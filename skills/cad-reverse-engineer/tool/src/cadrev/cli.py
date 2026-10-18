@@ -220,7 +220,7 @@ def cmd_check(args) -> int:
     path = report.write(p, status, results, images)
     print(f"\n{status}: {headline['errors']} errors, {headline['warnings']} warnings, "
           f"{headline['checks_passed']}/{headline['checks']} checks pass. Report: {path.relative_to(p.root)}")
-    return 0 if status == "VERIFIED" else 1
+    return 0 if status in report.PASSING else 1
 
 
 def main(argv: list[str] | None = None) -> int:

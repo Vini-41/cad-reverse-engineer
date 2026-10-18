@@ -254,8 +254,6 @@ def check_evidence(p: Project) -> None:
                 for key, value in values.items():
                     if not any(math.isclose(float(value), q, rel_tol=1e-9) for q in read):
                         p.error("value-not-in-reading", f"{eid}.{key} = {value} not in its reading")
-            if not e.get("confirmed_by"):
-                p.warn("image-unconfirmed", f"{eid}: figure reading awaits human confirmation (confirmed_by)")
         else:
             p.error("evidence-anchor", f"{eid}: needs quote (text sources) or image + reading (figures, video)")
         for key, value in values.items():

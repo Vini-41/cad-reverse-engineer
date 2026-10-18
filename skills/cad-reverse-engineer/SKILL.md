@@ -70,7 +70,7 @@ When a check goes red, change the model or its params. Evidence changes only to 
 
 Format: `checks.yaml` and `overlays.yaml` in [`references/project-format.md`](references/project-format.md).
 
-Done when `cadrev check <dir>` prints VERIFIED and no `[unchecked-source]` warning remains.
+Done when `cadrev check <dir>` prints VERIFIED (or VERIFIED PENDING REVIEW: see `confirmed_by` in [`references/project-format.md`](references/project-format.md)) and no `[unchecked-source]` warning remains.
 
 ### 7. Hand over
 

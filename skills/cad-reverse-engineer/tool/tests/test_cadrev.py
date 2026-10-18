@@ -281,6 +281,53 @@ def test_figure_evidence_needs_pinned_crop(proj_dir):
     assert "image-hash" in errors(proj_dir)
 
 
+def add_reading(root: Path, **fields) -> dict:
+    """Ledger a pinned Fig. 2 crop whose reading no human has confirmed; return its entry."""
+    crop = root / "figures" / "crops" / "fig2.png"
+    crop.parent.mkdir(parents=True, exist_ok=True)
+    crop.write_bytes(b"a figure label")
+    entry = {"id": "F2", "source": "paper", "locator": "Fig. 2", "scope": "context",
+             "reason": "label", "image": "figures/crops/fig2.png",
+             "image_sha256": sources.sha256(crop), "reading": "70 mm", **fields}
+    edit(root, "evidence.yaml", lambda d: d["evidence"].append(entry))
+    return entry
+
+
+def test_project_whose_only_shortfall_is_an_unconfirmed_reading_is_pending_review(proj_dir):
+    add_reading(proj_dir)
+    code, report = verify(proj_dir)
+    assert report["counts"]["errors"] == 0
+    assert (code, report["status"]) == (0, "VERIFIED PENDING REVIEW")
+    assert report["findings"] == []
+    assert "**VERIFIED PENDING REVIEW**" in (proj_dir / "build" / "report.md").read_text()
+
+
+def test_report_lists_each_reading_awaiting_confirmation_with_its_crop(proj_dir):
+    add_reading(proj_dir)
+    _, report = verify(proj_dir)
+    assert report["awaiting_confirmation"] == [{"evidence": "F2", "locator": "Fig. 2",
+                                                "reading": "70 mm", "image": "figures/crops/fig2.png"}]
+    md = (proj_dir / "build" / "report.md").read_text()
+    awaiting = md.split("## Figure readings awaiting human confirmation")[1].split("\n## ")[0]
+    assert "F2" in awaiting and "70 mm" in awaiting and "figures/crops/fig2.png" in awaiting
+
+
+def test_confirming_the_reading_makes_the_project_verified(proj_dir):
+    add_reading(proj_dir)
+    assert verify(proj_dir)[1]["status"] == "VERIFIED PENDING REVIEW"
+    edit(proj_dir, "evidence.yaml", lambda d: d["evidence"][-1].update(confirmed_by="A. Reviewer"))
+    code, report = verify(proj_dir)
+    assert (code, report["status"], report["awaiting_confirmation"]) == (0, "VERIFIED", [])
+
+
+def test_guard_error_beside_an_unconfirmed_reading_is_not_verified(proj_dir):
+    add_reading(proj_dir)
+    write(proj_dir, "gaps.yaml", {"gaps": []})
+    code, report = verify(proj_dir)
+    assert (code, report["status"]) == (1, "NOT VERIFIED")
+    assert [f["rule"] for f in report["findings"] if f["level"] == "error"] == ["param-gap"]
+
+
 def test_overlay_renders_against_a_figure(proj_dir):
     from PIL import Image
 
@@ -954,7 +1001,7 @@ def test_example_reaches_the_status_its_readme_documents(tmp_path):
     status = documented_status()
     assert (report["status"], report["counts"]["errors"], report["counts"]["warnings"],
             report["counts"]["checks_passed"], report["counts"]["checks"]) == status
-    assert code == (0 if status[0] == "VERIFIED" else 1)
+    assert code == (0 if status[0] in ("VERIFIED", "VERIFIED PENDING REVIEW") else 1)
 
 
 def test_guard_root_readme_shows_the_status_the_example_readme_documents():

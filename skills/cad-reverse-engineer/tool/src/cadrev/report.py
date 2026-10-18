@@ -23,6 +23,15 @@ def _table(header: list[str], rows: list[list]) -> list[str]:
     return lines + [""]
 
 
+PASSING = ("VERIFIED", "VERIFIED PENDING REVIEW")
+
+
+def awaiting_confirmation(p: Project) -> list[dict]:
+    """The figure readings no named human has confirmed yet, each with its crop."""
+    return [{"evidence": eid, "locator": e.get("locator"), "reading": e.get("reading"), "image": e["image"]}
+            for eid, e in p.evidence.items() if "image" in e and not e.get("confirmed_by")]
+
+
 def status(p: Project, partial: bool = False) -> str:
     """The one place a verification run's status is decided; everything else reads it.
 
@@ -30,7 +39,9 @@ def status(p: Project, partial: bool = False) -> str:
     """
     if partial:
         return "PARTIAL"
-    return "NOT VERIFIED" if any(f.level == "error" for f in p.findings) else "VERIFIED"
+    if any(f.level == "error" for f in p.findings):
+        return "NOT VERIFIED"
+    return "VERIFIED PENDING REVIEW" if awaiting_confirmation(p) else "VERIFIED"
 
 
 def counts(p: Project, results: list[CheckResult]) -> dict[str, int]:
@@ -58,6 +69,11 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
     md += ["VERIFIED means every number in the model is accounted for and the geometry matches "
            "every checked source value. It does not mean the sources fully define the part: "
            "proposed parameters are reconstruction choices, listed below.", ""]
+    awaiting = awaiting_confirmation(p)
+    if status == "VERIFIED PENDING REVIEW":
+        md += [f"PENDING REVIEW: {len(awaiting)} figure readings await human confirmation, listed below. "
+               "Once a named reviewer has checked each against its crop and written `confirmed_by`, "
+               "the project is VERIFIED.", ""]
 
     md += ["## Sources", ""]
     md += _table(["id", "kind", "citation", "sha256"],
@@ -89,12 +105,11 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
                    + ("" if e.get("confirmed_by") else " (unconfirmed)")]
                   for eid, e in p.evidence.items()])
 
-    unconfirmed = [(eid, e) for eid, e in p.evidence.items() if "image" in e and not e.get("confirmed_by")]
-    if unconfirmed:
+    if awaiting:
         md += ["## Figure readings awaiting human confirmation", ""]
-        for eid, e in unconfirmed:
-            md += [f"- **{eid}** ({e.get('locator')}): reads “{e.get('reading')}”", "",
-                   f"  ![{eid}](../{e['image']})", ""]
+        for a in awaiting:
+            md += [f"- **{a['evidence']}** ({a['locator']}): reads “{a['reading']}” in `{a['image']}`", "",
+                   f"  ![{a['evidence']}](../{a['image']})", ""]
 
     md += ["## Conflicts between sources", ""]
     md += _table(["id", "evidence", "summary", "resolution"],
@@ -126,5 +141,6 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
         "params": {n: {"value": p.values.get(n), **s} for n, s in p.params.items()},
         "bases": dict(bases),
         "rests_on_proposed": sorted(p.proposed),
+        "awaiting_confirmation": awaiting,
     }, indent=2, default=str), encoding="utf8")
     return path
