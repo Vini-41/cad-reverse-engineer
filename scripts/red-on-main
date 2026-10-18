@@ -8,6 +8,9 @@
 #
 #   scripts/red-on-main [pytest args, e.g. -k units]     LIST=1 also lists every test as red or green
 #
+# With no pytest args it runs the test functions new since BASE or edited in its diff. A row added
+# to a table (QUOTES, UNITS) edits the table, not the test that reads it: pass -k for those.
+#
 # BASE is the commit before the fix: by default the upstream branch (origin/main), so unpushed
 # commits on main count as the fix. Set BASE=<ref> to compare against another commit.
 set -euo pipefail
@@ -33,6 +36,18 @@ cp -R "$tool/tests" "$tree/skills/cad-reverse-engineer/tool/tests"
 echo "working tree, but tool source from ${BASE:-upstream} ($(git -C "$repo" rev-parse --short "$base"))"
 existing="$tree.existing"  # the test functions BASE already has
 git -C "$repo" grep -hoE '^def test_[A-Za-z0-9_]+' "$base" -- "$tool/tests" | sed 's/^def //' >"$existing" || true
+if [ $# -eq 0 ]; then
+  # Select the test functions new since BASE, and those whose body the diff touches.
+  selected=$( { grep -hoE '^def test_[A-Za-z0-9_]+' "$tool"/tests/*.py | sed 's/^def //' | grep -vxFf "$existing"
+                git -C "$repo" diff -U0 "$base" -- "$tool/tests" | sed -nE 's/^@@ .* @@ def (test_[A-Za-z0-9_]+).*/\1/p'
+              } | sort -u || true)
+  if [ -z "$selected" ]; then
+    echo "no test function is new or changed since ${BASE:-upstream}; pass -k to choose tests" >&2
+    exit 2
+  fi
+  set -- -k "$(echo "$selected" | paste -sd ' ' - | sed 's/ / or /g')"
+  echo "running the $(echo "$selected" | wc -l | tr -d ' ') test functions new or changed since ${BASE:-upstream}"
+fi
 cd "$tree/skills/cad-reverse-engineer/tool"
 # PYTHONPATH puts the base's src ahead of the editable install of the working tree's.
 results=$(PYTHONPATH="$PWD/src" uv run --project "$tool" python -m pytest -v --tb=no -p no:cacheprovider "$@" \

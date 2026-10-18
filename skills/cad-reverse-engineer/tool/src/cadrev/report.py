@@ -76,10 +76,8 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
     md = [f"# {p.meta.get('name', 'Reconstruction')}: verification report", ""]
     md += [f"**{status}**: {headline['errors']} errors, {headline['warnings']} warnings. "
            f"{headline['checks_passed']}/{headline['checks']} geometry checks pass.",
-           f"Of {headline['params']} parameters, {headline['source']} "
-           f"{'traces' if headline['source'] == 1 else 'trace'} to sources, "
-           f"{headline['measured']} {'is' if headline['measured'] == 1 else 'are'} measured and "
-           f"{headline['proposed']} rest on proposed values.", ""]
+           f"Of {headline['params']} parameters, {headline['source']} rest on sources, "
+           f"{headline['measured']} on measured values and {headline['proposed']} on proposed values.", ""]
     if exact(p, status):
         md += ["**Exact**: no parameter rests on a proposed value.", ""]
     md += ["VERIFIED means every number in the model is accounted for and the geometry matches "

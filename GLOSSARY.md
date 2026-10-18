@@ -32,6 +32,10 @@ _Avoid_: exclusion, ignore
 **Basis**:
 The declared origin of a parameter's value: `source`, `derived`, `measured` or `proposed`. A parameter with basis `source` *traces to a source*.
 
+**Rests on**:
+The basis a parameter's value ultimately depends on: its own, or for a derived parameter the weakest among the parameters it is computed from, proposed being weaker than measured and measured weaker than source.
+_Avoid_: traces to (for a derived parameter), effective basis
+
 **Measured**:
 The basis of a value scaled off an image or video frame against a known reference. Never used for evaluating the built model.
 

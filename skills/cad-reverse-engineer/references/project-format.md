@@ -148,7 +148,7 @@ params:
 
 Write `interpretation` on every `source` param whose mapping onto geometry is a choice (which axis, envelope versus pitch, which feature).
 
-A derived param rests on the weakest basis among the params its `expr` references (proposed < measured < source); an `expr` that references no param (`2.2`, `2 * pi`) is `[param-constant]`. The report's headline counts params by what they rest on (source, measured, proposed), lists each measured param with its method and uncertainty, and marks a VERIFIED project with no proposed param as **exact**.
+A derived param rests on the weakest basis among the params its `expr` references (proposed < measured < source); an `expr` that references no param (`2.2`, `2 * pi`) is `[param-constant]`. The report's headline counts params by what they rest on.
 
 ## checks.yaml
 
@@ -199,3 +199,20 @@ overlays:
 ```
 
 Renders `build/overlays/<id>.png`: model edges in magenta, calibration span in blue. An overlay is visual evidence for a human; it adds no pass/fail.
+
+## build/report.json
+
+The machine-readable report `cadrev check` writes beside `report.md`, which renders the same data. A PARTIAL run writes neither. Its top-level keys:
+
+| key | holds |
+|---|---|
+| `status` | NOT VERIFIED, VERIFIED PENDING REVIEW or VERIFIED |
+| `exact` | true when the status is VERIFIED and no param rests on a proposed value |
+| `counts` | `errors`, `warnings`, `checks`, `checks_passed`, `params`, and the params resting on each basis: `source`, `measured`, `proposed` |
+| `findings` | every finding as `level`, `rule`, `message` |
+| `checks` | every geometry check with its result, expected and evaluated values |
+| `params` | each param's spec, its resolved `value` and the basis it `rests_on` |
+| `bases` | how many params declare each basis |
+| `rests_on_proposed` | the params resting on a proposed value |
+| `measured` | each measured param with its `value`, `from`, `method` and `uncertainty` |
+| `awaiting_confirmation` | each unconfirmed figure reading with its `evidence`, `locator`, `reading` and `image` |

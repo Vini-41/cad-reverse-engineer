@@ -98,6 +98,14 @@ def test_report_json_carries_status_findings_and_counts(proj_dir):
                                 "params": 5, "source": 4, "measured": 0, "proposed": 1}
 
 
+def test_report_json_has_the_keys_project_format_documents(proj_dir):
+    doc = (Path(__file__).parents[2] / "references" / "project-format.md").read_text()
+    rows = dict(re.findall(r"^\| `(\w+)` \| (.*) \|$", doc.split("## build/report.json")[1], re.M))
+    _, report = verify(proj_dir)
+    assert set(report) == set(rows), "report.json and project-format.md list different keys"
+    assert set(report["counts"]) == set(re.findall(r"`(\w+)`", rows["counts"]))
+
+
 def test_report_json_lists_each_finding_with_level_rule_and_message(proj_dir):
     write(proj_dir, "gaps.yaml", {"gaps": []})
     code, report = verify(proj_dir)
@@ -387,7 +395,7 @@ def test_report_headline_counts_parameters_by_what_they_rest_on(proj_dir):
     assert {k: report["counts"][k] for k in ("params", "source", "measured", "proposed")} == {
         "params": 8, "source": 5, "measured": 1, "proposed": 2}
     md = (proj_dir / "build" / "report.md").read_text()
-    assert "Of 8 parameters, 5 trace to sources, 1 is measured and 2 rest on proposed values." in md
+    assert "Of 8 parameters, 5 rest on sources, 1 on measured values and 2 on proposed values." in md
 
 
 def test_report_lists_each_measured_param_with_its_method_and_uncertainty(proj_dir):
