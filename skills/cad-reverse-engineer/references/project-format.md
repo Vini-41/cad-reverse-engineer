@@ -25,7 +25,7 @@ name: legclaw
 target: Seventh-iteration BLCM leg as reported in Cheng 2026 (not the Fig. S10 iterations)
 units: {length: mm, angle: deg, mass: g}
 tolerance: {length: 0.001}
-model_literals: [0, 1, 2, -1, 0.5, 90, 180, 270, 360]   # optional; numbers model.py may contain
+model_literals: [0, 1, 2, -1, 0.5, 90, 180, 270, 360]   # optional; numbers model.py may contain (modeling.md)
 sources:
   - id: paper
     kind: paper            # paper | supplement | datasheet | video | drawing | other
@@ -213,6 +213,7 @@ The machine-readable report `cadrev check` writes beside `report.md`, which rend
 | `checks` | every geometry check with its result, expected and evaluated values |
 | `tolerances` | each check with a non-default tolerance: its `check` id, `kind`, and `tol` or `tol_rel` |
 | `overlap_limits` | each interference check with a non-default overlap limit: its `check` id and `max_volume` |
+| `model_literals` | project.yaml's `model_literals` when it differs from the default, else null |
 | `params` | each param's spec, its resolved `value` and the basis it `rests_on` |
 | `bases` | how many params declare each basis |
 | `rests_on_proposed` | the params resting on a proposed value |
