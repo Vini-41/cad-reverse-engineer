@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Run this working tree's tests against the tool source as it was before the fix: those that go
-# red there are holes the fix closes, those that stay green are guards, named test_guard_*. Prints
+# Run this working tree's tests, with its docs and examples, against the tool source as it was
+# before the fix: those that go red there are holes the fix closes, those that stay green are
+# guards, named test_guard_*. Prints
 # the counts and each misnamed test, and exits 1 if there is one: a test_guard_* that goes red, or
 # a test function new since BASE that stays green without the name. New rows of a test function
 # BASE already has (the QUOTES and UNITS tables) carry near misses, so only their red guards count.
@@ -21,12 +22,15 @@ if [ "$base" = "$(git -C "$repo" rev-parse HEAD)" ] && git -C "$repo" diff --qui
 fi
 
 tree=$(mktemp -d)
-trap 'git -C "$repo" worktree remove --force "$tree" >/dev/null 2>&1 || true; rm -f "$tree.existing"' EXIT
+trap 'git -C "$repo" worktree remove --force "$tree" >/dev/null 2>&1 || true; rm -f "$tree.existing" "$tree.patch"' EXIT
 git -C "$repo" worktree add --detach --quiet "$tree" "$base"
+# Everything but the tool source comes from the working tree: the tests read the READMEs and examples too.
+git -C "$repo" diff --binary "$base" -- . ":(exclude)skills/cad-reverse-engineer/tool/src" >"$tree.patch"
+[ -s "$tree.patch" ] && git -C "$tree" apply --whitespace=nowarn "$tree.patch"
 rm -rf "$tree/skills/cad-reverse-engineer/tool/tests"
 cp -R "$tool/tests" "$tree/skills/cad-reverse-engineer/tool/tests"
 
-echo "tests from the working tree, tool source from ${BASE:-upstream} ($(git -C "$repo" rev-parse --short "$base"))"
+echo "working tree, but tool source from ${BASE:-upstream} ($(git -C "$repo" rev-parse --short "$base"))"
 existing="$tree.existing"  # the test functions BASE already has
 git -C "$repo" grep -hoE '^def test_[A-Za-z0-9_]+' "$base" -- "$tool/tests" | sed 's/^def //' >"$existing" || true
 cd "$tree/skills/cad-reverse-engineer/tool"
