@@ -490,6 +490,7 @@ DAMAGE = {
     "text source not UTF-8": lambda r: ((r / "sources" / "b.txt").write_bytes(b"\xff\xfe 30 mm"),
                                         _add_source(r, "b", "sources/b.txt")),
     "name is a number": lambda r: _replace(r, "project.yaml", "name:", "name: 5\noldname:"),
+    "format is a mapping": lambda r: _replace(r, "project.yaml", "format:", "format: {v: 1}\nxformat:"),
     "units is a number": lambda r: _replace(r, "project.yaml", "units:", "units: 5\nxunits:"),
     "tolerance of zero": lambda r: _replace(r, "project.yaml", "tolerance:", "tolerance: {length: 0}\nxtolerance:"),
     "model_literals is a number": lambda r: _replace(r, "project.yaml", "name:", "model_literals: 5\nname:"),
@@ -528,4 +529,7 @@ def test_no_damage_escapes_a_verification_run(proj_dir, capsys, damage):
     code = cli.main(["check", str(proj_dir)])
     out = capsys.readouterr()
     assert code in (0, 1) and "Traceback" not in out.out + out.err
-    assert json.loads((proj_dir / "build" / "report.json").read_text())["status"]
+    report = proj_dir / "build" / "report.json"
+    # A refused project writes no report and says so; any other run reports a status.
+    assert json.loads(report.read_text())["status"] if report.exists() else (
+        "the project was not read, so no report was written" in out.out)

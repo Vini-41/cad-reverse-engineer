@@ -77,6 +77,7 @@ def _contract_breach(result) -> str | None:
 
 def build(p: Project) -> Built | None:
     spec = importlib.util.spec_from_file_location("cadrev_model", p.root / "model.py")
+    assert spec is not None and spec.loader is not None  # a .py path always gets a source loader
     module = importlib.util.module_from_spec(spec)
     params = Params(p.values)
     try:
@@ -91,7 +92,7 @@ def build(p: Project) -> Built | None:
         return None
     built = Built(
         parts=result.get("parts", {}),
-        datums={k: tuple(float(c) for c in v) for k, v in result.get("datums", {}).items()},
+        datums={k: (float(x), float(y), float(z)) for k, (x, y, z) in result.get("datums", {}).items()},
         assembly=result.get("assembly", {}),
         used=params.used,
     )
