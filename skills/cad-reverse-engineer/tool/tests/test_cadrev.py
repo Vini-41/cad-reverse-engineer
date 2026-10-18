@@ -1009,6 +1009,36 @@ def test_check_at_the_default_tolerance_is_not_listed(proj_dir):
     assert "| pitch | distance |" not in (proj_dir / "build" / "report.md").read_text()
 
 
+# Overlap limit: not a tolerance, but a loosened interference check is shown all the same.
+
+def test_report_lists_an_interference_check_with_its_max_volume(proj_dir):
+    _set_tol(proj_dir, "clear", max_volume=0.5)
+    code, report = verify(proj_dir)
+    assert code == 0
+    assert report["overlap_limits"] == [{"check": "clear", "max_volume": 0.5}]
+    assert "| clear | 0.5 |" in (proj_dir / "build" / "report.md").read_text()
+
+
+def test_report_lists_an_interference_check_under_a_project_wide_tolerance(proj_dir):
+    edit(proj_dir, "project.yaml", lambda d: d.update(tolerance={"length": 0.01}))
+    _, report = verify(proj_dir)
+    assert [o["check"] for o in report["overlap_limits"]] == ["clear"]
+    assert report["overlap_limits"][0]["max_volume"] == pytest.approx(1e-6)
+    assert "| clear | 1e-06 |" in (proj_dir / "build" / "report.md").read_text()
+
+
+@pytest.mark.parametrize("change", [
+    lambda root: None,
+    lambda root: _set_tol(root, "clear", max_volume=1e-9),
+    lambda root: edit(root, "project.yaml", lambda d: d.update(tolerance={"length": 0.001})),
+], ids=["unset", "max_volume-at-default", "tolerance-length-at-default"])
+def test_guard_interference_check_at_the_default_overlap_limit_is_not_listed(proj_dir, change):
+    change(proj_dir)
+    _, report = verify(proj_dir)
+    assert report.get("overlap_limits", []) == []
+    assert not re.search(r"^\| clear \| [\d.e+-]+ \|$", (proj_dir / "build" / "report.md").read_text(), re.M)
+
+
 def _ambiguous(root: Path, tmp_path: Path, quote: str) -> list[str]:
     add_quote(root, tmp_path, quote, quote, {"v": 4})
     edit(root, "params.yaml", lambda d: d["params"].update(n1={"basis": "source", "from": "N1.v"}))
