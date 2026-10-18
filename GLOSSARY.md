@@ -44,7 +44,7 @@ The basis of a value the reconstruction chooses because no source states it.
 _Avoid_: assumed, guessed
 
 **Gap**:
-A question that, once answered, would replace a proposed value with a stated one.
+A question that, once answered, would replace a proposed or measured value with a stated one.
 
 ## Verification
 
