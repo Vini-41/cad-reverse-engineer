@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import ast
 import importlib.util
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from .project import Project
+from .project import Project, expr_names
 
 AXES = {"x": 0, "y": 1, "z": 2}
 
@@ -49,6 +49,32 @@ class Built:
     used: set[str]
 
 
+def _contract_breach(result) -> str | None:
+    """Why build()'s return breaks the model contract, or None if it keeps it."""
+    from build123d import Location
+    from build123d.topology import Shape
+
+    if not isinstance(result, dict):
+        return f"must return a mapping of parts, datums and assembly, not {type(result).__name__}"
+    for key in ("parts", "datums", "assembly"):
+        if not isinstance(result.get(key, {}), dict):
+            return f"{key} must be a mapping of names, not {type(result[key]).__name__}"
+    for name, part in result.get("parts", {}).items():
+        if not isinstance(part, Shape):
+            return f"part {name} must be a build123d shape, not {type(part).__name__}"
+        if not re.fullmatch(r"[\w.-]+", str(name)):
+            return f"part name {name!r} must be letters, digits, '_', '.' or '-': it names build/parts/<name>.step"
+    for name, point in result.get("datums", {}).items():
+        if not (isinstance(point, (tuple, list)) and len(point) == 3
+                and all(isinstance(c, (int, float)) for c in point)):
+            return f"datum {name} must be an (x, y, z) tuple of numbers, not {point!r}"
+    for inst, entry in result.get("assembly", {}).items():
+        if not (isinstance(entry, (tuple, list)) and len(entry) == 2
+                and isinstance(entry[0], str) and isinstance(entry[1], Location)):
+            return f"assembly instance {inst} must be a (part name, Location) pair, not {entry!r}"
+    return None
+
+
 def build(p: Project) -> Built | None:
     spec = importlib.util.spec_from_file_location("cadrev_model", p.root / "model.py")
     module = importlib.util.module_from_spec(spec)
@@ -56,8 +82,12 @@ def build(p: Project) -> Built | None:
     try:
         spec.loader.exec_module(module)
         result = module.build(params)
-    except Exception as exc:  # noqa: BLE001 - a broken model is a finding, not a crash
+    except (Exception, SystemExit) as exc:  # noqa: BLE001 - a broken model is a finding, not a crash
         p.error("model-build", f"model.build failed: {type(exc).__name__}: {exc}")
+        return None
+    problem = _contract_breach(result)
+    if problem:
+        p.error("model-return", f"model.build {problem}")
         return None
     built = Built(
         parts=result.get("parts", {}),
@@ -70,9 +100,10 @@ def build(p: Project) -> Built | None:
     for name, part in built.parts.items():
         if not part.is_valid:
             p.error("part-invalid", f"part {name}: solid is not valid")
-    for inst, (part, _) in built.assembly.items():
+    for inst, (part, _) in list(built.assembly.items()):
         if part not in built.parts:
             p.error("assembly-part", f"assembly instance {inst}: unknown part {part!r}")
+            del built.assembly[inst]
     return built
 
 
@@ -80,8 +111,10 @@ def _used_by_derived(p: Project) -> set[str]:
     names = set()
     for spec in p.params.values():
         if spec.get("expr"):
-            names |= {n.id for n in ast.walk(ast.parse(spec["expr"], mode="eval"))
-                      if isinstance(n, ast.Name)}
+            try:
+                names |= expr_names(spec["expr"])
+            except (SyntaxError, ValueError):
+                pass  # already a param-derived finding
     return names
 
 
@@ -179,7 +212,7 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
             else:
                 p.error("check-kind", f"check {cid}: unknown kind {kind!r}")
                 continue
-        except (KeyError, TypeError) as exc:
+        except (KeyError, TypeError, ValueError) as exc:
             p.error("check-config", f"check {cid}: missing or unknown {exc}")
             continue
     for r in results:

@@ -14,6 +14,11 @@ from . import sources
 TEMPLATE = Path(__file__).parent / "template"
 
 
+def _print_findings(findings, stream=None) -> None:
+    for f in findings:
+        print(f"{f.level}: [{f.rule}] {f.message}", file=stream or sys.stdout)
+
+
 def cmd_init(args) -> int:
     root = Path(args.dir)
     if root.exists() and any(root.iterdir()):
@@ -26,31 +31,89 @@ def cmd_init(args) -> int:
     return 0
 
 
+def _rewrite_source_entry(text: str, source_id: str, fields: dict[str, str]) -> str | None:
+    """text with the block-style entry for source_id given these fields, or None if not found."""
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        m = re.match(rf"^(\s*)- id: ['\"]?{re.escape(source_id)}['\"]?\s*$", line)
+        if not m:
+            continue
+        indent = len(m.group(1)) + 2
+        end = i + 1
+        while end < len(lines) and (not lines[end].strip()
+                                    or len(lines[end]) - len(lines[end].lstrip()) >= indent
+                                    and not lines[end].lstrip().startswith("- ")):
+            end += 1
+        block = lines[i + 1:end]
+        for key, value in fields.items():
+            new = f"{' ' * indent}{key}: {value}"
+            at = [j for j, b in enumerate(block) if re.match(rf"^\s*{key}:", b)]
+            if at:
+                block[at[0]] = new
+            else:
+                block.insert(0, new)
+        return "\n".join(lines[:i + 1] + block + lines[end:]) + "\n"
+    return None
+
+
 def cmd_source(args) -> int:
     root = Path(args.dir)
     src = Path(args.file)
+    meta = root / "project.yaml"
+    if not meta.is_file():
+        print(f"{meta} not found; run cadrev init first", file=sys.stderr)
+        return 1
+    if not src.is_file():
+        print(f"{src} not found", file=sys.stderr)
+        return 1
+    problems: list[proj.Finding] = []
+    registered = {s["id"] for s in proj.read_yaml(root, "project.yaml", problems).get("sources", [])}
+    if problems:
+        _print_findings(problems, sys.stderr)
+        return 1
     target = root / "sources" / (args.rename or src.name)
     target.parent.mkdir(exist_ok=True)
     if src.resolve() != target.resolve():
         shutil.copy2(src, target)
+    path, digest = f"sources/{target.name}", sources.sha256(target)
+    text = meta.read_text()
+    if args.id in registered:
+        # Restoring a source into a clone, or a fresh download: keep the entry, refresh the file.
+        refreshed = _rewrite_source_entry(text, args.id, {"path": path, "sha256": digest})
+        if refreshed is None:
+            print(f"source {args.id} is registered in a form cadrev cannot edit; set its path to "
+                  f"{path} and sha256 to {digest} in project.yaml", file=sys.stderr)
+            return 1
+        meta.write_text(refreshed)
+        print(f"refreshed {args.id} -> {target}")
+        return 0
     entry = [f"  - id: {args.id}", f"    kind: {args.kind}",
-             f"    path: sources/{target.name}", f"    sha256: {sources.sha256(target)}",
+             f"    path: {path}", f"    sha256: {digest}",
              f"    citation: {args.citation!r}"]
     entry += [f"    url: {args.url}"] if args.url else []
     entry += [f"    license: {args.license}"] if args.license else []
-    meta = root / "project.yaml"
-    text = meta.read_text()
-    if re.search(rf"^\s*- id: {re.escape(args.id)}\s*$", text, re.M):
-        print(f"source {args.id} already registered", file=sys.stderr)
-        return 1
     text = re.sub(r"^sources: \[\]\s*$", "sources:", text, flags=re.M)
     meta.write_text(text.rstrip("\n") + "\n" + "\n".join(entry) + "\n")
     print(f"registered {args.id} -> {target}")
     return 0
 
 
-def cmd_text(args) -> int:
+def _open(args, source: str | None = None) -> proj.Project | None:
+    """The project for a read-only command, or None after printing why it cannot be used."""
     p = proj.load(Path(args.dir))
+    _print_findings(p.findings, sys.stderr)
+    if any(f.rule == "project-missing" for f in p.findings):
+        return None
+    if source is not None and source not in p.sources:
+        print(f"unknown source {source!r}; registered: {', '.join(p.sources) or 'none'}", file=sys.stderr)
+        return None
+    return p
+
+
+def cmd_text(args) -> int:
+    p = _open(args, args.source)
+    if p is None:
+        return 1
     texts = sources.pages(p.source_path(args.source))
     wanted = [args.page] if args.page else range(1, len(texts) + 1)
     for n in wanted:
@@ -65,7 +128,9 @@ def cmd_text(args) -> int:
 
 
 def cmd_figures(args) -> int:
-    p = proj.load(Path(args.dir))
+    p = _open(args, args.source)
+    if p is None:
+        return 1
     out = p.root / "figures" / args.source
     for path in sources.extract_figures(p.source_path(args.source), out):
         print(path.relative_to(p.root))
@@ -89,7 +154,9 @@ def cmd_crop(args) -> int:
 
 
 def cmd_coverage(args) -> int:
-    p = proj.load(Path(args.dir))
+    p = _open(args)
+    if p is None:
+        return 1
     missing = proj.check_coverage(p)
     for sid, page, line in missing:
         print(f"{sid} p{page}: {line}")
@@ -101,13 +168,18 @@ def cmd_check(args) -> int:
     from . import report
 
     p = proj.load(Path(args.dir))
+    if any(f.rule == "project-missing" for f in p.findings):
+        # Not a project, perhaps not even a directory: write nothing into it.
+        _print_findings(p.findings)
+        print(f"\n{report.status(p)}: no project here, so no report was written.")
+        return 1
     proj.check_static(p)
     if not args.no_coverage:
         proj.check_coverage(p)
     # A partial run makes no claim, so it writes nothing to build/.
     partial = args.no_build or args.no_coverage
     results, images = [], []
-    if not args.no_build and not any(f.rule == "model-missing" for f in p.findings):
+    if not args.no_build and not any(f.rule in ("model-missing", "model-syntax") for f in p.findings):
         from . import geometry, overlay
 
         built = geometry.build(p)
@@ -119,8 +191,7 @@ def cmd_check(args) -> int:
                 images = overlay.render(p, built)
     status = report.status(p, partial)
     headline = report.counts(p, results)
-    for f in p.findings:
-        print(f"{f.level}: [{f.rule}] {f.message}")
+    _print_findings(p.findings)
     if partial:
         skipped = " and ".join(s for s, on in (("the build", args.no_build),
                                                 ("the coverage sweep", args.no_coverage)) if on)

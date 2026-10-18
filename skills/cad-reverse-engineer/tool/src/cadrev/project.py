@@ -14,7 +14,7 @@ from pathlib import Path
 
 import yaml
 
-from . import sources
+from . import schema, sources
 
 BASES = ("source", "derived", "measured", "proposed")
 SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "other")
@@ -45,6 +45,8 @@ class Project:
     gaps: dict[str, dict]
     overlays: list[dict]
     values: dict[str, float] = field(default_factory=dict)
+    # Text sources whose file exists but cannot be read as text.
+    unreadable: set[str] = field(default_factory=set)
     # Parameters resting on a proposed value, directly or through derived expressions.
     proposed: set[str] = field(default_factory=set)
     findings: list[Finding] = field(default_factory=list)
@@ -74,28 +76,48 @@ class Project:
         return float(item["values"][key])
 
 
-def _read(root: Path, name: str, key: str, default):
+def read_yaml(root: Path, name: str, findings: list[Finding]) -> dict:
+    """A project file's contents in the expected shape; {} if absent. Problems become findings."""
     path = root / name
-    if not path.exists():
-        return default
-    data = yaml.safe_load(path.read_text(encoding="utf8")) or {}
-    return data.get(key, default)
+    if not path.is_file():
+        return {}
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf8"))
+    except yaml.YAMLError as exc:
+        mark = getattr(exc, "problem_mark", None)
+        where = f"{name} line {mark.line + 1}" if mark else name
+        problem = getattr(exc, "problem", None) or str(exc)
+        findings.append(Finding("error", "yaml-syntax", f"{where}: {problem}"))
+        return {}
+    except UnicodeDecodeError:
+        findings.append(Finding("error", "yaml-syntax", f"{name}: not UTF-8 text"))
+        return {}
+    problems: list[str] = []
+    data = schema.conform_file(name, {} if data is None else data, problems)
+    findings += [Finding("error", "schema", message) for message in problems]
+    return data
 
 
 def load(root: Path) -> Project:
+    """The project at root. Never raises: missing or malformed files become findings."""
     root = root.resolve()
-    meta = yaml.safe_load((root / "project.yaml").read_text(encoding="utf8")) or {}
-    evidence_list = _read(root, "evidence.yaml", "evidence", [])
+    findings: list[Finding] = []
+    if not (root / "project.yaml").is_file():
+        findings.append(Finding("error", "project-missing", f"{root / 'project.yaml'} not found; "
+                                "point cadrev at a project directory (cadrev init creates one)"))
+    files = {name: read_yaml(root, name, findings) for name in schema.FILES}
+    evidence_list = files["evidence.yaml"].get("evidence", [])
     project = Project(
         root=root,
-        meta=meta,
+        meta=files["project.yaml"],
         evidence={e["id"]: e for e in evidence_list},
-        skipped=_read(root, "evidence.yaml", "skipped", []),
-        conflicts=_read(root, "evidence.yaml", "conflicts", []),
-        params=_read(root, "params.yaml", "params", {}),
-        checks=_read(root, "checks.yaml", "checks", []),
-        gaps={g["id"]: g for g in _read(root, "gaps.yaml", "gaps", [])},
-        overlays=_read(root, "overlays.yaml", "overlays", []),
+        skipped=files["evidence.yaml"].get("skipped", []),
+        conflicts=files["evidence.yaml"].get("conflicts", []),
+        params=files["params.yaml"].get("params", {}),
+        checks=files["checks.yaml"].get("checks", []),
+        gaps={g["id"]: g for g in files["gaps.yaml"].get("gaps", [])},
+        overlays=files["overlays.yaml"].get("overlays", []),
+        findings=findings,
     )
     if len(project.evidence) != len(evidence_list):
         project.error("evidence-id", "evidence ids must be unique")
@@ -110,14 +132,23 @@ def check_sources(p: Project) -> None:
         if not path.is_file():
             p.error("source-missing", f"source {sid}: {s.get('path')} not found"
                     + (f"; download from {s['url']}" if s.get("url") else ""))
-        elif s.get("sha256") != sources.sha256(path):
-            p.error("source-hash", f"source {sid}: sha256 does not match {s.get('path')}")
+        else:
+            if s.get("sha256") != sources.sha256(path):
+                p.error("source-hash", f"source {sid}: sha256 does not match {s.get('path')}")
+            if path.suffix.lower() in TEXT_FORMATS:
+                try:
+                    sources.pages(path)
+                except Exception as exc:  # noqa: BLE001 - pypdf and zipfile raise many types
+                    p.error("source-unreadable", f"source {sid}: cannot read text from {s.get('path')}: "
+                            f"{type(exc).__name__}: {exc}")
+                    p.unreadable.add(sid)
         if not s.get("citation"):
             p.error("source-citation", f"source {sid}: citation is required")
 
 
 def _available(p: Project, sid: str) -> bool:
-    return sid in p.sources and (p.root / p.sources[sid].get("path", "")).is_file()
+    return (sid in p.sources and sid not in p.unreadable
+            and (p.root / p.sources[sid].get("path", "")).is_file())
 
 
 def check_evidence(p: Project) -> None:
@@ -131,6 +162,10 @@ def check_evidence(p: Project) -> None:
             p.error("evidence-values", f"{eid}: needs values (or scope: context)")
         if "quote" in e:
             if not _available(p, sid):
+                continue
+            if Path(p.sources[sid]["path"]).suffix.lower() not in TEXT_FORMATS:
+                p.error("evidence-anchor", f"{eid}: {sid} is not a text source; "
+                        "use image + reading instead of quote")
                 continue
             match = sources.find_quote(p.source_path(sid), e["quote"], e.get("page"))
             if match is None:
@@ -220,6 +255,11 @@ def _evaluate(expr: str, names: dict[str, float]) -> float:
     return float(eval(compile(tree, "<expr>", "eval"), {"__builtins__": {}}, MATH_NAMES | names))
 
 
+def expr_names(expr: str) -> set[str]:
+    """Names a derived expression refers to; raises SyntaxError if it does not parse."""
+    return {n.id for n in ast.walk(ast.parse(expr, mode="eval")) if isinstance(n, ast.Name)}
+
+
 def resolve_params(p: Project) -> None:
     """Fill p.values, enforcing each basis's obligations."""
     pending = dict(p.params)
@@ -266,8 +306,13 @@ def resolve_params(p: Project) -> None:
                 p.error("param-derived", f"param {name}: derived needs expr")
                 pending.pop(name)
                 continue
-            needs = {n.id for n in ast.walk(ast.parse(spec["expr"], mode="eval"))
-                     if isinstance(n, ast.Name)} - MATH_NAMES.keys()
+            try:
+                needs = expr_names(spec["expr"]) - MATH_NAMES.keys()
+            except (SyntaxError, ValueError) as exc:
+                p.error("param-derived", f"param {name}: expr is not valid syntax "
+                        f"({getattr(exc, 'msg', exc)}): {spec['expr']!r}")
+                pending.pop(name)
+                continue
             unknown = needs - p.params.keys()
             if unknown:
                 p.error("param-derived", f"param {name}: expr uses undefined {sorted(unknown)}")
@@ -334,11 +379,17 @@ def check_conflicts(p: Project) -> None:
 def lint_model(p: Project) -> None:
     """model.py may hold no dimension literals; every number comes through params."""
     path = p.root / "model.py"
-    if not path.exists():
+    if not path.is_file():
         p.error("model-missing", "model.py not found")
         return
     allowed = {float(v) for v in p.meta.get("model_literals", [0, 1, 2, -1, 0.5, 90, 180, 270, 360])}
-    tree = ast.parse(path.read_text(encoding="utf8"))
+    try:
+        tree = ast.parse(path.read_text(encoding="utf8"))
+    except (SyntaxError, ValueError) as exc:  # ValueError: null bytes or undecodable text
+        line = getattr(exc, "lineno", None)
+        where = f"model.py line {line}" if line else "model.py"
+        p.error("model-syntax", f"{where}: {getattr(exc, 'msg', exc)}")
+        return
     for node in ast.walk(tree):
         if (isinstance(node, ast.Constant) and isinstance(node.value, (int, float))
                 and not isinstance(node.value, bool) and float(node.value) not in allowed):

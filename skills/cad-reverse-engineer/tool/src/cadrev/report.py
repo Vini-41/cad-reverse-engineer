@@ -73,7 +73,7 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
     md += [" · ".join(f"{b}: {bases[b]}" for b in BASES), ""]
     md += _table(["param", "value", "basis", "from / expr", "note"],
                  [[n, f"{p.values.get(n, float('nan')):g}",
-                   s.get("basis") + (" (from proposed)" if s.get("basis") == "derived"
+                   str(s.get("basis")) + (" (from proposed)" if s.get("basis") == "derived"
                                      and n in p.proposed else ""),
                    s.get("from") or s.get("expr") or "",
                    s.get("interpretation") or s.get("rationale") or s.get("method") or ""]

@@ -21,6 +21,7 @@ def build(p):
 - **Datums** are the named points that `distance` checks measure: pin centres, pivot axes, mounting holes. Name them `<part>.<feature>` and compute them from the same params that place the feature, never as a second copy of the arithmetic.
 - **The assembly** places part instances with `Location`. Instances are what `interference` checks and overlays of `assembly` use.
 - `p.<name>` for an undefined param fails the build. Params the model never reads raise `[param-unused]`.
+- `build` returns exactly this mapping: parts are build123d shapes, datums `(x, y, z)` tuples, assembly entries `(part name, Location)` pairs. Any other shape is `[model-return]`; a model.py that does not parse is `[model-syntax]`.
 
 ## Building geometry that checks can see
 

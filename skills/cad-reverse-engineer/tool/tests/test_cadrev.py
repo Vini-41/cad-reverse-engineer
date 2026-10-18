@@ -224,3 +224,202 @@ def test_overlay_renders_against_a_figure(proj_dir):
     assert cli.main(["check", str(proj_dir)]) == 0
     assert (proj_dir / "build" / "overlays" / "front.png").exists()
     assert "overlays/front.png" in (proj_dir / "build" / "report.md").read_text()
+
+
+# Named findings, never tracebacks.
+
+def findings(root: Path, rule: str) -> list[str]:
+    """Messages of every report.json finding with this rule, from a fresh verification run."""
+    _, report = verify(root)
+    return [f["message"] for f in report["findings"] if f["rule"] == rule]
+
+
+def edit(root: Path, name: str, change) -> None:
+    data = yaml.safe_load((root / name).read_text())
+    change(data)
+    write(root, name, data)
+
+
+@pytest.mark.parametrize("name", ["project.yaml", "evidence.yaml", "params.yaml", "checks.yaml",
+                                  "gaps.yaml", "overlays.yaml"])
+def test_malformed_yaml_is_a_finding_naming_the_file_and_line(proj_dir, name):
+    write(proj_dir, name, "items:\n  - id: a\n    quote: [unclosed\n")
+    code, report = verify(proj_dir)
+    assert code == 1 and report["status"] == "NOT VERIFIED"
+    messages = [f["message"] for f in report["findings"] if f["rule"] == "yaml-syntax"]
+    assert len(messages) == 1
+    assert messages[0].startswith(f"{name} line ")
+
+
+def test_wellformed_yaml_raises_no_syntax_finding(proj_dir):
+    assert findings(proj_dir, "yaml-syntax") == []
+
+
+@pytest.mark.parametrize("missing", ["file", "directory"])
+def test_missing_project_file_is_a_finding_and_writes_nothing(tmp_path, capsys, missing):
+    root = tmp_path / "empty"
+    if missing == "file":
+        root.mkdir()
+    assert cli.main(["check", str(root)]) == 1
+    captured = capsys.readouterr()
+    assert "[project-missing]" in captured.out
+    assert "Traceback" not in captured.out + captured.err
+    assert not (root / "build").exists()
+
+
+def test_present_project_file_raises_no_missing_finding(proj_dir):
+    assert findings(proj_dir, "project-missing") == []
+
+
+def test_evidence_item_without_id_is_a_finding(proj_dir):
+    edit(proj_dir, "evidence.yaml", lambda d: d["evidence"][1].pop("id"))
+    assert findings(proj_dir, "schema") == ["evidence.yaml evidence[1]: id is required"]
+
+
+@pytest.mark.parametrize("name, change, where", [
+    ("params.yaml", lambda d: d.update(params=[{"link_L": 40}]), "params.yaml params:"),
+    ("params.yaml", lambda d: d["params"].update(link_L=40), "params.yaml params.link_L:"),
+    ("evidence.yaml", lambda d: d["evidence"][0]["values"].update(L="forty"),
+     "evidence.yaml evidence[0].values.L:"),
+    ("project.yaml", lambda d: d.update(sources=3), "project.yaml sources:"),
+])
+def test_wrongly_typed_entry_is_a_finding_naming_where(proj_dir, name, change, where):
+    edit(proj_dir, name, change)
+    messages = findings(proj_dir, "schema")
+    assert len(messages) == 1 and messages[0].startswith(where)
+
+
+def test_well_shaped_project_raises_no_schema_finding(proj_dir):
+    assert findings(proj_dir, "schema") == []
+
+
+def test_model_syntax_error_is_a_finding(proj_dir):
+    write(proj_dir, "model.py", MODEL.replace("def build(p):", "def build(p)"))
+    messages = findings(proj_dir, "model-syntax")
+    assert len(messages) == 1 and messages[0].startswith("model.py line 4:")
+
+
+def test_valid_model_raises_no_syntax_finding(proj_dir):
+    assert findings(proj_dir, "model-syntax") == []
+
+
+def test_derived_expr_syntax_error_is_a_finding_and_other_params_still_evaluate(proj_dir):
+    def change(d):
+        d["params"]["broken"] = {"basis": "derived", "expr": "pitch /"}
+        d["params"]["half_pitch"] = {"basis": "derived", "expr": "pitch / 2"}
+    edit(proj_dir, "params.yaml", change)
+    _, report = verify(proj_dir)
+    messages = [f["message"] for f in report["findings"] if f["rule"] == "param-derived"]
+    assert len(messages) == 1 and messages[0].startswith("param broken: expr is not valid")
+    assert report["params"]["half_pitch"]["value"] == 15
+
+
+@pytest.mark.parametrize("returned", ["[]", "None", '{"parts": []}', '{"parts": {}, "datums": {"a": 1}}',
+                                      '{"parts": {"link": 3}}'])
+def test_build_returning_the_wrong_shape_is_a_finding(proj_dir, returned):
+    write(proj_dir, "model.py", MODEL.replace("    return {", f"    return {returned}\n    _ = {{", 1))
+    code, report = verify(proj_dir)
+    assert code == 1
+    assert [f["rule"] for f in report["findings"] if f["rule"] == "model-return"] == ["model-return"]
+
+
+def test_build_returning_the_expected_mapping_raises_no_return_finding(proj_dir):
+    assert findings(proj_dir, "model-return") == []
+
+
+def test_reregistering_a_source_refreshes_its_path_and_hash(proj_dir, tmp_path, capsys):
+    paper = tmp_path / "paper-v2.txt"
+    paper.write_text(PAPER + "Received 1 March.\n")
+    assert cli.main(["source", str(proj_dir), str(paper), "--id", "paper", "--kind", "paper",
+                     "--citation", "Doe 2026", "--rename", "paper-v2.txt"]) == 0
+    entries = yaml.safe_load((proj_dir / "project.yaml").read_text())["sources"]
+    assert [(s["id"], s["path"], s["sha256"]) for s in entries] == [
+        ("paper", "sources/paper-v2.txt", sources.sha256(paper))]
+    assert "Traceback" not in capsys.readouterr().err
+    assert verify(proj_dir)[0] == 0
+
+
+def test_source_into_a_missing_project_is_an_error_not_a_traceback(tmp_path, capsys):
+    paper = tmp_path / "paper.txt"
+    paper.write_text(PAPER)
+    assert cli.main(["source", str(tmp_path / "nowhere"), str(paper), "--id", "paper",
+                     "--kind", "paper", "--citation", "Doe 2026"]) == 1
+    err = capsys.readouterr().err
+    assert "project.yaml" in err and "Traceback" not in err
+
+
+def test_param_without_basis_is_a_finding_in_the_report(proj_dir):
+    edit(proj_dir, "params.yaml", lambda d: d["params"]["link_L"].pop("basis"))
+    assert "param-basis" in errors(proj_dir)
+
+
+def test_quote_from_a_non_text_source_is_a_finding(proj_dir, tmp_path):
+    frame = tmp_path / "frame.png"
+    frame.write_bytes(b"png")
+    assert cli.main(["source", str(proj_dir), str(frame), "--id", "video", "--kind", "video",
+                     "--citation", "Doe 2026 Movie S1"]) == 0
+    edit(proj_dir, "evidence.yaml", lambda d: d["evidence"][1].update(source="video"))
+    assert "evidence-anchor" in errors(proj_dir)
+
+
+def test_reregistering_one_source_leaves_the_others_untouched(proj_dir, tmp_path):
+    notes = tmp_path / "notes.txt"
+    notes.write_text("No dimensions here.\n")
+    assert cli.main(["source", str(proj_dir), str(notes), "--id", "notes", "--kind", "other",
+                     "--citation", "Doe notes"]) == 0
+    before = yaml.safe_load((proj_dir / "project.yaml").read_text())["sources"]
+    (proj_dir / "sources" / "paper.txt").write_text(PAPER + "Received 1 March.\n")
+    assert cli.main(["source", str(proj_dir), str(proj_dir / "sources" / "paper.txt"), "--id", "paper",
+                     "--kind", "paper", "--citation", "Doe 2026"]) == 0
+    after = yaml.safe_load((proj_dir / "project.yaml").read_text())["sources"]
+    assert after[1] == before[1]
+    assert after[0] == {**before[0], "sha256": sources.sha256(proj_dir / "sources" / "paper.txt")}
+
+
+def _overlay(root: Path, **changes) -> None:
+    from PIL import Image
+
+    (root / "figures").mkdir(exist_ok=True)
+    Image.new("RGB", (40, 20), "white").save(root / "figures" / "fig.png")
+    overlay = {"id": "front", "image": "figures/fig.png", "part": "link", "view": "front",
+               "origin": [20, 10], "calibration": {"pixels": [[5, 15], [35, 15]], "evidence": "pitch.pitch"}}
+    write(root, "overlays.yaml", {"overlays": [{**overlay, **changes}]})
+
+
+def _zero_pitch(root: Path) -> None:
+    edit(root, "evidence.yaml", lambda d: d["evidence"].append(
+        {"id": "zero", "source": "paper", "locator": "Table 1", "quote": "Link 40×8×5",
+         "scope": "context", "reason": "test", "values": {"z": 0}}))
+    _overlay(root, calibration={"pixels": [[5, 15], [35, 15]], "evidence": "zero.z"})
+
+
+@pytest.mark.parametrize("damage, rule", [
+    (lambda r: edit(r, "params.yaml", lambda d: d["params"].update({1: {"basis": "proposed", "value": 1,
+                                                                       "rationale": "x"}})), "schema"),
+    (lambda r: _overlay(r, id="a/b"), "overlay-config"),
+    (_zero_pitch, "overlay-config"),
+    (lambda r: ((r / "model.py").unlink(), (r / "model.py").mkdir()), "model-missing"),
+    (lambda r: write(r, "model.py", MODEL.replace("def build(p):", "raise SystemExit(3)\n\ndef build(p):")),
+     "model-build"),
+    (lambda r: write(r, "model.py", MODEL.replace('{"link": link}', '{"a/b": link}')), "model-return"),
+    (lambda r: (r / "sources" / "paper.txt").write_bytes(b"\xff\xfe\x00broken"), "source-hash"),
+])
+def test_damaged_input_is_a_finding_not_a_crash(proj_dir, damage, rule):
+    damage(proj_dir)
+    sources.pages.cache_clear()
+    code, report = verify(proj_dir)
+    assert code == 1 and rule in [f["rule"] for f in report["findings"]]
+
+
+@pytest.mark.parametrize("name, content", [("paper.pdf", b"%PDF-1.4 not really"),
+                                           ("paper.docx", b"PK not a zip")])
+def test_unreadable_source_is_a_finding(proj_dir, tmp_path, name, content):
+    broken = tmp_path / name
+    broken.write_bytes(content)
+    assert cli.main(["source", str(proj_dir), str(broken), "--id", "broken", "--kind", "other",
+                     "--citation", "Doe"]) == 0
+    assert "source-unreadable" in errors(proj_dir)
+
+
+def test_readable_sources_raise_no_unreadable_finding(proj_dir):
+    assert findings(proj_dir, "source-unreadable") == []

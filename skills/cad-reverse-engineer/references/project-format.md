@@ -2,6 +2,8 @@
 
 A reconstruction project is a directory of YAML files plus `model.py`. `cadrev init` creates it; `cadrev check` enforces every rule below and names the rule it applies (`[rule-name]`) in each finding.
 
+Before any rule runs, every file is read against the shapes shown here. A file that is not valid YAML is `[yaml-syntax]` (file and line); an entry of the wrong shape (a missing `id`, a param that is a bare number, a non-numeric value) is `[schema]`, names the file and the entry, and is left out of the run. A directory without `project.yaml` is `[project-missing]`, and no report is written.
+
 ```
 project.yaml    sources, units, tolerance, target
 evidence.yaml   the ledger: evidence, skipped, conflicts
@@ -34,9 +36,9 @@ sources:
     coverage: false        # optional: exclude from the coverage sweep (e.g. a 200-page catalogue)
 ```
 
-`tolerance.length` is how closely the model must realise a source value. It is a modelling check, never a manufacturing tolerance. Keep `sources:` the last key: `cadrev source` appends to it.
+`tolerance.length` is how closely the model must realise a source value. It is a modelling check, never a manufacturing tolerance. Keep `sources:` the last key: `cadrev source` appends to it. Registering an id that is already listed refreshes its `path` and `sha256` instead, which is how sources are restored into a clone or replaced by a new download.
 
-Text formats (quote-checked and swept): PDF, DOCX, TXT, MD, HTML. Save a web datasheet as HTML or TXT to make it quotable. Video and image files are sources for image evidence only.
+Text formats (quote-checked and swept): PDF, DOCX, TXT, MD, HTML. A text source whose file cannot be read as text is `[source-unreadable]`. Save a web datasheet as HTML or TXT to make it quotable. Video and image files are sources for image evidence only.
 
 ## evidence.yaml
 

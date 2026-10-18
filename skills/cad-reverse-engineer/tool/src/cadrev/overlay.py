@@ -46,7 +46,7 @@ def render(p: Project, built: Built) -> list[Path]:
             ox, oy = o["origin"]
             image = mpimg.imread(p.root / o["image"])
             edges = list(_edges(built, o["part"]))
-        except (KeyError, ValueError, FileNotFoundError) as exc:
+        except (KeyError, TypeError, ValueError, ZeroDivisionError, OSError) as exc:
             p.error("overlay-config", f"overlay {oid}: {exc}")
             continue
         flip = -1 if o.get("mirror") else 1
@@ -62,7 +62,12 @@ def render(p: Project, built: Built) -> list[Path]:
                      fontsize=8)
         ax.set_axis_off()
         target = out / f"{oid}.png"
-        fig.savefig(target, bbox_inches="tight", dpi=100)
-        plt.close(fig)
+        try:
+            fig.savefig(target, bbox_inches="tight", dpi=100)
+        except (OSError, ValueError) as exc:
+            p.error("overlay-config", f"overlay {oid}: cannot write {target.name}: {exc}")
+            continue
+        finally:
+            plt.close(fig)
         written.append(target)
     return written
