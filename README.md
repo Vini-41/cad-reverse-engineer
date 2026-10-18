@@ -9,7 +9,7 @@ This project keeps that boundary visible and machine-checked:
 1. **Ledger.** Every number a source states about the object is recorded as a verbatim quote, located in a SHA-256-pinned copy of the source. Numbers printed only inside figures are recorded as hashed image crops with a human-confirmed reading.
 2. **Parameters.** The model can only get numbers from `params.yaml`, and each parameter declares its basis: `source`, `derived`, `measured` or `proposed`. The model file is linted so that it contains no dimension literals.
 3. **Checks.** Published values become geometry checks (envelopes, pin pitches, masses, interference), evaluated on the built solids and compared with the ledger, never with the parameters.
-4. **Coverage.** A sweep lists every dimension-like phrase in the sources. Each one is either ledgered or skipped with a reason.
+4. **Coverage.** A sweep lists every stated quantity in the sources. Each one is either ledgered or skipped with a reason.
 5. **Report.** `build/report.md` states what is verified, which parameters rest on proposed values, which conflicts between sources are still open, and which questions to send the authors.
 
 ```
@@ -49,7 +49,7 @@ cadrev source my-project paper.pdf --id paper --kind paper --citation "Doe et al
 cadrev text my-project paper --page 4      # the exact text quotes are matched against
 cadrev figures my-project paper            # extract embedded figures
 cadrev crop my-project figures/paper/p004_01.jpg 850 160 1240 385 --name fig2a --zoom 2
-cadrev coverage my-project                 # dimension-like text not yet ledgered
+cadrev coverage my-project                 # stated quantities not yet ledgered or skipped
 cadrev check my-project                    # everything; writes build/
 ```
 

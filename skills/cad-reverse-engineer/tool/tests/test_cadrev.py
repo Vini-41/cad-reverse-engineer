@@ -237,7 +237,7 @@ def test_model_literal_is_rejected(proj_dir):
     assert "model-literal" in errors(proj_dir)
 
 
-def test_unledgered_dimension_is_reported(proj_dir):
+def test_unledgered_stated_quantity_is_reported(proj_dir):
     data = yaml.safe_load((proj_dir / "evidence.yaml").read_text())
     data["skipped"] = []
     write(proj_dir, "evidence.yaml", data)

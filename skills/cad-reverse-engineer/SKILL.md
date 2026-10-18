@@ -42,7 +42,7 @@ Read every page with `cadrev text <dir> <source>` and every figure with `cadrev 
 - Copy quotes from `cadrev text` output, which is the text the matcher sees.
 - Numbers printed inside figures (dimension labels, scale bars, inset annotations) become image evidence: `cadrev crop` the label, view the crop, write the `reading` exactly as printed.
 - Record each disagreement between sources under `conflicts`.
-- Skip, with a reason, the dimension-like text that is about something else: test objects, loads, airframe, results.
+- Skip, with a reason, the stated quantities that are about something else: test objects, loads, airframe, results.
 
 Format: `evidence.yaml` in [`references/project-format.md`](references/project-format.md).
 

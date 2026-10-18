@@ -19,6 +19,14 @@ _Avoid_: quote (for image evidence)
 **Conflict**:
 Two ledger entries that disagree about the same feature; open until it carries a resolution.
 
+**Stated quantity**:
+A number a source prints with a unit, as an `a×b×c` product or as a thread size; each one is ledgered or skipped.
+_Avoid_: dimension (for anything that is not a size of the object's geometry), dimension candidate
+
+**Skip**:
+A stated quantity set aside with a reason because it is not about the object, such as a test load or a result.
+_Avoid_: exclusion, ignore
+
 ## Parameters
 
 **Basis**:
@@ -39,6 +47,10 @@ A question that, once answered, would replace a proposed value with a stated one
 **Check**:
 One comparison between the built geometry and a ledger value: an envelope, a distance between datums, a mass or an interference.
 _Avoid_: test, assertion
+
+**Coverage sweep**:
+The pass over every text source that lists each stated quantity no ledger quote or skip covers.
+_Avoid_: coverage check, scan
 
 **Verification run**:
 One execution of `cadrev check`: lint, build, every check, and the report.

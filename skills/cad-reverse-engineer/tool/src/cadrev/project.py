@@ -269,14 +269,14 @@ def check_evidence(p: Project) -> None:
 
 
 def check_coverage(p: Project) -> list[tuple[str, int, str]]:
-    """Dimension-like text in each source that no evidence or skip entry covers."""
+    """The stated quantities in each source that no evidence or skip entry covers."""
     uncovered = []
     for sid, s in p.sources.items():
         if not _available(p, sid) or Path(s["path"]).suffix.lower() not in TEXT_FORMATS:
             continue
         if s.get("coverage") is False:
             p.warn("coverage-off", f"source {sid}: coverage: false, so the sweep does not read it; "
-                   "any quantity it states may be unledgered")
+                   "any stated quantity in it may be unledgered")
             continue
         texts = sources.pages(p.source_path(sid))
         anchors = [e for e in p.evidence.values() if e.get("source") == sid and "quote" in e]
@@ -307,12 +307,12 @@ def check_coverage(p: Project) -> list[tuple[str, int, str]]:
                 stop = text.find(sources.normalize(k.get("to", "")), start + 1) if start != -1 else -1
                 if start != -1 and stop != -1:
                     spans.append((start, stop + len(sources.normalize(k.get("to", "")))))
-            for start, end, snippet in sources.dimension_candidates(text):
+            for start, end, snippet in sources.stated_quantities(text):
                 if not any(a <= start and end <= b for a, b in spans):
                     context = text[max(0, start - 60):end + 40]
                     uncovered.append((sid, n, f"{snippet}  …{context}…"))
     for sid, n, line in uncovered:
-        p.error("coverage", f"{sid} p{n}: unledgered dimension {line}")
+        p.error("coverage", f"{sid} p{n}: unledgered stated quantity {line}")
     return uncovered
 
 

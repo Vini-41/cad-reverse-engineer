@@ -2,7 +2,7 @@
 # (text sources) or a pinned figure crop with its reading (figures, video frames).
 evidence: []
 
-# Dimension-like text that is not about the object (test conditions, results, other designs).
+# Stated quantities that are not about the object (test conditions, results, other designs).
 skipped: []
 
 # Places where sources disagree, and how the reconstruction resolves each.

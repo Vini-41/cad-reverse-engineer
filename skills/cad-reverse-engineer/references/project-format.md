@@ -102,7 +102,7 @@ One item per statement in a source. Two anchor types:
 
 Every value of an in-scope item must be used by a param `from:` or covered by a check (`[evidence-unused]`).
 
-### `skipped`: dimension-like text that is not about the object
+### `skipped`: stated quantities that are not about the object
 
 The coverage sweep lists every number printed with a unit from the table under `units` (a range or list as one candidate: `3–5 mm`, `1,5,10 mm`), every `a×b×c` product and every thread size (`M3`) in the text sources, leaving out digits inside a name (`L14`) and figure, table, equation or section numbers. Each one must fall inside an evidence quote or a skip. A source with `coverage: false` is not swept and raises the warning `[coverage-off]`.
 

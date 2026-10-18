@@ -17,7 +17,7 @@ _DASHES = dict.fromkeys(map(ord, "‐‑‒–—−"), "-")
 _TIMES = dict.fromkeys(map(ord, "×✕✖⨯"), "x")
 # The numbers naming figures, tables, equations or sections ("Fig. S2", "Eqs. (3)-(4)",
 # "Sec. 4.2", "Figs. 2 and 3"). Abbreviations other than "fig" need their period, so "2 sec"
-# stays a value, and a number followed by a unit ("section 4 mm thick") is a dimension; "in" and
+# stays a value, and a number followed by a unit ("section 4 mm thick") is a value; "in" and
 # the inch mark are left out there, so "Fig. 2 in" stays a label.
 _UNIT = units.spelling()
 # A number as printed: 3.5, or a fraction before a unit (1/4 inch, 1 1/2 in; a bare 1/50 is two).
@@ -97,7 +97,7 @@ def _tokens(text: str) -> list[_Token]:
 
 
 def quantities_in(text: str) -> list[tuple[float, str | None]]:
-    """The dimension candidates of a quote, each with the unit printed after it (None if none):
+    """The values a quote states, each with the unit printed after it (None if none):
     whole numeric tokens, both endpoints of a range as positive values, and no number that labels
     a figure, table, equation or section. The numbers of a range or product share its last unit."""
     return [(t.value, t.unit) for t in _tokens(normalize(text)) if not t.labelled]
@@ -182,10 +182,14 @@ def extract_figures(path: Path, out: Path) -> list[Path]:
 _THREAD = re.compile(r"(?<![a-z0-9.])m\d+(?:\.\d+)?(?:x\d+(?:\.\d+)?)?(?![a-z0-9])")
 
 
-def dimension_candidates(text: str) -> list[tuple[int, int, str]]:
+def stated_quantities(text: str) -> list[tuple[int, int, str]]:
     """Spans in normalized text that state a quantity: a number the quote reader would read with
     a unit (a whole range such as 3-5 mm), an a×b×c product, or a thread size; never digits
-    inside a name or a figure, table, equation or section number."""
+    inside a name or a figure, table, equation or section number.
+
+    It errs towards listing: a unit glued to a number is a candidate even where it is part of a
+    name (1990s, 4G), because extracted text glues real ones too (t=0s, 20g), and a false
+    candidate costs one skip where a missed one leaves a quantity unledgered."""
     spans, group = [], []
     for t in _tokens(text):
         group.append(t)

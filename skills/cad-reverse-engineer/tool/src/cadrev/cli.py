@@ -160,7 +160,7 @@ def cmd_coverage(args) -> int:
     missing = proj.check_coverage(p)
     for sid, page, line in missing:
         print(f"{sid} p{page}: {line}")
-    print(f"{len(missing)} unledgered dimension candidates")
+    print(f"{len(missing)} unledgered stated quantities")
     return 1 if missing else 0
 
 
@@ -244,7 +244,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--zoom", type=int, default=1)
     s.set_defaults(fn=cmd_crop)
 
-    s = sub.add_parser("coverage", help="list dimension-like text no evidence or skip covers")
+    s = sub.add_parser("coverage", help="list stated quantities no evidence or skip covers")
     s.add_argument("dir")
     s.set_defaults(fn=cmd_coverage)
 

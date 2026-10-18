@@ -1,0 +1,3 @@
+# Dimensionless quantities read in SI
+
+A quote's `%`, `turns` and `mAh` are read through the same unit table as every length and mass, and since no project unit governs them they convert to SI: a ledgered `40%` reaches its param as 0.4, `3300 mAh` as 11880 (coulombs). We chose this over keeping them as printed, or flagging them in the coverage sweep without reading their unit, because a unit the reader knows is one `[unit-quantity]` can enforce: a percentage or a battery capacity used as a length fails loudly instead of entering the model as millimetres, and one table keeps the sweep and the matcher in step (ADR-0001).
