@@ -54,12 +54,18 @@ def render(p: Project, built: Built) -> list[Path]:
         ax.imshow(image)
         for edge in edges:
             points = [(q.X, q.Y, q.Z) for q in (edge.position_at(t / 24) for t in range(25))]
-            ax.plot([ox + flip * pt[h] * scale for pt in points],
-                    [oy - pt[v] * scale for pt in points],
-                    color=o.get("color", "#e4007c"), linewidth=1.2, alpha=0.85)
+            ax.plot(
+                [ox + flip * pt[h] * scale for pt in points],
+                [oy - pt[v] * scale for pt in points],
+                color=o.get("color", "#e4007c"),
+                linewidth=1.2,
+                alpha=0.85,
+            )
         ax.plot([x1, x2], [y1, y2], "o--", color="#00a0e4", markersize=4, linewidth=1)
-        ax.set_title(f"{oid}: {o['part']} {o['view']} view, scaled by {cal['evidence']} = {known:g}",
-                     fontsize=8)
+        ax.set_title(
+            f"{oid}: {o['part']} {o['view']} view, scaled by {cal['evidence']} = {known:g}",
+            fontsize=8,
+        )
         ax.set_axis_off()
         target = out / f"{oid}.png"
         try:

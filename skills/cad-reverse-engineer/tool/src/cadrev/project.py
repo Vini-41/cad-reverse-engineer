@@ -32,8 +32,20 @@ SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "other")
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}
 MATH_NAMES = {
     name: getattr(math, name)
-    for name in ("pi", "sqrt", "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
-                 "radians", "degrees", "hypot")
+    for name in (
+        "pi",
+        "sqrt",
+        "sin",
+        "cos",
+        "tan",
+        "asin",
+        "acos",
+        "atan",
+        "atan2",
+        "radians",
+        "degrees",
+        "hypot",
+    )
 } | {"min": min, "max": max, "abs": abs}
 
 
@@ -105,7 +117,9 @@ class Project:
         item = self.evidence.get(item_id)
         if item is None or key not in item.get("values", {}):
             return None
-        return float(item["values"][key]), item["quote"] if "quote" in item else str(item.get("reading", ""))
+        return float(item["values"][key]), item["quote"] if "quote" in item else str(
+            item.get("reading", "")
+        )
 
     def printed_units(self, ref: str) -> list[str | None]:
         """The units printed after each appearance of an evidence value in its quote or reading."""
@@ -113,8 +127,13 @@ class Project:
         if ledgered is None:
             return []
         value, text = ledgered
-        return list(dict.fromkeys(unit for v, unit in sources.quantities_in(text)
-                                  if math.isclose(v, value, rel_tol=1e-9)))
+        return list(
+            dict.fromkeys(
+                unit
+                for v, unit in sources.quantities_in(text)
+                if math.isclose(v, value, rel_tol=1e-9)
+            )
+        )
 
     def unit_of(self, ref: str) -> str | None:
         """The unit an evidence value is printed in; None (the project's units) if none is printed."""
@@ -156,8 +175,14 @@ def read_meta(root: Path, findings: list[Finding]) -> dict:
     """project.yaml's contents, or {} after a REFUSED finding: it is missing or of a format
     this cadrev does not read."""
     if not (root / "project.yaml").is_file():
-        findings.append(Finding("error", "project-missing", f"{root / 'project.yaml'} not found; "
-                                "point cadrev at a project directory (cadrev init creates one)"))
+        findings.append(
+            Finding(
+                "error",
+                "project-missing",
+                f"{root / 'project.yaml'} not found; "
+                "point cadrev at a project directory (cadrev init creates one)",
+            )
+        )
         return {}
     before = len(findings)
     meta = read_yaml(root, "project.yaml", findings)
@@ -165,11 +190,22 @@ def read_meta(root: Path, findings: list[Finding]) -> dict:
         return meta  # the syntax finding names the problem; the format cannot be read past it
     fmt = meta.get("format")
     if fmt is None:
-        findings.append(Finding("error", "format-missing",
-                                f"project.yaml: format is missing; this cadrev reads format: {FORMAT}"))
+        findings.append(
+            Finding(
+                "error",
+                "format-missing",
+                f"project.yaml: format is missing; this cadrev reads format: {FORMAT}",
+            )
+        )
     elif type(fmt) is not int or fmt != FORMAT:
-        findings.append(Finding("error", "format-unknown", f"project.yaml: format {fmt!r} is not one "
-                                f"this cadrev reads (it reads format: {FORMAT})"))
+        findings.append(
+            Finding(
+                "error",
+                "format-unknown",
+                f"project.yaml: format {fmt!r} is not one "
+                f"this cadrev reads (it reads format: {FORMAT})",
+            )
+        )
     else:
         return meta
     return {}
@@ -181,8 +217,11 @@ def load(root: Path) -> Project:
     findings: list[Finding] = []
     meta = read_meta(root, findings)
     refused = any(f.rule in REFUSED for f in findings)
-    files = {name: {} if refused else read_yaml(root, name, findings)
-             for name in schema.FILES if name != "project.yaml"}
+    files = {
+        name: {} if refused else read_yaml(root, name, findings)
+        for name in schema.FILES
+        if name != "project.yaml"
+    }
     evidence_list = files["evidence.yaml"].get("evidence", [])
     project = Project(
         root=root,
@@ -207,8 +246,11 @@ def check_sources(p: Project) -> None:
             p.error("source-kind", f"source {sid}: kind must be one of {', '.join(SOURCE_KINDS)}")
         path = p.root / s.get("path", "")
         if not path.is_file():
-            p.error("source-missing", f"source {sid}: {s.get('path')} not found"
-                    + (f"; download from {s['url']}" if s.get("url") else ""))
+            p.error(
+                "source-missing",
+                f"source {sid}: {s.get('path')} not found"
+                + (f"; download from {s['url']}" if s.get("url") else ""),
+            )
         else:
             if s.get("sha256") != sources.sha256(path):
                 p.error("source-hash", f"source {sid}: sha256 does not match {s.get('path')}")
@@ -216,16 +258,22 @@ def check_sources(p: Project) -> None:
                 try:
                     sources.pages(path)
                 except Exception as exc:  # noqa: BLE001 - pypdf and zipfile raise many types
-                    p.error("source-unreadable", f"source {sid}: cannot read text from {s.get('path')}: "
-                            f"{type(exc).__name__}: {exc}")
+                    p.error(
+                        "source-unreadable",
+                        f"source {sid}: cannot read text from {s.get('path')}: "
+                        f"{type(exc).__name__}: {exc}",
+                    )
                     p.unreadable.add(sid)
         if not s.get("citation"):
             p.error("source-citation", f"source {sid}: citation is required")
 
 
 def _available(p: Project, sid: str) -> bool:
-    return (sid in p.sources and sid not in p.unreadable
-            and (p.root / p.sources[sid].get("path", "")).is_file())
+    return (
+        sid in p.sources
+        and sid not in p.unreadable
+        and (p.root / p.sources[sid].get("path", "")).is_file()
+    )
 
 
 def check_evidence(p: Project) -> None:
@@ -241,20 +289,26 @@ def check_evidence(p: Project) -> None:
             if not _available(p, sid):
                 continue
             if Path(p.sources[sid]["path"]).suffix.lower() not in TEXT_FORMATS:
-                p.error("evidence-anchor", f"{eid}: {sid} is not a text source; "
-                        "use image + reading instead of quote")
+                p.error(
+                    "evidence-anchor",
+                    f"{eid}: {sid} is not a text source; use image + reading instead of quote",
+                )
                 continue
             match = sources.find_quote(p.source_path(sid), e["quote"], e.get("page"))
             if match is None:
                 where = f" on page {e['page']}" if e.get("page") else ""
-                p.error("quote-not-found", f"{eid}: quote not found in {sid}{where}: {e['quote']!r}")
+                p.error(
+                    "quote-not-found", f"{eid}: quote not found in {sid}{where}: {e['quote']!r}"
+                )
                 continue
             if not e.get("page") and len(sources.pages(p.source_path(sid))) > 1:
                 p.warn("quote-page", f"{eid}: add page: {match.page}")
             quoted = sources.numbers_in(e["quote"])
             for key, value in values.items():
                 if not any(math.isclose(float(value), q, rel_tol=1e-9) for q in quoted):
-                    p.error("value-not-in-quote", f"{eid}.{key} = {value} does not appear in its quote")
+                    p.error(
+                        "value-not-in-quote", f"{eid}.{key} = {value} does not appear in its quote"
+                    )
         elif "image" in e:
             image = p.root / e["image"]
             if not image.is_file():
@@ -262,22 +316,35 @@ def check_evidence(p: Project) -> None:
             elif e.get("image_sha256") != sources.sha256(image):
                 p.error("image-hash", f"{eid}: image_sha256 does not match {e['image']}")
             if not e.get("reading"):
-                p.error("image-reading", f"{eid}: image evidence needs reading: the text as printed")
+                p.error(
+                    "image-reading", f"{eid}: image evidence needs reading: the text as printed"
+                )
             else:
                 read = sources.numbers_in(str(e["reading"]))
                 for key, value in values.items():
                     if not any(math.isclose(float(value), q, rel_tol=1e-9) for q in read):
                         p.error("value-not-in-reading", f"{eid}.{key} = {value} not in its reading")
         else:
-            p.error("evidence-anchor", f"{eid}: needs quote (text sources) or image + reading (figures, video)")
+            p.error(
+                "evidence-anchor",
+                f"{eid}: needs quote (text sources) or image + reading (figures, video)",
+            )
         for key, value in values.items():
             printed = p.printed_units(f"{eid}.{key}")
             if len(printed) > 1:
-                shown = " and ".join(f"{value:g} {u}" if u else f"{value:g} with no unit" for u in printed)
-                p.error("unit-ambiguous", f"{eid}.{key} is printed as {shown} in its "
-                        f"{'quote' if 'quote' in e else 'reading'}; quote only the part that states it")
+                shown = " and ".join(
+                    f"{value:g} {u}" if u else f"{value:g} with no unit" for u in printed
+                )
+                p.error(
+                    "unit-ambiguous",
+                    f"{eid}.{key} is printed as {shown} in its "
+                    f"{'quote' if 'quote' in e else 'reading'}; quote only the part that states it",
+                )
         if not e.get("locator"):
-            p.error("evidence-locator", f"{eid}: locator is required (e.g. 'Table S2', 'Fig. 2A', 'Sec. 4.2')")
+            p.error(
+                "evidence-locator",
+                f"{eid}: locator is required (e.g. 'Table S2', 'Fig. 2A', 'Sec. 4.2')",
+            )
 
 
 def check_coverage(p: Project) -> list[tuple[str, int, str]]:
@@ -287,8 +354,11 @@ def check_coverage(p: Project) -> list[tuple[str, int, str]]:
         if not _available(p, sid) or Path(s["path"]).suffix.lower() not in TEXT_FORMATS:
             continue
         if s.get("coverage") is False:
-            p.warn("coverage-off", f"source {sid}: coverage: false, so the sweep does not read it; "
-                   "any stated quantity in it may be unledgered")
+            p.warn(
+                "coverage-off",
+                f"source {sid}: coverage: false, so the sweep does not read it; "
+                "any stated quantity in it may be unledgered",
+            )
             continue
         texts = sources.pages(p.source_path(sid))
         anchors = [e for e in p.evidence.values() if e.get("source") == sid and "quote" in e]
@@ -316,12 +386,14 @@ def check_coverage(p: Project) -> list[tuple[str, int, str]]:
                 if "from" not in k or k.get("page") not in (None, n):
                     continue
                 start = text.find(sources.normalize(k["from"]))
-                stop = text.find(sources.normalize(k.get("to", "")), start + 1) if start != -1 else -1
+                stop = (
+                    text.find(sources.normalize(k.get("to", "")), start + 1) if start != -1 else -1
+                )
                 if start != -1 and stop != -1:
                     spans.append((start, stop + len(sources.normalize(k.get("to", "")))))
             for start, end, snippet in sources.stated_quantities(text):
                 if not any(a <= start and end <= b for a, b in spans):
-                    context = text[max(0, start - 60):end + 40]
+                    context = text[max(0, start - 60) : end + 40]
                     uncovered.append((sid, n, f"{snippet}  …{context}…"))
     for sid, n, line in uncovered:
         p.error("coverage", f"{sid} p{n}: unledgered stated quantity {line}")
@@ -330,8 +402,17 @@ def check_coverage(p: Project) -> list[tuple[str, int, str]]:
 
 def _evaluate(expr: str, names: dict[str, float]) -> float:
     tree = ast.parse(expr, mode="eval")
-    allowed = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Call, ast.Name, ast.Load,
-               ast.Constant, ast.operator, ast.unaryop)
+    allowed = (
+        ast.Expression,
+        ast.BinOp,
+        ast.UnaryOp,
+        ast.Call,
+        ast.Name,
+        ast.Load,
+        ast.Constant,
+        ast.operator,
+        ast.unaryop,
+    )
     for node in ast.walk(tree):
         if not isinstance(node, allowed):
             raise ValueError(f"disallowed syntax {type(node).__name__}")
@@ -359,7 +440,9 @@ def resolve_params(p: Project) -> None:
                 p.error("param-from", f"param {name}: from: {ref!r} is not an evidence value")
             else:
                 if "value" in spec and not math.isclose(float(spec["value"]), value, rel_tol=1e-9):
-                    p.error("param-mismatch", f"param {name}: value {spec['value']} != {ref} = {value}")
+                    p.error(
+                        "param-mismatch", f"param {name}: value {spec['value']} != {ref} = {value}"
+                    )
                 p.values[name] = value
             p.rests_on[name] = "source"
             pending.pop(name)
@@ -394,13 +477,19 @@ def resolve_params(p: Project) -> None:
             try:
                 needs = expr_names(spec["expr"]) - MATH_NAMES.keys()
             except (SyntaxError, ValueError) as exc:
-                p.error("param-derived", f"param {name}: expr is not valid syntax "
-                        f"({getattr(exc, 'msg', exc)}): {spec['expr']!r}")
+                p.error(
+                    "param-derived",
+                    f"param {name}: expr is not valid syntax "
+                    f"({getattr(exc, 'msg', exc)}): {spec['expr']!r}",
+                )
                 pending.pop(name)
                 continue
             if not needs:
-                p.error("param-constant", f"param {name}: expr {spec['expr']!r} references no param, "
-                        "so its value traces to nothing; give the number its own basis")
+                p.error(
+                    "param-constant",
+                    f"param {name}: expr {spec['expr']!r} references no param, "
+                    "so its value traces to nothing; give the number its own basis",
+                )
             unknown = needs - p.params.keys()
             if unknown:
                 p.error("param-derived", f"param {name}: expr uses undefined {sorted(unknown)}")
@@ -413,11 +502,14 @@ def resolve_params(p: Project) -> None:
                     p.error("param-derived", f"param {name}: {exc}")
                     value = math.nan
                 if "value" in spec and not math.isclose(float(spec["value"]), value, rel_tol=1e-6):
-                    p.error("param-mismatch", f"param {name}: value {spec['value']} != expr = {value:g}")
+                    p.error(
+                        "param-mismatch", f"param {name}: value {spec['value']} != expr = {value:g}"
+                    )
                 p.values[name] = value
                 # A constant expr rests on nothing, so it counts as the weakest basis.
-                p.rests_on[name] = max((p.rests_on[n] for n in needs), key=RESTS_ON.index,
-                                       default="proposed")
+                p.rests_on[name] = max(
+                    (p.rests_on[n] for n in needs), key=RESTS_ON.index, default="proposed"
+                )
                 pending.pop(name)
                 progressed = True
         if pending and not progressed:
@@ -433,7 +525,9 @@ CHECK_READS = {"bbox": "length", "distance": "length", "mass": "mass"}
 def check_refs(c: dict) -> list[str]:
     """The evidence values a check compares with the geometry."""
     eid = c.get("evidence")
-    return [f"{eid}.{key}" for key in (c.get("axes") or {})] + ([f"{eid}.{c['key']}"] if c.get("key") else [])
+    return [f"{eid}.{key}" for key in (c.get("axes") or {})] + (
+        [f"{eid}.{c['key']}"] if c.get("key") else []
+    )
 
 
 def check_tolerance(p: Project, c: dict) -> tuple[str, float] | None:
@@ -448,7 +542,7 @@ def check_tolerance(p: Project, c: dict) -> tuple[str, float] | None:
 
 def overlap_limit(p: Project, c: dict) -> float:
     """The most overlap an interference check lets instances have: max_volume, else tolerance.length³."""
-    return float(c.get("max_volume", p.length_tol ** 3))
+    return float(c.get("max_volume", p.length_tol**3))
 
 
 def check_tolerances(p: Project) -> None:
@@ -460,22 +554,31 @@ def check_tolerances(p: Project) -> None:
         key, value = tolerance
         if key == "tol_rel":
             if value > TOL_REL_CAP:
-                p.error("tolerance-cap", f"check {cid}: tol_rel {value:g} is above the cap of {TOL_REL_CAP:g}")
+                p.error(
+                    "tolerance-cap",
+                    f"check {cid}: tol_rel {value:g} is above the cap of {TOL_REL_CAP:g}",
+                )
             continue
         where = "" if "tol" in c else " (tolerance.length)"
         for ref in check_refs(c):
             expected = p.evidence_value(ref)
             if expected is not None and value > TOL_CAP * abs(expected) * (1 + 1e-9):
-                p.error("tolerance-cap", f"check {cid}: tol {value:g}{where} is above {TOL_CAP:.0%} "
-                        f"of {ref}, {expected:g}")
+                p.error(
+                    "tolerance-cap",
+                    f"check {cid}: tol {value:g}{where} is above {TOL_CAP:.0%} "
+                    f"of {ref}, {expected:g}",
+                )
                 break
 
 
 def check_accounting(p: Project) -> None:
     """Every evidence value is used by a parameter, checked against geometry, or set aside."""
     used = {spec.get("from") for spec in p.params.values()}
-    measured_from = {str(spec.get("from", "")).partition(".")[0]
-                     for spec in p.params.values() if spec.get("basis") == "measured"}
+    measured_from = {
+        str(spec.get("from", "")).partition(".")[0]
+        for spec in p.params.values()
+        if spec.get("basis") == "measured"
+    }
     checked = {ref for c in p.checks for ref in check_refs(c)}
     used |= checked
     for eid, e in p.evidence.items():
@@ -487,12 +590,18 @@ def check_accounting(p: Project) -> None:
             continue
         for key in e.get("values") or {}:
             if f"{eid}.{key}" not in used:
-                p.error("evidence-unused", f"{eid}.{key} is neither used by a param nor checked "
-                        "(or mark the item scope: not-modeled with a reason)")
+                p.error(
+                    "evidence-unused",
+                    f"{eid}.{key} is neither used by a param nor checked "
+                    "(or mark the item scope: not-modeled with a reason)",
+                )
     for name, spec in p.params.items():
         if spec.get("basis") == "source" and spec.get("from") not in checked:
-            p.warn("unchecked-source", f"param {name}: {spec.get('from')} feeds the model but no "
-                   "check confirms the geometry realises it")
+            p.warn(
+                "unchecked-source",
+                f"param {name}: {spec.get('from')} feeds the model but no "
+                "check confirms the geometry realises it",
+            )
 
 
 def check_conflicts(p: Project) -> None:
@@ -509,12 +618,25 @@ def expect_quantity(p: Project, ref: str, expected: tuple[str, ...], use: str) -
     quantity, or in no unit."""
     unit = p.unit_of(ref)
     if unit is not None and units.quantity(unit) not in expected:
-        p.error("unit-quantity", f"{ref} is printed in {unit}, a unit of {units.quantity(unit)}, "
-                f"where {' or '.join(f'a {q}' for q in expected)} is expected ({use})")
+        p.error(
+            "unit-quantity",
+            f"{ref} is printed in {unit}, a unit of {units.quantity(unit)}, "
+            f"where {' or '.join(f'a {q}' for q in expected)} is expected ({use})",
+        )
 
 
-_SCALING = (ast.Expression, ast.Name, ast.Load, ast.Constant, ast.UnaryOp, ast.UAdd, ast.USub,
-            ast.BinOp, ast.Mult, ast.Div)
+_SCALING = (
+    ast.Expression,
+    ast.Name,
+    ast.Load,
+    ast.Constant,
+    ast.UnaryOp,
+    ast.UAdd,
+    ast.USub,
+    ast.BinOp,
+    ast.Mult,
+    ast.Div,
+)
 
 
 def _traced(p: Project, name: str, through: tuple[str, ...] = ()) -> tuple[str, str] | None:
@@ -566,16 +688,27 @@ def check_units(p: Project) -> None:
             expect_quantity(p, ref, ("length",), f"overlay {o.get('id', '?')} calibration")
 
 
-_FOLDS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
-          ast.Div: operator.truediv, ast.FloorDiv: operator.floordiv, ast.Mod: operator.mod,
-          ast.Pow: operator.pow, ast.UAdd: operator.pos, ast.USub: operator.neg}
+_FOLDS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+    ast.UAdd: operator.pos,
+    ast.USub: operator.neg,
+}
 _TEXT_TO_NUMBER = ("float", "int", "complex", "eval")
 
 
 def _literal(node: ast.AST) -> float | None:
     """The value of a number literal, in any spelling (1e1, 3.0, 0x3, 3_0), or None."""
-    if (isinstance(node, ast.Constant) and isinstance(node.value, (int, float))
-            and not isinstance(node.value, bool)):
+    if (
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, (int, float))
+        and not isinstance(node.value, bool)
+    ):
         return float(node.value)
     return None
 
@@ -622,37 +755,62 @@ def lint_model(p: Project) -> None:
     folded = set()  # nodes inside a constant expression already folded whole
     for node in ast.walk(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
-            modules = ([a.name for a in node.names] if isinstance(node, ast.Import)
-                       else ["." * node.level + (node.module or "")])
+            modules = (
+                [a.name for a in node.names]
+                if isinstance(node, ast.Import)
+                else ["." * node.level + (node.module or "")]
+            )
             for module in modules:
                 if module.split(".")[0] not in MODEL_IMPORTS:
-                    p.error("model-import", f"model.py:{node.lineno}: imports {module}; model.py may "
-                            "import only build123d and math, so every number comes through params")
-        elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-              and node.func.id in _TEXT_TO_NUMBER
-              and any(isinstance(n, ast.JoinedStr) or (isinstance(n, ast.Constant) and isinstance(n.value, str))
-                      for arg in node.args for n in ast.walk(arg))):
-            p.error("model-text-number", f"model.py:{node.lineno}: {node.func.id}() of text; "
-                    "move the number to params.yaml with a basis")
+                    p.error(
+                        "model-import",
+                        f"model.py:{node.lineno}: imports {module}; model.py may "
+                        "import only build123d and math, so every number comes through params",
+                    )
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in _TEXT_TO_NUMBER
+            and any(
+                isinstance(n, ast.JoinedStr)
+                or (isinstance(n, ast.Constant) and isinstance(n.value, str))
+                for arg in node.args
+                for n in ast.walk(arg)
+            )
+        ):
+            p.error(
+                "model-text-number",
+                f"model.py:{node.lineno}: {node.func.id}() of text; "
+                "move the number to params.yaml with a basis",
+            )
         if isinstance(node, ast.Constant):
             literal = _literal(node)
             if literal is not None and not is_allowed(literal):
-                p.error("model-literal", f"model.py:{node.lineno}: literal {ast.unparse(node)}; "
-                        "move it to params.yaml with a basis")
+                p.error(
+                    "model-literal",
+                    f"model.py:{node.lineno}: literal {ast.unparse(node)}; "
+                    "move it to params.yaml with a basis",
+                )
         elif isinstance(node, ast.BinOp) and node not in folded:
             value = _fold(node)
             if value is None:
                 continue
             folded.update(ast.walk(node))
             if not is_allowed(value):
-                p.error("model-arithmetic", f"model.py:{node.lineno}: {ast.unparse(node)} folds to "
-                        f"{value:g}, not an allowed literal; move it to params.yaml with a basis")
+                p.error(
+                    "model-arithmetic",
+                    f"model.py:{node.lineno}: {ast.unparse(node)} folds to "
+                    f"{value:g}, not an allowed literal; move it to params.yaml with a basis",
+                )
 
 
 def check_static(p: Project) -> None:
     target = str(p.meta.get("target") or "")
     if not target or target.startswith("TODO"):
-        p.error("target", "project.yaml target: name the object, version and configuration reconstructed")
+        p.error(
+            "target",
+            "project.yaml target: name the object, version and configuration reconstructed",
+        )
     check_sources(p)
     check_evidence(p)
     resolve_params(p)

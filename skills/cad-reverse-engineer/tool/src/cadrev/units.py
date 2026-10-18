@@ -14,10 +14,18 @@ from typing import NamedTuple
 BASE = {"length": "mm", "angle": "deg", "mass": "g", "force": "N", "time": "s"}
 # Every other quantity is measured in the project's base units: torque in N·mm by default.
 # Those built from none (a fraction, a count, a charge) stay in SI: 40% is 0.4.
-DERIVED = {"torque": {"force": 1, "length": 1}, "pressure": {"force": 1, "length": -2},
-           "density": {"mass": 1, "length": -3}, "speed": {"length": 1, "time": -1},
-           "area": {"length": 2}, "volume": {"length": 3}, "angular speed": {"angle": 1, "time": -1},
-           "fraction": {}, "count": {}, "charge": {}}
+DERIVED = {
+    "torque": {"force": 1, "length": 1},
+    "pressure": {"force": 1, "length": -2},
+    "density": {"mass": 1, "length": -3},
+    "speed": {"length": 1, "time": -1},
+    "area": {"length": 2},
+    "volume": {"length": 3},
+    "angular speed": {"angle": 1, "time": -1},
+    "fraction": {},
+    "count": {},
+    "charge": {},
+}
 
 # "in" before a determiner is the word ("4 in total", "2 in each leg"), not inches.
 INCH_IN = r"in(?!\s(?:the|a|an|each|every|all|total|both|this|that|these|those|its|their|which|series|parallel)\b)"
@@ -25,7 +33,6 @@ _SEP = r"(?:\s?[·⋅*]\s?|[.-])?"  # between the parts of a compound unit: N·m
 _CUBED = r"(?:3|\^3)"  # NFKC turns ³ into 3
 _PER_CC = rf"(?:/\s?cm{_CUBED}|/\s?cc|/\s?ml|{_SEP}cm-3)"  # g/cm³, g/cc, g/ml, g·cm⁻³
 _SQUARED = r"(?:2|\^2)"  # NFKC turns ² into 2
-
 
 
 class Unit(NamedTuple):
@@ -103,7 +110,9 @@ def unit_at(text: str, pos: int) -> tuple[str, int] | None:
     m = _FOLLOWING.match(text, pos)
     if m is None:
         return None
-    return next(name for name, spelled in _SPELLED.items() if spelled.fullmatch(m.group(1))), m.end()
+    return next(
+        name for name, spelled in _SPELLED.items() if spelled.fullmatch(m.group(1))
+    ), m.end()
 
 
 def named(spelled: str) -> str | None:
@@ -119,11 +128,16 @@ def quantity(unit: str) -> str:
 def declared(q, spelled) -> tuple[str | None, str]:
     """The unit a project's `units: {q: spelled}` sets, or None and why it sets none."""
     if q not in BASE:
-        return None, f"units sets {', '.join(BASE)}; other quantities follow from them (torque in force × length)"
+        return (
+            None,
+            f"units sets {', '.join(BASE)}; other quantities follow from them (torque in force × length)",
+        )
     unit = named(spelled) if isinstance(spelled, str) else None
     if unit is None:
-        return None, (f"{spelled!r} is not a unit cadrev knows; one of "
-                      + ", ".join(n for n, u in UNITS.items() if u.quantity == q))
+        return None, (
+            f"{spelled!r} is not a unit cadrev knows; one of "
+            + ", ".join(n for n, u in UNITS.items() if u.quantity == q)
+        )
     if quantity(unit) != q:
         return None, f"{unit} is a unit of {quantity(unit)}, not {q}"
     return unit, ""

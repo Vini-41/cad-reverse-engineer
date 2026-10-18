@@ -30,41 +30,125 @@ class Record:
 
 TEXT_OR_NUMBER = (str, NUMBER)
 
-SOURCE = Record({"id": str, "kind": str, "path": str, "sha256": str, "citation": str,
-                 "url": str, "license": str, "coverage": bool}, required=("id",))
-EVIDENCE = Record({"id": str, "source": str, "page": int, "locator": str, "quote": str,
-                   "values": Table(NUMBER), "scope": str, "reason": str, "image": str,
-                   "image_sha256": str, "reading": TEXT_OR_NUMBER, "confirmed_by": str},
-                  required=("id",))
-SKIP = Record({"source": str, "page": int, "pages": Items(int), "quote": str, "from": str,
-               "to": str, "reason": str})
+SOURCE = Record(
+    {
+        "id": str,
+        "kind": str,
+        "path": str,
+        "sha256": str,
+        "citation": str,
+        "url": str,
+        "license": str,
+        "coverage": bool,
+    },
+    required=("id",),
+)
+EVIDENCE = Record(
+    {
+        "id": str,
+        "source": str,
+        "page": int,
+        "locator": str,
+        "quote": str,
+        "values": Table(NUMBER),
+        "scope": str,
+        "reason": str,
+        "image": str,
+        "image_sha256": str,
+        "reading": TEXT_OR_NUMBER,
+        "confirmed_by": str,
+    },
+    required=("id",),
+)
+SKIP = Record(
+    {
+        "source": str,
+        "page": int,
+        "pages": Items(int),
+        "quote": str,
+        "from": str,
+        "to": str,
+        "reason": str,
+    }
+)
 CONFLICT = Record({"id": TEXT_OR_NUMBER, "evidence": Items(str), "summary": str, "resolution": str})
-PARAM = Record({"basis": str, "from": str, "value": NUMBER, "expr": str, "method": str,
-                "uncertainty": TEXT_OR_NUMBER, "rationale": str, "gap": str, "interpretation": str})
-CHECK = Record({"id": TEXT_OR_NUMBER, "kind": str, "part": str, "parts": Items(str), "evidence": str,
-                "key": str, "axes": Table(str), "between": Items(str), "along": str, "density": str,
-                "counts": Table(NUMBER), "add": Items(str), "tol": NUMBER, "tol_rel": NUMBER,
-                "max_volume": NUMBER, "pairs": Items(Items(str)), "interpretation": str})
+PARAM = Record(
+    {
+        "basis": str,
+        "from": str,
+        "value": NUMBER,
+        "expr": str,
+        "method": str,
+        "uncertainty": TEXT_OR_NUMBER,
+        "rationale": str,
+        "gap": str,
+        "interpretation": str,
+    }
+)
+CHECK = Record(
+    {
+        "id": TEXT_OR_NUMBER,
+        "kind": str,
+        "part": str,
+        "parts": Items(str),
+        "evidence": str,
+        "key": str,
+        "axes": Table(str),
+        "between": Items(str),
+        "along": str,
+        "density": str,
+        "counts": Table(NUMBER),
+        "add": Items(str),
+        "tol": NUMBER,
+        "tol_rel": NUMBER,
+        "max_volume": NUMBER,
+        "pairs": Items(Items(str)),
+        "interpretation": str,
+    }
+)
 GAP = Record({"id": str, "question": str, "ask": str}, required=("id",))
-OVERLAY = Record({"id": TEXT_OR_NUMBER, "image": str, "part": str, "view": str,
-                  "origin": Items(NUMBER), "mirror": bool, "color": str,
-                  "calibration": Record({"pixels": Items(Items(NUMBER)), "evidence": str})})
+OVERLAY = Record(
+    {
+        "id": TEXT_OR_NUMBER,
+        "image": str,
+        "part": str,
+        "view": str,
+        "origin": Items(NUMBER),
+        "mirror": bool,
+        "color": str,
+        "calibration": Record({"pixels": Items(Items(NUMBER)), "evidence": str}),
+    }
+)
 
 # file -> top-level key -> (spec of each entry, collection type)
 FILES = {
-    "project.yaml": {"name": (TEXT_OR_NUMBER, None), "target": (str, None), "units": (dict, None),
-                     "tolerance": (Record({"length": NUMBER}), None),
-                     "model_literals": (Items(NUMBER), None), "sources": (SOURCE, list)},
-    "evidence.yaml": {"evidence": (EVIDENCE, list), "skipped": (SKIP, list),
-                      "conflicts": (CONFLICT, list)},
+    "project.yaml": {
+        "name": (TEXT_OR_NUMBER, None),
+        "target": (str, None),
+        "units": (dict, None),
+        "tolerance": (Record({"length": NUMBER}), None),
+        "model_literals": (Items(NUMBER), None),
+        "sources": (SOURCE, list),
+    },
+    "evidence.yaml": {
+        "evidence": (EVIDENCE, list),
+        "skipped": (SKIP, list),
+        "conflicts": (CONFLICT, list),
+    },
     "params.yaml": {"params": (PARAM, dict)},
     "checks.yaml": {"checks": (CHECK, list)},
     "gaps.yaml": {"gaps": (GAP, list)},
     "overlays.yaml": {"overlays": (OVERLAY, list)},
 }
 
-_NAMES = {str: "text", int: "a whole number", bool: "true or false", dict: "a mapping",
-          NUMBER: "a number", list: "a list"}
+_NAMES = {
+    str: "text",
+    int: "a whole number",
+    bool: "true or false",
+    dict: "a mapping",
+    NUMBER: "a number",
+    list: "a list",
+}
 
 
 def _expected(spec) -> str:
@@ -112,8 +196,10 @@ def conform(value, spec, where: str, problems: list[str]):
             for key in spec.required:
                 if key not in value:
                     problems.append(f"{where}: {key} is required")
-            return {k: conform(v, spec.fields[k], f"{where}.{k}", problems) if k in spec.fields else v
-                    for k, v in value.items()}
+            return {
+                k: conform(v, spec.fields[k], f"{where}.{k}", problems) if k in spec.fields else v
+                for k, v in value.items()
+            }
     elif _is(value, spec):
         return value
     problems.append(f"{where}: must be {_expected(spec)}, not {_given(value)}")
@@ -139,7 +225,9 @@ def conform_file(name: str, data, problems: list[str]) -> dict:
                 out.pop(key)
             continue
         if not isinstance(value, collection):
-            problems.append(f"{where}: must be {_NAMES[collection]} of entries, not {_given(value)}")
+            problems.append(
+                f"{where}: must be {_NAMES[collection]} of entries, not {_given(value)}"
+            )
             out.pop(key)
             continue
         entries = value.items() if collection is dict else enumerate(value)
