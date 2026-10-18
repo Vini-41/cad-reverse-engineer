@@ -248,6 +248,84 @@ def test_model_literal_is_rejected(proj_dir):
     assert "model-literal" in errors(proj_dir)
 
 
+# The model lint closes every route a number could take into model.py.
+
+def _model_with(root: Path, header: str = "", line: str = "") -> None:
+    """model.py with header above it and line as the first statement of build()."""
+    body = MODEL.replace("def build(p):\n", f"def build(p):\n    {line}\n") if line else MODEL
+    write(root, "model.py", header + "\n" + body)
+
+
+@pytest.mark.parametrize("header", ["import os", "from json import loads", "import fractions as f",
+                                    "from __future__ import annotations"])
+def test_model_importing_beyond_build123d_and_math_is_a_finding(proj_dir, header):
+    _model_with(proj_dir, header=header)
+    assert errors(proj_dir) == ["model-import"]
+
+
+def test_guard_model_importing_build123d_and_math(proj_dir):
+    _model_with(proj_dir, header="import math\nfrom math import pi\nimport build123d.topology as topo\n"
+                                 "from build123d import Box")
+    code, _ = verify(proj_dir)
+    assert code == 0 and findings(proj_dir, "model-import") == []
+
+
+@pytest.mark.parametrize("line", ['extra = float("4")', "extra = int('1' + '0')", 'extra = complex("4")',
+                                  'extra = eval("4")'])
+def test_model_converting_text_to_a_number_is_a_finding(proj_dir, line):
+    _model_with(proj_dir, line=line)
+    assert errors(proj_dir) == ["model-text-number"]
+
+
+def test_guard_model_converting_a_param_to_a_number_or_text(proj_dir):
+    _model_with(proj_dir, line="extra = int(p.link_H), float(p.pitch), str(p.link_L)")
+    code, _ = verify(proj_dir)
+    assert code == 0 and findings(proj_dir, "model-text-number") == []
+
+
+@pytest.mark.parametrize("expr", ["2*2 - 0.5", "2 ** 2", "-(1 + 2)", "90 + 0.5", "(0.5 + 0.5) * 90 / 2",
+                                  "2 ** 2 ** 2 ** 2 ** 2"])
+def test_model_constant_arithmetic_folding_to_a_disallowed_value_is_a_finding(proj_dir, expr):
+    _model_with(proj_dir, line=f"extra = {expr}")
+    messages = findings(proj_dir, "model-arithmetic")
+    assert errors(proj_dir) == ["model-arithmetic"] and len(messages) == 1
+
+
+@pytest.mark.parametrize("expr", ["1 / 2", "180 + 90", "-90", "-0.5", "2 * 0.5 - 1", "-p.pitch / 2 * 2"])
+def test_guard_model_constant_arithmetic_folding_to_an_allowed_value(proj_dir, expr):
+    _model_with(proj_dir, line=f"extra = {expr}")
+    code, _ = verify(proj_dir)
+    assert code == 0
+
+
+@pytest.mark.parametrize("literal", ["1e1", "3.0", "10.", "0x3", "3_0", "2.5e0"])
+def test_guard_model_literal_in_any_spelling_is_rejected(proj_dir, literal):
+    _model_with(proj_dir, line=f"extra = {literal}")
+    assert errors(proj_dir) == ["model-literal"]
+
+
+@pytest.mark.parametrize("literal", ["2.0", "5e-1", "9e1", "0x2", "1_8_0"])
+def test_guard_model_allowed_literal_in_any_spelling(proj_dir, literal):
+    _model_with(proj_dir, line=f"extra = {literal}")
+    code, _ = verify(proj_dir)
+    assert code == 0
+
+
+def test_report_shows_the_project_override_of_the_allowed_literals(proj_dir):
+    edit(proj_dir, "project.yaml", lambda d: d.update(model_literals=[0, 1, 2, 7.5]))
+    code, report = verify(proj_dir)
+    assert code == 0 and report["model_literals"] == [0, 1, 2, 7.5]
+    md = (proj_dir / "build" / "report.md").read_text()
+    assert "## Model literal override" in md and "0, 1, 2, 7.5" in md
+
+
+def test_report_shows_no_override_when_the_project_keeps_the_default_literals(proj_dir):
+    _, report = verify(proj_dir)
+    assert report["model_literals"] is None
+    md = (proj_dir / "build" / "report.md").read_text()
+    assert md.split("## Model literal override\n\n")[1].startswith("_None._")
+
+
 def test_unledgered_stated_quantity_is_reported(proj_dir):
     data = yaml.safe_load((proj_dir / "evidence.yaml").read_text())
     data["skipped"] = []

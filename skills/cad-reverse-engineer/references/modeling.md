@@ -17,6 +17,12 @@ def build(p):
 ## Contract
 
 - **Every number comes from `p`.** model.py may contain only the literals in `model_literals` (default `0 1 2 -1 0.5 90 180 270 360`), so halving, unit vectors and right-angle rotations stay readable. Any other number is `[model-literal]`: add it to params.yaml with a basis, even a 0.2 mm clearance. That is the point: the report then shows it as proposed.
+- **The lint closes every other route a number could take.** It is static, so these hold for the source text, whatever runs:
+  - Literals count in every spelling: `1e1`, `3.0`, `0x3` and `3_0` are the numbers they spell. A sign is free: `-90` passes wherever `90` does.
+  - Arithmetic on literals alone is folded, and the result must be an allowed literal too: `1 / 2` and `180 + 90` pass, `2*2 - 0.5` is `[model-arithmetic]`. Arithmetic with a param (`-p.pitch / 2`) is the model's own.
+  - model.py imports only `build123d` and `math`; any other import, `__future__` and relative imports included, is `[model-import]`.
+  - `float`, `int`, `complex` or `eval` of text (`float("4")`) is `[model-text-number]`. Converting a param (`int(p.n)`) passes.
+- **Widening `model_literals` is shown.** A project.yaml `model_literals` other than the default is listed in the report under *Model literal override*, and in report.json's `model_literals`.
 - **Parts live in their own frame**, placed where their checks expect: an envelope check with `axes: {L: x}` measures the part's X extent. Put the part's natural datum (a pivot, a mounting face) at the origin when the source defines one.
 - **Datums** are the named points that `distance` checks measure: pin centres, pivot axes, mounting holes. Name them `<part>.<feature>` and compute them from the same params that place the feature, never as a second copy of the arithmetic.
 - **The assembly** places part instances with `Location`. Instances are what `interference` checks and overlays of `assembly` use.
