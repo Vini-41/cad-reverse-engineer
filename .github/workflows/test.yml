@@ -8,11 +8,24 @@ jobs:
         working-directory: skills/cad-reverse-engineer/tool
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # red-on-main compares against HEAD~1
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --locked -p 3.12 --extra test
       - run: uv run pytest -q
+      - run: uv run pytest -q ../../../scripts/tests
       - run: uv run pyright
-      - run: uv run ruff check
+      - run: uv run ruff check . ../../../scripts/tests ../../../scripts/check-doc-pointers
+      - run: uv run ruff format --check . ../../../scripts/tests ../../../scripts/check-doc-pointers
+      - name: agent-facing docs point only at files that exist
+        run: ../../../scripts/check-doc-pointers
+      - name: plugin manifests validate
+        working-directory: .
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          claude plugin validate .
+      - name: red-on-main runs
+        run: BASE=HEAD~1 ../../../scripts/red-on-main --co -q
       - name: example reaches its documented status
         run: |
           example=../../../examples/legclaw-links
