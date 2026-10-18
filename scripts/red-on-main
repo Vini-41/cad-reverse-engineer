@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Run this working tree's tests against the tool source as it was before the fix, and say which
+# go red there (holes the fix closes) and which stay green (guards, to be named test_guard_*).
+#
+#   scripts/red-on-main [pytest args, e.g. -k units]
+#
+# BASE is the commit before the fix: by default the upstream branch (origin/main), so unpushed
+# commits on main count as the fix. Set BASE=<ref> to compare against another commit.
+set -euo pipefail
+
+repo=$(git rev-parse --show-toplevel)
+tool="$repo/skills/cad-reverse-engineer/tool"
+base=$(git -C "$repo" rev-parse "${BASE:-@{upstream}}")
+if [ "$base" = "$(git -C "$repo" rev-parse HEAD)" ] && git -C "$repo" diff --quiet HEAD -- "$tool/src"; then
+  echo "BASE is HEAD and the tool source is unchanged, so there is no fix to compare; set BASE=<ref>" >&2
+  exit 2
+fi
+
+tree=$(mktemp -d)
+trap 'git -C "$repo" worktree remove --force "$tree" >/dev/null 2>&1 || true' EXIT
+git -C "$repo" worktree add --detach --quiet "$tree" "$base"
+rm -rf "$tree/skills/cad-reverse-engineer/tool/tests"
+cp -R "$tool/tests" "$tree/skills/cad-reverse-engineer/tool/tests"
+
+echo "tests from the working tree, tool source from ${BASE:-upstream} ($(git -C "$repo" rev-parse --short "$base"))"
+cd "$tree/skills/cad-reverse-engineer/tool"
+# PYTHONPATH puts the base's src ahead of the editable install of the working tree's.
+PYTHONPATH="$PWD/src" uv run --project "$tool" python -m pytest -v --tb=no -p no:cacheprovider "$@" \
+  | sed -nE 's/^(.+) (FAILED|ERROR) +\[ *[0-9]+%\]$/red    \1/p; s/^(.+) PASSED +\[ *[0-9]+%\]$/green  \1/p' \
+  | sort || true

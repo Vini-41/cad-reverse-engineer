@@ -584,6 +584,10 @@ DAMAGE = {
     "image evidence is a directory": lambda r: edit(r, "evidence.yaml", lambda d: d["evidence"].append(
         {"id": "im", "source": "paper", "locator": "F", "image": "sources", "reading": "3"})),
     "duplicate gap ids": lambda r: write(r, "gaps.yaml", {"gaps": [{"id": "G1"}, {"id": "G1"}]}),
+    "source registered after a PyYAML re-dump": lambda r: (
+        edit(r, "project.yaml", lambda d: None), (r / "notes.txt").write_text("No dimensions.\n"),
+        cli.main(["source", str(r), str(r / "notes.txt"), "--id", "notes", "--kind", "other",
+                  "--citation", "Doe notes"])),
 }
 
 
