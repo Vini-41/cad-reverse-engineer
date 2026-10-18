@@ -23,21 +23,38 @@ def _table(header: list[str], rows: list[list]) -> list[str]:
     return lines + [""]
 
 
-def write(p: Project, results: list[CheckResult], images: list[Path]) -> Path:
+def status(p: Project, partial: bool = False) -> str:
+    """The one place a verification run's status is decided; everything else reads it.
+
+    partial: the run skipped the build or the coverage sweep, so it makes no claim.
+    """
+    if partial:
+        return "PARTIAL"
+    return "NOT VERIFIED" if any(f.level == "error" for f in p.findings) else "VERIFIED"
+
+
+def counts(p: Project, results: list[CheckResult]) -> dict[str, int]:
+    """The headline numbers shown beside the status."""
+    errors = sum(f.level == "error" for f in p.findings)
+    return {"errors": errors, "warnings": len(p.findings) - errors,
+            "checks": len(results), "checks_passed": sum(r.ok for r in results),
+            "params": len(p.params), "traced": len(p.params) - len(p.proposed),
+            "proposed": len(p.proposed)}
+
+
+def write(p: Project, status: str, results: list[CheckResult], images: list[Path]) -> Path:
     out = p.root / "build"
     out.mkdir(exist_ok=True)
     errors = [f for f in p.findings if f.level == "error"]
     warnings = [f for f in p.findings if f.level == "warning"]
     bases = Counter(spec.get("basis") for spec in p.params.values())
-    traced = len(p.params) - len(p.proposed)
-    total = len(p.params) or 1
-    status = "VERIFIED" if not errors else "NOT VERIFIED"
+    headline = counts(p, results)
 
     md = [f"# {p.meta.get('name', 'Reconstruction')}: verification report", ""]
-    md += [f"**{status}**: {len(errors)} errors, {len(warnings)} warnings. "
-           f"{sum(r.ok for r in results)}/{len(results)} geometry checks pass. "
-           f"{traced}/{len(p.params)} parameters ({traced / total:.0%}) trace to sources alone; "
-           f"{len(p.proposed)} rest on proposed values.", ""]
+    md += [f"**{status}**: {headline['errors']} errors, {headline['warnings']} warnings. "
+           f"{headline['checks_passed']}/{headline['checks']} geometry checks pass. "
+           f"{headline['traced']}/{headline['params']} parameters ({headline['traced'] / (headline['params'] or 1):.0%}) "
+           f"trace to sources alone; {headline['proposed']} rest on proposed values.", ""]
     md += ["VERIFIED means every number in the model is accounted for and the geometry matches "
            "every checked source value. It does not mean the sources fully define the part: "
            "proposed parameters are reconstruction choices, listed below.", ""]
@@ -103,8 +120,8 @@ def write(p: Project, results: list[CheckResult], images: list[Path]) -> Path:
     path.write_text("\n".join(md) + "\n", encoding="utf8")
     (out / "report.json").write_text(json.dumps({
         "status": status,
-        "errors": [asdict(f) for f in errors],
-        "warnings": [asdict(f) for f in warnings],
+        "counts": headline,
+        "findings": [asdict(f) for f in errors + warnings],
         "checks": [asdict(r) for r in results],
         "params": {n: {"value": p.values.get(n), **s} for n, s in p.params.items()},
         "bases": dict(bases),

@@ -104,24 +104,33 @@ def cmd_check(args) -> int:
     proj.check_static(p)
     if not args.no_coverage:
         proj.check_coverage(p)
+    # A partial run makes no claim, so it writes nothing to build/.
+    partial = args.no_build or args.no_coverage
     results, images = [], []
     if not args.no_build and not any(f.rule == "model-missing" for f in p.findings):
         from . import geometry, overlay
 
         built = geometry.build(p)
         if built is not None:
-            for path in geometry.export(p, built):
-                print(f"wrote {path.relative_to(p.root)}")
             results = geometry.run_checks(p, built)
-            images = overlay.render(p, built)
-    path = report.write(p, results, images)
-    errors = [f for f in p.findings if f.level == "error"]
+            if not partial:
+                for path in geometry.export(p, built):
+                    print(f"wrote {path.relative_to(p.root)}")
+                images = overlay.render(p, built)
+    status = report.status(p, partial)
+    headline = report.counts(p, results)
     for f in p.findings:
         print(f"{f.level}: [{f.rule}] {f.message}")
-    print(f"\n{'VERIFIED' if not errors else 'NOT VERIFIED'}: {len(errors)} errors, "
-          f"{len(p.findings) - len(errors)} warnings, "
-          f"{sum(r.ok for r in results)}/{len(results)} checks pass. Report: {path.relative_to(p.root)}")
-    return 1 if errors else 0
+    if partial:
+        skipped = " and ".join(s for s, on in (("the build", args.no_build),
+                                                ("the coverage sweep", args.no_coverage)) if on)
+        print(f"\n{status}: {headline['errors']} errors, {headline['warnings']} warnings; skipped {skipped}, "
+              "so no claim is made and no report was written.")
+        return 1
+    path = report.write(p, status, results, images)
+    print(f"\n{status}: {headline['errors']} errors, {headline['warnings']} warnings, "
+          f"{headline['checks_passed']}/{headline['checks']} checks pass. Report: {path.relative_to(p.root)}")
+    return 0 if status == "VERIFIED" else 1
 
 
 def main(argv: list[str] | None = None) -> int:

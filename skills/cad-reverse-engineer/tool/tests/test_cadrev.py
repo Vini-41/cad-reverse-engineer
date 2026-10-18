@@ -1,9 +1,10 @@
+import json
 from pathlib import Path
 
 import pytest
 import yaml
 
-from cadrev import cli, project, sources
+from cadrev import cli, sources
 
 PAPER = """\
 Table 1. Dimensions of key components
@@ -73,11 +74,64 @@ def proj_dir(tmp_path):
     return root
 
 
+def verify(root: Path, *flags: str) -> tuple[int, dict]:
+    """Run a verification run through the CLI; return its exit code and report.json."""
+    code = cli.main(["check", str(root), *flags])
+    return code, json.loads((root / "build" / "report.json").read_text())
+
+
 def errors(root: Path) -> list[str]:
-    p = project.load(root)
-    project.check_static(p)
-    project.check_coverage(p)
-    return [f.rule for f in p.findings if f.level == "error"]
+    _, report = verify(root)
+    return [f["rule"] for f in report["findings"] if f["level"] == "error"]
+
+
+def test_report_json_carries_status_findings_and_counts(proj_dir):
+    code, report = verify(proj_dir)
+    assert code == 0
+    assert report["status"] == "VERIFIED"
+    assert all(set(f) == {"level", "rule", "message"} for f in report["findings"])
+    assert report["counts"] == {"errors": 0, "warnings": len(report["findings"]),
+                                "checks": 5, "checks_passed": 5,
+                                "params": 5, "traced": 4, "proposed": 1}
+
+
+def test_report_json_lists_each_finding_with_level_rule_and_message(proj_dir):
+    write(proj_dir, "gaps.yaml", {"gaps": []})
+    code, report = verify(proj_dir)
+    assert code == 1
+    assert report["status"] == "NOT VERIFIED"
+    assert {"level": "error", "rule": "param-gap",
+            "message": "param hole_d: unknown gap 'G1'"} in report["findings"]
+    assert report["counts"]["errors"] == 1
+
+
+def test_report_md_renders_the_status_and_findings_of_report_json(proj_dir):
+    write(proj_dir, "gaps.yaml", {"gaps": []})
+    _, report = verify(proj_dir)
+    md = (proj_dir / "build" / "report.md").read_text()
+    assert f"**{report['status']}**" in md
+    for f in report["findings"]:
+        assert f"- **{f['level']}** `{f['rule']}`: {f['message']}" in md
+
+
+@pytest.mark.parametrize("flag", ["--no-build", "--no-coverage"])
+def test_skipping_part_of_the_run_is_partial_and_writes_no_report(proj_dir, capsys, flag):
+    report_md, report_json = proj_dir / "build" / "report.md", proj_dir / "build" / "report.json"
+    assert cli.main(["check", str(proj_dir), flag]) != 0
+    assert "PARTIAL" in capsys.readouterr().out
+    assert not report_md.exists() and not report_json.exists()
+
+
+@pytest.mark.parametrize("flag", ["--no-build", "--no-coverage"])
+def test_partial_run_leaves_the_existing_report_untouched(proj_dir, flag):
+    def build_dir() -> dict[str, bytes]:
+        return {str(f): f.read_bytes() for f in (proj_dir / "build").rglob("*") if f.is_file()}
+
+    verify(proj_dir)
+    before = build_dir()
+    write(proj_dir, "gaps.yaml", {"gaps": []})
+    assert cli.main(["check", str(proj_dir), flag]) != 0
+    assert build_dir() == before
 
 
 def test_normalize_matches_layout_variants():
