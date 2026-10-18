@@ -67,7 +67,7 @@ def cmd_source(args) -> int:
         print(f"{src} not found", file=sys.stderr)
         return 1
     problems: list[proj.Finding] = []
-    registered = {s["id"] for s in proj.read_yaml(root, "project.yaml", problems).get("sources", [])}
+    registered = {s["id"] for s in proj.read_meta(root, problems).get("sources", [])}
     if problems:
         _print_findings(problems, sys.stderr)
         return 1
@@ -102,7 +102,7 @@ def _open(args, source: str | None = None) -> proj.Project | None:
     """The project for a read-only command, or None after printing why it cannot be used."""
     p = proj.load(Path(args.dir))
     _print_findings(p.findings, sys.stderr)
-    if any(f.rule == "project-missing" for f in p.findings):
+    if p.refused:
         return None
     if source is not None and source not in p.sources:
         print(f"unknown source {source!r}; registered: {', '.join(p.sources) or 'none'}", file=sys.stderr)
@@ -168,10 +168,10 @@ def cmd_check(args) -> int:
     from . import report
 
     p = proj.load(Path(args.dir))
-    if any(f.rule == "project-missing" for f in p.findings):
-        # Not a project, perhaps not even a directory: write nothing into it.
+    if p.refused:
+        # Not a project, or one this cadrev cannot read: write nothing into it.
         _print_findings(p.findings)
-        print(f"\n{report.status(p)}: no project here, so no report was written.")
+        print(f"\n{report.status(p)}: the project was not read, so no report was written.")
         return 1
     proj.check_static(p)
     if not args.no_coverage:

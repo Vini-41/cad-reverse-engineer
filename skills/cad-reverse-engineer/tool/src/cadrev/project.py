@@ -17,6 +17,8 @@ import yaml
 from . import schema, sources
 
 FORMAT = 1  # the project.yaml format this cadrev reads
+# Findings after which nothing else in the project is read and every command refuses it.
+REFUSED = ("project-missing", "format-missing", "format-unknown")
 BASES = ("source", "derived", "measured", "proposed")
 SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "other")
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}
@@ -51,6 +53,10 @@ class Project:
     # Parameters resting on a proposed value, directly or through derived expressions.
     proposed: set[str] = field(default_factory=set)
     findings: list[Finding] = field(default_factory=list)
+
+    @property
+    def refused(self) -> bool:
+        return any(f.rule in REFUSED for f in self.findings)
 
     def error(self, rule: str, message: str) -> None:
         self.findings.append(Finding("error", rule, message))
@@ -99,18 +105,41 @@ def read_yaml(root: Path, name: str, findings: list[Finding]) -> dict:
     return data
 
 
+def read_meta(root: Path, findings: list[Finding]) -> dict:
+    """project.yaml's contents, or {} after a REFUSED finding: it is missing or of a format
+    this cadrev does not read."""
+    if not (root / "project.yaml").is_file():
+        findings.append(Finding("error", "project-missing", f"{root / 'project.yaml'} not found; "
+                                "point cadrev at a project directory (cadrev init creates one)"))
+        return {}
+    before = len(findings)
+    meta = read_yaml(root, "project.yaml", findings)
+    if any(f.rule == "yaml-syntax" for f in findings[before:]):
+        return meta  # the syntax finding names the problem; the format cannot be read past it
+    fmt = meta.get("format")
+    if fmt is None:
+        findings.append(Finding("error", "format-missing",
+                                f"project.yaml: format is missing; this cadrev reads format: {FORMAT}"))
+    elif type(fmt) is not int or fmt != FORMAT:
+        findings.append(Finding("error", "format-unknown", f"project.yaml: format {fmt!r} is not one "
+                                f"this cadrev reads (it reads format: {FORMAT})"))
+    else:
+        return meta
+    return {}
+
+
 def load(root: Path) -> Project:
     """The project at root. Never raises: missing or malformed files become findings."""
     root = root.resolve()
     findings: list[Finding] = []
-    if not (root / "project.yaml").is_file():
-        findings.append(Finding("error", "project-missing", f"{root / 'project.yaml'} not found; "
-                                "point cadrev at a project directory (cadrev init creates one)"))
-    files = {name: read_yaml(root, name, findings) for name in schema.FILES}
+    meta = read_meta(root, findings)
+    refused = any(f.rule in REFUSED for f in findings)
+    files = {name: {} if refused else read_yaml(root, name, findings)
+             for name in schema.FILES if name != "project.yaml"}
     evidence_list = files["evidence.yaml"].get("evidence", [])
     project = Project(
         root=root,
-        meta=files["project.yaml"],
+        meta=meta,
         evidence={e["id"]: e for e in evidence_list},
         skipped=files["evidence.yaml"].get("skipped", []),
         conflicts=files["evidence.yaml"].get("conflicts", []),
@@ -398,17 +427,7 @@ def lint_model(p: Project) -> None:
                     "move it to params.yaml with a basis")
 
 
-def check_format(p: Project) -> None:
-    fmt = p.meta.get("format")
-    if fmt is None:
-        p.error("format-missing", f"project.yaml: format is missing; this cadrev reads format: {FORMAT}")
-    elif type(fmt) is not int or fmt != FORMAT:
-        p.error("format-unknown", f"project.yaml: format {fmt!r} is not one this cadrev reads "
-                f"(it reads format: {FORMAT})")
-
-
 def check_static(p: Project) -> None:
-    check_format(p)
     target = str(p.meta.get("target") or "")
     if not target or target.startswith("TODO"):
         p.error("target", "project.yaml target: name the object, version and configuration reconstructed")

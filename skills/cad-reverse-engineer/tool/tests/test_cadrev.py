@@ -426,20 +426,42 @@ def test_init_writes_the_current_format(proj_dir):
     assert findings(proj_dir, "format-missing") == findings(proj_dir, "format-unknown") == []
 
 
-def test_project_without_format_is_a_finding(proj_dir):
+def test_project_without_format_stops_the_run_and_writes_nothing(proj_dir, capsys):
     edit(proj_dir, "project.yaml", lambda d: d.pop("format"))
-    code, report = verify(proj_dir)
-    assert code == 1
-    assert [f["message"] for f in report["findings"] if f["rule"] == "format-missing"] == [
-        "project.yaml: format is missing; this cadrev reads format: 1"]
+    assert cli.main(["check", str(proj_dir)]) == 1
+    out = capsys.readouterr().out
+    assert "error: [format-missing] project.yaml: format is missing; this cadrev reads format: 1" in out
+    assert not (proj_dir / "build").exists()
 
 
-@pytest.mark.parametrize("given", [2, 1.0, "1", True, [1]])
-def test_project_of_an_unknown_format_is_a_finding(proj_dir, given):
+@pytest.mark.parametrize("given", [2, 1.0, "1", True, [1], {"v": 1}])
+def test_project_of_an_unknown_format_stops_the_run_and_writes_nothing(proj_dir, capsys, given):
     edit(proj_dir, "project.yaml", lambda d: d.update(format=given))
-    code, report = verify(proj_dir)
-    messages = [f["message"] for f in report["findings"] if f["rule"] == "format-unknown"]
-    assert code == 1 and len(messages) == 1 and messages[0].startswith("project.yaml: format ")
+    assert cli.main(["check", str(proj_dir)]) == 1
+    out = capsys.readouterr()
+    assert out.out.count("[format-unknown] project.yaml: format ") == 1
+    assert "Traceback" not in out.out + out.err
+    assert not (proj_dir / "build").exists()
+
+
+def test_project_of_an_unknown_format_has_no_other_file_read(proj_dir, capsys):
+    edit(proj_dir, "project.yaml", lambda d: d.update(format=2))
+    write(proj_dir, "params.yaml", "params: [unclosed\n")
+    assert cli.main(["check", str(proj_dir)]) == 1
+    assert [line for line in capsys.readouterr().out.splitlines() if line.startswith("error:")] == [
+        "error: [format-unknown] project.yaml: format 2 is not one this cadrev reads (it reads format: 1)"]
+
+
+@pytest.mark.parametrize("command", [["coverage"], ["text", "paper"], ["figures", "paper"],
+                                     ["source", "PAPER", "--id", "paper", "--kind", "paper",
+                                      "--citation", "Doe 2026"]])
+def test_every_command_refuses_a_project_of_an_unknown_format(proj_dir, tmp_path, capsys, command):
+    edit(proj_dir, "project.yaml", lambda d: d.update(format=2))
+    before = (proj_dir / "project.yaml").read_text()
+    args = [str(tmp_path / "paper.txt") if a == "PAPER" else a for a in command]
+    assert cli.main([args[0], str(proj_dir), *args[1:]]) == 1
+    assert "[format-unknown]" in capsys.readouterr().err
+    assert (proj_dir / "project.yaml").read_text() == before
 
 
 def test_readable_sources_raise_no_unreadable_finding(proj_dir):
@@ -468,7 +490,6 @@ DAMAGE = {
     "text source not UTF-8": lambda r: ((r / "sources" / "b.txt").write_bytes(b"\xff\xfe 30 mm"),
                                         _add_source(r, "b", "sources/b.txt")),
     "name is a number": lambda r: _replace(r, "project.yaml", "name:", "name: 5\noldname:"),
-    "format is a mapping": lambda r: _replace(r, "project.yaml", "format:", "format: {v: 1}\nxformat:"),
     "units is a number": lambda r: _replace(r, "project.yaml", "units:", "units: 5\nxunits:"),
     "tolerance of zero": lambda r: _replace(r, "project.yaml", "tolerance:", "tolerance: {length: 0}\nxtolerance:"),
     "model_literals is a number": lambda r: _replace(r, "project.yaml", "name:", "model_literals: 5\nname:"),
