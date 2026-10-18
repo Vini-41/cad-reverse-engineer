@@ -2370,6 +2370,55 @@ def test_report_md_labels_the_declared_bases_apart_from_what_params_rest_on(proj
     assert "Declared basis: source: 4 · derived: 1 · measured: 0 · proposed: 1" in md
 
 
+def test_reregistering_a_source_takes_its_new_citation_url_and_license(proj_dir):
+    subprocess.run(["git", "init", "-q", str(proj_dir)], check=True)
+    paper = proj_dir / "sources" / "paper.txt"
+    code, _ = run(
+        "source",
+        str(proj_dir),
+        str(paper),
+        "--id",
+        "paper",
+        "--kind",
+        "paper",
+        "--citation",
+        "Doe 2026, Adv. Sci.",
+        "--url",
+        "https://doi.org/10.0/doe",
+        "--license",
+        "CC-BY-4.0",
+    )
+    (entry,) = yaml.safe_load((proj_dir / "project.yaml").read_text())["sources"]
+    assert code == 0
+    assert (entry["citation"], entry["url"], entry["license"]) == (
+        "Doe 2026, Adv. Sci.",
+        "https://doi.org/10.0/doe",
+        "CC-BY-4.0",
+    )
+    ignored = subprocess.run(
+        ["git", "-C", str(proj_dir), "check-ignore", "-q", "sources/paper.txt"]
+    )
+    assert ignored.returncode == 1
+
+
+def _flow_param(root: Path, rationale: str) -> None:
+    """Add the param spare to params.yaml as a flow mapping, its rationale written as given."""
+    flow = f"  spare: {{basis: proposed, value: 3, rationale: {rationale}, gap: G1}}\n"
+    (root / "params.yaml").write_text((root / "params.yaml").read_text() + flow)
+
+
+def test_unknown_key_in_an_entry_is_a_finding_naming_it(proj_dir):
+    # An unquoted comma in a flow mapping splits the value: "or a washer" becomes a key.
+    _flow_param(proj_dir, "a spacer, or a washer")
+    messages = findings(proj_dir, "schema")
+    assert len(messages) == 1 and "'or a washer'" in messages[0]
+
+
+def test_guard_comma_inside_a_quoted_value_is_one_value(proj_dir):
+    _flow_param(proj_dir, "'a spacer, or a washer'")
+    assert findings(proj_dir, "schema") == []
+
+
 def test_verification_run_writes_nothing_into_the_project_outside_build(proj_dir):
     before = {p for p in proj_dir.rglob("*")}
     verify(proj_dir)

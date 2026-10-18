@@ -102,8 +102,13 @@ def cmd_source(args) -> int:
     path, digest = f"sources/{target.name}", sources.sha256(target)
     text = meta.read_text()
     if args.id in registered:
-        # Restoring a source into a clone, or a fresh download: keep the entry, refresh the file.
-        refreshed = _rewrite_source_entry(text, args.id, {"path": path, "sha256": digest})
+        # Restoring a source into a clone, or a fresh download: keep the entry, refresh the file
+        # and whatever the command states about it.
+        fields = {"path": path, "sha256": digest, "kind": args.kind}
+        fields |= {"citation": repr(args.citation)}
+        fields |= {"url": args.url} if args.url else {}
+        fields |= {"license": args.license} if args.license else {}
+        refreshed = _rewrite_source_entry(text, args.id, fields)
         if refreshed is None:
             print(
                 f"source {args.id} is registered in a form cadrev cannot edit; set its path to "
@@ -112,7 +117,8 @@ def cmd_source(args) -> int:
             )
             return 1
         meta.write_text(refreshed)
-        _unignore_if_redistributable(root, path, registered[args.id].get("license"))
+        license_id = args.license or registered[args.id].get("license")
+        _unignore_if_redistributable(root, path, license_id)
         print(f"refreshed {args.id} -> {target}")
         return 0
     entry = [

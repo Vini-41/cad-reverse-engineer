@@ -2,7 +2,7 @@
 
 A reconstruction project is a directory of YAML files plus `model.py`. `cadrev init` creates it; `cadrev check` enforces every rule below and names the rule it applies (`[rule-name]`) in each finding.
 
-Before any rule runs, every file is read against the shapes shown here. A file that is not valid YAML is `[yaml-syntax]` (file and line); an entry of the wrong shape (a missing `id`, a param that is a bare number, a non-numeric value) is `[schema]`, names the file and the entry, and is left out of the run. A directory without `project.yaml` is `[project-missing]`, and no report is written.
+Before any rule runs, every file is read against the shapes shown here. A file that is not valid YAML is `[yaml-syntax]` (file and line); an entry of the wrong shape (a missing `id`, a param that is a bare number, a non-numeric value, a key not shown here) is `[schema]`, names the file and the entry, and is left out of the run. Quote every value that holds a comma inside a `{…}` entry: unquoted, `reason: a test load, not the object` ends at the comma and leaves `not the object` as an unknown key. A directory without `project.yaml` is `[project-missing]`, and no report is written.
 
 ```
 project.yaml    format, sources, units, tolerance, target
@@ -67,7 +67,7 @@ Recognised units, spelled-out names included (millimetre, inches, degrees, grams
 
 Any other word after a number (`12 links`) leaves it in project units.
 
-`tolerance.length` is how closely the model must realise a source value. It is a modelling check, never a manufacturing tolerance. Keep `sources:` the last key: `cadrev source` appends to it. Registering an id that is already listed refreshes its `path` and `sha256` instead, which is how sources are restored into a clone or replaced by a new download. A source whose `license` is CC0-1.0, CC-BY-x.y or CC-BY-SA-x.y gets a `!sources/<file>` line in the project's `.gitignore`, so it is committed and the project reruns from a clone; any other license, or none, leaves the file ignored.
+`tolerance.length` is how closely the model must realise a source value. It is a modelling check, never a manufacturing tolerance. Keep `sources:` the last key: `cadrev source` appends to it. Registering an id that is already listed refreshes its entry instead: the file's `path` and `sha256`, and the `kind`, `citation`, `url` and `license` the command gives. That is how sources are restored into a clone, replaced by a new download, or given a license after the fact. A source whose `license` is CC0-1.0, CC-BY-x.y or CC-BY-SA-x.y gets a `!sources/<file>` line in the project's `.gitignore`, so it is committed and the project reruns from a clone; any other license, or none, leaves the file ignored.
 
 A source's `kind` outside the list above is `[source-kind]`, and an empty `citation` is `[source-citation]`. A `path` with no file is `[source-missing]`, whose message names the `url` to download from; a file whose sha256 differs from the pinned one is `[source-hash]`: after a deliberate change, register it again.
 

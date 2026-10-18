@@ -2,7 +2,8 @@
 
 A spec is a Python type (str, int, bool, dict), NUMBER, a tuple of alternatives,
 Items(spec) for a list, Table(spec) for a mapping of names, or Record for a
-mapping with known keys. Unknown keys pass through; keys set to null count as absent.
+mapping with known keys. An unknown key is a problem, since it is most often a typo or a value
+split at an unquoted comma; keys set to null count as absent.
 """
 
 from __future__ import annotations
@@ -192,6 +193,12 @@ def conform(value, spec, where: str, problems: list[str]):
             return {k: conform(v, spec.of, f"{where}.{k}", problems) for k, v in value.items()}
     elif isinstance(spec, Record):
         if isinstance(value, dict):
+            for key in value:
+                if key not in spec.fields:
+                    problems.append(
+                        f"{where}: unknown key {key!r}; if it is the rest of a value split at a "
+                        "comma, quote that value"
+                    )
             value = {k: v for k, v in value.items() if v is not None}
             for key in spec.required:
                 if key not in value:

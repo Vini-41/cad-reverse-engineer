@@ -48,3 +48,20 @@ Skill and tool with run 1's fixes. 107 tool calls, about 19 minutes.
 | 13 | Distance checks between datums are close to tautological, because the datums are computed from the same params as the solid and are not tied to it. | open | This is the design in modeling.md ("compute them from the same params"). It is related to #23 (runtime trace), which would tie geometry to params. |
 | 14 | The leg-mass check passed at −15% after the agent raised one proposed param (thigh wall 2.5 → 4 mm) and said so in its rationale. | works as revised | This is run 1 trip 11's rule being followed. |
 | 15 | The shell sandbox refused `cadrev source …` (it read `source` as the builtin) and loops. The run had no assembly viewer, so the agent wrote one. | environment | No change. |
+
+## Run 3
+
+Skill and tool with run 2's fixes, commit `3e3b658`. 110 tool calls, about 19 minutes.
+
+**End state:** VERIFIED PENDING REVIEW, not exact: 0 errors, 0 warnings, 38/38 checks pass. 60 params, resting on 38 source, 2 measured and 20 proposed. Two legs were built, each with its thigh, pedestal, compression and bent links, foot frame, X-links, springs, steering wheels and four toes. Five conflicts were recorded, each with a resolution. Eight readings were awaiting confirmation. It hit none of run 1's or run 2's tool trips. It followed the new rules: counts are params, tuned proposed params are named, the crop scale is applied and the label confirmed inside.
+
+| # | Trip | Kind | Fix |
+|---|---|---|---|
+| 1 | The agent re-registered a source with `--license` and `--url`. `cadrev source` printed "refreshed", but it kept the old citation and wrote neither field, so the source stayed gitignored. The agent edited project.yaml and .gitignore by hand. | tool bug | Re-registering now refreshes `kind`, `citation`, `url` and `license` as well as `path` and `sha256`, and un-ignores the file under the new license. Test: `test_reregistering_a_source_takes_its_new_citation_url_and_license`. project-format.md documents it. |
+| 2 | An unquoted comma in a flow mapping (`interpretation: disc diameter (L and W are both 18, read as …)`) split the value into a stray key. No finding was raised, and the report showed the truncated note. The committed example had the same bug: three skip reasons cut at a comma. | tool hole | An unknown key in an entry is `[schema]`, naming the key and suggesting quotes. Tests: `test_unknown_key_in_an_entry_is_a_finding_naming_it` and its guard. The example's three reasons are quoted. project-format.md says to quote values with commas. |
+| 3 | The agent rewrote `3*w/2` as `w + w/2` and `/4` as `/2/2` to clear `[model-literal]`. | open | These are relations to a param, which modeling.md allows. The question of whether the lint should see through them belongs to #23. |
+| 4 | The paper states its counts in words ("Eight tension springs"), so all six count params are proposed, and that keeps the project from Exact. | open | This is the same as run 2 trip 11. Words are not numbers by design, and a change there is a design decision left for `/code-review`. |
+| 5 | A measured param has no `gap` field, so G-leg-spacing appears with no params under it. | open | This is minor. It is left for `/code-review`. |
+| 6 | Overlays offer only front, top and right views, with no rotation, so photos taken in another orientation cannot be overlaid. `crop --zoom` and throwaway measuring crops are not covered in the skill. | no change | Overlays add no pass or fail, and `--help` documents `--zoom`. |
+| 7 | Battery cell counts, Jetson memory and video timestamps were swept as quantities. | no change | Same as run 2 trip 10. They are covered by skips. |
+| 8 | The shell sandbox refused `source` as an argument. `init` file mtimes looked odd (template times are preserved). | environment | No change. |
