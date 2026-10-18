@@ -1,0 +1,9 @@
+# Every number the sources state about the object. Each item is a verbatim quote
+# (text sources) or a pinned figure crop with its reading (figures, video frames).
+evidence: []
+
+# Dimension-like text that is not about the object (test conditions, results, other designs).
+skipped: []
+
+# Places where sources disagree, and how the reconstruction resolves each.
+conflicts: []

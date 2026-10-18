@@ -1,0 +1,19 @@
+# The only place numbers enter the model. basis: source | derived | measured | proposed.
+params:
+  comp_L: {basis: source, from: S2-compression-linkage.L, interpretation: overall length along part X}
+  comp_H: {basis: source, from: S2-compression-linkage.H, interpretation: in-plane height along part Z}
+  comp_W: {basis: source, from: S2-compression-linkage.W, interpretation: thickness along part Y}
+  bent_L: {basis: source, from: S2-bent-linkage.L, interpretation: overall length along part X (see K1)}
+  bent_H: {basis: source, from: S2-bent-linkage.H, interpretation: in-plane height along part Z}
+  bent_W: {basis: source, from: S2-bent-linkage.W, interpretation: thickness along part Y}
+  link_L: {basis: source, from: S2-linkage.L, interpretation: overall length along part X}
+  link_H: {basis: source, from: S2-linkage.H, interpretation: in-plane height along part Z}
+  link_W: {basis: source, from: S2-linkage.W, interpretation: thickness along part Y}
+
+  pin_d: {basis: proposed, value: 2, rationale: Common 2 mm steel pin for printed linkages., gap: G-pins}
+  end_margin: {basis: proposed, value: 2.5, rationale: Material beyond each pin hole; sets pin pitch = L - 2 * margin., gap: G-pitch}
+  layout_gap: {basis: proposed, value: 4, rationale: Spacing between parts in the review layout only; not a mechanism dimension.}
+
+  comp_pitch: {basis: derived, expr: comp_L - 2 * end_margin}
+  bent_pitch: {basis: derived, expr: bent_L - 2 * end_margin, value: 32}
+  link_pitch: {basis: derived, expr: link_L - 2 * end_margin}

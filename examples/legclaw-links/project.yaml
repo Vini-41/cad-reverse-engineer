@@ -1,0 +1,21 @@
+# Reconstruction project. File formats: references/project-format.md in the cad-reverse-engineer skill.
+name: legclaw-links
+target: The compression, bent and plain linkages of the seventh-iteration BLCM leg-claw (Cheng 2026), as solid parts with pin holes.
+units: {length: mm, angle: deg, mass: g}
+tolerance: {length: 0.001}   # model must realise source values to this; it is not a print tolerance
+# Register sources with `cadrev source`; it copies the file and pins its sha256. Keep this key last.
+sources:
+  - id: paper
+    kind: paper
+    path: sources/Cheng2026_LegClaw.pdf
+    sha256: b8f0e5f959caea2ec1b79a2fe0488279552ace379df3a9a899894bf50326f408
+    citation: 'Cheng et al., Bioinspired Adaptive Leg-Claw Enables Robust Perching and Grasping for UAVs, Adv. Sci. 2026, e23518'
+    url: https://doi.org/10.1002/advs.202523518
+    license: CC-BY-4.0
+  - id: supp
+    kind: supplement
+    path: sources/Cheng2026_LegClaw_supplementary.docx
+    sha256: 929378a5eca8454155e4a1be9dfd0c33952873f66b46124b54a06869f3e587c1
+    citation: 'Cheng et al. 2026, Supporting Information'
+    url: https://doi.org/10.1002/advs.202523518
+    license: CC-BY-4.0

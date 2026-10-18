@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "cad-reverse-engineer",
+  "description": "Verifiable CAD reconstruction from papers.",
+  "owner": {
+    "name": "Vini Rezanejad",
+    "url": "https://github.com/Vini-41"
+  },
+  "plugins": [
+    {
+      "name": "cad-reverse-engineer",
+      "description": "Reverse-engineer CAD from papers: a parametric build123d model where every dimension traces to a quoted, hashed source and is checked against the built geometry.",
+      "source": "./",
+      "category": "development"
+    }
+  ]
+}

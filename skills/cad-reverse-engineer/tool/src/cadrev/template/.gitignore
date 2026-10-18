@@ -1,0 +1,5 @@
+build/
+# Sources are pinned by sha256 in project.yaml. Commit them only when their license allows redistribution.
+sources/
+figures/*/
+!figures/crops/

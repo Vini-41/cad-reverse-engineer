@@ -1,0 +1,2 @@
+# Geometry checks. Expected values come from evidence.yaml, never from params.yaml.
+checks: []
