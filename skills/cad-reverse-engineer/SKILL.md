@@ -21,7 +21,7 @@ uv run -q --project <this skill's base directory>/tool cadrev --help
 
 ## Steps
 
-Each step ends on a criterion `cadrev` confirms: the rules named in brackets are the findings that must be absent. `cadrev check <dir> --no-build` is a PARTIAL run that reports every rule except the build's and the checks'.
+Each step ends on a criterion `cadrev` confirms: the rules named in brackets are the findings that must be absent. `cadrev check <dir> --no-build` reports every rule except the build's and the checks'; [Statuses](references/project-format.md#statuses) gives the status such a run ends on.
 
 ### 1. Scope the target
 
@@ -70,9 +70,9 @@ Done when the tracer part's checks went green before a second part was modelled,
 
 Add a check for every source value the geometry should realise: `bbox` for envelopes, `distance` between datums for pitches and spacings, `mass` where a mass is stated, `interference` across the assembly. Where a figure shows a modelled part in a near-orthographic view, add an overlay and look at the rendered PNG; record in the param's interpretation what the overlay showed.
 
-A check is green when the value it evaluates in the built geometry matches its ledger value within tolerance, and red (`[check-failed]`) otherwise. Turn a red check green by changing the model or its params. A proposed param changed to turn a check green says so in its `rationale`, since that check now confirms the choice rather than a source. Evidence changes only to correct a transcription, re-copied from `cadrev text`. A tolerance loosened past its cap is `[tolerance-cap]`, and every loosened one is listed in the report.
+Turn a red check green by changing the model or its params, and record a changed proposed param as `params.yaml` in [`references/project-format.md`](references/project-format.md#paramsyaml) describes. Evidence changes only to correct a transcription, re-copied from `cadrev text`.
 
-Format: `checks.yaml` and `overlays.yaml` in [`references/project-format.md`](references/project-format.md).
+Format, including when a check is red and how far its tolerance may loosen: `checks.yaml` and `overlays.yaml` in [`references/project-format.md`](references/project-format.md).
 
 Done when every check is green and `cadrev check <dir>` reports no `[check-*]`, `[tolerance-cap]`, `[evidence-unused]`, `[unchecked-source]` or other error, so its status is VERIFIED or VERIFIED PENDING REVIEW.
 

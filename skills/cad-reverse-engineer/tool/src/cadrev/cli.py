@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import sys
@@ -31,6 +32,11 @@ def cmd_init(args) -> int:
     meta.write_text(meta.read_text().replace("NAME", args.name or root.name))
     print(f"created {root}")
     return 0
+
+
+def _quoted(text: str) -> str:
+    """text as a double-quoted YAML scalar, whatever quotes, colons or # it holds."""
+    return json.dumps(text, ensure_ascii=False)  # a JSON string is a YAML double-quoted scalar
 
 
 def _rewrite_source_entry(text: str, source_id: str, fields: dict[str, str]) -> str | None:
@@ -105,7 +111,7 @@ def cmd_source(args) -> int:
         # Restoring a source into a clone, or a fresh download: keep the entry, refresh the file
         # and whatever the command states about it.
         fields = {"path": path, "sha256": digest, "kind": args.kind}
-        fields |= {"citation": repr(args.citation)}
+        fields |= {"citation": _quoted(args.citation)}
         fields |= {"url": args.url} if args.url else {}
         fields |= {"license": args.license} if args.license else {}
         refreshed = _rewrite_source_entry(text, args.id, fields)
@@ -126,7 +132,7 @@ def cmd_source(args) -> int:
         f"    kind: {args.kind}",
         f"    path: {path}",
         f"    sha256: {digest}",
-        f"    citation: {args.citation!r}",
+        f"    citation: {_quoted(args.citation)}",
     ]
     entry += [f"    url: {args.url}"] if args.url else []
     entry += [f"    license: {args.license}"] if args.license else []

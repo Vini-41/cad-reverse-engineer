@@ -14,7 +14,9 @@
 A rule counts as asserted where its name, or `[name]`, appears in an assert's comparison: directly,
 through a variable or helper whose value names it, or through a parametrize argument. The comparison
 asserts it absent when it uses `not in` or compares with an empty literal (`== []`), present
-otherwise; `not` flips it.
+otherwise; `not` flips it. A conditional assert (`a if c else b`) asserts only what both branches
+do. A parametrize argument names the rules of the cases its case list makes, evaluated against the
+module's tables where it can be; a test or case marked skip, skipif or xfail asserts nothing.
 """
 
 from __future__ import annotations
@@ -36,6 +38,70 @@ from cadrev import sources, units  # noqa: E402  (after the path to the tool sou
 
 EMITTERS = {"error": 0, "warn": 0, "Finding": 1}  # the call and the position of its rule argument
 BRACKETED = re.compile(r"\[([a-z][a-z0-9-]*)\]")
+UNRUN = ("skip", "skipif", "xfail")  # marks under which a test or case may assert nothing
+CASE_BUILTINS = {
+    f.__name__: f
+    for f in (sorted, range, len, enumerate, zip, list, tuple, set, dict, reversed, min, max, sum)
+}
+
+
+class Opaque:
+    """A value of a test module's table that a case list cannot read, such as a lambda."""
+
+
+class Mark:
+    def __init__(self, name: str):
+        self.name = name
+
+    def __call__(self, *args, **kwargs) -> Mark:
+        return self
+
+
+class Marks:
+    def __getattr__(self, name: str) -> Mark:
+        return Mark(name)
+
+
+class Param:
+    def __init__(self, *values, marks=(), id=None):
+        self.values = values
+        self.marks = marks if isinstance(marks, (list, tuple)) else (marks,)
+
+
+class Pytest:
+    """What a case list may read of pytest: pytest.param and pytest.mark.<name>."""
+
+    param = Param
+    mark = Marks()
+
+
+def shape(node: ast.AST, tables: dict):
+    """A module-level value as far as a case list can read it: literals, containers and earlier
+    tables kept, anything else Opaque."""
+    try:
+        return ast.literal_eval(node)
+    except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
+        pass
+    if isinstance(node, ast.Name) and node.id in tables:
+        return tables[node.id]
+    if isinstance(node, (ast.List, ast.Tuple)):
+        items = [shape(e, tables) for e in node.elts]
+        return items if isinstance(node, ast.List) else tuple(items)
+    if isinstance(node, ast.Dict):
+        out = {}
+        for k, v in zip(node.keys, node.values):
+            try:
+                out[shape(k, tables) if k is not None else Opaque()] = shape(v, tables)
+            except TypeError:  # an unhashable key
+                return Opaque()
+        return out
+    return Opaque()
+
+
+def unrun(deco: ast.AST) -> bool:
+    """Whether a decorator marks its test skip, skipif or xfail."""
+    func = deco.func if isinstance(deco, ast.Call) else deco
+    return any(ast.unparse(func).endswith(f"mark.{m}") for m in UNRUN)
 
 
 def emitted() -> set[str]:
@@ -83,7 +149,42 @@ class Asserts:
             return set().union(*(self.named(k, env, helpers) for k in node.keys if k is not None))
         return self.named(node, env, helpers)
 
-    def local(self, fn: ast.FunctionDef, module: dict, helpers) -> dict[str, set[str]]:
+    def held(self, value) -> set[str]:
+        """The rules a case's argument value names."""
+        if isinstance(value, str):
+            return ({value} | set(BRACKETED.findall(value))) & self.rules
+        if isinstance(value, dict):
+            return set().union(*(self.held(k) | self.held(v) for k, v in value.items()))
+        if isinstance(value, (list, tuple, set)):
+            return set().union(*(self.held(v) for v in value))
+        return set()
+
+    def cases(self, rows: ast.AST, names: list[str], tables: dict) -> dict[str, set[str]] | None:
+        """The rules each argument names across the cases a case list makes and runs, or None
+        when the list cannot be evaluated."""
+        try:
+            made = list(
+                eval(  # noqa: S307  (the repo's own test file, read against stand-ins)
+                    compile(ast.Expression(rows), "<cases>", "eval"),
+                    {"__builtins__": CASE_BUILTINS, "pytest": Pytest(), **tables},
+                )
+            )
+        except Exception:  # noqa: BLE001  (a case list it cannot evaluate is read by name)
+            return None
+        out: dict[str, set[str]] = {name: set() for name in names}
+        for row in made:
+            if isinstance(row, Param):
+                if any(isinstance(m, Mark) and m.name in UNRUN for m in row.marks):
+                    continue
+                row = row.values if len(names) > 1 else row.values[0]
+            values = row if len(names) > 1 else (row,)
+            if not isinstance(values, (list, tuple)):
+                return None
+            for name, value in zip(names, values):
+                out[name] |= self.held(value)
+        return out
+
+    def local(self, fn: ast.FunctionDef, module: dict, helpers, tables) -> dict[str, set[str]]:
         env = dict(module)
         for deco in fn.decorator_list:
             if (
@@ -94,7 +195,10 @@ class Asserts:
             ):
                 names = [n.strip() for n in str(deco.args[0].value).split(",")]
                 rows = deco.args[1]
-                if len(names) > 1 and isinstance(rows, (ast.List, ast.Tuple)):
+                made = self.cases(rows, names, tables)
+                if made is not None:
+                    env |= made
+                elif len(names) > 1 and isinstance(rows, (ast.List, ast.Tuple)):
                     for i, name in enumerate(names):
                         env[name] = set().union(
                             *(
@@ -118,15 +222,17 @@ class Asserts:
         tree = ast.parse(path.read_text(encoding="utf8"))
         module: dict[str, set[str]] = {}
         helpers: dict[str, set[str]] = {}
+        tables: dict = {}
         for node in tree.body:
             if isinstance(node, ast.Assign):
                 for t in node.targets:
                     if isinstance(t, ast.Name):
                         module[t.id] = self.table(node.value, module, helpers)
+                        tables[t.id] = shape(node.value, tables)
         functions = [n for n in tree.body if isinstance(n, ast.FunctionDef)]
         for _ in functions:  # a helper may return another helper's rules
             for fn in functions:
-                env = self.local(fn, module, helpers)
+                env = self.local(fn, module, helpers, tables)
                 helpers[fn.name] = set().union(
                     *(
                         self.named(r.value, env, helpers)
@@ -135,25 +241,25 @@ class Asserts:
                     )
                 )
         for fn in functions:
-            env = self.local(fn, module, helpers)
+            if any(unrun(d) for d in fn.decorator_list):
+                continue
+            env = self.local(fn, module, helpers, tables)
             for node in ast.walk(fn):
                 if isinstance(node, ast.Assert):
-                    for leaf, negated in self.leaves(node.test):
-                        side = self.absent if negated != self.denies(leaf) else self.present
-                        for rule in self.named(leaf, env, helpers):
-                            side[rule].add(fn.name)
+                    for rule, absent in self.claims(node.test, False, env, helpers):
+                        (self.absent if absent else self.present)[rule].add(fn.name)
 
-    def leaves(self, node: ast.AST, negated: bool = False):
+    def claims(self, node: ast.AST, negated: bool, env, helpers) -> set[tuple[str, bool]]:
+        """What an assert's test asserts, as (rule, whether asserted absent) pairs."""
         if isinstance(node, ast.BoolOp):
-            for v in node.values:
-                yield from self.leaves(v, negated)
-        elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
-            yield from self.leaves(node.operand, not negated)
-        elif isinstance(node, ast.IfExp):
-            yield from self.leaves(node.body, negated)
-            yield from self.leaves(node.orelse, negated)
-        else:
-            yield node, negated
+            return set().union(*(self.claims(v, negated, env, helpers) for v in node.values))
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return self.claims(node.operand, not negated, env, helpers)
+        if isinstance(node, ast.IfExp):  # each branch holds only where its condition does
+            body = self.claims(node.body, negated, env, helpers)
+            return body & self.claims(node.orelse, negated, env, helpers)
+        absent = negated != self.denies(node)
+        return {(rule, absent) for rule in self.named(node, env, helpers)}
 
     @staticmethod
     def denies(node: ast.AST) -> bool:

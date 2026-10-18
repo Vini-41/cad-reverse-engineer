@@ -9,13 +9,14 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .geometry import CheckResult
+from .lint import MODEL_LITERALS
 from .project import (
     BASES,
     LENGTH_TOL,
-    MODEL_LITERALS,
     RESTS_ON,
     Project,
     check_tolerance,
+    default_overlap_limit,
     overlap_limit,
 )
 
@@ -108,13 +109,15 @@ def literal_override(p: Project) -> list | None:
 
 
 def overlap_limits(p: Project) -> list[dict]:
-    """Each interference check whose overlap limit is not cadrev's default, LENGTH_TOL³, with that
-    limit. An overlap limit is not a tolerance, so it is listed apart from the tolerances."""
-    return [
-        {"check": c.get("id"), "max_volume": overlap_limit(p, c)}
-        for c in p.checks
-        if c.get("kind") == "interference" and not math.isclose(overlap_limit(p, c), LENGTH_TOL**3)
-    ]
+    """Each interference check whose overlap limit is not cadrev's default, with that limit. An
+    overlap limit is not a tolerance, so it is listed apart from the tolerances."""
+    out = []
+    for c in p.checks:
+        if c.get("kind") == "interference":
+            limit = overlap_limit(p, c)
+            if not math.isclose(limit, default_overlap_limit()):
+                out.append({"check": c.get("id"), "max_volume": limit})
+    return out
 
 
 def counts(p: Project, results: list[CheckResult]) -> dict[str, int]:

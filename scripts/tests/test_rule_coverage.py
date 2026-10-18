@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPT = Path(__file__).resolve().parents[1] / "rule-coverage"
 CADREV = SCRIPT.parents[1] / "skills/cad-reverse-engineer/tool/src/cadrev"
 
@@ -123,3 +125,95 @@ def test_test_importing_a_cadrev_module_but_the_cli_fails(tmp_path):
         "skills/cad-reverse-engineer/tool/tests/test_cadrev.py:2: imports cadrev.units;"
         " tests import only cadrev.cli",
     ]
+
+
+FINDINGS_TESTS = """\
+from cadrev import cli
+import pytest
+
+UNITS = {"a 4 mm pin": (4, 4)}
+FINDINGS = {
+    "too-long": (lambda r: None, [lambda r: None]),
+    "open-end": (lambda r: None, NEAR_MISSES),
+}
+
+
+def rules(root):
+    return []
+
+
+@pytest.mark.parametrize("rule", sorted(FINDINGS))
+def test_guard_change_raises_its_rule(tmp_path, rule):
+    FINDINGS[rule][0](tmp_path)
+    assert rule in rules(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "rule, miss", [(rule, i) for rule in sorted(FINDINGS) for i in range(len(FINDINGS[rule][1]))]
+)
+def test_guard_near_miss_raises_no_rule(tmp_path, rule, miss):
+    FINDINGS[rule][1][miss](tmp_path)
+    assert rule not in rules(tmp_path)
+"""
+
+
+def test_table_key_the_case_comprehension_makes_no_case_of_fails(tmp_path):
+    result = check(repo(tmp_path, tests=FINDINGS_TESTS.replace("NEAR_MISSES", "[]")))
+    assert result.returncode == 1
+    assert result.stdout.splitlines()[1:] == ["[open-end] no test asserts it absent"]
+
+
+def test_guard_table_key_the_case_comprehension_makes_a_case_of_passes(tmp_path):
+    tests = FINDINGS_TESTS.replace("NEAR_MISSES", "[lambda r: None]")
+    result = check(repo(tmp_path, tests=tests))
+    assert (result.returncode, result.stdout.splitlines()[1:]) == (0, [])
+
+
+@pytest.mark.parametrize(
+    "old, new, missing",
+    [
+        (
+            "def test_guard_closed_end",
+            '@pytest.mark.skip(reason="slow")\ndef test_guard_closed_end',
+            "[open-end] no test asserts it absent",
+        ),
+        (
+            "def test_long_link",
+            "@pytest.mark.xfail\ndef test_long_link",
+            "[too-long] no test asserts it present",
+        ),
+        (
+            '["open-end"]',
+            '[pytest.param("open-end", marks=pytest.mark.xfail)]',
+            "[open-end] no test asserts it present",
+        ),
+    ],
+)
+def test_rule_asserted_only_by_a_skipped_or_xfail_test_fails(tmp_path, old, new, missing):
+    result = check(repo(tmp_path, tests=TESTS.replace(old, new)))
+    assert result.returncode == 1
+    assert result.stdout.splitlines()[1:] == [missing]
+
+
+def test_guard_rule_asserted_by_a_case_beside_a_skipped_case_passes(tmp_path):
+    rows = '[pytest.param("too-long", marks=pytest.mark.skip), "open-end"]'
+    result = check(repo(tmp_path, tests=TESTS.replace('["open-end"]', rows)))
+    assert (result.returncode, result.stdout.splitlines()[1:]) == (0, [])
+
+
+def test_rule_asserted_in_one_branch_of_a_conditional_assert_fails(tmp_path):
+    old = 'assert "open-end" not in errors(tmp_path)'
+    new = 'assert ("open-end" not in errors(tmp_path)) if tmp_path.exists() else True'
+    result = check(repo(tmp_path, tests=TESTS.replace(old, new)))
+    assert result.returncode == 1
+    assert result.stdout.splitlines()[1:] == ["[open-end] no test asserts it absent"]
+
+
+def test_guard_rule_asserted_in_both_branches_of_a_conditional_assert_passes(tmp_path):
+    old = 'assert "open-end" not in errors(tmp_path)'
+    new = (
+        'assert ("open-end" not in errors(tmp_path)) if tmp_path.exists() '
+        'else ("open-end" not in [])'
+    )
+    result = check(repo(tmp_path, tests=TESTS.replace(old, new)))
+    assert (result.returncode, result.stdout.splitlines()[1:]) == (0, [])

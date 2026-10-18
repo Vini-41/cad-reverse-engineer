@@ -456,7 +456,40 @@ def test_model_constant_arithmetic_folding_to_a_disallowed_value_is_a_finding(pr
 
 
 @pytest.mark.parametrize(
-    "expr", ["1 / 2", "180 + 90", "-90", "-0.5", "2 * 0.5 - 1", "-p.pitch / 2 * 2"]
+    "expr",
+    [
+        "p.pitch * 2 * 2",
+        "p.pitch * 2 * 2 - 0.5",
+        "2 * p.pitch * 2",
+        "p.pitch * 2 * -2",
+        "p.pitch + 90 + 0.5",
+        "p.pitch - 90 - 0.5",
+        "90 - p.pitch + 0.5",
+        "p.pitch - (p.link_H - 90 - 0.5)",
+    ],
+)
+def test_model_chain_of_one_operator_folds_its_literals_in_any_order(proj_dir, expr):
+    _model_with(proj_dir, line=f"extra = {expr}")
+    messages = findings(proj_dir, "model-arithmetic")
+    assert errors(proj_dir) == ["model-arithmetic"] and len(messages) == 1
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        "1 / 2",
+        "180 + 90",
+        "-90",
+        "-0.5",
+        "2 * 0.5 - 1",
+        "-p.pitch / 2 * 2",
+        "p.pitch * 2 * 0.5",
+        "2 * p.pitch * 90",
+        "p.pitch - 90 + 180",
+        "p.pitch * 2 - 0.5",
+        "p.pitch / 2 * 2",
+        "p.pitch * p.link_H * 2",
+    ],
 )
 def test_guard_model_constant_arithmetic_folding_to_an_allowed_value(proj_dir, expr):
     _model_with(proj_dir, line=f"extra = {expr}")
@@ -2399,6 +2432,16 @@ def test_reregistering_a_source_takes_its_new_citation_url_and_license(proj_dir)
         ["git", "-C", str(proj_dir), "check-ignore", "-q", "sources/paper.txt"]
     )
     assert ignored.returncode == 1
+
+
+@pytest.mark.parametrize("sid", ["paper", "second"])
+def test_source_citation_with_quotes_and_apostrophes_is_written_as_given(proj_dir, sid):
+    citation = 'O\'Neil "LegClaw", 2026'
+    paper = proj_dir / "sources" / "paper.txt"
+    args = ["--id", sid, "--kind", "paper", "--citation", citation]
+    code, _ = run("source", str(proj_dir), str(paper), *args, "--rename", f"{sid}.txt")
+    entries = yaml.safe_load((proj_dir / "project.yaml").read_text())["sources"]
+    assert code == 0 and [e["citation"] for e in entries if e["id"] == sid] == [citation]
 
 
 def _flow_param(root: Path, rationale: str) -> None:

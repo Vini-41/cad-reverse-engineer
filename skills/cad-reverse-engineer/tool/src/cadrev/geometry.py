@@ -171,6 +171,27 @@ def _expect(p: Project, ref: str) -> float:
     return value
 
 
+def _compared(
+    p: Project, c: dict, rid: str, ref: str, measured: float, shown: str = ""
+) -> CheckResult:
+    """The comparison of a value a check evaluates with the ledger value at ref: it passes within
+    the check's tolerance, tol, a length, or for a mass check tol_rel, a fraction of that value."""
+    expected = _expect(p, ref)
+    if c["kind"] == "mass":
+        tol_rel = float(c["tol_rel"])
+        tol, band = tol_rel * expected, f" ±{tol_rel:.0%}"
+    else:
+        tol, band = float(c.get("tol", p.length_tol)), ""
+    return CheckResult(
+        rid,
+        c["kind"],
+        abs(measured - expected) <= tol,
+        f"{expected:g}{band} ({ref})",
+        f"{measured:.4g}{shown}",
+        c.get("interpretation", ""),
+    )
+
+
 def _instances(built: Built):
     for inst, (part, location) in built.assembly.items():
         yield inst, built.parts[part].moved(location)
@@ -200,25 +221,14 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
     results = []
     for c in p.checks:
         cid, kind = c.get("id", "?"), c.get("kind")
-        tol = float(c.get("tol", p.length_tol))
         try:
             if kind == "bbox":
                 part = built.parts[c["part"]]
                 s = part.bounding_box().size
                 size = (s.X, s.Y, s.Z)
                 for key, axis in c["axes"].items():
-                    expected = _expect(p, f"{c['evidence']}.{key}")
-                    measured = size[AXES[axis]]
-                    results.append(
-                        CheckResult(
-                            f"{cid}.{key}",
-                            kind,
-                            abs(measured - expected) <= tol,
-                            f"{expected:g} ({c['evidence']}.{key})",
-                            f"{measured:.4g} along {axis}",
-                            c.get("interpretation", ""),
-                        )
-                    )
+                    ref, measured = f"{c['evidence']}.{key}", size[AXES[axis]]
+                    results.append(_compared(p, c, f"{cid}.{key}", ref, measured, f" along {axis}"))
             elif kind == "distance":
                 owners = {_owner(built, d) for d in c["between"]} - {None}
                 if len(owners) > 1:
@@ -234,17 +244,8 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
                     measured = abs(a[i] - b[i])
                 else:
                     measured = math.dist(a, b)
-                expected = _expect(p, f"{c['evidence']}.{c['key']}")
-                results.append(
-                    CheckResult(
-                        cid,
-                        kind,
-                        abs(measured - expected) <= tol,
-                        f"{expected:g} ({c['evidence']}.{c['key']})",
-                        f"{measured:.4g} {' - '.join(c['between'])}",
-                        c.get("interpretation", ""),
-                    )
-                )
+                ref, between = f"{c['evidence']}.{c['key']}", " - ".join(c["between"])
+                results.append(_compared(p, c, cid, ref, measured, f" {between}"))
             elif kind == "mass":
                 names = c.get("parts") or list(built.parts)
                 counts = c.get("counts", {})
@@ -253,18 +254,7 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
                     sum(built.parts[n].volume * _count(p, counts, n) for n in names) * density
                 )
                 measured += sum(p.values[n] for n in c.get("add", []))
-                expected = _expect(p, f"{c['evidence']}.{c['key']}")
-                tol_rel = float(c["tol_rel"])
-                results.append(
-                    CheckResult(
-                        cid,
-                        kind,
-                        abs(measured - expected) <= tol_rel * expected,
-                        f"{expected:g} ±{tol_rel:.0%} ({c['evidence']}.{c['key']})",
-                        f"{measured:.4g}",
-                        c.get("interpretation", ""),
-                    )
-                )
+                results.append(_compared(p, c, cid, f"{c['evidence']}.{c['key']}", measured))
             elif kind == "interference":
                 limit = overlap_limit(p, c)
                 pairs = [tuple(pair) for pair in c.get("pairs", [])]
