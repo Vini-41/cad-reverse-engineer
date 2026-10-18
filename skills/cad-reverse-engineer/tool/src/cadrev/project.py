@@ -78,22 +78,27 @@ class Project:
     @property
     def units(self) -> dict[str, str]:
         """The unit of each base quantity: the project's where it names a valid one, else the default."""
-        declared = self.meta.get("units") or {}
         out = dict(units.BASE)
-        for q, spelled in declared.items():
-            unit = units.named(spelled) if isinstance(spelled, str) else None
-            if q in units.BASE and unit is not None and units.quantity(unit) == q:
+        for q, spelled in (self.meta.get("units") or {}).items():
+            unit, _ = units.declared(q, spelled)
+            if unit is not None:
                 out[q] = unit
         return out
 
+    def _ledgered(self, ref: str) -> tuple[float, str] | None:
+        """An evidence value as printed, with the quote or reading it is printed in."""
+        item_id, _, key = ref.partition(".")
+        item = self.evidence.get(item_id)
+        if item is None or key not in item.get("values", {}):
+            return None
+        return float(item["values"][key]), item["quote"] if "quote" in item else str(item.get("reading", ""))
+
     def printed_units(self, ref: str) -> list[str | None]:
         """The units printed after each appearance of an evidence value in its quote or reading."""
-        item_id, _, key = ref.partition(".")
-        item = self.evidence.get(item_id) or {}
-        if key not in item.get("values", {}):
+        ledgered = self._ledgered(ref)
+        if ledgered is None:
             return []
-        text = item["quote"] if "quote" in item else str(item.get("reading", ""))
-        value = float(item["values"][key])
+        value, text = ledgered
         return list(dict.fromkeys(unit for v, unit in sources.quantities_in(text)
                                   if math.isclose(v, value, rel_tol=1e-9)))
 
@@ -104,11 +109,10 @@ class Project:
 
     def evidence_value(self, ref: str) -> float | None:
         """An evidence value in the project's units, converted from the unit printed in its quote."""
-        item_id, _, key = ref.partition(".")
-        item = self.evidence.get(item_id)
-        if item is None or key not in item.get("values", {}):
+        ledgered = self._ledgered(ref)
+        if ledgered is None:
             return None
-        value, unit = float(item["values"][key]), self.unit_of(ref)
+        value, unit = ledgered[0], self.unit_of(ref)
         return value if unit is None else units.convert(value, unit, self.units)
 
 
@@ -402,17 +406,23 @@ def resolve_params(p: Project) -> None:
             break
 
 
+# The quantity of the evidence values each check kind compares with the geometry.
+CHECK_READS = {"bbox": "length", "distance": "length", "mass": "mass"}
+
+
+def check_refs(c: dict) -> list[str]:
+    """The evidence values a check compares with the geometry."""
+    eid = c.get("evidence")
+    return [f"{eid}.{key}" for key in (c.get("axes") or {})] + ([f"{eid}.{c['key']}"] if c.get("key") else [])
+
+
 def check_accounting(p: Project) -> None:
     """Every evidence value is used by a parameter, checked against geometry, or set aside."""
     used = {spec.get("from") for spec in p.params.values()}
     measured_from = {str(spec.get("from", "")).partition(".")[0]
                      for spec in p.params.values() if spec.get("basis") == "measured"}
-    for c in p.checks:
-        eid = c.get("evidence")
-        if c.get("key"):
-            used.add(f"{eid}.{c['key']}")
-        for key in (c.get("axes") or {}):
-            used.add(f"{eid}.{key}")
+    checked = {ref for c in p.checks for ref in check_refs(c)}
+    used |= checked
     for eid, e in p.evidence.items():
         if eid in measured_from and not e.get("values"):
             continue
@@ -424,8 +434,6 @@ def check_accounting(p: Project) -> None:
             if f"{eid}.{key}" not in used:
                 p.error("evidence-unused", f"{eid}.{key} is neither used by a param nor checked "
                         "(or mark the item scope: not-modeled with a reason)")
-    checked = {f"{c.get('evidence')}.{k}" for c in p.checks for k in (c.get("axes") or {})}
-    checked |= {f"{c.get('evidence')}.{c['key']}" for c in p.checks if c.get("key")}
     for name, spec in p.params.items():
         if spec.get("basis") == "source" and spec.get("from") not in checked:
             p.warn("unchecked-source", f"param {name}: {spec.get('from')} feeds the model but no "
@@ -450,36 +458,50 @@ def expect_quantity(p: Project, ref: str, expected: tuple[str, ...], use: str) -
                 f"where {' or '.join(f'a {q}' for q in expected)} is expected ({use})")
 
 
-def expect_param_quantity(p: Project, name: str, expected: tuple[str, ...], use: str) -> None:
-    """expect_quantity for a param; only basis source traces to a quote."""
+_SCALING = (ast.Expression, ast.Name, ast.Load, ast.Constant, ast.UnaryOp, ast.UAdd, ast.USub,
+            ast.BinOp, ast.Mult, ast.Div)
+
+
+def _traced(p: Project, name: str, through: tuple[str, ...] = ()) -> tuple[str, str] | None:
+    """The source param a param's value copies, and the evidence value it is from: the param
+    itself for basis source, or for basis derived the one param its expr scales by constants."""
     spec = p.params.get(name) or {}
     if spec.get("basis") == "source":
-        expect_quantity(p, str(spec.get("from", "")), expected, f"param {name} {use}")
+        return name, str(spec.get("from", ""))
+    if spec.get("basis") != "derived" or name in through:
+        return None
+    try:
+        tree = ast.parse(str(spec.get("expr", "")), mode="eval")
+    except (SyntaxError, ValueError):
+        return None  # already a param-derived finding
+    names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)} - MATH_NAMES.keys()
+    if len(names) != 1 or not all(isinstance(n, _SCALING) for n in ast.walk(tree)):
+        return None
+    return _traced(p, names.pop(), (*through, name))
+
+
+def expect_param_quantity(p: Project, name: str, expected: tuple[str, ...], use: str) -> None:
+    """expect_quantity for the quote a param traces to, if it traces to one."""
+    traced = _traced(p, name)
+    if traced is not None:
+        source, ref = traced
+        via = f" through {name}" if source != name else ""
+        expect_quantity(p, ref, expected, f"param {source}{via} {use}")
 
 
 def check_units(p: Project) -> None:
     """The project names a unit for each quantity it sets, and each evidence value is used as
     the quantity its printed unit measures."""
     for q, spelled in (p.meta.get("units") or {}).items():
-        where = f"project.yaml units.{q}"
-        unit = units.named(spelled) if isinstance(spelled, str) else None
-        if q not in units.BASE:
-            p.error("units", f"{where}: units sets {', '.join(units.BASE)}; "
-                    "other quantities follow from them (torque in force × length)")
-        elif unit is None:
-            p.error("units", f"{where}: {spelled!r} is not a unit cadrev knows; one of "
-                    + ", ".join(n for n, (uq, _, _) in units.UNITS.items() if uq == q))
-        elif units.quantity(unit) != q:
-            p.error("units", f"{where}: {unit} is a unit of {units.quantity(unit)}, not {q}")
+        unit, problem = units.declared(q, spelled)
+        if unit is None:
+            p.error("units", f"project.yaml units.{q}: {problem}")
     for c in p.checks:
-        cid, kind, eid = c.get("id", "?"), c.get("kind"), c.get("evidence")
-        if kind == "bbox":
-            for key in c.get("axes") or {}:
-                expect_quantity(p, f"{eid}.{key}", ("length",), f"check {cid}")
-        elif kind == "distance":
-            expect_quantity(p, f"{eid}.{c.get('key')}", ("length",), f"check {cid}")
-        elif kind == "mass":
-            expect_quantity(p, f"{eid}.{c.get('key')}", ("mass",), f"check {cid}")
+        cid, kind = c.get("id", "?"), c.get("kind")
+        if kind in CHECK_READS:
+            for ref in check_refs(c):
+                expect_quantity(p, ref, (CHECK_READS[kind],), f"check {cid}")
+        if kind == "mass":
             expect_param_quantity(p, c.get("density") or "", ("density",), f"in check {cid}")
             for name in c.get("add", []):
                 expect_param_quantity(p, name, ("mass",), f"in check {cid}")

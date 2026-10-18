@@ -829,3 +829,24 @@ def test_param_the_model_reads_printed_in_neither_a_length_nor_an_angle_is_a_fin
 def test_guard_param_the_model_reads_printed_in_a_length_an_angle_or_no_unit(proj_dir, tmp_path, unit):
     _model_reads(proj_dir, tmp_path, f"The link reads 40 {unit} on the gauge.")
     assert findings(proj_dir, "unit-quantity") == []
+
+
+def _derived_density(root: Path, tmp_path: Path, text: str, expr: str) -> list[str]:
+    """unit-quantity findings when the mass check's density is derived by expr from N1.rho."""
+    _mass_check(root, tmp_path, text, {"m": 1.8, "rho": 1.2})
+    edit(root, "params.yaml", lambda d: d["params"].update(
+        rho_src={"basis": "source", "from": "N1.rho"}, rho={"basis": "derived", "expr": expr}))
+    return findings(root, "unit-quantity")
+
+
+@pytest.mark.parametrize("expr", ["rho_src", "rho_src * 1", "2 * rho_src / 2"])
+def test_density_derived_from_one_param_traces_to_its_quote(proj_dir, tmp_path, expr):
+    messages = _derived_density(proj_dir, tmp_path, "The link weighs 1.8 g; its wall is 1.2 mm.", expr)
+    assert len(messages) == 1 and messages[0].startswith("N1.rho") and "param rho_src" in messages[0]
+
+
+@pytest.mark.parametrize("text, expr", [("The link weighs 1.8 g; resin of 1.2 g/cm3.", "rho_src * 1"),
+                                        ("The link weighs 1.8 g; its wall is 1.2 mm.", "rho_src ** 2"),
+                                        ("The link weighs 1.8 g; its wall is 1.2 mm.", "rho_src / pitch")])
+def test_guard_density_derived_from_a_density_or_by_a_change_of_quantity(proj_dir, tmp_path, text, expr):
+    assert _derived_density(proj_dir, tmp_path, text, expr) == []
