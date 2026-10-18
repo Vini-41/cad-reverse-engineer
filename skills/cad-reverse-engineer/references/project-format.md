@@ -34,7 +34,7 @@ sources:
     citation: …
     url: https://doi.org/…
     license: CC-BY-4.0
-    coverage: false        # optional: exclude from the coverage sweep (e.g. a 200-page catalogue)
+    coverage: false        # optional: exclude from the coverage sweep (e.g. a 200-page catalogue; see `skipped`)
 ```
 
 `format` is the version of these file formats. A project without it is `[format-missing]`; one with a version this cadrev does not read is `[format-unknown]`. Either way cadrev reads no other project file, every command refuses the project, and no report is written.
@@ -58,8 +58,12 @@ Recognised units, spelled-out names included (millimetre, inches, degrees, grams
 | density | g/cm³ (g/cc, g/ml), kg/m³, g/mm³ |
 | speed | mm/s, cm/s, m/s, km/h |
 | time | ms, s/sec, min, h/hr |
+| area | mm², cm², m² (also mm2, mm^2) |
+| volume | mm³, cm³ (cc, ml), m³ (also cm3, cm^3) |
+| angular speed | rpm (r/min), rad/s |
+| fraction, count, charge | % (percent), turns, mAh; kept in SI, so 40% is 0.4 |
 
-Any other word after a number (`six turns`, `3300 mAh`) leaves it in project units.
+Any other word after a number (`12 links`) leaves it in project units.
 
 `tolerance.length` is how closely the model must realise a source value. It is a modelling check, never a manufacturing tolerance. Keep `sources:` the last key: `cadrev source` appends to it. Registering an id that is already listed refreshes its `path` and `sha256` instead, which is how sources are restored into a clone or replaced by a new download.
 
@@ -90,7 +94,7 @@ One item per statement in a source. Two anchor types:
   confirmed_by: <reviewer>     # written by the human who checked the crop
 ```
 
-- **quote** is copied from `cadrev text` output. Matching ignores case, whitespace, line-break hyphenation, dash variants and `×`/`x`; everything else must be verbatim. Numbers match whole: a quote starting or ending at a digit never matches inside a larger number ("37 mm" is not found in "137 mm" or "3.7 mm"). Each value must appear as a number in the quote (or reading); both ends of a range (`5-10 mm`) count as positive values, and a number labelling a figure, table, equation or section (`Fig. 2`, `Figs. 2 and 3`, `Table S1`, `Eq. (3)`, `Sec. 4.2`) is not a value unless a unit follows it (`section 4 mm thick`; after a label, `in` is the word: `Fig. 2 in`). Words such as "eight" are not numbers: leave the value out or quote a numeric form. Write each value as printed; its unit is read from the quote (see `units` above).
+- **quote** is copied from `cadrev text` output. Matching ignores case, whitespace, line-break hyphenation, dash variants and `×`/`x`; everything else must be verbatim. Numbers match whole: a quote starting or ending at a digit never matches inside a larger number ("37 mm" is not found in "137 mm" or "3.7 mm"). Each value must appear as a number in the quote (or reading); a decimal comma is one number (`3,5 mm` is 3.5; `1,250` and `1,5,10` stay several), and so is a fraction before a unit (`1/4 inch` is 0.25, `1 1/2 in` is 1.5; a bare `1/50` is two); both ends of a range (`5-10 mm`) count as positive values, and a number labelling a figure, table, equation or section (`Fig. 2`, `Figs. 2 and 3`, `Table S1`, `Eq. (3)`, `Sec. 4.2`) is not a value unless a unit follows it (`section 4 mm thick`; after a label, `in` is the word: `Fig. 2 in`). Words such as "eight" are not numbers: leave the value out or quote a numeric form. Write each value as printed; its unit is read from the quote (see `units` above).
 - **image** evidence covers numbers that exist only in pixels: figure labels, drawing dimensions, video frames. The crop is hashed so the reviewed image cannot change underneath its reading.
 - **scope** is optional:
   - `not-modeled` + `reason`: a real statement about the object that this reconstruction does not build (purchased springs, out-of-scope subassemblies).
@@ -100,7 +104,7 @@ Every value of an in-scope item must be used by a param `from:` or covered by a 
 
 ### `skipped`: dimension-like text that is not about the object
 
-The coverage sweep lists every number-with-unit and every `a×b×c` product in the text sources. Each one must fall inside an evidence quote or a skip:
+The coverage sweep lists every number printed with a unit from the table under `units` (a range or list as one candidate: `3–5 mm`, `1,5,10 mm`), every `a×b×c` product and every thread size (`M3`) in the text sources, leaving out digits inside a name (`L14`) and figure, table, equation or section numbers. Each one must fall inside an evidence quote or a skip. A source with `coverage: false` is not swept and raises the warning `[coverage-off]`.
 
 ```yaml
 skipped:

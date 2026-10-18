@@ -13,14 +13,18 @@ from typing import NamedTuple
 # The quantities a project's `units` may set, with the unit used when it sets none.
 BASE = {"length": "mm", "angle": "deg", "mass": "g", "force": "N", "time": "s"}
 # Every other quantity is measured in the project's base units: torque in N·mm by default.
+# Those built from none (a fraction, a count, a charge) stay in SI: 40% is 0.4.
 DERIVED = {"torque": {"force": 1, "length": 1}, "pressure": {"force": 1, "length": -2},
-           "density": {"mass": 1, "length": -3}, "speed": {"length": 1, "time": -1}}
+           "density": {"mass": 1, "length": -3}, "speed": {"length": 1, "time": -1},
+           "area": {"length": 2}, "volume": {"length": 3}, "angular speed": {"angle": 1, "time": -1},
+           "fraction": {}, "count": {}, "charge": {}}
 
 # "in" before a determiner is the word ("4 in total", "2 in each leg"), not inches.
 INCH_IN = r"in(?!\s(?:the|a|an|each|every|all|total|both|this|that|these|those|its|their|which|series|parallel)\b)"
 _SEP = r"(?:\s?[·⋅*]\s?|[.-])?"  # between the parts of a compound unit: N·m, kg ·cm, N.m, Nm
 _CUBED = r"(?:3|\^3)"  # NFKC turns ³ into 3
 _PER_CC = rf"(?:/\s?cm{_CUBED}|/\s?cc|/\s?ml|{_SEP}cm-3)"  # g/cm³, g/cc, g/ml, g·cm⁻³
+_SQUARED = r"(?:2|\^2)"  # NFKC turns ² into 2
 
 
 
@@ -50,6 +54,14 @@ UNITS: dict[str, Unit] = {
     "Pa": Unit("pressure", 1.0, (r"pa",)),
     "bar": Unit("pressure", 1e5, (r"bar",)),
     "psi": Unit("pressure", 6894.757293168, (r"psi",)),
+    "rpm": Unit("angular speed", 0.10471975511965977, (r"rpm", r"r/min")),
+    "rad/s": Unit("angular speed", 1.0, (r"rad/s",)),
+    "mm²": Unit("area", 1e-6, (rf"mm{_SQUARED}",)),
+    "cm²": Unit("area", 1e-4, (rf"cm{_SQUARED}",)),
+    "m²": Unit("area", 1.0, (rf"m{_SQUARED}",)),
+    "mm³": Unit("volume", 1e-9, (rf"mm{_CUBED}",)),
+    "cm³": Unit("volume", 1e-6, (rf"cm{_CUBED}", r"cc", r"ml")),
+    "m³": Unit("volume", 1.0, (rf"m{_CUBED}",)),
     "mm": Unit("length", 1e-3, (r"mm", r"millimet(?:er|re)s?")),
     "cm": Unit("length", 1e-2, (r"cm", r"centimet(?:er|re)s?")),
     "µm": Unit("length", 1e-6, (r"μm", r"um", r"microns?", r"micromet(?:er|re)s?")),
@@ -69,6 +81,9 @@ UNITS: dict[str, Unit] = {
     "s": Unit("time", 1.0, (r"s", r"secs?", r"seconds?")),
     "min": Unit("time", 60.0, (r"min", r"mins", r"minutes?")),
     "h": Unit("time", 3600.0, (r"h", r"hrs?", r"hours?")),
+    "%": Unit("fraction", 1e-2, (r"%", r"percent")),
+    "turns": Unit("count", 1.0, (r"turns?",)),
+    "mAh": Unit("charge", 3.6, (r"mah",)),
 }
 
 

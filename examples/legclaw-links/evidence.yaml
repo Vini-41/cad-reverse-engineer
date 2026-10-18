@@ -90,7 +90,7 @@ evidence:
 skipped:
   - {source: supp, from: "Table S4.", to: "Movie S1.", reason: Grasp-test objects, not mechanism geometry.}
   - {source: supp, from: "Figure S4", to: "Figure S5.", reason: Test loads.}
-  - {source: supp, quote: "thigh rotated ~90°", reason: Motion snapshot, not geometry.}
+  - {source: supp, from: "Figure S7.", to: "inverted posture.", reason: "Video timestamps and motion snapshots, not geometry."}
   - {source: supp, quote: "3S LiPo battery (3300 mAh)", reason: Airframe battery.}
   - {source: paper, pages: [1, 2, 3, 5, 6, 7, 8, 9, 10, 12, 13], reason: "Example scope: results, test conditions and airframe. A full reconstruction ledgers or skips each line."}
   - {source: paper, page: 11, quote: "optimized for a 1.2 kg takeoff weight", reason: Vehicle mass, not mechanism geometry.}

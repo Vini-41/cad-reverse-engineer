@@ -10,7 +10,8 @@ set -euo pipefail
 
 repo=$(git rev-parse --show-toplevel)
 tool="$repo/skills/cad-reverse-engineer/tool"
-base=$(git -C "$repo" rev-parse "${BASE:-@{upstream}}")
+upstream="@{upstream}"
+base=$(git -C "$repo" rev-parse "${BASE:-$upstream}")
 if [ "$base" = "$(git -C "$repo" rev-parse HEAD)" ] && git -C "$repo" diff --quiet HEAD -- "$tool/src"; then
   echo "BASE is HEAD and the tool source is unchanged, so there is no fix to compare; set BASE=<ref>" >&2
   exit 2

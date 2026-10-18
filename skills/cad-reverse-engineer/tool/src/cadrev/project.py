@@ -275,6 +275,8 @@ def check_coverage(p: Project) -> list[tuple[str, int, str]]:
         if not _available(p, sid) or Path(s["path"]).suffix.lower() not in TEXT_FORMATS:
             continue
         if s.get("coverage") is False:
+            p.warn("coverage-off", f"source {sid}: coverage: false, so the sweep does not read it; "
+                   "any quantity it states may be unledgered")
             continue
         texts = sources.pages(p.source_path(sid))
         anchors = [e for e in p.evidence.values() if e.get("source") == sid and "quote" in e]

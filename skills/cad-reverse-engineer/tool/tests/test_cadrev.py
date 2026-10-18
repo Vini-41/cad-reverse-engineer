@@ -206,6 +206,12 @@ QUOTES = {
     "tilted from -10 to -5 deg": ([-10, -5], [10, 5]),
     "The pin is 3.7 mm wide and 137 mm long.": ([3.7, 137], [37, 7]),
     "Link 40×8×5": ([40, 8, 5], [408]),
+    "Walls 3,5 mm": ([3.5], [5, 3]),
+    "a 1/4 inch shaft": ([0.25], [4, 1]),
+    "a 1 1/2 inch shaft": ([1.5], [0.5, 2]),
+    "gear ratio 1/50": ([1, 50], [0.02]),
+    "widths 1,5,10 mm": ([1, 5, 10], [1.5]),
+    "a 1,250 mm rail": ([1, 250], [1.25]),
 }
 
 
@@ -685,6 +691,24 @@ UNITS = {
     "moving at 5 cm/s": (5, 50),
     "moving at 2 m/s": (2, 2000),
     "moving at 36 km/h": (36, 10000),
+    "a 1/4 inch shaft": (0.25, 6.35),
+    "a 2.5 mm² wire": (2.5, 2.5),
+    "a 3 cm² pad": (3, 300),
+    "a 10 cm3 cavity": (10, 10000),
+    "a 10 ml cavity": (10, 10000),
+    "spinning at 300 rpm": (300, 1800),
+    "at 40% infill": (40, 0.4),
+    "at 40 percent infill": (40, 0.4),
+    "a 2.5 mm^2 wire": (2.5, 2.5),
+    "a 2 m² panel": (2, 2e6),
+    "a 5 mm³ void": (5, 5),
+    "a 10 cm^3 cavity": (10, 10000),
+    "a 10 cc cavity": (10, 10000),
+    "a 2 m³ tank": (2, 2e9),
+    "spinning at 300 r/min": (300, 1800),
+    "turning at 2 rad/s": (2, 114.59155902616465),
+    "wound 3 turns": (3, 3),
+    "a 3300 mAh battery": (3300, 11880),
 }
 
 
@@ -854,3 +878,54 @@ def test_density_derived_from_one_param_traces_to_its_quote(proj_dir, tmp_path, 
                                         ("The link weighs 1.8 g; its wall is 1.2 mm.", "rho_src / pitch")])
 def test_guard_density_derived_from_a_density_or_by_a_change_of_quantity(proj_dir, tmp_path, text, expr):
     assert _derived_density(proj_dir, tmp_path, text, expr) == []
+
+
+# The coverage sweep, driven by the unit table the quote reader uses.
+
+def swept(root: Path, tmp_path: Path, capsys, text: str) -> list[str]:
+    """The candidates `cadrev coverage` lists in a notes source holding text, as printed."""
+    notes = tmp_path / "notes.txt"
+    notes.write_text(text)
+    assert cli.main(["source", str(root), str(notes), "--id", "notes", "--kind", "paper",
+                     "--citation", "Doe 2026 notes"]) == 0
+    capsys.readouterr()
+    cli.main(["coverage", str(root)])
+    lines = capsys.readouterr().out.splitlines()
+    return [line.removeprefix("notes p1: ").split("  …")[0] for line in lines if line.startswith("notes p1: ")]
+
+
+# Each form a hardware paper states a quantity in, and the whole candidate the sweep lists for it.
+SWEPT = {
+    "0.5 in": "0.5 in", '2"': '2"', "1/4 inch": "1/4 inch", "3 ft": "3 ft",
+    "5 millimeters": "5 millimeters", "5 um": "5 um", "M3": "m3", "10 cm3": "10 cm3",
+    "2.5 mm²": "2.5 mm2", "30◦": "30◦", "2 rad": "2 rad", "5 MPa": "5 mpa",
+    "1.2 kgf": "1.2 kgf", "1.2 kg·cm": "1.2 kg·cm", "300 rpm": "300 rpm", "9 s": "9 s",
+    "40%": "40%", "3,5 mm": "3,5 mm", "3–5 mm": "3-5 mm", "1 1/2 in": "1 1/2 in",
+    "10,20,30 mm": "10,20,30 mm",
+}
+
+
+@pytest.mark.parametrize("form", sorted(SWEPT))
+def test_coverage_lists_each_quantity_form_whole(proj_dir, tmp_path, capsys, form):
+    assert swept(proj_dir, tmp_path, capsys, f"The part is {form} here.") == [SWEPT[form]]
+
+
+def test_guard_coverage_lists_a_degree_sign_angle(proj_dir, tmp_path, capsys):
+    assert swept(proj_dir, tmp_path, capsys, "The part is 30° here.") == ["30°"]
+
+
+def test_coverage_lists_nothing_where_no_quantity_is_stated(proj_dir, tmp_path, capsys):
+    assert swept(proj_dir, tmp_path, capsys, "Fig. 2 shows 2 in each leg of L14 at 30 °C beside an M3a cell (doi:10.1088/ada2cc).") == []
+
+
+def test_source_with_coverage_off_is_a_warning_in_the_report(proj_dir):
+    edit(proj_dir, "project.yaml", lambda d: d["sources"][0].update(coverage=False))
+    code, report = verify(proj_dir)
+    warnings = [f for f in report["findings"] if f["rule"] == "coverage-off"]
+    assert code == 0 and len(warnings) == 1 and warnings[0]["level"] == "warning"
+    assert f"`coverage-off`: {warnings[0]['message']}" in (proj_dir / "build" / "report.md").read_text()
+
+
+def test_guard_source_with_coverage_on_raises_no_coverage_off_warning(proj_dir):
+    edit(proj_dir, "project.yaml", lambda d: d["sources"][0].update(coverage=True))
+    assert findings(proj_dir, "coverage-off") == []
