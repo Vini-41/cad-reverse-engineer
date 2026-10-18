@@ -1,0 +1,6 @@
+{
+  "include": ["skills/cad-reverse-engineer/tool/src", "skills/cad-reverse-engineer/tool/tests"],
+  "exclude": ["skills/cad-reverse-engineer/tool/src/cadrev/template"],
+  "venvPath": "skills/cad-reverse-engineer/tool",
+  "venv": ".venv"
+}

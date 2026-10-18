@@ -160,69 +160,63 @@ def test_value_must_appear_in_quote(proj_dir):
     assert "value-not-in-quote" in errors(proj_dir)
 
 
-def quote_errors(root: Path, tmp_path: Path, text: str, quote: str, values: dict) -> list[str]:
-    """Error rules of a verification run with one more source holding text, quoted once."""
+def add_quote(root: Path, tmp_path: Path, text: str, quote: str, values: dict) -> None:
+    """Register one more source holding text, and ledger quote from it as evidence N1."""
     notes = tmp_path / "notes.txt"
     notes.write_text(text)
     assert cli.main(["source", str(root), str(notes), "--id", "notes", "--kind", "paper",
                      "--citation", "Doe 2026 notes"]) == 0
     edit(root, "evidence.yaml", lambda d: d["evidence"].append(
         {"id": "N1", "source": "notes", "locator": "Sec. 1", "quote": quote, "values": values}))
-    return errors(root)
 
 
 @pytest.mark.parametrize("text, quote", [("The rod is 137 mm long.", "37 mm"),
                                          ("The rod is 3.7 mm wide.", "7 mm")])
 def test_quote_matches_whole_numbers_only(proj_dir, tmp_path, text, quote):
-    assert "quote-not-found" in quote_errors(proj_dir, tmp_path, text, quote, {"x": 37})
+    add_quote(proj_dir, tmp_path, text, quote, {"x": 37})
+    assert "quote-not-found" in errors(proj_dir)
 
 
 def test_quote_of_whole_numbers_is_found(proj_dir, tmp_path):
-    assert "quote-not-found" not in quote_errors(proj_dir, tmp_path, "The rod is 137 mm long.",
-                                                 "is 137 mm", {"x": 137})
+    add_quote(proj_dir, tmp_path, "The rod is 137 mm long.", "is 137 mm", {"x": 137})
+    assert "quote-not-found" not in errors(proj_dir)
 
 
-@pytest.mark.parametrize("quote", ["3.7 mm wide", "137 mm long"])
-def test_value_is_not_part_of_a_larger_number(proj_dir, tmp_path, quote):
-    text = "The pin is 3.7 mm wide and 137 mm long."
-    assert "value-not-in-quote" in quote_errors(proj_dir, tmp_path, text, quote, {"x": 37})
+# How a quote reads: the values it yields and the near misses it must refuse. Add a row for every
+# new quote form the reader handles, with the closest input on the other side of the rule.
+QUOTES = {
+    "Fig. 2 shows the 4 cm link": ([4], [2]),
+    "Figure S3 shows the 4 cm link": ([4], [3]),
+    "Fig. 2a, 7 mm": ([7], [2]),
+    "Figs. 2 and 3 show the 4 cm link": ([4], [2, 3]),
+    "Table 5 lists the 4 cm link": ([4], [5]),
+    "Tables 1-3 list the 4 cm link": ([4], [1, 3]),
+    "Eq. (6) gives the 4 cm link": ([4], [6]),
+    "Section 4.2 gives the 4 cm link": ([4], [4.2]),
+    "Sec. 4.2.1 gives the 4 cm link": ([4], [4.2]),
+    "the tab 3 mm wide": ([3], []),
+    "2 sec per stride": ([2], []),
+    "a section 4 mm thick": ([4], []),
+    "a table 30 mm wide": ([30], [3]),
+    "Hole spacing 5-10 mm": ([5, 10], [-10]),
+    "Hole spacing 5–10 mm": ([5, 10], [-10]),
+    "Walls 3–5 mm": ([3, 5], [-5]),
+    "Hole spacing 5 mm - 10 mm": ([5, 10], [-10]),
+    "tilted from -10 to -5 deg": ([-10, -5], [10, 5]),
+    "The pin is 3.7 mm wide and 137 mm long.": ([3.7, 137], [37, 7]),
+    "Link 40×8×5": ([40, 8, 5], [408]),
+}
 
 
-@pytest.mark.parametrize("quote, label", [("Fig. 2 shows the 4 cm link", 2),
-                                          ("Figure S3 shows the 4 cm link", 3),
-                                          ("Table 5 lists the 4 cm link", 5),
-                                          ("Eq. (6) gives the 4 cm link", 6),
-                                          ("Section 4.2 gives the 4 cm link", 4.2),
-                                          ("Figs. 2 and 3 show the 4 cm link", 3),
-                                          ("Tables 1-3 list the 4 cm link", 3)])
-def test_number_labelling_a_figure_table_equation_or_section_is_not_a_value(
-        proj_dir, tmp_path, quote, label):
-    assert "value-not-in-quote" in quote_errors(proj_dir, tmp_path, quote, quote, {"x": label})
-
-
-@pytest.mark.parametrize("quote, value", [("Fig. 2 shows the 4 cm link", 4),
-                                          ("the tab 3 mm wide", 3), ("2 sec per stride", 2),
-                                          ("a section 4 mm thick", 4), ("a table 30 mm wide", 30)])
-def test_dimension_beside_a_label_is_a_value(proj_dir, tmp_path, quote, value):
-    assert "value-not-in-quote" not in quote_errors(proj_dir, tmp_path, quote, quote, {"x": value})
-
-
-@pytest.mark.parametrize("quote, lo, hi", [("Hole spacing 5-10 mm", 5, 10), ("Walls 3–5 mm", 3, 5),
-                                           ("Hole spacing 5 mm - 10 mm", 5, 10)])
-def test_range_yields_both_endpoints_as_positive_values(proj_dir, tmp_path, quote, lo, hi):
-    rules = quote_errors(proj_dir, tmp_path, quote, quote, {"lo": lo, "hi": hi})
-    assert "value-not-in-quote" not in rules
-
-
-@pytest.mark.parametrize("quote, upper", [("Hole spacing 5-10 mm", -10), ("Walls 3–5 mm", -5)])
-def test_range_upper_bound_is_not_negative(proj_dir, tmp_path, quote, upper):
-    assert "value-not-in-quote" in quote_errors(proj_dir, tmp_path, quote, quote, {"x": upper})
-
-
-def test_minus_sign_before_a_number_is_kept(proj_dir, tmp_path):
-    quote = "tilted from -10 to -5 deg"
-    assert "value-not-in-quote" not in quote_errors(proj_dir, tmp_path, quote, quote,
-                                                    {"lo": -10, "hi": -5})
+@pytest.mark.parametrize("quote", sorted(QUOTES))
+def test_quote_yields_its_values_and_refuses_near_misses(proj_dir, tmp_path, quote):
+    accepted, refused = QUOTES[quote]
+    values = {f"a{i}": v for i, v in enumerate(accepted)} | {f"r{i}": v for i, v in enumerate(refused)}
+    add_quote(proj_dir, tmp_path, quote, quote, values)
+    _, report = verify(proj_dir)
+    missing = {f["message"].split(" ")[0].removeprefix("N1.")
+               for f in report["findings"] if f["rule"] == "value-not-in-quote"}
+    assert missing == {f"r{i}" for i in range(len(refused))}
 
 
 def test_source_tampering_is_caught(proj_dir):
