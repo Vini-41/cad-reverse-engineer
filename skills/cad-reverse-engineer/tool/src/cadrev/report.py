@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+import math
 from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 
 from .geometry import CheckResult
-from .project import BASES, LENGTH_TOL, RESTS_ON, Project, check_tolerance
+from .project import BASES, LENGTH_TOL, RESTS_ON, Project, check_tolerance, overlap_limit
 
 
 def _cell(value) -> str:
@@ -83,6 +84,16 @@ def tolerances(p: Project) -> list[dict]:
     return out
 
 
+def overlap_limits(p: Project) -> list[dict]:
+    """Each interference check whose overlap limit is not cadrev's default, LENGTH_TOL³, with that
+    limit. An overlap limit is not a tolerance, so it is listed apart from the tolerances."""
+    return [
+        {"check": c.get("id"), "max_volume": overlap_limit(p, c)}
+        for c in p.checks
+        if c.get("kind") == "interference" and not math.isclose(overlap_limit(p, c), LENGTH_TOL**3)
+    ]
+
+
 def counts(p: Project, results: list[CheckResult]) -> dict[str, int]:
     """The headline numbers shown beside the status."""
     errors = sum(f.level == "error" for f in p.findings)
@@ -103,6 +114,7 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
     bases = Counter(spec.get("basis") for spec in p.params.values())
     headline = counts(p, results)
     loosened = tolerances(p)
+    limits = overlap_limits(p)
 
     md = [f"# {p.meta.get('name', 'Reconstruction')}: verification report", ""]
     md += [
@@ -152,6 +164,9 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
             for t in loosened
         ],
     )
+
+    md += ["## Non-default overlap limits", ""]
+    md += _table(["check", "max_volume"], [[o["check"], f"{o['max_volume']:g}"] for o in limits])
 
     md += ["## Parameters", ""]
     md += [" · ".join(f"{b}: {bases[b]}" for b in BASES), ""]
@@ -258,6 +273,7 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
                 "findings": [asdict(f) for f in errors + warnings],
                 "checks": [asdict(r) for r in results],
                 "tolerances": loosened,
+                "overlap_limits": limits,
                 "exact": exact(p, status),
                 "params": {
                     n: {"value": p.values.get(n), "rests_on": p.rests_on.get(n), **s}
