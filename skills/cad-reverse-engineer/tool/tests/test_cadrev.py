@@ -106,6 +106,15 @@ def test_report_json_has_the_keys_project_format_documents(proj_dir):
     assert set(report["counts"]) == set(re.findall(r"`(\w+)`", rows["counts"]))
 
 
+def test_every_status_cadrev_check_reports_is_defined_in_project_format():
+    from cadrev import report
+
+    doc = (Path(__file__).parents[2] / "references" / "project-format.md").read_text()
+    section = doc.split("\n## Statuses\n")[1].split("\n## ")[0]
+    defined = re.findall(r"^\| \*\*([A-Z ]+)\*\* \|", section, re.M)
+    assert sorted(defined) == sorted(report.STATUSES), "cadrev check and project-format.md differ on statuses"
+
+
 def test_report_json_lists_each_finding_with_level_rule_and_message(proj_dir):
     write(proj_dir, "gaps.yaml", {"gaps": []})
     code, report = verify(proj_dir)

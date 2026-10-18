@@ -24,7 +24,9 @@ def _table(header: list[str], rows: list[list]) -> list[str]:
     return lines + [""]
 
 
-PASSING = ("VERIFIED", "VERIFIED PENDING REVIEW")
+VERIFIED, PENDING_REVIEW, PARTIAL, NOT_VERIFIED = "VERIFIED", "VERIFIED PENDING REVIEW", "PARTIAL", "NOT VERIFIED"
+STATUSES = (VERIFIED, PENDING_REVIEW, PARTIAL, NOT_VERIFIED)  # every status `cadrev check` reports
+PASSING = (VERIFIED, PENDING_REVIEW)
 
 
 def awaiting_confirmation(p: Project) -> list[dict]:
@@ -39,15 +41,15 @@ def status(p: Project, partial: bool = False) -> str:
     partial: the run skipped the build or the coverage sweep, so it makes no claim.
     """
     if partial:
-        return "PARTIAL"
+        return PARTIAL
     if any(f.level == "error" for f in p.findings):
-        return "NOT VERIFIED"
-    return "VERIFIED PENDING REVIEW" if awaiting_confirmation(p) else "VERIFIED"
+        return NOT_VERIFIED
+    return PENDING_REVIEW if awaiting_confirmation(p) else VERIFIED
 
 
 def exact(p: Project, status: str) -> bool:
     """Exact: VERIFIED with no parameter resting on a proposed value."""
-    return status == "VERIFIED" and not p.proposed
+    return status == VERIFIED and not p.proposed
 
 
 def measured_params(p: Project) -> list[dict]:
@@ -114,7 +116,7 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
            "every checked source value. It does not mean the sources fully define the part: "
            "proposed parameters are reconstruction choices, listed below.", ""]
     awaiting = awaiting_confirmation(p)
-    if status == "VERIFIED PENDING REVIEW":
+    if status == PENDING_REVIEW:
         md += [f"PENDING REVIEW: {len(awaiting)} figure readings await human confirmation, listed below. "
                "Once a named reviewer has checked each against its crop and written `confirmed_by`, "
                "the project is VERIFIED.", ""]
