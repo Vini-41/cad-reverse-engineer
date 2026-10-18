@@ -12,6 +12,7 @@ jobs:
       - run: uv sync --locked -p 3.12 --extra test
       - run: uv run pytest -q
       - run: uv run pyright
+      - run: uv run ruff check
       - name: example reaches its documented status
         run: |
           example=../../../examples/legclaw-links

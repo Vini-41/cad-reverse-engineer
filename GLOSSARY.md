@@ -52,6 +52,10 @@ A question that, once answered, would replace a proposed value with a stated one
 One comparison between the built geometry and a ledger value: an envelope, a distance between datums, a mass or an interference.
 _Avoid_: test, assertion
 
+**Tolerance**:
+How far the value a check evaluates may stray from its ledger value and still pass; one other than the default is shown beside its check. An interference check compares with no ledger value, so its overlap limit is not a tolerance.
+_Avoid_: margin, allowance
+
 **Coverage sweep**:
 The pass over every text source that lists each stated quantity no ledger quote or skip covers.
 _Avoid_: coverage check, scan

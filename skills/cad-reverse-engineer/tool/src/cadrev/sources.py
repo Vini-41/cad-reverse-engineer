@@ -7,7 +7,7 @@ import re
 import unicodedata
 import zipfile
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 from typing import NamedTuple
 
@@ -25,7 +25,8 @@ _NUMBER = re.compile(rf"-?(?:\d+\s)?\d+/[1-9]\d*(?=\s?{_UNIT})|-?\d+(?:\.\d+)?")
 # A decimal comma (3,5) joins its digits into one number; the comma of a thousands figure
 # (1,250) or of a list (1,5,10) does not.
 _DECIMAL_COMMA = re.compile(r"(?<![\d,])(\d+),(?!\d{3}(?!\d))(\d+)(?![\d,])")
-_LABEL_NUMBER = rf"\(?s?\d+(?:\.\d+)*(?![\d.])[a-z]?\)?(?!\s*{units.spelling(but=(units.INCH_IN, '"', '′′'))})"
+_NOT_INCHES = units.spelling(but=(units.INCH_IN, '"', "′′"))
+_LABEL_NUMBER = rf"\(?s?\d+(?:\.\d+)*(?![\d.])[a-z]?\)?(?!\s*{_NOT_INCHES})"
 _LABEL = re.compile(r"(?:\b(?:(?:fig(?:ure)?|table|equation|section)s?\.?|(?:tab|eq|sec|sect)s?\.)|§)\s*"
                     rf"({_LABEL_NUMBER}(?:\s*(?:,|-|and|&|to)\s*{_LABEL_NUMBER})*)")
 # The dash of a range ("5-10", "5 mm - 10 mm"), which separates two values rather than negating one.
@@ -128,7 +129,7 @@ def _docx_text(path: Path) -> str:
     return "\n".join(line for line in lines if line.strip())
 
 
-@lru_cache(maxsize=None)
+@cache
 def pages(path: Path) -> tuple[str, ...]:
     """Text of each page. DOCX, TXT and MD are one page."""
     suffix = path.suffix.lower()

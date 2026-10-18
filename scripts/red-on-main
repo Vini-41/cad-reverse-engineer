@@ -37,9 +37,25 @@ echo "working tree, but tool source from ${BASE:-upstream} ($(git -C "$repo" rev
 existing="$tree.existing"  # the test functions BASE already has
 git -C "$repo" grep -hoE '^def test_[A-Za-z0-9_]+' "$base" -- "$tool/tests" | sed 's/^def //' >"$existing" || true
 if [ $# -eq 0 ]; then
-  # Select the test functions new since BASE, and those whose body the diff touches.
+  # Select the test functions new since BASE, and those whose lines (decorators to last line) the
+  # diff touches. A hunk's @@ header names the function above an insertion, so it is not used.
   selected=$( { grep -hoE '^def test_[A-Za-z0-9_]+' "$tool"/tests/*.py | sed 's/^def //' | grep -vxFf "$existing"
-                git -C "$repo" diff -U0 "$base" -- "$tool/tests" | sed -nE 's/^@@ .* @@ def (test_[A-Za-z0-9_]+).*/\1/p'
+                git -C "$repo" diff -U0 "$base" -- "$tool/tests" | python3 -c '
+import ast, re, sys
+repo, changed, path = sys.argv[1], {}, None
+for line in sys.stdin:
+    if line.startswith("+++ "):
+        path = None if line.startswith("+++ /dev/null") else line[6:].rstrip("\n")
+    elif (m := re.match(r"@@ -\S+ \+(\d+)(?:,(\d+))? @@", line)) and path:
+        start, count = int(m[1]), int(m[2] or 1)
+        changed.setdefault(path, set()).update(range(start, start + max(count, 1)))
+for path, lines in changed.items():
+    for node in ast.parse(open(f"{repo}/{path}", encoding="utf8").read()).body:
+        if isinstance(node, ast.FunctionDef) and node.name.startswith("test_"):
+            first = min([node.lineno] + [d.lineno for d in node.decorator_list])
+            if any(first <= n <= node.end_lineno for n in lines):
+                print(node.name)
+' "$repo"
               } | sort -u || true)
   if [ -z "$selected" ]; then
     echo "no test function is new or changed since ${BASE:-upstream}; pass -k to choose tests" >&2
