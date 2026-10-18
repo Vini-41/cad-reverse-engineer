@@ -21,7 +21,7 @@ VERIFIED PENDING REVIEW: 0 errors, 2 warnings, 10/10 checks pass. Report: build/
 
 ```
 **VERIFIED PENDING REVIEW**: 0 errors, 2 warnings. 10/10 geometry checks pass.
-9/15 parameters (60%) trace to sources alone; 6 rest on proposed values.
+Of 15 parameters, 9 trace to sources, 0 are measured and 6 rest on proposed values.
 ```
 
 Here VERIFIED means that every number is accounted for and the geometry realises every checked source value. Anything the sources leave open stays listed as proposed, so the report never claims more than the evidence supports. PENDING REVIEW means one step is left to a human: the example's Fig. 2A label was read off a figure crop, and the status stays short of VERIFIED until a named reviewer confirms that reading.

@@ -95,7 +95,7 @@ def test_report_json_carries_status_findings_and_counts(proj_dir):
     assert all(set(f) == {"level", "rule", "message"} for f in report["findings"])
     assert report["counts"] == {"errors": 0, "warnings": len(report["findings"]),
                                 "checks": 5, "checks_passed": 5,
-                                "params": 5, "traced": 4, "proposed": 1}
+                                "params": 5, "source": 4, "measured": 0, "proposed": 1}
 
 
 def test_report_json_lists_each_finding_with_level_rule_and_message(proj_dir):
@@ -340,6 +340,89 @@ def test_overlay_renders_against_a_figure(proj_dir):
     assert cli.main(["check", str(proj_dir)]) == 0
     assert (proj_dir / "build" / "overlays" / "front.png").exists()
     assert "overlays/front.png" in (proj_dir / "build" / "report.md").read_text()
+
+
+# Basis: what each parameter rests on, and the headline that counts them.
+
+def add_params(root: Path, **params) -> None:
+    edit(root, "params.yaml", lambda d: d["params"].update(params))
+
+
+def add_measured(root: Path) -> None:
+    """Ledger the Fig. 2 crop, confirmed, and scale param foot_w off it."""
+    add_reading(root, confirmed_by="A. Reviewer")
+    add_params(root, foot_w={"basis": "measured", "from": "F2", "value": 5.5,
+                             "method": "pitch as scale, 12 px/mm", "uncertainty": "±0.3 mm"})
+
+
+@pytest.mark.parametrize("expr", ["2.2", "2 * pi"])
+def test_derived_param_whose_expr_references_no_param_is_a_finding(proj_dir, expr):
+    add_params(proj_dir, half={"basis": "derived", "expr": expr})
+    assert "param-constant" in errors(proj_dir)
+
+
+def test_guard_derived_param_whose_expr_references_a_param_raises_no_constant_finding(proj_dir):
+    add_params(proj_dir, half={"basis": "derived", "expr": "pi * pitch / 2"})
+    assert "param-constant" not in errors(proj_dir)
+
+
+@pytest.mark.parametrize("expr, rests_on", [("pitch / 2", "source"), ("pitch - foot_w", "measured"),
+                                            ("pitch - hole_d", "proposed"),
+                                            ("pitch - foot_w - hole_d", "proposed"),
+                                            ("twice - pitch", "measured")])
+def test_derived_param_rests_on_the_weakest_basis_it_depends_on(proj_dir, expr, rests_on):
+    add_measured(proj_dir)
+    add_params(proj_dir, twice={"basis": "derived", "expr": "2 * foot_w"},
+               result={"basis": "derived", "expr": expr})
+    _, report = verify(proj_dir)
+    assert report["params"]["result"]["rests_on"] == rests_on
+
+
+def test_report_headline_counts_parameters_by_what_they_rest_on(proj_dir):
+    add_measured(proj_dir)
+    add_params(proj_dir, slot={"basis": "derived", "expr": "foot_w + hole_d"},
+               half={"basis": "derived", "expr": "pitch / 2"})
+    code, report = verify(proj_dir)
+    assert (code, report["status"]) == (0, "VERIFIED")
+    assert {k: report["counts"][k] for k in ("params", "source", "measured", "proposed")} == {
+        "params": 8, "source": 5, "measured": 1, "proposed": 2}
+    md = (proj_dir / "build" / "report.md").read_text()
+    assert "Of 8 parameters, 5 trace to sources, 1 is measured and 2 rest on proposed values." in md
+
+
+def test_report_lists_each_measured_param_with_its_method_and_uncertainty(proj_dir):
+    add_measured(proj_dir)
+    _, report = verify(proj_dir)
+    assert report["measured"] == [{"param": "foot_w", "value": 5.5, "from": "F2",
+                                   "method": "pitch as scale, 12 px/mm", "uncertainty": "±0.3 mm"}]
+    md = (proj_dir / "build" / "report.md").read_text()
+    measured = md.split("## Measured parameters")[1].split("\n## ")[0]
+    assert "| foot_w | 5.5 | F2 | pitch as scale, 12 px/mm | ±0.3 mm |" in measured
+
+
+def _no_proposed(root: Path) -> None:
+    """Derive the fixture's one proposed param, hole_d, from the pitch instead."""
+    add_params(root, hole_d={"basis": "derived", "expr": "pitch / 10"})
+
+
+def test_verified_project_with_no_proposed_param_is_exact(proj_dir):
+    _no_proposed(proj_dir)
+    code, report = verify(proj_dir)
+    assert (code, report["status"], report["counts"]["proposed"], report["exact"]) == (0, "VERIFIED", 0, True)
+    assert "**Exact**: no parameter rests on a proposed value." in (proj_dir / "build" / "report.md").read_text()
+
+
+@pytest.mark.parametrize("change", ["proposed param", "unconfirmed reading", "error"])
+def test_project_with_a_proposed_param_or_short_of_verified_is_not_exact(proj_dir, change):
+    if change != "proposed param":
+        _no_proposed(proj_dir)
+    if change == "unconfirmed reading":
+        add_reading(proj_dir)
+    if change == "error":
+        add_params(proj_dir, half={"basis": "derived", "expr": "2.2"})
+    _, report = verify(proj_dir)
+    assert report["exact"] is False
+    assert "**Exact**" not in (proj_dir / "build" / "report.md").read_text()
 
 
 # Named findings, never tracebacks.
@@ -1002,6 +1085,8 @@ def test_example_reaches_the_status_its_readme_documents(tmp_path):
     assert (report["status"], report["counts"]["errors"], report["counts"]["warnings"],
             report["counts"]["checks_passed"], report["counts"]["checks"]) == status
     assert code == (0 if status[0] in ("VERIFIED", "VERIFIED PENDING REVIEW") else 1)
+    headline = (root / "build" / "report.md").read_text().split("\n\n")[1]
+    assert headline in (EXAMPLE.parents[1] / "README.md").read_text(), "the root README shows another headline"
 
 
 def test_guard_root_readme_shows_the_status_the_example_readme_documents():

@@ -146,7 +146,9 @@ params:
 | `measured` | `from` (an image evidence id), `value`, `method`, `uncertainty` | scaled off an image or video frame against a known reference |
 | `proposed` | `value`, `rationale`; `gap` expected | a reconstruction choice the sources do not make |
 
-Write `interpretation` on every `source` param whose mapping onto geometry is a choice (which axis, envelope versus pitch, which feature). A derived param that depends on a proposed one is reported as resting on proposed values.
+Write `interpretation` on every `source` param whose mapping onto geometry is a choice (which axis, envelope versus pitch, which feature).
+
+A derived param rests on the weakest basis among the params its `expr` references (proposed < measured < source); an `expr` that references no param (`2.2`, `2 * pi`) is `[param-constant]`. The report's headline counts params by what they rest on (source, measured, proposed), lists each measured param with its method and uncertainty, and marks a VERIFIED project with no proposed param as **exact**.
 
 ## checks.yaml
 

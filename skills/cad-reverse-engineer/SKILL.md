@@ -7,7 +7,7 @@ description: Reverse-engineer a published object as a parametric build123d model
 
 Rebuild a published object as CAD that a reviewer can audit number by number. The **ledger** is the spine: every number the sources state about the object is a verbatim quote (or a hashed figure crop) in `evidence.yaml`; every number the model uses is a parameter in `params.yaml` with a declared **basis**; every source value the geometry should realise is a **check** in `checks.yaml` that compares the built geometry with the ledger. `cadrev check` enforces all of it and writes `build/report.md`.
 
-The honest product is a model whose report separates what the sources state from what the reconstruction chose. "Exact" means every modelled feature traces to a source alone; the report's headline (`N/M parameters trace to sources alone`) says how close a project is. Proposed values are fine when named, with a gap that would close them.
+The honest product is a model whose report separates what the sources state from what the reconstruction chose. "Exact" means VERIFIED with no parameter resting on a proposed value; the report's headline says how close a project is (see `derived` in [`references/project-format.md`](references/project-format.md)). Proposed values are fine when named, with a gap that would close them.
 
 ## Tool
 

@@ -20,6 +20,8 @@ FORMAT = 1  # the project.yaml format this cadrev reads
 # Findings after which nothing else in the project is read and every command refuses it.
 REFUSED = ("project-missing", "format-missing", "format-unknown")
 BASES = ("source", "derived", "measured", "proposed")
+# What a parameter can rest on, strongest first: a derived one rests on the weakest of its inputs.
+RESTS_ON = ("source", "measured", "proposed")
 SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "other")
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}
 MATH_NAMES = {
@@ -50,8 +52,9 @@ class Project:
     values: dict[str, float] = field(default_factory=dict)
     # Text sources whose file exists but cannot be read as text.
     unreadable: set[str] = field(default_factory=set)
-    # Parameters resting on a proposed value, directly or through derived expressions.
-    proposed: set[str] = field(default_factory=set)
+    # The basis each resolved parameter rests on, one of RESTS_ON: its own, or for a derived one
+    # the weakest among the parameters its expr references.
+    rests_on: dict[str, str] = field(default_factory=dict)
     findings: list[Finding] = field(default_factory=list)
 
     @property
@@ -63,6 +66,11 @@ class Project:
 
     def warn(self, rule: str, message: str) -> None:
         self.findings.append(Finding("warning", rule, message))
+
+    @property
+    def proposed(self) -> set[str]:
+        """Parameters resting on a proposed value, directly or through derived expressions."""
+        return {name for name, basis in self.rests_on.items() if basis == "proposed"}
 
     @property
     def sources(self) -> dict[str, dict]:
@@ -347,6 +355,7 @@ def resolve_params(p: Project) -> None:
                 if "value" in spec and not math.isclose(float(spec["value"]), value, rel_tol=1e-9):
                     p.error("param-mismatch", f"param {name}: value {spec['value']} != {ref} = {value}")
                 p.values[name] = value
+            p.rests_on[name] = "source"
             pending.pop(name)
         elif basis == "measured":
             item = p.evidence.get(str(spec.get("from", "")).partition(".")[0])
@@ -356,6 +365,7 @@ def resolve_params(p: Project) -> None:
                 if key not in spec:
                     p.error("param-measured", f"param {name}: measured needs {key}")
             p.values[name] = float(spec.get("value", math.nan))
+            p.rests_on[name] = "measured"
             pending.pop(name)
         elif basis == "proposed":
             if "value" not in spec or not spec.get("rationale"):
@@ -365,7 +375,7 @@ def resolve_params(p: Project) -> None:
             elif spec["gap"] not in p.gaps:
                 p.error("param-gap", f"param {name}: unknown gap {spec['gap']!r}")
             p.values[name] = float(spec.get("value", math.nan))
-            p.proposed.add(name)
+            p.rests_on[name] = "proposed"
             pending.pop(name)
     # Derived parameters may depend on each other; resolve until no progress.
     while pending:
@@ -382,6 +392,9 @@ def resolve_params(p: Project) -> None:
                         f"({getattr(exc, 'msg', exc)}): {spec['expr']!r}")
                 pending.pop(name)
                 continue
+            if not needs:
+                p.error("param-constant", f"param {name}: expr {spec['expr']!r} references no param, "
+                        "so its value traces to nothing; give the number its own basis")
             unknown = needs - p.params.keys()
             if unknown:
                 p.error("param-derived", f"param {name}: expr uses undefined {sorted(unknown)}")
@@ -396,8 +409,9 @@ def resolve_params(p: Project) -> None:
                 if "value" in spec and not math.isclose(float(spec["value"]), value, rel_tol=1e-6):
                     p.error("param-mismatch", f"param {name}: value {spec['value']} != expr = {value:g}")
                 p.values[name] = value
-                if needs & p.proposed:
-                    p.proposed.add(name)
+                # A constant expr rests on nothing, so it counts as the weakest basis.
+                p.rests_on[name] = max((p.rests_on[n] for n in needs), key=RESTS_ON.index,
+                                       default="proposed")
                 pending.pop(name)
                 progressed = True
         if pending and not progressed:

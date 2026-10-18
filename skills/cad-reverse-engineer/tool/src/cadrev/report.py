@@ -8,7 +8,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .geometry import CheckResult
-from .project import BASES, Project
+from .project import BASES, RESTS_ON, Project
 
 
 def _cell(value) -> str:
@@ -44,13 +44,25 @@ def status(p: Project, partial: bool = False) -> str:
     return "VERIFIED PENDING REVIEW" if awaiting_confirmation(p) else "VERIFIED"
 
 
+def exact(p: Project, status: str) -> bool:
+    """Exact: VERIFIED with no parameter resting on a proposed value."""
+    return status == "VERIFIED" and not p.proposed
+
+
+def measured_params(p: Project) -> list[dict]:
+    """Each measured parameter with the method and uncertainty of its scaling."""
+    return [{"param": n, "value": p.values.get(n), "from": s.get("from"),
+             "method": s.get("method"), "uncertainty": s.get("uncertainty")}
+            for n, s in p.params.items() if s.get("basis") == "measured"]
+
+
 def counts(p: Project, results: list[CheckResult]) -> dict[str, int]:
     """The headline numbers shown beside the status."""
     errors = sum(f.level == "error" for f in p.findings)
     return {"errors": errors, "warnings": len(p.findings) - errors,
             "checks": len(results), "checks_passed": sum(r.ok for r in results),
-            "params": len(p.params), "traced": len(p.params) - len(p.proposed),
-            "proposed": len(p.proposed)}
+            "params": len(p.params)} | {
+            basis: sum(b == basis for b in p.rests_on.values()) for basis in RESTS_ON}
 
 
 def write(p: Project, status: str, results: list[CheckResult], images: list[Path]) -> Path:
@@ -63,9 +75,13 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
 
     md = [f"# {p.meta.get('name', 'Reconstruction')}: verification report", ""]
     md += [f"**{status}**: {headline['errors']} errors, {headline['warnings']} warnings. "
-           f"{headline['checks_passed']}/{headline['checks']} geometry checks pass. "
-           f"{headline['traced']}/{headline['params']} parameters ({headline['traced'] / (headline['params'] or 1):.0%}) "
-           f"trace to sources alone; {headline['proposed']} rest on proposed values.", ""]
+           f"{headline['checks_passed']}/{headline['checks']} geometry checks pass.",
+           f"Of {headline['params']} parameters, {headline['source']} "
+           f"{'traces' if headline['source'] == 1 else 'trace'} to sources, "
+           f"{headline['measured']} {'is' if headline['measured'] == 1 else 'are'} measured and "
+           f"{headline['proposed']} rest on proposed values.", ""]
+    if exact(p, status):
+        md += ["**Exact**: no parameter rests on a proposed value.", ""]
     md += ["VERIFIED means every number in the model is accounted for and the geometry matches "
            "every checked source value. It does not mean the sources fully define the part: "
            "proposed parameters are reconstruction choices, listed below.", ""]
@@ -89,11 +105,16 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
     md += [" · ".join(f"{b}: {bases[b]}" for b in BASES), ""]
     md += _table(["param", "value", "basis", "from / expr", "note"],
                  [[n, f"{p.values.get(n, float('nan')):g}",
-                   str(s.get("basis")) + (" (from proposed)" if s.get("basis") == "derived"
-                                     and n in p.proposed else ""),
+                   str(s.get("basis")) + (f" (rests on {p.rests_on[n]})" if s.get("basis") == "derived"
+                                          and n in p.rests_on else ""),
                    s.get("from") or s.get("expr") or "",
                    s.get("interpretation") or s.get("rationale") or s.get("method") or ""]
                   for n, s in p.params.items()])
+
+    md += ["## Measured parameters", ""]
+    md += _table(["param", "value", "from", "method", "uncertainty"],
+                 [[m["param"], f"{m['value']:g}", m["from"], m["method"], m["uncertainty"]]
+                  for m in measured_params(p)])
 
     md += ["## Evidence", ""]
     md += _table(["id", "source", "locator", "values", "anchor"],
@@ -138,9 +159,12 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
         "counts": headline,
         "findings": [asdict(f) for f in errors + warnings],
         "checks": [asdict(r) for r in results],
-        "params": {n: {"value": p.values.get(n), **s} for n, s in p.params.items()},
+        "exact": exact(p, status),
+        "params": {n: {"value": p.values.get(n), "rests_on": p.rests_on.get(n), **s}
+                   for n, s in p.params.items()},
         "bases": dict(bases),
         "rests_on_proposed": sorted(p.proposed),
+        "measured": measured_params(p),
         "awaiting_confirmation": awaiting,
     }, indent=2, default=str), encoding="utf8")
     return path
