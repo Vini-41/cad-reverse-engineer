@@ -937,18 +937,31 @@ def test_guard_source_with_coverage_on_raises_no_coverage_off_warning(proj_dir):
 EXAMPLE = Path(__file__).parents[4] / "examples" / "legclaw-links"
 
 
-def test_example_reaches_the_status_its_readme_documents(tmp_path):
+def documented_status() -> tuple[str, int, int, int, int]:
+    """The example README's expected status: status, errors, warnings, checks passed, checks."""
     documented = re.search(r"^Expected status: `(.+): (\d+) errors, (\d+) warnings, (\d+)/(\d+) checks pass`$",
                            (EXAMPLE / "README.md").read_text(), re.M)
     assert documented, "the example README states no expected status"
+    status, *numbers = documented.groups()
+    errors, warnings, passed, checks = map(int, numbers)
+    return status, errors, warnings, passed, checks
+
+
+def test_example_reaches_the_status_its_readme_documents(tmp_path):
     root = tmp_path / "legclaw-links"
     shutil.copytree(EXAMPLE, root, ignore=shutil.ignore_patterns("build", "__pycache__"))
     code, report = verify(root)
-    status, errors, warnings, passed, checks = documented.groups()
+    status = documented_status()
     assert (report["status"], report["counts"]["errors"], report["counts"]["warnings"],
-            report["counts"]["checks_passed"], report["counts"]["checks"]) == (
-        status, int(errors), int(warnings), int(passed), int(checks))
-    assert code == (0 if status == "VERIFIED" else 1)
+            report["counts"]["checks_passed"], report["counts"]["checks"]) == status
+    assert code == (0 if status[0] == "VERIFIED" else 1)
+
+
+def test_guard_root_readme_shows_the_status_the_example_readme_documents():
+    status, errors, warnings, passed, checks = documented_status()
+    root_readme = (EXAMPLE.parents[1] / "README.md").read_text()
+    assert f"{status}: {errors} errors, {warnings} warnings, {passed}/{checks} checks pass. Report:" in root_readme
+    assert f"**{status}**: {errors} errors, {warnings} warnings. {passed}/{checks} geometry checks pass." in root_readme
 
 
 def gitignored(root: Path, name: str, license: str | None) -> bool:
