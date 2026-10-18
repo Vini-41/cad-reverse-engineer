@@ -160,6 +160,71 @@ def test_value_must_appear_in_quote(proj_dir):
     assert "value-not-in-quote" in errors(proj_dir)
 
 
+def quote_errors(root: Path, tmp_path: Path, text: str, quote: str, values: dict) -> list[str]:
+    """Error rules of a verification run with one more source holding text, quoted once."""
+    notes = tmp_path / "notes.txt"
+    notes.write_text(text)
+    assert cli.main(["source", str(root), str(notes), "--id", "notes", "--kind", "paper",
+                     "--citation", "Doe 2026 notes"]) == 0
+    edit(root, "evidence.yaml", lambda d: d["evidence"].append(
+        {"id": "N1", "source": "notes", "locator": "Sec. 1", "quote": quote, "values": values}))
+    return errors(root)
+
+
+@pytest.mark.parametrize("text, quote", [("The rod is 137 mm long.", "37 mm"),
+                                         ("The rod is 3.7 mm wide.", "7 mm")])
+def test_quote_matches_whole_numbers_only(proj_dir, tmp_path, text, quote):
+    assert "quote-not-found" in quote_errors(proj_dir, tmp_path, text, quote, {"x": 37})
+
+
+def test_quote_of_whole_numbers_is_found(proj_dir, tmp_path):
+    assert "quote-not-found" not in quote_errors(proj_dir, tmp_path, "The rod is 137 mm long.",
+                                                 "is 137 mm", {"x": 137})
+
+
+@pytest.mark.parametrize("quote", ["3.7 mm wide", "137 mm long"])
+def test_value_is_not_part_of_a_larger_number(proj_dir, tmp_path, quote):
+    text = "The pin is 3.7 mm wide and 137 mm long."
+    assert "value-not-in-quote" in quote_errors(proj_dir, tmp_path, text, quote, {"x": 37})
+
+
+@pytest.mark.parametrize("quote, label", [("Fig. 2 shows the 4 cm link", 2),
+                                          ("Figure S3 shows the 4 cm link", 3),
+                                          ("Table 5 lists the 4 cm link", 5),
+                                          ("Eq. (6) gives the 4 cm link", 6),
+                                          ("Section 4.2 gives the 4 cm link", 4.2),
+                                          ("Figs. 2 and 3 show the 4 cm link", 3),
+                                          ("Tables 1-3 list the 4 cm link", 3)])
+def test_number_labelling_a_figure_table_equation_or_section_is_not_a_value(
+        proj_dir, tmp_path, quote, label):
+    assert "value-not-in-quote" in quote_errors(proj_dir, tmp_path, quote, quote, {"x": label})
+
+
+@pytest.mark.parametrize("quote, value", [("Fig. 2 shows the 4 cm link", 4),
+                                          ("the tab 3 mm wide", 3), ("2 sec per stride", 2),
+                                          ("a section 4 mm thick", 4), ("a table 30 mm wide", 30)])
+def test_dimension_beside_a_label_is_a_value(proj_dir, tmp_path, quote, value):
+    assert "value-not-in-quote" not in quote_errors(proj_dir, tmp_path, quote, quote, {"x": value})
+
+
+@pytest.mark.parametrize("quote, lo, hi", [("Hole spacing 5-10 mm", 5, 10), ("Walls 3–5 mm", 3, 5),
+                                           ("Hole spacing 5 mm - 10 mm", 5, 10)])
+def test_range_yields_both_endpoints_as_positive_values(proj_dir, tmp_path, quote, lo, hi):
+    rules = quote_errors(proj_dir, tmp_path, quote, quote, {"lo": lo, "hi": hi})
+    assert "value-not-in-quote" not in rules
+
+
+@pytest.mark.parametrize("quote, upper", [("Hole spacing 5-10 mm", -10), ("Walls 3–5 mm", -5)])
+def test_range_upper_bound_is_not_negative(proj_dir, tmp_path, quote, upper):
+    assert "value-not-in-quote" in quote_errors(proj_dir, tmp_path, quote, quote, {"x": upper})
+
+
+def test_minus_sign_before_a_number_is_kept(proj_dir, tmp_path):
+    quote = "tilted from -10 to -5 deg"
+    assert "value-not-in-quote" not in quote_errors(proj_dir, tmp_path, quote, quote,
+                                                    {"lo": -10, "hi": -5})
+
+
 def test_source_tampering_is_caught(proj_dir):
     (proj_dir / "sources" / "paper.txt").write_text(PAPER.replace("40", "45"))
     sources.pages.cache_clear()

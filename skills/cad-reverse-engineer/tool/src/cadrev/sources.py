@@ -13,6 +13,15 @@ from pathlib import Path
 _DASHES = dict.fromkeys(map(ord, "‐‑‒–—−"), "-")
 _TIMES = dict.fromkeys(map(ord, "×✕✖⨯"), "x")
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
+# The numbers naming figures, tables, equations or sections ("Fig. S2", "Eqs. (3)-(4)",
+# "Sec. 4.2", "Figs. 2 and 3"). Abbreviations other than "fig" need their period, so "2 sec"
+# stays a value, and a number followed by a unit ("section 4 mm thick") is a dimension.
+_UNIT = r"(?:mm|cm|µm|μm|um|m|°|deg|rad|g|kg)\b"
+_LABEL_NUMBER = rf"\(?s?\d+(?:\.\d+)*(?![\d.])[a-z]?\)?(?!\s*{_UNIT})"
+_LABEL = re.compile(r"(?:\b(?:(?:fig(?:ure)?|table|equation|section)s?\.?|(?:tab|eq|sec|sect)s?\.)|§)\s*"
+                    rf"({_LABEL_NUMBER}(?:\s*(?:,|-|and|&|to)\s*{_LABEL_NUMBER})*)")
+# The dash of a range ("5-10", "5 mm - 10 mm"), which separates two values rather than negating one.
+_RANGE_DASH = re.compile(rf"(?<=\d)(\s*(?:{_UNIT}\s*)?)-(?=\s*\d)")
 
 
 def sha256(path: Path) -> str:
@@ -38,7 +47,20 @@ def squash(text: str) -> str:
 
 
 def numbers_in(text: str) -> list[float]:
-    return [float(n) for n in _NUMBER.findall(normalize(text).replace("x", " "))]
+    """The dimension candidates of a quote: whole numeric tokens, both endpoints of a range
+    as positive values, and no number that labels a figure, table, equation or section."""
+    text = normalize(text).replace("x", " ")
+    label_spans = [m.span(1) for m in _LABEL.finditer(text)]
+    text = _RANGE_DASH.sub(r"\1 ", text)  # length-preserving, so label_spans still hold
+    return [float(m.group()) for m in _NUMBER.finditer(text)
+            if not any(a <= m.start() < b for a, b in label_spans)]
+
+
+def _whole(needle: str) -> re.Pattern[str]:
+    """needle, refusing to start or end inside a larger number (37 within 137 or 3.7)."""
+    head = r"(?<!\d)(?<!\d[.,])" if needle[:1].isdigit() else ""
+    tail = r"(?![.,]?\d)" if needle[-1:].isdigit() else ""
+    return re.compile(head + re.escape(needle) + tail)
 
 
 @dataclass(frozen=True)
@@ -75,8 +97,9 @@ def find_quote(path: Path, quote: str, page: int | None = None) -> Match | None:
     candidates = [page] if page else range(1, len(texts) + 1)
     for mode, fn in (("exact", normalize), ("squashed", squash)):
         needle = fn(quote)
+        pattern = _whole(needle)
         for n in candidates:
-            if 1 <= n <= len(texts) and needle and needle in fn(texts[n - 1]):
+            if 1 <= n <= len(texts) and needle and pattern.search(fn(texts[n - 1])):
                 return Match(n, mode)
     return None
 
