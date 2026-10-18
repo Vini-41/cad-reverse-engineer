@@ -423,3 +423,66 @@ def test_unreadable_source_is_a_finding(proj_dir, tmp_path, name, content):
 
 def test_readable_sources_raise_no_unreadable_finding(proj_dir):
     assert findings(proj_dir, "source-unreadable") == []
+
+
+def _add_source(root: Path, sid: str, path: str) -> None:
+    meta = root / "project.yaml"
+    meta.write_text(meta.read_text() + f"  - id: {sid}\n    kind: paper\n    path: {path}\n"
+                    "    sha256: x\n    citation: c\n")
+
+
+def _replace(root: Path, name: str, old: str, new: str) -> None:
+    (root / name).write_text((root / name).read_text().replace(old, new))
+
+
+# Damage that once crashed, or plausibly could crash, a verification run. Add a case for every
+# new way project input or user code enters the run.
+DAMAGE = {
+    "param named by a number": lambda r: edit(r, "params.yaml", lambda d: d["params"].update(
+        {7: {"basis": "proposed", "value": 3, "rationale": "x", "gap": "G1"}})),
+    "overlay pixels in 3D": lambda r: _overlay(r, calibration={"pixels": [[0, 0, 0], [1, 1, 1]],
+                                                               "evidence": "pitch.pitch"}),
+    "source path is a directory": lambda r: _add_source(r, "d", "sources"),
+    "source path outside the project": lambda r: _add_source(r, "e", "/etc/hosts"),
+    "text source not UTF-8": lambda r: ((r / "sources" / "b.txt").write_bytes(b"\xff\xfe 30 mm"),
+                                        _add_source(r, "b", "sources/b.txt")),
+    "name is a number": lambda r: _replace(r, "project.yaml", "name:", "name: 5\noldname:"),
+    "units is a number": lambda r: _replace(r, "project.yaml", "units:", "units: 5\nxunits:"),
+    "tolerance of zero": lambda r: _replace(r, "project.yaml", "tolerance:", "tolerance: {length: 0}\nxtolerance:"),
+    "model_literals is a number": lambda r: _replace(r, "project.yaml", "name:", "model_literals: 5\nname:"),
+    "deeply nested expr": lambda r: edit(r, "params.yaml", lambda d: d["params"].update(
+        {"deep": {"basis": "derived", "expr": "(" * 300 + "pitch" + ")" * 300}})),
+    "expr overflows": lambda r: edit(r, "params.yaml", lambda d: d["params"].update(
+        {"big": {"basis": "derived", "expr": "pitch ** 1000"}})),
+    "derived without inputs": lambda r: edit(r, "params.yaml", lambda d: d["params"].update(
+        {"q": {"basis": "derived", "expr": "pitch", "value": 30}})),
+    "mass check counts not numbers": lambda r: edit(r, "checks.yaml", lambda d: d["checks"].append(
+        {"id": "m", "kind": "mass", "density": "pitch", "evidence": "pitch", "key": "pitch",
+         "tol_rel": 0.1, "counts": {"link": "x"}})),
+    "bbox along an unknown axis": lambda r: edit(r, "checks.yaml", lambda d: d["checks"].append(
+        {"id": "q", "kind": "bbox", "part": "link", "evidence": "pitch", "axes": {"pitch": "w"}})),
+    "datum of booleans": lambda r: write(r, "model.py", MODEL.replace("(-p.pitch / 2, 0, 0)", "(True, 0, 0)")),
+    "part name is a number": lambda r: write(r, "model.py", MODEL.replace('{"link": link}', '{"link": link, 3: link}')),
+    "unhashable YAML key": lambda r: write(r, "params.yaml", "params:\n  ? [a, b]\n  : {basis: proposed}\n"),
+    "undefined YAML alias": lambda r: write(r, "gaps.yaml", "gaps: *nope\n"),
+    "NUL byte in YAML": lambda r: (r / "gaps.yaml").write_bytes(b"gaps: []\x00\n"),
+    "file is a top-level list": lambda r: write(r, "params.yaml", "- a\n- b\n"),
+    "project file is a directory": lambda r: ((r / "evidence.yaml").unlink(), (r / "evidence.yaml").mkdir()),
+    "evidence value keyed by a number": lambda r: edit(r, "evidence.yaml",
+                                                       lambda d: d["evidence"][1]["values"].update({3: 30})),
+    "skip by from without to": lambda r: edit(r, "evidence.yaml", lambda d: d["skipped"].append(
+        {"source": "paper", "from": "Tests", "reason": "r"})),
+    "image evidence is a directory": lambda r: edit(r, "evidence.yaml", lambda d: d["evidence"].append(
+        {"id": "im", "source": "paper", "locator": "F", "image": "sources", "reading": "3"})),
+    "duplicate gap ids": lambda r: write(r, "gaps.yaml", {"gaps": [{"id": "G1"}, {"id": "G1"}]}),
+}
+
+
+@pytest.mark.parametrize("damage", sorted(DAMAGE))
+def test_no_damage_escapes_a_verification_run(proj_dir, capsys, damage):
+    DAMAGE[damage](proj_dir)
+    sources.pages.cache_clear()
+    code = cli.main(["check", str(proj_dir)])
+    out = capsys.readouterr()
+    assert code in (0, 1) and "Traceback" not in out.out + out.err
+    assert json.loads((proj_dir / "build" / "report.json").read_text())["status"]
