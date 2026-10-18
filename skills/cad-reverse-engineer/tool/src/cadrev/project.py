@@ -446,6 +446,11 @@ def check_tolerance(p: Project, c: dict) -> tuple[str, float] | None:
     return None
 
 
+def overlap_limit(p: Project, c: dict) -> float:
+    """The most overlap an interference check lets instances have: max_volume, else tolerance.length³."""
+    return float(c.get("max_volume", p.length_tol ** 3))
+
+
 def check_tolerances(p: Project) -> None:
     """No check is loosened past the cap: tol to TOL_CAP of each value it compares, tol_rel to TOL_REL_CAP."""
     for c in p.checks:

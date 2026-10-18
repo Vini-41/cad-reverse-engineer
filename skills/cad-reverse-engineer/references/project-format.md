@@ -168,7 +168,7 @@ checks:
 - `bbox`: the part's axis-aligned bounding-box size in its own frame.
 - `distance`: between two datums returned by the model.
 - `mass`: Σ volume × count × density, plus any `add` params; `tol_rel` is required. Its `density` and `add` params take their units from the quote (see `units` above).
-- `interference`: overlap volume between assembly instances; all pairs when `pairs` is omitted. Needs no evidence.
+- `interference`: overlap volume between assembly instances; all pairs when `pairs` is omitted. Needs no evidence. It passes when the overlap is at most `max_volume`, which defaults to `tolerance.length`³. This overlap limit compares with no ledger value, so it is not a tolerance and has no cap, but the report lists each limit other than 0.001³ beside its check.
 
 `tol` overrides `tolerance.length` for one check. A check's tolerance is capped: `tol` (or `tolerance.length`, where the check sets none) at 5% of each value the check compares, and `tol_rel` at 0.25; above either is `[tolerance-cap]`. The report lists every non-default tolerance beside its check: each `tol` other than 0.001, and every `tol_rel`, which has no default. Each source param that no check covers raises `[unchecked-source]`.
 
@@ -212,6 +212,7 @@ The machine-readable report `cadrev check` writes beside `report.md`, which rend
 | `findings` | every finding as `level`, `rule`, `message` |
 | `checks` | every geometry check with its result, expected and evaluated values |
 | `tolerances` | each check with a non-default tolerance: its `check` id, `kind`, and `tol` or `tol_rel` |
+| `overlap_limits` | each interference check with a non-default overlap limit: its `check` id and `max_volume` |
 | `model_literals` | project.yaml's `model_literals` when it differs from the default, else null |
 | `params` | each param's spec, its resolved `value` and the basis it `rests_on` |
 | `bases` | how many params declare each basis |

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+import math
 from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 
 from .geometry import CheckResult
-from .project import BASES, LENGTH_TOL, MODEL_LITERALS, RESTS_ON, Project, check_tolerance
+from .project import BASES, LENGTH_TOL, MODEL_LITERALS, RESTS_ON, Project, check_tolerance, overlap_limit
 
 
 def _cell(value) -> str:
@@ -75,6 +76,13 @@ def literal_override(p: Project) -> list | None:
     return literals
 
 
+def overlap_limits(p: Project) -> list[dict]:
+    """Each interference check whose overlap limit is not cadrev's default, LENGTH_TOL³, with that
+    limit. An overlap limit is not a tolerance, so it is listed apart from the tolerances."""
+    return [{"check": c.get("id"), "max_volume": overlap_limit(p, c)} for c in p.checks
+            if c.get("kind") == "interference" and not math.isclose(overlap_limit(p, c), LENGTH_TOL ** 3)]
+
+
 def counts(p: Project, results: list[CheckResult]) -> dict[str, int]:
     """The headline numbers shown beside the status."""
     errors = sum(f.level == "error" for f in p.findings)
@@ -92,6 +100,7 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
     bases = Counter(spec.get("basis") for spec in p.params.values())
     headline = counts(p, results)
     loosened = tolerances(p)
+    limits = overlap_limits(p)
     override = literal_override(p)
 
     md = [f"# {p.meta.get('name', 'Reconstruction')}: verification report", ""]
@@ -124,6 +133,9 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
     md += _table(["check", "kind", "tolerance"],
                  [[t["check"], t["kind"], next(f"{k} {t[k]:g}" for k in ("tol", "tol_rel") if k in t)]
                   for t in loosened])
+
+    md += ["## Non-default overlap limits", ""]
+    md += _table(["check", "max_volume"], [[o["check"], f"{o['max_volume']:g}"] for o in limits])
 
     md += ["## Model literal override", ""]
     md += ([f"project.yaml `model_literals` allows {', '.join(f'{v:g}' for v in override)} in model.py, "
@@ -189,6 +201,7 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
         "findings": [asdict(f) for f in errors + warnings],
         "checks": [asdict(r) for r in results],
         "tolerances": loosened,
+        "overlap_limits": limits,
         "model_literals": override,
         "exact": exact(p, status),
         "params": {n: {"value": p.values.get(n), "rests_on": p.rests_on.get(n), **s}

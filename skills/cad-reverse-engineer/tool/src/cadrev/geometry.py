@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from .project import Project, expect_param_quantity, expr_names
+from .project import Project, expect_param_quantity, expr_names, overlap_limit
 
 AXES = {"x": 0, "y": 1, "z": 2}
 
@@ -198,7 +198,7 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
                     f"{expected:g} ±{tol_rel:.0%} ({c['evidence']}.{c['key']})",
                     f"{measured:.4g}", c.get("interpretation", "")))
             elif kind == "interference":
-                limit = float(c.get("max_volume", p.length_tol ** 3))
+                limit = overlap_limit(p, c)
                 pairs = [tuple(pair) for pair in c.get("pairs", [])]
                 shapes = dict(_instances(built))
                 if not pairs:
