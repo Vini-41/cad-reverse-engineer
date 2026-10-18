@@ -1,5 +1,7 @@
 ## This repo
 
+Before planning, read `.scratch/handoff.md` if it exists: it carries the last session's state.
+
 The CLI's source and tests live under `skills/cad-reverse-engineer/tool/`, not at the repo root.
 
 `skills/cad-reverse-engineer/SKILL.md` and its `references/` are the shipped product: before editing them, load `/writing-for-agents`.
