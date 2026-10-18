@@ -1,4 +1,7 @@
 import json
+import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -929,3 +932,60 @@ def test_source_with_coverage_off_is_a_warning_in_the_report(proj_dir):
 def test_guard_source_with_coverage_on_raises_no_coverage_off_warning(proj_dir):
     edit(proj_dir, "project.yaml", lambda d: d["sources"][0].update(coverage=True))
     assert findings(proj_dir, "coverage-off") == []
+
+
+EXAMPLE = Path(__file__).parents[4] / "examples" / "legclaw-links"
+
+
+def test_example_reaches_the_status_its_readme_documents(tmp_path):
+    documented = re.search(r"^Expected status: `(.+): (\d+) errors, (\d+) warnings, (\d+)/(\d+) checks pass`$",
+                           (EXAMPLE / "README.md").read_text(), re.M)
+    assert documented, "the example README states no expected status"
+    root = tmp_path / "legclaw-links"
+    shutil.copytree(EXAMPLE, root, ignore=shutil.ignore_patterns("build", "__pycache__"))
+    code, report = verify(root)
+    status, errors, warnings, passed, checks = documented.groups()
+    assert (report["status"], report["counts"]["errors"], report["counts"]["warnings"],
+            report["counts"]["checks_passed"], report["counts"]["checks"]) == (
+        status, int(errors), int(warnings), int(passed), int(checks))
+    assert code == (0 if status == "VERIFIED" else 1)
+
+
+def gitignored(root: Path, name: str, license: str | None) -> bool:
+    """Whether git ignores sources/<name> after it is registered with this license."""
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    paper = root.parent / name
+    paper.write_text(PAPER)
+    assert cli.main(["source", str(root), str(paper), "--id", "extra", "--kind", "paper",
+                     "--citation", "Doe 2026", *(["--license", license] if license else [])]) == 0
+    return subprocess.run(["git", "-C", str(root), "check-ignore", "-q", f"sources/{name}"]).returncode == 0
+
+
+@pytest.mark.parametrize("license", ["CC-BY-4.0", "CC-BY-SA-4.0", "CC0-1.0", "CC BY 4.0"])
+def test_source_whose_license_allows_redistribution_is_committed(proj_dir, license):
+    assert not gitignored(proj_dir, "open.txt", license)
+
+
+@pytest.mark.parametrize("license", [None, "CC-BY-NC-4.0", "CC-BY-ND-4.0", "all rights reserved"])
+def test_guard_source_whose_license_does_not_allow_redistribution_stays_gitignored(proj_dir, license):
+    assert gitignored(proj_dir, "closed.txt", license)
+
+
+def test_redistributable_source_whose_name_is_a_glob_is_committed_alone(proj_dir):
+    assert not gitignored(proj_dir, "open[1].txt", "CC-BY-4.0")
+    (proj_dir / "sources" / "open1.txt").write_text(PAPER)
+    assert subprocess.run(["git", "-C", str(proj_dir), "check-ignore", "-q", "sources/open1.txt"]).returncode == 0
+
+
+def test_redistributable_source_is_committed_from_a_project_that_ignores_all_of_sources(proj_dir):
+    # Projects made before sources could be committed ignore the whole directory.
+    gitignore = proj_dir / ".gitignore"
+    gitignore.write_text(re.sub(r"^sources/.*$", "sources/", gitignore.read_text(), flags=re.M))
+    assert not gitignored(proj_dir, "open.txt", "CC-BY-4.0")
+
+
+def test_example_sources_are_committed():
+    names = [Path(s["path"]).name for s in yaml.safe_load((EXAMPLE / "project.yaml").read_text())["sources"]]
+    listed = subprocess.run(["git", "-C", str(EXAMPLE), "ls-files", "sources"], capture_output=True,
+                            text=True, check=True).stdout.split()
+    assert sorted(listed) == sorted(f"sources/{n}" for n in names)

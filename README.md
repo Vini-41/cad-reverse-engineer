@@ -62,7 +62,7 @@ Outputs:
 
 ## Example
 
-[`examples/legclaw-links`](examples/legclaw-links) reconstructs three linkages of the leg-claw in Cheng et al., *Bioinspired Adaptive Leg-Claw Enables Robust Perching and Grasping for UAVs*, Advanced Science 2026 ([doi:10.1002/advs.202523518](https://doi.org/10.1002/advs.202523518)). The source files are not committed. Download the article and its Supporting Information, then register them as described in the example's README. The pinned hashes tell you whether you have the same files.
+[`examples/legclaw-links`](examples/legclaw-links) reconstructs three linkages of the leg-claw in Cheng et al., *Bioinspired Adaptive Leg-Claw Enables Robust Perching and Grasping for UAVs*, Advanced Science 2026 ([doi:10.1002/advs.202523518](https://doi.org/10.1002/advs.202523518)). Both sources are CC BY 4.0 and committed with it, so `cadrev check examples/legclaw-links` runs from a fresh clone; CI runs it on every push.
 
 The example covers each kind of evidence: Table S2 envelopes from the DOCX supplement, quotes from the PDF methods, a figure-label crop from Fig. 2A, two recorded source conflicts, and proposed pin pitches with the author questions that would settle them.
 
@@ -81,10 +81,10 @@ examples/                worked reconstructions
 
 ```bash
 cd skills/cad-reverse-engineer/tool
-uv sync -p 3.12 --extra test
+uv sync --locked -p 3.12 --extra test
 uv run pytest -q
 ```
 
 ## License
 
-The code is under the MIT license. The example's figure crop comes from the CC BY 4.0 article cited above and keeps that license and attribution.
+The code is under the MIT license. The example's sources and figure crop come from the CC BY 4.0 article cited above and keep that license and attribution.

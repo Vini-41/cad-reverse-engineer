@@ -1,5 +1,5 @@
 build/
-# Sources are pinned by sha256 in project.yaml. Commit them only when their license allows redistribution.
-sources/
+# Sources are pinned by sha256 in project.yaml. `cadrev source` un-ignores each one whose license allows redistribution.
+sources/*
 figures/*/
 !figures/crops/

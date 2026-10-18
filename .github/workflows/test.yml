@@ -9,6 +9,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync -p 3.12 --extra test
+      - run: uv sync --locked -p 3.12 --extra test
       - run: uv run pytest -q
       - run: uv run pyright
+      - name: example reaches its documented status
+        run: |
+          example=../../../examples/legclaw-links
+          expected=$(sed -n 's/^Expected status: `\(.*\)`$/\1/p' "$example/README.md")
+          test -n "$expected" || { echo "$example/README.md states no expected status"; exit 1; }
+          uv run cadrev check "$example" | tee check.log || true
+          grep -qF "$expected. Report:" check.log || { echo "expected: $expected"; exit 1; }

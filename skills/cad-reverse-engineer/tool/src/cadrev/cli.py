@@ -12,6 +12,8 @@ from . import project as proj
 from . import sources
 
 TEMPLATE = Path(__file__).parent / "template"
+# SPDX ids whose terms let anyone redistribute the file unchanged and for any purpose.
+REDISTRIBUTABLE = re.compile(r"CC0-1\.0|CC-BY(-SA)?-\d\.\d", re.I)
 
 
 def _print_findings(findings, stream=None) -> None:
@@ -56,6 +58,21 @@ def _rewrite_source_entry(text: str, source_id: str, fields: dict[str, str]) -> 
     return None
 
 
+def _unignore_if_redistributable(root: Path, path: str, license_id: object) -> None:
+    """Un-ignore a source in the project's .gitignore when its license allows redistribution."""
+    gitignore = root / ".gitignore"
+    if (not isinstance(license_id, str) or not gitignore.is_file()
+            or not REDISTRIBUTABLE.fullmatch(re.sub(r"\s+", "-", license_id.strip()))):
+        return
+    # git cannot re-include a file inside an ignored directory, so ignore its contents instead.
+    lines = ["sources/*" if line.strip() in ("sources/", "sources") else line
+             for line in gitignore.read_text().splitlines()]
+    pattern = "!" + re.sub(r"([\\*?\[!#])", r"\\\1", path)
+    if pattern not in lines:
+        lines.append(pattern)
+    gitignore.write_text("\n".join(lines) + "\n")
+
+
 def cmd_source(args) -> int:
     root = Path(args.dir)
     src = Path(args.file)
@@ -67,7 +84,7 @@ def cmd_source(args) -> int:
         print(f"{src} not found", file=sys.stderr)
         return 1
     problems: list[proj.Finding] = []
-    registered = {s["id"] for s in proj.read_meta(root, problems).get("sources", [])}
+    registered = {s["id"]: s for s in proj.read_meta(root, problems).get("sources", [])}
     if problems:
         _print_findings(problems, sys.stderr)
         return 1
@@ -85,6 +102,7 @@ def cmd_source(args) -> int:
                   f"{path} and sha256 to {digest} in project.yaml", file=sys.stderr)
             return 1
         meta.write_text(refreshed)
+        _unignore_if_redistributable(root, path, registered[args.id].get("license"))
         print(f"refreshed {args.id} -> {target}")
         return 0
     entry = [f"  - id: {args.id}", f"    kind: {args.kind}",
@@ -94,6 +112,7 @@ def cmd_source(args) -> int:
     entry += [f"    license: {args.license}"] if args.license else []
     text = re.sub(r"^sources: \[\]\s*$", "sources:", text, flags=re.M)
     meta.write_text(text.rstrip("\n") + "\n" + "\n".join(entry) + "\n")
+    _unignore_if_redistributable(root, path, args.license)
     print(f"registered {args.id} -> {target}")
     return 0
 
