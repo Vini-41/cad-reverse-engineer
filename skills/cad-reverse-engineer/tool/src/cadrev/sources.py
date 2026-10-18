@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import re
 import unicodedata
 import zipfile
@@ -189,17 +190,34 @@ def extract_figures(path: Path, out: Path) -> list[Path]:
 
         for n, page in enumerate(PdfReader(path).pages, 1):
             for i, image in enumerate(page.images, 1):
-                target = out / f"p{n:03d}_{i:02d}{Path(image.name).suffix or '.png'}"
-                target.write_bytes(image.data)
-                written.append(target)
+                name = f"p{n:03d}_{i:02d}{Path(image.name).suffix or '.png'}"
+                written.append(_write_viewable(out / name, image.data))
     elif path.suffix.lower() == ".docx":
         with zipfile.ZipFile(path) as z:
             for name in sorted(z.namelist()):
                 if name.startswith("word/media/"):
-                    target = out / Path(name).name
-                    target.write_bytes(z.read(name))
-                    written.append(target)
+                    written.append(_write_viewable(out / Path(name).name, z.read(name)))
     return written
+
+
+VIEWABLE = {".png", ".jpg", ".jpeg", ".gif", ".webp"}  # formats an image viewer shows as they are
+
+
+def _write_viewable(target: Path, data: bytes) -> Path:
+    """Write an extracted image to target, or as PNG beside it when a viewer cannot show its
+    format (TIFF, BMP) and Pillow can read it; return the path written."""
+    if target.suffix.lower() not in VIEWABLE:
+        from PIL import Image, UnidentifiedImageError
+
+        try:
+            with Image.open(io.BytesIO(data)) as image:
+                png = target.with_suffix(".png")
+                image.save(png, format="PNG")
+                return png
+        except (UnidentifiedImageError, OSError, ValueError):
+            pass  # a format Pillow cannot read (EMF, WMF) is kept as extracted
+    target.write_bytes(data)
+    return target
 
 
 # Thread and fastener sizes (M3, M2.5x0.45): stated sizes the unit table cannot read.

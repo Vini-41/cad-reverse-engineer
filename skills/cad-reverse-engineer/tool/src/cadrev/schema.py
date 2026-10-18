@@ -97,7 +97,7 @@ CHECK = Record(
         "between": Items(str),
         "along": str,
         "density": str,
-        "counts": Table(NUMBER),
+        "counts": Table(str),
         "add": Items(str),
         "tol": NUMBER,
         "tol_rel": NUMBER,

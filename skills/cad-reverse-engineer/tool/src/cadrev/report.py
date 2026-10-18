@@ -204,7 +204,7 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
     )
 
     md += ["## Parameters", ""]
-    md += [" · ".join(f"{b}: {bases[b]}" for b in BASES), ""]
+    md += ["Declared basis: " + " · ".join(f"{b}: {bases[b]}" for b in BASES), ""]
     md += _table(
         ["param", "value", "basis", "from / expr", "note"],
         [

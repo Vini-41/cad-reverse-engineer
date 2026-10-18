@@ -5,10 +5,11 @@ from __future__ import annotations
 import importlib.util
 import math
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from .project import Project, expect_param_quantity, expr_names, overlap_limit
+from .project import Project, check_params, expect_param_quantity, expr_names, overlap_limit
 
 AXES = {"x": 0, "y": 1, "z": 2}
 
@@ -87,12 +88,15 @@ def build(p: Project) -> Built | None:
     assert spec is not None and spec.loader is not None  # a .py path always gets a source loader
     module = importlib.util.module_from_spec(spec)
     params = Params(p.values)
+    writes_bytecode, sys.dont_write_bytecode = sys.dont_write_bytecode, True  # no __pycache__/
     try:
         spec.loader.exec_module(module)
         result = module.build(params)
     except (Exception, SystemExit) as exc:  # noqa: BLE001 - a broken model is a finding, not a crash
         p.error("model-build", f"model.build failed: {type(exc).__name__}: {exc}")
         return None
+    finally:
+        sys.dont_write_bytecode = writes_bytecode
     problem = _contract_breach(result)
     if problem:
         p.error("model-return", f"model.build {problem}")
@@ -107,11 +111,18 @@ def build(p: Project) -> Built | None:
     )
     for name in sorted(built.used):
         expect_param_quantity(p, name, ("length", "angle"), "in model.py")
-    for name in sorted(p.values.keys() - built.used - _used_by_derived(p)):
+    for name in sorted(p.values.keys() - built.used - _used_by_derived(p) - check_params(p)):
         p.warn("param-unused", f"param {name} is defined but the model never reads it")
     for name, part in built.parts.items():
+        solids = len(part.solids())
         if not part.is_valid:
             p.error("part-invalid", f"part {name}: solid is not valid")
+        elif solids != 1:
+            p.error(
+                "part-invalid",
+                f"part {name}: is {solids} solids, not one; fuse its bodies, "
+                "or make each its own part placed in the assembly",
+            )
     for inst, (part, _) in list(built.assembly.items()):
         if part not in built.parts:
             p.error("assembly-part", f"assembly instance {inst}: unknown part {part!r}")
@@ -165,6 +176,26 @@ def _instances(built: Built):
         yield inst, built.parts[part].moved(location)
 
 
+def _owner(built: Built, datum: str) -> str | None:
+    """The part a datum named <part>.<feature> belongs to, or None if its prefix names no part."""
+    named = [part for part in built.parts if str(datum).startswith(f"{part}.")]
+    return max(named, key=len, default=None)
+
+
+def _count(p: Project, counts: dict, part: str) -> float:
+    """How many of part a mass check weighs: the param its counts entry names, else 1."""
+    return p.values[counts[part]] if part in counts else 1
+
+
+def _volume(overlap) -> float:
+    """The volume of an intersect() result: nothing, one shape, or a list of shapes."""
+    if overlap is None:
+        return 0.0
+    if isinstance(overlap, list):  # a ShapeList, when the overlap is not one shape
+        return sum(shape.volume for shape in overlap)
+    return overlap.volume
+
+
 def run_checks(p: Project, built: Built) -> list[CheckResult]:
     results = []
     for c in p.checks:
@@ -189,6 +220,14 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
                         )
                     )
             elif kind == "distance":
+                owners = {_owner(built, d) for d in c["between"]} - {None}
+                if len(owners) > 1:
+                    p.error(
+                        "check-config",
+                        f"check {cid}: {' and '.join(c['between'])} are datums of different parts, "
+                        "each in its own frame; a distance compares two datums of one part",
+                    )
+                    continue
                 a, b = (built.datums[d] for d in c["between"])
                 if c.get("along"):
                     i = AXES[c["along"]]
@@ -210,7 +249,9 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
                 names = c.get("parts") or list(built.parts)
                 counts = c.get("counts", {})
                 density = p.values[c["density"]]
-                measured = sum(built.parts[n].volume * counts.get(n, 1) for n in names) * density
+                measured = (
+                    sum(built.parts[n].volume * _count(p, counts, n) for n in names) * density
+                )
                 measured += sum(p.values[n] for n in c.get("add", []))
                 expected = _expect(p, f"{c['evidence']}.{c['key']}")
                 tol_rel = float(c["tol_rel"])
@@ -233,9 +274,9 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
                     pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1 :]]
                 worst = (0.0, "")
                 for a, b in pairs:
-                    overlap = shapes[a].intersect(shapes[b])
-                    volume = overlap.volume if overlap is not None else 0.0
-                    worst = max(worst, (volume, f"{a} ∩ {b}"))
+                    volume = _volume(shapes[a].intersect(shapes[b]))
+                    if volume > worst[0]:  # name a pair only where instances overlap
+                        worst = (volume, f"{a} ∩ {b}")
                 results.append(
                     CheckResult(
                         cid,

@@ -42,13 +42,13 @@ Done when every document the reconstruction will cite is registered and `cadrev 
 Read every page with `cadrev text <dir> <source>` and every figure with `cadrev figures <dir> <source>` and then the Read tool. For each statement about the object, add an evidence item:
 
 - Copy quotes from `cadrev text` output, which is the text the matcher sees.
-- Numbers printed inside figures (dimension labels, scale bars, inset annotations) become image evidence: `cadrev crop` the label, view the crop, write the `reading` exactly as printed.
+- Numbers printed inside figures about the object (dimension labels, scale bars, inset annotations) become image evidence: `cadrev crop` the label, view the crop, write the `reading` exactly as printed. `crop` takes pixels of the extracted file; when the Read tool shows an image downscaled, multiply by the factor it reports, and confirm in the crop that the whole label is inside.
 - Record each disagreement between sources under `conflicts`.
-- Skip, with a reason, the stated quantities that are about something else: test objects, loads, airframe, results.
+- Skip, with a reason, the stated quantities that are about something else: test objects, loads, test rigs, results.
 
 Format: `evidence.yaml` in [`references/project-format.md`](references/project-format.md).
 
-Done when every figure has been viewed with its labels ledgered, and `cadrev check <dir> --no-build` reports no `[coverage]`, `[quote-not-found]`, `[value-not-in-*]`, `[image-*]`, `[unit-ambiguous]`, `[skip-*]`, `[conflict-ref]` or `[evidence-*]` other than `[evidence-unused]`. The coverage sweep sees text only; the figure pass is yours.
+Done when every figure has been viewed with its labels ledgered, and `cadrev check <dir> --no-build` reports no `[coverage]`, `[quote-not-found]`, `[value-not-in-*]`, `[image-*]`, `[unit-ambiguous]`, `[skip-*]`, `[conflict-ref]` or `[evidence-*]` other than `[evidence-unused]`. The coverage sweep lists only numbers printed with a unit, so the figure pass and the unitless cells of tables are yours.
 
 ### 4. Parameterise
 
@@ -70,7 +70,7 @@ Done when the tracer part's checks went green before a second part was modelled,
 
 Add a check for every source value the geometry should realise: `bbox` for envelopes, `distance` between datums for pitches and spacings, `mass` where a mass is stated, `interference` across the assembly. Where a figure shows a modelled part in a near-orthographic view, add an overlay and look at the rendered PNG; record in the param's interpretation what the overlay showed.
 
-A check is green when the value it evaluates in the built geometry matches its ledger value within tolerance, and red (`[check-failed]`) otherwise. Turn a red check green by changing the model or its params. Evidence changes only to correct a transcription, re-copied from `cadrev text`. A tolerance loosened past its cap is `[tolerance-cap]`, and every loosened one is listed in the report.
+A check is green when the value it evaluates in the built geometry matches its ledger value within tolerance, and red (`[check-failed]`) otherwise. Turn a red check green by changing the model or its params. A proposed param changed to turn a check green says so in its `rationale`, since that check now confirms the choice rather than a source. Evidence changes only to correct a transcription, re-copied from `cadrev text`. A tolerance loosened past its cap is `[tolerance-cap]`, and every loosened one is listed in the report.
 
 Format: `checks.yaml` and `overlays.yaml` in [`references/project-format.md`](references/project-format.md).
 

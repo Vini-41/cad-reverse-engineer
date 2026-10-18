@@ -1251,7 +1251,7 @@ DAMAGE = {
                 "evidence": "pitch",
                 "key": "pitch",
                 "tol_rel": 0.1,
-                "counts": {"link": "x"},
+                "counts": {"link": 2},
             }
         ),
     ),
@@ -2107,8 +2107,8 @@ def pdf(pages: list[str], image: bool = False) -> bytes:
     return bytes(out)
 
 
-def docx(text: str, image: bytes | None = None) -> bytes:
-    """A DOCX with one paragraph per line of text, and image as word/media/image1.png."""
+def docx(text: str, image: bytes | None = None, media: str = "image1.png") -> bytes:
+    """A DOCX with one paragraph per line of text, and image as word/media/<media>."""
     body = "".join(f"<w:p><w:r><w:t>{line}</w:t></w:r></w:p>" for line in text.splitlines())
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/'
@@ -2118,15 +2118,15 @@ def docx(text: str, image: bytes | None = None) -> bytes:
     with zipfile.ZipFile(out, "w") as z:
         z.writestr("word/document.xml", xml)
         if image is not None:
-            z.writestr("word/media/image1.png", image)
+            z.writestr(f"word/media/{media}", image)
     return out.getvalue()
 
 
-def png() -> bytes:
+def png(format: str = "PNG") -> bytes:
     from PIL import Image
 
     out = io.BytesIO()
-    Image.new("RGB", (4, 2), "red").save(out, format="PNG")
+    Image.new("RGB", (4, 2), "red").save(out, format=format)
     return out.getvalue()
 
 
@@ -2179,6 +2179,16 @@ def test_guard_figures_extracts_each_embedded_image(proj_dir, tmp_path, name, co
     assert (proj_dir / out.strip()).stat().st_size > 0
 
 
+def test_figures_writes_an_image_a_viewer_cannot_show_as_png(proj_dir, tmp_path):
+    from PIL import Image
+
+    add_source(proj_dir, tmp_path, "supp.docx", docx(PAPER, image=png("TIFF"), media="image1.tiff"))
+    code, out = run("figures", str(proj_dir), "doc")
+    assert (code, out) == (0, "figures/doc/image1.png\n")
+    with Image.open(proj_dir / "figures" / "doc" / "image1.png") as image:
+        assert (image.format, image.size) == ("PNG", (4, 2))
+
+
 def test_guard_figures_of_a_source_without_images_writes_nothing(proj_dir):
     assert run("figures", str(proj_dir), "paper") == (0, "")
 
@@ -2205,6 +2215,167 @@ def test_guard_crop_writes_the_region_zoomed_and_prints_its_sha256(proj_dir):
     assert (code, out) == (0, f"image: figures/crops/c.png\nimage_sha256: {sha256(crop)}\n")
     with Image.open(crop) as image:
         assert image.size == (30, 15)
+
+
+# Trips from the dogfood run (docs/dogfood/legclaw-run-log.md): each is a place a fresh agent
+# reconstructing the full LegClaw met a crash, a false finding or a silent wrong answer.
+
+
+def _placed(*instances: str) -> str:
+    """The fixture's model with the link placed at each Location in instances."""
+    entries = ", ".join(f'"link_{i}": ("link", {loc})' for i, loc in enumerate(instances, 1))
+    return MODEL.replace('{"link_1": ("link", Location())}', "{" + entries + "}")
+
+
+def test_interference_between_overlapping_instances_fails_the_check_without_a_traceback(
+    proj_dir,
+):
+    write(proj_dir, "model.py", _placed("Location()", "Location((p.pitch / 2, 0, 0))"))
+    code, report = verify(proj_dir)
+    assert code == 1
+    clear = next(c for c in report["checks"] if c["id"] == "clear")
+    assert not clear["ok"] and "link_1 ∩ link_2" in clear["measured"]
+    assert "check-failed" in [f["rule"] for f in report["findings"]]
+
+
+def test_interference_check_with_no_overlap_names_no_pair(proj_dir):
+    write(proj_dir, "model.py", _placed("Location()", "Location((0, 0, p.link_H * 2))"))
+    code, report = verify(proj_dir)
+    clear = next(c for c in report["checks"] if c["id"] == "clear")
+    assert code == 0 and clear["ok"] and "∩" not in clear["measured"]
+
+
+def _mass_with_hardware(root: Path, tmp_path: Path, hardware: dict) -> None:
+    """The link's mass check, with the density rho and the param hardware as its add."""
+    values = {"m": 2.8, "rho": 1.2} | ({"screws": 1} if "from" in hardware else {})
+    text = "The link weighs 2.8 g with 1 g of screws, printed in resin of 1.2 g/cm3."
+    _mass_check(root, tmp_path, text, values)
+    edit(root, "params.yaml", lambda d: d["params"].update(hardware=hardware))
+    edit(root, "checks.yaml", lambda d: d["checks"][-1].update(add=["hardware"]))
+
+
+def test_params_only_a_mass_check_reads_are_not_unused(proj_dir, tmp_path):
+    _mass_with_hardware(
+        proj_dir,
+        tmp_path,
+        {"basis": "proposed", "value": 1, "rationale": "screws by count", "gap": "G1"},
+    )
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert findings(proj_dir, "param-unused") == []
+
+
+def test_source_param_a_mass_check_adds_is_checked_by_it(proj_dir, tmp_path):
+    _mass_with_hardware(proj_dir, tmp_path, {"basis": "source", "from": "N1.screws"})
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert findings(proj_dir, "unchecked-source") == []
+
+
+_TWO_PARTS = MODEL.replace(
+    '"parts": {"link": link},', '"parts": {"link": link, "pin": Cylinder(p.hole_d / 2, p.link_H)},'
+).replace('"link.b": (p.pitch / 2, 0, 0)}', '"link.b": (p.pitch / 2, 0, 0), "pin.c": (0, 0, 0)}')
+
+
+def test_distance_between_datums_of_two_parts_is_a_finding(proj_dir):
+    write(proj_dir, "model.py", _TWO_PARTS)
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"][1].update(between=["link.a", "pin.c"]))
+    messages = findings(proj_dir, "check-config")
+    assert len(messages) == 1 and "link.a" in messages[0] and "pin.c" in messages[0]
+
+
+def test_guard_distance_between_datums_of_one_part_beside_another_part(proj_dir):
+    write(proj_dir, "model.py", _TWO_PARTS)
+    assert findings(proj_dir, "check-config") == []
+
+
+def test_part_of_two_disjoint_solids_is_invalid(proj_dir):
+    split = "link += Pos(p.link_L, 0, 0) * Box(p.link_W, p.link_W, p.link_H)\n    return {"
+    write(proj_dir, "model.py", MODEL.replace("return {", split))
+    messages = findings(proj_dir, "part-invalid")
+    assert len(messages) == 1 and "2 solids" in messages[0]
+
+
+def test_guard_part_of_two_touching_bodies_fused_into_one_solid(proj_dir):
+    fused = "link += Pos(p.link_L / 2, 0, 0) * Box(p.link_W, p.link_W, p.link_H)\n    return {"
+    write(proj_dir, "model.py", MODEL.replace("return {", fused))
+    assert findings(proj_dir, "part-invalid") == []
+
+
+def _skip_in_pdf(root: Path, tmp_path: Path, **skip) -> None:
+    """Register the paper as a two-page PDF, source doc, skipping skip in it."""
+    add_source(root, tmp_path, "paper.pdf", pdf(list(PAPER_PAGES)))
+    skips = [{"source": "doc", "reason": "the paper again", **skip}]
+    edit(root, "evidence.yaml", lambda d: d["skipped"].extend(skips))
+
+
+@pytest.mark.parametrize(
+    "skip",
+    [
+        {"from": "Link 40", "to": "diameter."},  # a block that runs onto the next page
+        {"quote": "branches of 70 mm diameter"},
+        {"quote": "spaced 30 mm apart", "page": 1},
+    ],
+    ids=["from-to-across-pages", "quote-not-in-source", "quote-on-another-page"],
+)
+def test_skip_that_matches_nothing_is_a_finding(proj_dir, tmp_path, skip):
+    _skip_in_pdf(proj_dir, tmp_path, **skip)
+    assert "skip-not-found" in rules(proj_dir)
+
+
+@pytest.mark.parametrize(
+    "skip",
+    [
+        {"from": "Link 40", "to": "8x5"},
+        {"from": "pivot holes", "to": "diameter."},
+        {"quote": "spaced 30 mm apart", "page": 2},
+        {"pages": [1]},
+    ],
+)
+def test_guard_skip_that_matches_on_one_page(proj_dir, tmp_path, skip):
+    _skip_in_pdf(proj_dir, tmp_path, **skip)
+    assert "skip-not-found" not in rules(proj_dir)
+
+
+def _mass_of_two_links(root: Path, tmp_path: Path, count) -> None:
+    """A mass check of two links, 1.78 g each, counting the link by count."""
+    text = "Two links weigh 3.6 g, printed in resin of 1.2 g/cm3."
+    _mass_check(root, tmp_path, text, {"m": 3.6, "rho": 1.2})
+    edit(root, "checks.yaml", lambda d: d["checks"][-1].update(counts={"link": count}))
+
+
+def test_mass_check_counts_a_part_by_the_param_it_names(proj_dir, tmp_path):
+    _mass_of_two_links(proj_dir, tmp_path, "n_links")
+    add_params(
+        proj_dir,
+        n_links={"basis": "proposed", "value": 2, "rationale": "'two links'", "gap": "G1"},
+    )
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert report["params"]["n_links"]["rests_on"] == "proposed"
+    assert findings(proj_dir, "param-unused") == []
+
+
+def test_mass_check_count_given_as_a_bare_number_is_a_finding(proj_dir, tmp_path):
+    _mass_of_two_links(proj_dir, tmp_path, 2)
+    messages = findings(proj_dir, "schema")
+    assert len(messages) == 1 and "counts" in messages[0]
+
+
+def test_report_md_labels_the_declared_bases_apart_from_what_params_rest_on(proj_dir):
+    add_params(proj_dir, half={"basis": "derived", "expr": "hole_d / 2"})
+    write(proj_dir, "model.py", MODEL.replace("p.hole_d / 2", "p.half"))
+    verify(proj_dir)
+    md = (proj_dir / "build" / "report.md").read_text()
+    assert "Declared basis: source: 4 · derived: 1 · measured: 0 · proposed: 1" in md
+
+
+def test_verification_run_writes_nothing_into_the_project_outside_build(proj_dir):
+    before = {p for p in proj_dir.rglob("*")}
+    verify(proj_dir)
+    assert {p for p in proj_dir.rglob("*") if "build" not in p.relative_to(proj_dir).parts} == {
+        p for p in before if "build" not in p.relative_to(proj_dir).parts
+    }
 
 
 # Every rule beside its near miss. scripts/rule-coverage fails CI unless each rule the tool emits is

@@ -21,8 +21,8 @@ build/          STEP files, overlays, report.md, report.json
 
 ```yaml
 format: 1                # written by `cadrev init`
-name: legclaw
-target: Seventh-iteration BLCM leg as reported in Cheng 2026 (not the Fig. S10 iterations)
+name: gripper
+target: Version-3 two-finger gripper as reported in Doe 2025, fingers open (not the Fig. S4 prototype)
 units: {length: mm, angle: deg, mass: g}
 tolerance: {length: 0.001}
 model_literals: [0, 1, 2, -1, 0.5, 90, 180, 270, 360]   # optional; numbers model.py may contain (modeling.md)
@@ -80,28 +80,28 @@ Text formats (quote-checked and swept): PDF, DOCX, TXT, MD, HTML. A text source 
 One item per statement in a source. Two anchor types:
 
 ```yaml
-- id: S2-bent-linkage          # unique; referenced as S2-bent-linkage.L
+- id: T1-finger-link          # unique; referenced as T1-finger-link.L
   source: supp
   page: 4                      # PDF page (1-based); the quote must be on it
-  locator: Table S2            # human locator: table, figure, section, equation
-  quote: "Bent Linkage 37×6.5×5"
-  values: {L: 37, H: 6.5, W: 5}
+  locator: Table 1             # human locator: table, figure, section, equation
+  quote: "Finger link 42×8×4"
+  values: {L: 42, H: 8, W: 4}
 
-- id: fig2a-foot
+- id: fig3b-palm
   source: paper
   page: 4
-  locator: Fig. 2A, sole inset
-  image: figures/crops/fig2a-foot.png
+  locator: Fig. 3B, palm inset
+  image: figures/crops/fig3b-palm.png
   image_sha256: …              # printed by `cadrev crop`
-  reading: "70mm; 56mm; 22mm"  # the label text exactly as printed in the image
-  values: {L: 70, W: 56, H: 22}
+  reading: "48mm; 30mm; 12mm"  # the label text exactly as printed in the image
+  values: {L: 48, W: 30, H: 12}
   confirmed_by: <reviewer>     # written by the human who checked the crop
 ```
 
 - **quote** is copied from `cadrev text` output. Matching ignores case, whitespace, line-break hyphenation, dash variants and `×`/`x`; everything else must be verbatim. Numbers match whole: a quote starting or ending at a digit never matches inside a larger number ("37 mm" is not found in "137 mm" or "3.7 mm"). Each value must appear as a number in the quote (or reading); a decimal comma is one number (`3,5 mm` is 3.5; `1,250` and `1,5,10` stay several), and so is a fraction before a unit (`1/4 inch` is 0.25, `1 1/2 in` is 1.5; a bare `1/50` is two); both ends of a range (`5-10 mm`) count as positive values, and a number labelling a figure, table, equation or section (`Fig. 2`, `Figs. 2 and 3`, `Table S1`, `Eq. (3)`, `Sec. 4.2`) is not a value unless a unit follows it (`section 4 mm thick`; after a label, `in` is the word: `Fig. 2 in`). Words such as "eight" are not numbers: leave the value out or quote a numeric form. Write each value as printed; its unit is read from the quote (see `units` above).
-- **image** evidence covers numbers that exist only in pixels: figure labels, drawing dimensions, video frames. The crop is hashed so the reviewed image cannot change underneath its reading. Until a named human writes `confirmed_by`, the reading holds the project at VERIFIED PENDING REVIEW (see [Statuses](#statuses)); `build/report.md` lists each such reading beside its crop.
+- **image** evidence covers numbers that exist only in pixels: figure labels, drawing dimensions, video frames. The crop is hashed so the reviewed image cannot change underneath its reading. Until a named human writes `confirmed_by`, the reading holds the project at VERIFIED PENDING REVIEW (see [Statuses](#statuses)); `build/report.md` lists each such reading beside its crop. The image a `measured` param scales off is image evidence too: its `reading` transcribes any label printed in it and names the reference it is scaled against (`no printed labels; scaled on the palm width`), and its reviewer confirms that crop and that reference. Figure labels that are not about the object (test rigs, loads, results) need no evidence item.
 - **scope** is optional:
-  - `not-modeled` + `reason`: a real statement about the object that this reconstruction does not build (purchased springs, out-of-scope subassemblies).
+  - `not-modeled` + `reason`: a real statement about the object that this reconstruction does not build (purchased springs, out-of-scope subassemblies). It keeps its `values`, so the report shows what was left unbuilt.
   - `context` + `reason`: a statement that informs interpretation but is not a dimension of any modelled feature (masses in conflict, a kinematic length of uncertain identity). `values` may be omitted.
 
 Each item has a unique `id` (`[evidence-id]`), a registered `source` (`[evidence-source]`) and a `locator` (`[evidence-locator]`), and is anchored by a quote from a text source or by an image + reading (`[evidence-anchor]`). A quote not found in its source, or not on its `page`, is `[quote-not-found]`; a quote from a source of several pages that gives no `page` raises the warning `[quote-page]`, which names the page it was found on. A quoted item needs `values` unless it is `scope: context` (`[evidence-values]`). An image item needs its crop (`[image-missing]`), unchanged since `image_sha256` was printed (`[image-hash]`), and a `reading` (`[image-reading]`). A value that is not a number in its quote is `[value-not-in-quote]`; in its reading, `[value-not-in-reading]`. A `scope` needs a `reason` (`[evidence-scope]`).
@@ -110,25 +110,25 @@ Every value of an in-scope item must be used by a param `from:` or covered by a 
 
 ### `skipped`: stated quantities that are not about the object
 
-The coverage sweep lists every number printed with a unit from the table under `units` (a range or list as one candidate: `3–5 mm`, `1,5,10 mm`), every `a×b×c` product and every thread size (`M3`) in the text sources, leaving out digits inside a name (`L14`) and figure, table, equation or section numbers. Each one must fall inside an evidence quote or a skip; one that does not is `[coverage]`. A source with `coverage: false` is not swept and raises the warning `[coverage-off]`.
+The coverage sweep lists every number printed with a unit from the table under `units` (a range or list as one candidate: `3–5 mm`, `1,5,10 mm`), every `a×b×c` product and every thread size (`M3`) in the text sources, leaving out digits inside a name (`L3`) and figure, table, equation or section numbers. Each one must fall inside an evidence quote or a skip; one that does not is `[coverage]`. A source with `coverage: false` is not swept and raises the warning `[coverage-off]`.
 
 ```yaml
 skipped:
   - {source: paper, page: 12, quote: "servo output torque fixed at 1.2 kg ·cm", reason: test setting}
   - {source: supp, from: "Table S4.", to: "Movie S1.", reason: grasp-test objects}
-  - {source: paper, pages: [12, 13], reason: experimental methods and airframe}
+  - {source: paper, pages: [12, 13], reason: experimental methods and test rig}
 ```
 
-Skip by quote for single lines, by `from`/`to` for tables and blocks, by `pages` only for pages that carry nothing about the object. Every skip needs a `reason` (`[skip-reason]`) and one of `quote`, `pages` or `from` + `to` (`[skip-anchor]`).
+Skip by quote for single lines, by `from`/`to` for tables and blocks, by `pages` only for pages that carry nothing about the object. Every skip needs a `reason` (`[skip-reason]`) and one of `quote`, `pages` or `from` + `to` (`[skip-anchor]`). A skip's quote, or its `from` and `to`, must be found together on one page (its `page`, when given), copied from `cadrev text` like a quote; a skip that matches nothing is `[skip-not-found]`. Split a block that runs onto the next page into one skip per page.
 
 ### `conflicts`
 
 ```yaml
 conflicts:
   - id: K1
-    evidence: [S1-foot, fig2a-foot]
-    summary: Fig. S1 gives 60×46×20, Fig. 2A gives 70×56×22.
-    resolution: Fig. 2A is the outer envelope of the assembled sole; S1 is the linkage skeleton.
+    evidence: [S1-palm, fig3b-palm]
+    summary: Fig. S1 gives 44×26×10, Fig. 3B gives 48×30×12.
+    resolution: Fig. 3B is the outer envelope of the palm with its covers; S1 is the bare frame.
 ```
 
 A conflict naming evidence the ledger does not hold is `[conflict-ref]`. A conflict without `resolution` stays the warning `[conflict-open]` and appears in the report as open.
@@ -139,10 +139,10 @@ The only door numbers have into the model.
 
 ```yaml
 params:
-  bent_L:   {basis: source,   from: S2-bent-linkage.L, interpretation: overall length along part X}
+  link_L:   {basis: source,   from: T1-finger-link.L, interpretation: overall length along part X}
   pin_d:    {basis: proposed, value: 2, rationale: common 2 mm pin, gap: G-pins}
-  pitch:    {basis: derived,  expr: bent_L - 2 * end_margin, value: 32}
-  foot_w:   {basis: measured, from: s6-frame-316, value: 55.2, method: "mat grid scale, 10 px/mm", uncertainty: "±1.5 mm"}
+  pitch:    {basis: derived,  expr: link_L - 2 * end_margin, value: 34}
+  palm_w:   {basis: measured, from: v1-frame-316, value: 30.4, method: "mat grid scale, 10 px/mm", uncertainty: "±1.5 mm"}
 ```
 
 | basis | required | meaning |
@@ -154,7 +154,7 @@ params:
 
 A basis outside these four is `[param-basis]`. A missing requirement is `[param-from]` (`from` names no evidence value, or for `measured` no image evidence), `[param-measured]` or `[param-proposed]`; an `expr` that does not parse, names an undefined param, fails to evaluate or depends on itself is `[param-derived]`. A `value` that differs from its evidence value or `expr` is `[param-mismatch]`. A proposed param that names no `gap` raises the warning `[param-gap]`, and one naming a gap gaps.yaml lacks is the error `[param-gap]`.
 
-Write `interpretation` on every `source` param whose mapping onto geometry is a choice (which axis, envelope versus pitch, which feature).
+Write `interpretation` on every `source` or `derived` param whose mapping onto geometry is a choice (which axis, envelope versus pitch, which feature, a placement such as flush or centred): a derived param rests on its inputs' basis, so the interpretation is where the choice its `expr` makes shows.
 
 A derived param rests on the weakest basis among the params its `expr` references (proposed < measured < source); an `expr` that references no param (`2.2`, `2 * pi`) is `[param-constant]`. The report's headline counts params by what they rest on.
 
@@ -164,21 +164,21 @@ Expected values always come from evidence, so a check compares the geometry with
 
 ```yaml
 checks:
-  - {id: env-bent, kind: bbox, part: bent_linkage, evidence: S2-bent-linkage,
+  - {id: env-link, kind: bbox, part: finger_link, evidence: T1-finger-link,
      axes: {L: x, H: z, W: y}, interpretation: L×H×W read as part X×Z×Y}
-  - {id: pitch-bent, kind: distance, between: [bent_linkage.pin_a, bent_linkage.pin_b],
-     evidence: L14-design, key: L14, along: x}          # along is optional
-  - {id: leg-mass, kind: mass, parts: [thigh, pedestal], counts: {phalanx: 8},
-     density: resin_density, add: [servo_mass_total], evidence: fig2a-mass, key: m, tol_rel: 0.15}
-  - {id: clear, kind: interference, pairs: [[thigh_1, pedestal_1]], max_volume: 0.001}
+  - {id: pitch-link, kind: distance, between: [finger_link.pin_a, finger_link.pin_b],
+     evidence: L3-design, key: L3, along: x}          # along is optional
+  - {id: gripper-mass, kind: mass, parts: [palm, finger_link], counts: {finger_link: n_links},
+     density: resin_density, add: [servo_mass], evidence: fig3b-mass, key: m, tol_rel: 0.15}
+  - {id: clear, kind: interference, pairs: [[palm_1, finger_link_1]], max_volume: 0.001}
 ```
 
 - `bbox`: the part's axis-aligned bounding-box size in its own frame.
-- `distance`: between two datums returned by the model.
-- `mass`: Σ volume × count × density, plus any `add` params; `tol_rel` is required. Its `density` and `add` params take their units from the quote (see `units` above).
+- `distance`: between two datums of one part, in that part's frame. Datums of two different parts (`<part>.<feature>` naming different parts) sit in unrelated frames, so such a check is `[check-config]`.
+- `mass`: Σ volume × count × density, plus any `add` params; `tol_rel` is required. Each `counts` entry names the param that counts that part (parts it leaves out count once), so a stated count is ledgered like any other number; a bare number there is `[schema]`. Its `density` and `add` params take their units from the quote (see `units` above). The check reads its `density`, `add` and `counts` params, so they need no read in model.py and no other check.
 - `interference`: overlap volume between assembly instances; all pairs when `pairs` is omitted. Needs no evidence. It passes when the overlap is at most `max_volume`, which defaults to `tolerance.length`³. This overlap limit compares with no ledger value, so it is not a tolerance and has no cap, but the report lists each limit other than 0.001³ beside its check.
 
-A check of another `kind` is `[check-kind]`; one naming a part, datum, axis or evidence value that does not exist is `[check-config]`. A check whose evaluated value strays from its ledger value by more than its tolerance is `[check-failed]`.
+Every check reads parts, never assembly instances: a dimension that spans several parts (an envelope of a subassembly, a spacing between parts) has no check yet, so record it as a `not-modeled` item or model the span as datums of one part. A check of another `kind` is `[check-kind]`; one naming a part, datum, axis or evidence value that does not exist is `[check-config]`. A check whose evaluated value strays from its ledger value by more than its tolerance is `[check-failed]`.
 
 `tol` overrides `tolerance.length` for one check. A check's tolerance is capped: `tol` (or `tolerance.length`, where the check sets none) at 5% of each value the check compares, and `tol_rel` at 0.25; above either is `[tolerance-cap]`. The report lists every non-default tolerance beside its check: each `tol` other than 0.001, and every `tol_rel`, which has no default. Each source param that no check covers raises `[unchecked-source]`.
 
@@ -187,7 +187,7 @@ A check of another `kind` is `[check-kind]`; one naming a part, datum, axis or e
 ```yaml
 gaps:
   - id: G-pitch
-    question: What is the pin-to-pin pitch of the bent linkage?
+    question: What is the pin-to-pin pitch of the finger link?
     ask: authors     # authors | measure | datasheet | test
 ```
 
@@ -197,14 +197,14 @@ The report lists every gap with the params that rest on it: this is the list of 
 
 ```yaml
 overlays:
-  - id: s1-foot-front
+  - id: s1-palm-front
     image: figures/supp/image7.png
-    part: foot              # a part, an assembly instance, or "assembly"
+    part: palm              # a part, an assembly instance, or "assembly"
     view: front             # front: X right, Z up · top: X right, Y up · right: Y right, Z up
     origin: [412, 618]      # pixel where model (0, 0) lands
     calibration:
       pixels: [[120, 640], [705, 640]]   # two pixels spanning a known dimension
-      evidence: S1-foot.L                 # that dimension
+      evidence: S1-palm.L                 # that dimension
     mirror: false
 ```
 

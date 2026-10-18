@@ -369,6 +369,7 @@ def check_coverage(p: Project) -> list[tuple[str, int, str]]:
             if not ("quote" in k or "pages" in k or ("from" in k and "to" in k)):
                 p.error("skip-anchor", f"skip in {sid}: needs quote, pages, or from + to")
         skipped_pages = {n for k in skips for n in k.get("pages", [])}
+        matched: set[int] = set()  # the skips, by index into skips, that cover text on some page
         for n, raw in enumerate(texts, 1):
             if n in skipped_pages:
                 continue
@@ -379,10 +380,12 @@ def check_coverage(p: Project) -> list[tuple[str, int, str]]:
                     continue
                 needle = sources.normalize(a["quote"])
                 start = text.find(needle)
+                if needle and start != -1 and any(a is k for k in skips):
+                    matched.add(next(i for i, k in enumerate(skips) if k is a))
                 while needle and start != -1:
                     spans.append((start, start + len(needle)))
                     start = text.find(needle, start + 1)
-            for k in skips:
+            for i, k in enumerate(skips):
                 if "from" not in k or k.get("page") not in (None, n):
                     continue
                 start = text.find(sources.normalize(k["from"]))
@@ -391,10 +394,21 @@ def check_coverage(p: Project) -> list[tuple[str, int, str]]:
                 )
                 if start != -1 and stop != -1:
                     spans.append((start, stop + len(sources.normalize(k.get("to", "")))))
+                    matched.add(i)
             for start, end, snippet in sources.stated_quantities(text):
                 if not any(a <= start and end <= b for a, b in spans):
                     context = text[max(0, start - 60) : end + 40]
                     uncovered.append((sid, n, f"{snippet}  …{context}…"))
+        for i, k in enumerate(skips):
+            if i in matched or "pages" in k or not ("quote" in k or ("from" in k and "to" in k)):
+                continue
+            where = f" p{k['page']}" if k.get("page") is not None else ""
+            what = f"quote {k['quote']!r}" if "quote" in k else f"from {k['from']!r} to {k['to']!r}"
+            p.error(
+                "skip-not-found",
+                f"skip in {sid}{where}: {what} matches no text of the source on any one page; "
+                "copy it from `cadrev text`, and split a block that runs onto the next page",
+            )
     for sid, n, line in uncovered:
         p.error("coverage", f"{sid} p{n}: unledgered stated quantity {line}")
     return uncovered
@@ -530,6 +544,16 @@ def check_refs(c: dict) -> list[str]:
     )
 
 
+def check_params(p: Project) -> set[str]:
+    """The params a check reads itself: each mass check's density, add and counts params."""
+    names: set[str] = set()
+    for c in p.checks:
+        if c.get("kind") == "mass":
+            names |= {str(c.get("density"))} | {str(n) for n in c.get("add") or []}
+            names |= {str(n) for n in (c.get("counts") or {}).values()}
+    return names & p.params.keys()
+
+
 def check_tolerance(p: Project, c: dict) -> tuple[str, float] | None:
     """The tolerance a check compares with, as (key, value): tol, a length, for bbox and distance,
     tol_rel, a fraction, for mass; None for a check of another kind."""
@@ -595,7 +619,10 @@ def check_accounting(p: Project) -> None:
                     f"{eid}.{key} is neither used by a param nor checked "
                     "(or mark the item scope: not-modeled with a reason)",
                 )
+    read_by_a_check = check_params(p)
     for name, spec in p.params.items():
+        if name in read_by_a_check:
+            continue  # the check that reads it compares its result with the ledger
         if spec.get("basis") == "source" and spec.get("from") not in checked:
             p.warn(
                 "unchecked-source",
