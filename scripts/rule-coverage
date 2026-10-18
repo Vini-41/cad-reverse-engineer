@@ -1,0 +1,258 @@
+#!/usr/bin/env python3
+"""Fail when test coverage of the tool's rules has eroded. Checks that:
+
+- every rule name the tool emits (the literal rule of each p.error, p.warn and Finding) is asserted
+  present by one test and asserted absent by another, and is documented as `[rule-name]` in
+  skills/cad-reverse-engineer/references/*.md;
+- every unit in cadrev.units.UNITS is read by a row of the test suite's UNITS table: a quote whose
+  value the quote reader assigns that unit;
+- the tests import no cadrev module but the CLI entry point, cadrev.cli.
+
+    scripts/rule-coverage [repo root, default this script's repo]
+        LIST=1 also lists each rule with the tests that assert it
+
+A rule counts as asserted where its name, or `[name]`, appears in an assert's comparison: directly,
+through a variable or helper whose value names it, or through a parametrize argument. The comparison
+asserts it absent when it uses `not in` or compares with an empty literal (`== []`), present
+otherwise; `not` flips it.
+"""
+
+from __future__ import annotations
+
+import ast
+import math
+import os
+import re
+import sys
+from pathlib import Path
+
+REPO = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[1]
+SKILL = REPO / "skills" / "cad-reverse-engineer"
+SRC = SKILL / "tool" / "src" / "cadrev"
+TESTS = SKILL / "tool" / "tests"
+sys.path.insert(0, str(SRC.parent))
+
+from cadrev import sources, units  # noqa: E402  (after the path to the tool source)
+
+EMITTERS = {"error": 0, "warn": 0, "Finding": 1}  # the call and the position of its rule argument
+BRACKETED = re.compile(r"\[([a-z][a-z0-9-]*)\]")
+
+
+def emitted() -> set[str]:
+    """Every rule name the tool source passes as a literal to a finding."""
+    rules = set()
+    for path in SRC.rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf8"))):
+            if not isinstance(node, ast.Call):
+                continue
+            name = (
+                node.func.attr
+                if isinstance(node.func, ast.Attribute)
+                else getattr(node.func, "id", None)
+            )
+            at = EMITTERS.get(name or "")
+            if at is not None and len(node.args) > at:
+                arg = node.args[at]
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    rules.add(arg.value)
+    return rules
+
+
+class Asserts:
+    """The rules each test file asserts present and absent."""
+
+    def __init__(self, rules: set[str]):
+        self.rules = rules
+        self.present: dict[str, set[str]] = {r: set() for r in rules}
+        self.absent: dict[str, set[str]] = {r: set() for r in rules}
+
+    def named(
+        self, node: ast.AST, env: dict[str, set[str]], helpers: dict[str, set[str]]
+    ) -> set[str]:
+        out = set()
+        for n in ast.walk(node):
+            if isinstance(n, ast.Constant) and isinstance(n.value, str):
+                out |= ({n.value} | set(BRACKETED.findall(n.value))) & self.rules
+            elif isinstance(n, ast.Name):
+                out |= env.get(n.id, set()) | helpers.get(n.id, set())
+        return out
+
+    def table(self, node: ast.AST, env, helpers) -> set[str]:
+        """What a module-level name holds: a dict's keys, or every rule its value names."""
+        if isinstance(node, ast.Dict):
+            return set().union(*(self.named(k, env, helpers) for k in node.keys if k is not None))
+        return self.named(node, env, helpers)
+
+    def local(self, fn: ast.FunctionDef, module: dict, helpers) -> dict[str, set[str]]:
+        env = dict(module)
+        for deco in fn.decorator_list:
+            if (
+                isinstance(deco, ast.Call)
+                and len(deco.args) >= 2
+                and isinstance(deco.args[0], ast.Constant)
+                and ast.unparse(deco.func).endswith("parametrize")
+            ):
+                names = [n.strip() for n in str(deco.args[0].value).split(",")]
+                rows = deco.args[1]
+                if len(names) > 1 and isinstance(rows, (ast.List, ast.Tuple)):
+                    for i, name in enumerate(names):
+                        env[name] = set().union(
+                            *(
+                                self.named(r.elts[i], env, helpers)
+                                for r in rows.elts
+                                if isinstance(r, ast.Tuple) and len(r.elts) > i
+                            )
+                        )
+                else:
+                    env[names[0]] = self.named(rows, env, helpers)
+        for node in ast.walk(fn):
+            if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                for t in targets:
+                    for n in ast.walk(t):
+                        if isinstance(n, ast.Name):
+                            env[n.id] = env.get(n.id, set()) | self.named(node.value, env, helpers)
+        return env
+
+    def read(self, path: Path) -> None:
+        tree = ast.parse(path.read_text(encoding="utf8"))
+        module: dict[str, set[str]] = {}
+        helpers: dict[str, set[str]] = {}
+        for node in tree.body:
+            if isinstance(node, ast.Assign):
+                for t in node.targets:
+                    if isinstance(t, ast.Name):
+                        module[t.id] = self.table(node.value, module, helpers)
+        functions = [n for n in tree.body if isinstance(n, ast.FunctionDef)]
+        for _ in functions:  # a helper may return another helper's rules
+            for fn in functions:
+                env = self.local(fn, module, helpers)
+                helpers[fn.name] = set().union(
+                    *(
+                        self.named(r.value, env, helpers)
+                        for r in ast.walk(fn)
+                        if isinstance(r, ast.Return) and r.value is not None
+                    )
+                )
+        for fn in functions:
+            env = self.local(fn, module, helpers)
+            for node in ast.walk(fn):
+                if isinstance(node, ast.Assert):
+                    for leaf, negated in self.leaves(node.test):
+                        side = self.absent if negated != self.denies(leaf) else self.present
+                        for rule in self.named(leaf, env, helpers):
+                            side[rule].add(fn.name)
+
+    def leaves(self, node: ast.AST, negated: bool = False):
+        if isinstance(node, ast.BoolOp):
+            for v in node.values:
+                yield from self.leaves(v, negated)
+        elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            yield from self.leaves(node.operand, not negated)
+        elif isinstance(node, ast.IfExp):
+            yield from self.leaves(node.body, negated)
+            yield from self.leaves(node.orelse, negated)
+        else:
+            yield node, negated
+
+    @staticmethod
+    def denies(node: ast.AST) -> bool:
+        """Whether a comparison asserts its rules absent: `not in`, or equal to an empty literal."""
+        if not isinstance(node, ast.Compare):
+            return False
+        empty = [
+            n
+            for n in [node.left, *node.comparators]
+            if isinstance(n, (ast.List, ast.Tuple, ast.Set))
+            and not n.elts
+            or isinstance(n, ast.Dict)
+            and not n.keys
+        ]
+        return any(isinstance(op, ast.NotIn) for op in node.ops) or bool(empty)
+
+
+def documented() -> set[str]:
+    return {
+        name
+        for doc in (SKILL / "references").glob("*.md")
+        for name in BRACKETED.findall(doc.read_text())
+    }
+
+
+def unread_units() -> list[str]:
+    """Units of cadrev.units.UNITS that no row of the tests' UNITS table reads."""
+    rows = None
+    for path in TESTS.glob("test_*.py"):
+        for node in ast.parse(path.read_text(encoding="utf8")).body:
+            if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == "UNITS" for t in node.targets
+            ):
+                rows = ast.literal_eval(node.value)
+    if rows is None:
+        return ["(the tests have no UNITS table)"]
+    read = {
+        unit
+        for quote, (value, _) in rows.items()
+        for v, unit in sources.quantities_in(quote)
+        if math.isclose(v, value, rel_tol=1e-9)
+    }
+    return [u for u in units.UNITS if u not in read]
+
+
+def stray_imports() -> list[str]:
+    """Each import in the tests of a cadrev module other than cadrev.cli."""
+    out = []
+    for path in sorted(TESTS.rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf8"))):
+            if isinstance(node, ast.Import):
+                modules = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                modules = (
+                    [f"{node.module}.{a.name}" for a in node.names]
+                    if node.module == "cadrev"
+                    else [node.module]
+                )
+            else:
+                continue
+            for module in modules:
+                if (module == "cadrev" or module.startswith("cadrev.")) and module != "cadrev.cli":
+                    out.append(f"{path.relative_to(REPO)}:{node.lineno}: imports {module}")
+    return out
+
+
+def main() -> int:
+    rules = emitted()
+    asserts = Asserts(rules)
+    for path in sorted(TESTS.glob("test_*.py")):
+        asserts.read(path)
+    problems = []
+    for rule in sorted(rules):
+        if os.environ.get("LIST"):
+            print(
+                f"{rule}\n  present: {', '.join(sorted(asserts.present[rule])) or '-'}"
+                f"\n  absent:  {', '.join(sorted(asserts.absent[rule])) or '-'}"
+            )
+        missing = [
+            k
+            for k, side in (("present", asserts.present), ("absent", asserts.absent))
+            if not side[rule]
+        ]
+        if missing:
+            problems.append(f"[{rule}] no test asserts it {' or '.join(missing)}")
+    problems += [
+        f"[{rule}] is not documented as [{rule}] in references/*.md"
+        for rule in sorted(rules - documented())
+    ]
+    problems += [f"unit {u} is read by no row of the tests' UNITS table" for u in unread_units()]
+    problems += [f"{where}; tests import only cadrev.cli" for where in stray_imports()]
+    print(
+        f"{len(rules)} rules emitted; "
+        f"{sum(bool(asserts.present[r] and asserts.absent[r]) for r in rules)} asserted both present and absent"
+    )
+    for p in problems:
+        print(p)
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -147,9 +147,14 @@ def _docx_text(path: Path) -> str:
     return "\n".join(line for line in lines if line.strip())
 
 
-@cache
 def pages(path: Path) -> tuple[str, ...]:
     """Text of each page. DOCX, TXT and MD are one page."""
+    return _pages(path, sha256(path))
+
+
+@cache
+def _pages(path: Path, digest: str) -> tuple[str, ...]:
+    """pages(path), cached by its content: a source rewritten in place is read afresh."""
     suffix = path.suffix.lower()
     if suffix == ".pdf":
         from pypdf import PdfReader

@@ -1,13 +1,17 @@
+import contextlib
+import hashlib
+import io
 import json
 import re
 import shutil
 import subprocess
+import zipfile
 from pathlib import Path
 
 import pytest
 import yaml
 
-from cadrev import cli, sources
+from cadrev import cli
 
 PAPER = """\
 Table 1. Dimensions of key components
@@ -146,6 +150,18 @@ def verify(root: Path, *flags: str) -> tuple[int, dict]:
     return code, json.loads((root / "build" / "report.json").read_text())
 
 
+def run(*args: str) -> tuple[int, str]:
+    """Run a cadrev command through the CLI; return its exit code and what it prints."""
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = cli.main(list(args))
+    return code, out.getvalue()
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def errors(root: Path) -> list[str]:
     _, report = verify(root)
     return [f["rule"] for f in report["findings"] if f["level"] == "error"]
@@ -218,9 +234,11 @@ def test_partial_run_leaves_the_existing_report_untouched(proj_dir, flag):
     assert build_dir() == before
 
 
-def test_normalize_matches_layout_variants():
-    assert sources.normalize("Bent Link-\nage 37 × 6.5×5") == "bent linkage 37x6.5x5"
-    assert sources.numbers_in("40×8×5 mm") == [40, 8, 5]
+def test_guard_quote_matches_across_a_hyphenated_line_break_and_spaced_times(proj_dir, tmp_path):
+    text, quote = "Bent Link-\nage 37 × 6.5×5", "Bent Linkage 37×6.5×5"
+    add_quote(proj_dir, tmp_path, text, quote, {"L": 37, "H": 6.5, "W": 5})
+    rules = errors(proj_dir)
+    assert "quote-not-found" not in rules and "value-not-in-quote" not in rules
 
 
 def test_complete_project_verifies(proj_dir):
@@ -337,8 +355,16 @@ def test_quote_yields_its_values_and_refuses_near_misses(proj_dir, tmp_path, quo
 
 def test_source_tampering_is_caught(proj_dir):
     (proj_dir / "sources" / "paper.txt").write_text(PAPER.replace("40", "45"))
-    sources.pages.cache_clear()
     assert "source-hash" in errors(proj_dir)
+
+
+def test_source_rewritten_between_runs_is_read_afresh(proj_dir):
+    assert verify(proj_dir)[0] == 0
+    paper = proj_dir / "sources" / "paper.txt"
+    paper.write_text(PAPER.replace("30 mm apart", "32 mm apart"))
+    register = ["source", str(proj_dir), str(paper), "--id", "paper", "--kind", "paper"]
+    assert cli.main([*register, "--citation", "Doe 2026"]) == 0
+    assert "quote-not-found" in errors(proj_dir)
 
 
 def test_model_literal_is_rejected(proj_dir):
@@ -506,10 +532,14 @@ def test_figure_evidence_needs_pinned_crop(proj_dir):
 
 
 def add_reading(root: Path, **fields) -> dict:
-    """Ledger a pinned Fig. 2 crop whose reading no human has confirmed; return its entry."""
-    crop = root / "figures" / "crops" / "fig2.png"
-    crop.parent.mkdir(parents=True, exist_ok=True)
-    crop.write_bytes(b"a figure label")
+    """Ledger a Fig. 2 crop, pinned by `cadrev crop`, whose reading no human has confirmed;
+    return its entry."""
+    from PIL import Image
+
+    (root / "figures").mkdir(exist_ok=True)
+    Image.new("RGB", (40, 20), "white").save(root / "figures" / "page2.png")
+    code, out = run("crop", str(root), "figures/page2.png", "0", "0", "20", "10", "--name", "fig2")
+    assert code == 0
     entry = {
         "id": "F2",
         "source": "paper",
@@ -517,7 +547,7 @@ def add_reading(root: Path, **fields) -> dict:
         "scope": "context",
         "reason": "label",
         "image": "figures/crops/fig2.png",
-        "image_sha256": sources.sha256(crop),
+        "image_sha256": out.split("image_sha256: ")[1].strip(),
         "reading": "70 mm",
         **fields,
     }
@@ -857,7 +887,7 @@ def test_reregistering_a_source_refreshes_its_path_and_hash(proj_dir, tmp_path, 
     )
     entries = yaml.safe_load((proj_dir / "project.yaml").read_text())["sources"]
     assert [(s["id"], s["path"], s["sha256"]) for s in entries] == [
-        ("paper", "sources/paper-v2.txt", sources.sha256(paper))
+        ("paper", "sources/paper-v2.txt", sha256(paper))
     ]
     assert "Traceback" not in capsys.readouterr().err
     assert verify(proj_dir)[0] == 0
@@ -953,7 +983,7 @@ def test_reregistering_one_source_leaves_the_others_untouched(proj_dir, tmp_path
     )
     after = yaml.safe_load((proj_dir / "project.yaml").read_text())["sources"]
     assert after[1] == before[1]
-    assert after[0] == {**before[0], "sha256": sources.sha256(proj_dir / "sources" / "paper.txt")}
+    assert after[0] == {**before[0], "sha256": sha256(proj_dir / "sources" / "paper.txt")}
 
 
 def _overlay(root: Path, **changes) -> None:
@@ -1024,7 +1054,6 @@ def _zero_pitch(root: Path) -> None:
 )
 def test_damaged_input_is_a_finding_not_a_crash(proj_dir, damage, rule):
     damage(proj_dir)
-    sources.pages.cache_clear()
     code, report = verify(proj_dir)
     assert code == 1 and rule in [f["rule"] for f in report["findings"]]
 
@@ -1287,7 +1316,6 @@ DAMAGE = {
 @pytest.mark.parametrize("damage", sorted(DAMAGE))
 def test_no_damage_escapes_a_verification_run(proj_dir, capsys, damage):
     DAMAGE[damage](proj_dir)
-    sources.pages.cache_clear()
     code = cli.main(["check", str(proj_dir)])
     out = capsys.readouterr()
     assert code in (0, 1) and "Traceback" not in out.out + out.err
@@ -2002,3 +2030,476 @@ def test_example_sources_are_committed():
         check=True,
     ).stdout.split()
     assert sorted(listed) == sorted(f"sources/{n}" for n in names)
+
+
+# Real PDF and DOCX sources, and the commands that read them.
+
+PAPER_PAGES = ("Table 1. Dimensions of key components\nLink 40x8x5", PAPER.split("\n", 3)[3])
+
+
+def pdf(pages: list[str], image: bool = False) -> bytes:
+    """A PDF with one page per text, each line drawn as text; image puts a 2x2 picture on page 1."""
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    if image:
+        objects.append(
+            b"<< /Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceRGB "
+            b"/BitsPerComponent 8 /Length 12 >>\nstream\n"
+            + bytes(range(0, 240, 20))
+            + b"\nendstream"
+        )
+    kids = []
+    for n, text in enumerate(pages):
+        lines = [
+            line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+            for line in text.splitlines()
+        ]
+        draw = "".join(
+            f"BT /F1 10 Tf 72 {720 - 14 * i} Td ({line}) Tj ET\n" for i, line in enumerate(lines)
+        )
+        if image and n == 0:
+            draw += "q 50 0 0 50 72 400 cm /Im1 Do Q\n"
+        stream = draw.encode("latin-1")
+        objects.append(b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream")
+        content = len(objects)
+        xobject = b" /XObject << /Im1 4 0 R >>" if image and n == 0 else b""
+        objects.append(
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents %d 0 R "
+            b"/Resources << /Font << /F1 3 0 R >>%s >> >>" % (content, xobject)
+        )
+        kids.append(len(objects))
+    objects[1] = b"<< /Type /Pages /Kids [%s] /Count %d >>" % (
+        b" ".join(b"%d 0 R" % k for k in kids),
+        len(kids),
+    )
+    out, offsets = bytearray(b"%PDF-1.4\n"), []
+    for i, body in enumerate(objects, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % i + body + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    out += b"".join(b"%010d 00000 n \n" % o for o in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (
+        len(objects) + 1,
+        xref,
+    )
+    return bytes(out)
+
+
+def docx(text: str, image: bytes | None = None) -> bytes:
+    """A DOCX with one paragraph per line of text, and image as word/media/image1.png."""
+    body = "".join(f"<w:p><w:r><w:t>{line}</w:t></w:r></w:p>" for line in text.splitlines())
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/'
+        f'wordprocessingml/2006/main"><w:body>{body}</w:body></w:document>'
+    )
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as z:
+        z.writestr("word/document.xml", xml)
+        if image is not None:
+            z.writestr("word/media/image1.png", image)
+    return out.getvalue()
+
+
+def png() -> bytes:
+    from PIL import Image
+
+    out = io.BytesIO()
+    Image.new("RGB", (4, 2), "red").save(out, format="PNG")
+    return out.getvalue()
+
+
+def add_source(root: Path, tmp_path: Path, name: str, content: bytes) -> None:
+    """Register content, saved as name, as source doc."""
+    path = tmp_path / name
+    path.write_bytes(content)
+    register = ["source", str(root), str(path), "--id", "doc", "--kind", "paper"]
+    assert cli.main([*register, "--citation", "Doe 2026"]) == 0
+
+
+def test_guard_text_prints_each_page_of_a_pdf_as_extracted(proj_dir, tmp_path):
+    add_source(proj_dir, tmp_path, "paper.pdf", pdf(list(PAPER_PAGES)))
+    code, out = run("text", str(proj_dir), "doc")
+    assert code == 0
+    assert "===== doc page 1/2 =====\nTable 1. Dimensions of key components\nLink 40x8x5" in out
+    assert "===== doc page 2/2 =====" in out and "spaced 30 mm apart" in out
+
+
+def test_guard_text_prints_one_page_or_the_lines_matching_a_pattern(proj_dir, tmp_path):
+    add_source(proj_dir, tmp_path, "paper.pdf", pdf(list(PAPER_PAGES)))
+    assert run("text", str(proj_dir), "doc", "--page", "1")[1].count("=====") == 2
+    assert run("text", str(proj_dir), "doc", "--grep", "MM APART")[1] == (
+        "p2: The pivot holes of the link are spaced 30 mm apart.\n"
+    )
+
+
+def test_guard_text_prints_a_docx_as_one_page_of_paragraphs(proj_dir, tmp_path):
+    add_source(proj_dir, tmp_path, "paper.docx", docx(PAPER))
+    code, out = run("text", str(proj_dir), "doc")
+    assert (code, out) == (0, f"===== doc page 1/1 =====\n{PAPER.rstrip()}\n")
+
+
+def test_guard_text_of_an_unregistered_source_is_refused(proj_dir, capsys):
+    assert cli.main(["text", str(proj_dir), "notes"]) == 1
+    assert "unknown source 'notes'; registered: paper" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "name, content, written",
+    [
+        ("paper.pdf", lambda: pdf(list(PAPER_PAGES), image=True), "figures/doc/p001_01"),
+        ("paper.docx", lambda: docx(PAPER, image=png()), "figures/doc/image1.png"),
+    ],
+)
+def test_guard_figures_extracts_each_embedded_image(proj_dir, tmp_path, name, content, written):
+    add_source(proj_dir, tmp_path, name, content())
+    code, out = run("figures", str(proj_dir), "doc")
+    assert code == 0 and len(out.splitlines()) == 1 and out.startswith(written)
+    assert (proj_dir / out.strip()).stat().st_size > 0
+
+
+def test_guard_figures_of_a_source_without_images_writes_nothing(proj_dir):
+    assert run("figures", str(proj_dir), "paper") == (0, "")
+
+
+def test_guard_crop_writes_the_region_zoomed_and_prints_its_sha256(proj_dir):
+    from PIL import Image
+
+    (proj_dir / "figures").mkdir(exist_ok=True)
+    Image.new("RGB", (40, 20), "white").save(proj_dir / "figures" / "page2.png")
+    code, out = run(
+        "crop",
+        str(proj_dir),
+        "figures/page2.png",
+        "0",
+        "0",
+        "10",
+        "5",
+        "--name",
+        "c",
+        "--zoom",
+        "3",
+    )
+    crop = proj_dir / "figures" / "crops" / "c.png"
+    assert (code, out) == (0, f"image: figures/crops/c.png\nimage_sha256: {sha256(crop)}\n")
+    with Image.open(crop) as image:
+        assert image.size == (30, 15)
+
+
+# Every rule beside its near miss. scripts/rule-coverage fails CI unless each rule the tool emits is
+# asserted present by one test and absent by another; a rule no other test covers both ways gets a
+# row here: the change to the fixture that raises it, and the closest changes it must accept.
+
+
+def rules(root: Path) -> list[str]:
+    """The rule of every finding, error or warning, from a fresh verification run."""
+    return [f["rule"] for f in verify(root)[1]["findings"]]
+
+
+def _append(name: str, key: str, entry: dict):
+    return lambda r, t: edit(r, name, lambda d: d.setdefault(key, []).append(entry))
+
+
+def _check(cid: str, **changes):
+    def change(r, t):
+        edit(
+            r,
+            "checks.yaml",
+            lambda d: next(c for c in d["checks"] if c["id"] == cid).update(changes),
+        )
+
+    return change
+
+
+def _evidence(eid: str, **changes):
+    """Change evidence eid's fields; a field changed to None is removed."""
+
+    def change(r, t):
+        def apply(d):
+            item = next(e for e in d["evidence"] if e["id"] == eid)
+            item.update(changes)
+            for key in [k for k, v in changes.items() if v is None]:
+                item.pop(key)
+
+        edit(r, "evidence.yaml", apply)
+
+    return change
+
+
+def _param(name: str, **spec):
+    """Set param name's fields, adding the param if it is new; a field set to None is removed."""
+
+    def change(r, t):
+        def apply(d):
+            merged = {**d["params"].get(name, {}), **spec}
+            d["params"][name] = {k: v for k, v in merged.items() if v is not None}
+
+        edit(r, "params.yaml", apply)
+
+    return change
+
+
+def _source(**changes):
+    return lambda r, t: edit(r, "project.yaml", lambda d: d["sources"][0].update(changes))
+
+
+def _skip(**skip):
+    """Replace the fixture's skip of its one test condition with skip."""
+    return lambda r, t: edit(
+        r, "evidence.yaml", lambda d: d.update(skipped=[{"source": "paper", **skip}])
+    )
+
+
+def _assembly(entry: str):
+    return lambda r, t: write(
+        r, "model.py", MODEL.replace('{"link_1": ("link", Location())}', entry)
+    )
+
+
+def _shell(faces: str):
+    """The link rebuilt as a solid from a shell of its faces[faces]."""
+    part = f'{{"link": Solid(Shell(link.faces(){faces}))}}'
+    return lambda r, t: write(r, "model.py", MODEL.replace('{"link": link}', part))
+
+
+def _reading(**fields):
+    return lambda r, t: add_reading(r, **fields)
+
+
+def _unpinned_reading(r, t):
+    add_reading(r)
+    (r / "figures" / "crops" / "fig2.png").unlink()
+
+
+def _measured(*missing: str):
+    def change(r, t):
+        add_measured(r)
+        edit(r, "params.yaml", lambda d: [d["params"]["foot_w"].pop(k) for k in missing])
+
+    return change
+
+
+def _weighs(grams: str):
+    """A mass check of the link, 1.78 g in resin of 1.2 g/cm3, against a source giving grams."""
+    text = f"The link weighs {grams} g, printed in resin of 1.2 g/cm3."
+    return lambda r, t: _mass_check(r, t, text, {"m": float(grams), "rho": 1.2})
+
+
+def _reregister(r, t):
+    paper = t / "paper.txt"
+    paper.write_text(PAPER + "Received 1 March.\n")
+    register = ["source", str(r), str(paper), "--id", "paper", "--kind", "paper"]
+    assert cli.main([*register, "--citation", "Doe 2026"]) == 0
+
+
+def _quote_from(name: str, quote: str, page: int | None = None):
+    """Register the paper as a two-page PDF or a DOCX, source doc, and ledger quote from it as N1."""
+
+    def change(r, t):
+        content = pdf(list(PAPER_PAGES)) if name.endswith(".pdf") else docx(PAPER)
+        add_source(r, t, name, content)
+        entry = {
+            "id": "N1",
+            "source": "doc",
+            "locator": "Sec. 2",
+            "quote": quote,
+            "values": {"pitch": 30},
+            "scope": "context",
+            "reason": "the paper again",
+        }
+        edit(
+            r,
+            "evidence.yaml",
+            lambda d: d["evidence"].append({**entry, **({"page": page} if page else {})}),
+        )
+
+    return change
+
+
+_EXTRA = {
+    "id": "extra",
+    "source": "paper",
+    "locator": "Sec. 3",
+    "quote": "branches of 60 mm diameter",
+}
+_CONFLICT = {"id": "C1", "evidence": ["T1-link", "pitch"], "summary": "pitch exceeds the link"}
+_MOVED = MODEL.replace("\n\n\n", "\n\n# v1\n")
+
+FINDINGS = {
+    "assembly-part": (
+        _assembly('{"link_1": ("pin", Location())}'),
+        [_assembly('{"pin": ("link", Location())}')],
+    ),
+    "check-config": (_check("pitch", along="w"), [_check("pitch", along="x")]),
+    "check-failed": (_weighs("2.0"), [_weighs("1.8")]),
+    "check-kind": (_check("clear", kind="overlap"), [_weighs("1.8")]),
+    "conflict-open": (
+        _append("evidence.yaml", "conflicts", _CONFLICT),
+        [_append("evidence.yaml", "conflicts", {**_CONFLICT, "resolution": "Table 1 rules"})],
+    ),
+    "conflict-ref": (
+        _append("evidence.yaml", "conflicts", {**_CONFLICT, "evidence": ["T2-link"]}),
+        [_append("evidence.yaml", "conflicts", _CONFLICT)],
+    ),
+    "coverage": (
+        _skip(quote="branches of", reason="test condition"),
+        [
+            _skip(pages=[1], reason="test conditions only"),
+            _skip(**{"from": "Tests used", "to": "diameter."}, reason="test condition"),
+        ],
+    ),
+    "evidence-anchor": (_evidence("pitch", quote=None), [_reading()]),
+    "evidence-id": (
+        _append(
+            "evidence.yaml",
+            "evidence",
+            {**_EXTRA, "id": "pitch", "scope": "context", "reason": "r"},
+        ),
+        [_append("evidence.yaml", "evidence", {**_EXTRA, "scope": "context", "reason": "r"})],
+    ),
+    "evidence-locator": (
+        _evidence("pitch", locator=None),
+        [_evidence("pitch", locator="p. 1, line 4")],
+    ),
+    "evidence-scope": (
+        _append("evidence.yaml", "evidence", {**_EXTRA, "scope": "not-modeled"}),
+        [
+            _append(
+                "evidence.yaml", "evidence", {**_EXTRA, "scope": "not-modeled", "reason": "a test"}
+            )
+        ],
+    ),
+    "evidence-source": (
+        _evidence("pitch", source="notes"),
+        [lambda r, t: add_quote(r, t, "spaced 30 mm apart", "30 mm", {"pitch": 30})],
+    ),
+    "evidence-unused": (
+        _append("evidence.yaml", "evidence", {**_EXTRA, "values": {"d": 60}}),
+        [
+            _append(
+                "evidence.yaml",
+                "evidence",
+                {
+                    **_EXTRA,
+                    "values": {"d": 60},
+                    "scope": "not-modeled",
+                    "reason": "a test condition",
+                },
+            )
+        ],
+    ),
+    "evidence-values": (
+        _append("evidence.yaml", "evidence", _EXTRA),
+        [_append("evidence.yaml", "evidence", {**_EXTRA, "scope": "context", "reason": "a test"})],
+    ),
+    "image-hash": (_reading(image_sha256="0" * 64), [_reading()]),
+    "image-missing": (_unpinned_reading, [_reading()]),
+    "image-reading": (_reading(reading=""), [_reading(reading="70")]),
+    "model-arithmetic": (
+        lambda r, t: _model_with(r, line="extra = 2 * 2 - 0.5"),
+        [lambda r, t: _model_with(r, line="extra = 2 * 2 - 2")],
+    ),
+    "model-build": (
+        lambda r, t: _model_with(r, line="extra = p.pitch_2"),
+        [lambda r, t: _model_with(r, line="extra = p.pitch")],
+    ),
+    "model-literal": (
+        lambda r, t: _model_with(r, line="extra = 7.5"),
+        [lambda r, t: _model_with(r, line="extra = 0.5")],
+    ),
+    "model-missing": (
+        lambda r, t: (r / "model.py").rename(r / "model_v1.py"),
+        [lambda r, t: (r / "model.py").write_text(_MOVED)],
+    ),
+    "overlay-config": (
+        lambda r, t: _overlay(r, view="side"),
+        [lambda r, t: _overlay(r, view="right")],
+    ),
+    "param-basis": (_param("hole_d", basis="assumed"), [lambda r, t: _no_proposed(r)]),
+    "param-derived": (
+        _param("half", basis="derived", expr="pitch /"),
+        [_param("half", basis="derived", expr="pitch / 2")],
+    ),
+    "param-from": (
+        _param("link_W", **{"from": "T1-link.D"}),
+        [_param("half_L", basis="source", **{"from": "T1-link.L"})],
+    ),
+    "param-gap": (
+        lambda r, t: write(r, "gaps.yaml", {"gaps": []}),
+        [lambda r, t: write(r, "gaps.yaml", {"gaps": [{"id": "G1", "question": "pin diameter?"}]})],
+    ),
+    "param-measured": (_measured("uncertainty"), [_measured()]),
+    "param-mismatch": (
+        _param("half", basis="derived", expr="pitch / 2", value=14),
+        [_param("half", basis="derived", expr="pitch / 2", value=15)],
+    ),
+    "param-proposed": (_param("hole_d", rationale=None), [_param("hole_d", rationale="an M3 pin")]),
+    "param-unused": (
+        _param("spare", basis="proposed", value=3, rationale="x", gap="G1"),
+        [
+            lambda r, t: (
+                _param("base", basis="proposed", value=3, rationale="x", gap="G1")(r, t),
+                _param(
+                    "hole_d", basis="derived", expr="base * 1", value=None, rationale=None, gap=None
+                )(r, t),
+            )
+        ],
+    ),
+    "part-invalid": (_shell("[1:]"), [_shell("")]),
+    "quote-not-found": (
+        _quote_from("paper.pdf", "spaced 30 mm apart", page=1),
+        [_quote_from("paper.docx", "pivot holes of the link are spaced 30 mm")],
+    ),
+    "quote-page": (
+        _quote_from("paper.pdf", "spaced 30 mm apart"),
+        [
+            _quote_from("paper.pdf", "spaced 30 mm apart", page=2),
+            _quote_from("paper.docx", "30 mm apart"),
+        ],
+    ),
+    "skip-anchor": (_skip(reason="test condition"), [_skip(pages=[1], reason="test condition")]),
+    "skip-reason": (
+        _skip(quote="branches of 60 mm diameter"),
+        [_skip(quote="branches of 60 mm diameter", reason="a test load")],
+    ),
+    "source-citation": (_source(citation=""), [_source(citation="Doe")]),
+    "source-hash": (
+        lambda r, t: (r / "sources" / "paper.txt").write_text(PAPER + "Received 1 March.\n"),
+        [_reregister],
+    ),
+    "source-kind": (_source(kind="book"), [_source(kind="other")]),
+    "source-missing": (
+        lambda r, t: (r / "sources" / "paper.txt").unlink(),
+        [lambda r, t: ((r / "sources" / "paper.txt").unlink(), _reregister(r, t))],
+    ),
+    "target": (
+        lambda r, t: edit(r, "project.yaml", lambda d: d.update(target="TODO name the object")),
+        [
+            lambda r, t: edit(
+                r, "project.yaml", lambda d: d.update(target="A link, v1 (TODO: year)")
+            )
+        ],
+    ),
+    "unchecked-source": (
+        lambda r, t: edit(r, "checks.yaml", lambda d: d["checks"].pop(1)),
+        [_check("pitch", along="x")],
+    ),
+    "value-not-in-reading": (_reading(values={"w": 71}), [_reading(values={"w": 70})]),
+}
+
+
+@pytest.mark.parametrize("rule", sorted(FINDINGS))
+def test_guard_change_raises_its_rule(proj_dir, tmp_path, rule):
+    FINDINGS[rule][0](proj_dir, tmp_path)
+    assert rule in rules(proj_dir)
+
+
+@pytest.mark.parametrize(
+    "rule, miss", [(rule, i) for rule in sorted(FINDINGS) for i in range(len(FINDINGS[rule][1]))]
+)
+def test_guard_near_miss_raises_no_rule(proj_dir, tmp_path, rule, miss):
+    FINDINGS[rule][1][miss](proj_dir, tmp_path)
+    assert rule not in rules(proj_dir)

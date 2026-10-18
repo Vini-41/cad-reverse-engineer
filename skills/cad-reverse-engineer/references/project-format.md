@@ -39,6 +39,8 @@ sources:
 
 `format` is the version of these file formats. A project without it is `[format-missing]`; one with a version this cadrev does not read is `[format-unknown]`. Either way cadrev reads no other project file, every command refuses the project, and no report is written.
 
+`target` names the object, version and configuration reconstructed; one missing or still starting with `TODO` is `[target]`.
+
 `units` names the project's unit for length, angle, mass, force and time (defaults `mm`, `deg`, `g`, `N`, `s`); torque, pressure, density and speed follow from them (N·mm, N/mm², g/mm³, mm/s by default). A key outside those five, or a unit cadrev does not know or of another quantity (`length: g`), is `[units]`.
 
 **Units come from the quote.** A ledger value is written as printed (`values: {L: 4}` for "4 cm"), and cadrev reads the unit printed right after it and converts the value to the project's units (40 mm) wherever a param `from:`, a check or an overlay uses it; a `value` written on that param is in project units (40). The numbers of a range or product share its last unit ("3–5 mm", "40×8×5 mm"). A value with no unit printed after it, such as a table cell (`37×6.5×5`), is already in project units. `in` and `"` read as inches, except `in` before a determiner ("4 in total", "2 in each leg").
@@ -66,6 +68,8 @@ Recognised units, spelled-out names included (millimetre, inches, degrees, grams
 Any other word after a number (`12 links`) leaves it in project units.
 
 `tolerance.length` is how closely the model must realise a source value. It is a modelling check, never a manufacturing tolerance. Keep `sources:` the last key: `cadrev source` appends to it. Registering an id that is already listed refreshes its `path` and `sha256` instead, which is how sources are restored into a clone or replaced by a new download. A source whose `license` is CC0-1.0, CC-BY-x.y or CC-BY-SA-x.y gets a `!sources/<file>` line in the project's `.gitignore`, so it is committed and the project reruns from a clone; any other license, or none, leaves the file ignored.
+
+A source's `kind` outside the list above is `[source-kind]`, and an empty `citation` is `[source-citation]`. A `path` with no file is `[source-missing]`, whose message names the `url` to download from; a file whose sha256 differs from the pinned one is `[source-hash]`: after a deliberate change, register it again.
 
 Text formats (quote-checked and swept): PDF, DOCX, TXT, MD, HTML. A text source whose file cannot be read as text is `[source-unreadable]`. Save a web datasheet as HTML or TXT to make it quotable. Video and image files are sources for image evidence only.
 
@@ -100,11 +104,13 @@ One item per statement in a source. Two anchor types:
   - `not-modeled` + `reason`: a real statement about the object that this reconstruction does not build (purchased springs, out-of-scope subassemblies).
   - `context` + `reason`: a statement that informs interpretation but is not a dimension of any modelled feature (masses in conflict, a kinematic length of uncertain identity). `values` may be omitted.
 
+Each item has a unique `id` (`[evidence-id]`), a registered `source` (`[evidence-source]`) and a `locator` (`[evidence-locator]`), and is anchored by a quote from a text source or by an image + reading (`[evidence-anchor]`). A quote not found in its source, or not on its `page`, is `[quote-not-found]`; a quote from a source of several pages that gives no `page` raises the warning `[quote-page]`, which names the page it was found on. A quoted item needs `values` unless it is `scope: context` (`[evidence-values]`). An image item needs its crop (`[image-missing]`), unchanged since `image_sha256` was printed (`[image-hash]`), and a `reading` (`[image-reading]`). A value that is not a number in its quote is `[value-not-in-quote]`; in its reading, `[value-not-in-reading]`. A `scope` needs a `reason` (`[evidence-scope]`).
+
 Every value of an in-scope item must be used by a param `from:` or covered by a check (`[evidence-unused]`).
 
 ### `skipped`: stated quantities that are not about the object
 
-The coverage sweep lists every number printed with a unit from the table under `units` (a range or list as one candidate: `3–5 mm`, `1,5,10 mm`), every `a×b×c` product and every thread size (`M3`) in the text sources, leaving out digits inside a name (`L14`) and figure, table, equation or section numbers. Each one must fall inside an evidence quote or a skip. A source with `coverage: false` is not swept and raises the warning `[coverage-off]`.
+The coverage sweep lists every number printed with a unit from the table under `units` (a range or list as one candidate: `3–5 mm`, `1,5,10 mm`), every `a×b×c` product and every thread size (`M3`) in the text sources, leaving out digits inside a name (`L14`) and figure, table, equation or section numbers. Each one must fall inside an evidence quote or a skip; one that does not is `[coverage]`. A source with `coverage: false` is not swept and raises the warning `[coverage-off]`.
 
 ```yaml
 skipped:
@@ -113,7 +119,7 @@ skipped:
   - {source: paper, pages: [12, 13], reason: experimental methods and airframe}
 ```
 
-Skip by quote for single lines, by `from`/`to` for tables and blocks, by `pages` only for pages that carry nothing about the object. Every skip needs a `reason`.
+Skip by quote for single lines, by `from`/`to` for tables and blocks, by `pages` only for pages that carry nothing about the object. Every skip needs a `reason` (`[skip-reason]`) and one of `quote`, `pages` or `from` + `to` (`[skip-anchor]`).
 
 ### `conflicts`
 
@@ -125,7 +131,7 @@ conflicts:
     resolution: Fig. 2A is the outer envelope of the assembled sole; S1 is the linkage skeleton.
 ```
 
-A conflict without `resolution` stays a warning and appears in the report as open.
+A conflict naming evidence the ledger does not hold is `[conflict-ref]`. A conflict without `resolution` stays the warning `[conflict-open]` and appears in the report as open.
 
 ## params.yaml
 
@@ -145,6 +151,8 @@ params:
 | `derived` | `expr`; `value` optional and must match | computed from other params; `pi sqrt sin cos tan asin acos atan atan2 radians degrees hypot min max abs` are available |
 | `measured` | `from` (an image evidence id), `value`, `method`, `uncertainty` | scaled off an image or video frame against a known reference |
 | `proposed` | `value`, `rationale`; `gap` expected | a reconstruction choice the sources do not make |
+
+A basis outside these four is `[param-basis]`. A missing requirement is `[param-from]` (`from` names no evidence value, or for `measured` no image evidence), `[param-measured]` or `[param-proposed]`; an `expr` that does not parse, names an undefined param, fails to evaluate or depends on itself is `[param-derived]`. A `value` that differs from its evidence value or `expr` is `[param-mismatch]`. A proposed param that names no `gap` raises the warning `[param-gap]`, and one naming a gap gaps.yaml lacks is the error `[param-gap]`.
 
 Write `interpretation` on every `source` param whose mapping onto geometry is a choice (which axis, envelope versus pitch, which feature).
 
@@ -169,6 +177,8 @@ checks:
 - `distance`: between two datums returned by the model.
 - `mass`: Σ volume × count × density, plus any `add` params; `tol_rel` is required. Its `density` and `add` params take their units from the quote (see `units` above).
 - `interference`: overlap volume between assembly instances; all pairs when `pairs` is omitted. Needs no evidence. It passes when the overlap is at most `max_volume`, which defaults to `tolerance.length`³. This overlap limit compares with no ledger value, so it is not a tolerance and has no cap, but the report lists each limit other than 0.001³ beside its check.
+
+A check of another `kind` is `[check-kind]`; one naming a part, datum, axis or evidence value that does not exist is `[check-config]`. A check whose evaluated value strays from its ledger value by more than its tolerance is `[check-failed]`.
 
 `tol` overrides `tolerance.length` for one check. A check's tolerance is capped: `tol` (or `tolerance.length`, where the check sets none) at 5% of each value the check compares, and `tol_rel` at 0.25; above either is `[tolerance-cap]`. The report lists every non-default tolerance beside its check: each `tol` other than 0.001, and every `tol_rel`, which has no default. Each source param that no check covers raises `[unchecked-source]`.
 
@@ -198,7 +208,7 @@ overlays:
     mirror: false
 ```
 
-Renders `build/overlays/<id>.png`: model edges in magenta, calibration span in blue. An overlay is visual evidence for a human; it adds no pass/fail.
+Renders `build/overlays/<id>.png`: model edges in magenta, calibration span in blue. An overlay is visual evidence for a human; it adds no pass/fail. One that cannot be drawn (an unknown `view` or `part`, a calibration that is no evidence value, an unreadable image) is `[overlay-config]`.
 
 ## build/report.json
 
