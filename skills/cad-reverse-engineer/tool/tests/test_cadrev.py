@@ -192,13 +192,20 @@ def test_report_json_has_the_keys_project_format_documents(proj_dir):
     assert set(report["counts"]) == set(re.findall(r"`(\w+)`", rows["counts"]))
 
 
-def test_every_status_cadrev_check_reports_is_defined_in_project_format():
-    from cadrev import report
+def test_every_status_cadrev_check_reports_is_defined_in_project_format(proj_dir):
+    def reported(*flags: str) -> str:
+        """The status the last line of `cadrev check` prints."""
+        return run("check", str(proj_dir), *flags)[1].splitlines()[-1].split(":")[0]
 
+    statuses = {reported(), reported("--no-build")}
+    add_reading(proj_dir)
+    statuses.add(reported())
+    write(proj_dir, "gaps.yaml", {"gaps": []})
+    statuses.add(reported())
     doc = (Path(__file__).parents[2] / "references" / "project-format.md").read_text()
     section = doc.split("\n## Statuses\n")[1].split("\n## ")[0]
     defined = re.findall(r"^\| \*\*([A-Z ]+)\*\* \|", section, re.M)
-    assert sorted(defined) == sorted(report.STATUSES), (
+    assert sorted(defined) == sorted(statuses), (
         "cadrev check and project-format.md differ on statuses"
     )
 
