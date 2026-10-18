@@ -24,8 +24,11 @@ def build(p):
         "linkage": bar(p.link_L, p.link_H, p.link_W, p.link_pitch, p.pin_d),
     }
     datums = {}
-    for name, pitch in (("compression_linkage", p.comp_pitch), ("bent_linkage", p.bent_pitch),
-                        ("linkage", p.link_pitch)):
+    for name, pitch in (
+        ("compression_linkage", p.comp_pitch),
+        ("bent_linkage", p.bent_pitch),
+        ("linkage", p.link_pitch),
+    ):
         datums[f"{name}.pin_a"] = (-pitch / 2, 0, 0)
         datums[f"{name}.pin_b"] = (pitch / 2, 0, 0)
     z = 0

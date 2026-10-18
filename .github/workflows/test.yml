@@ -15,8 +15,8 @@ jobs:
       - run: uv run pytest -q
       - run: uv run pytest -q ../../../scripts/tests
       - run: uv run pyright
-      - run: uv run ruff check . ../../../scripts/tests ../../../scripts/check-doc-pointers ../../../scripts/rule-coverage
-      - run: uv run ruff format --check . ../../../scripts/tests ../../../scripts/check-doc-pointers ../../../scripts/rule-coverage
+      - run: uv run ruff check ../../..
+      - run: uv run ruff format --check ../../..
       - name: agent-facing docs point only at files that exist
         run: ../../../scripts/check-doc-pointers
       - name: every rule is tested raised and not raised, and documented; tests use only the CLI
