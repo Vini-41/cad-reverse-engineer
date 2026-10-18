@@ -1,4 +1,5 @@
 # Reconstruction project. File formats: references/project-format.md in the cad-reverse-engineer skill.
+format: 1   # version of these file formats; set by cadrev init
 name: legclaw-links
 target: The compression, bent and plain linkages of the seventh-iteration BLCM leg-claw (Cheng 2026), as solid parts with pin holes.
 units: {length: mm, angle: deg, mass: g}

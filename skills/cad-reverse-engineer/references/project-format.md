@@ -5,7 +5,7 @@ A reconstruction project is a directory of YAML files plus `model.py`. `cadrev i
 Before any rule runs, every file is read against the shapes shown here. A file that is not valid YAML is `[yaml-syntax]` (file and line); an entry of the wrong shape (a missing `id`, a param that is a bare number, a non-numeric value) is `[schema]`, names the file and the entry, and is left out of the run. A directory without `project.yaml` is `[project-missing]`, and no report is written.
 
 ```
-project.yaml    sources, units, tolerance, target
+project.yaml    format, sources, units, tolerance, target
 evidence.yaml   the ledger: evidence, skipped, conflicts
 params.yaml     every number the model uses, with its basis
 checks.yaml     geometry checks against evidence
@@ -20,6 +20,7 @@ build/          STEP files, overlays, report.md, report.json
 ## project.yaml
 
 ```yaml
+format: 1                # written by `cadrev init`
 name: legclaw
 target: Seventh-iteration BLCM leg as reported in Cheng 2026 (not the Fig. S10 iterations)
 units: {length: mm, angle: deg, mass: g}
@@ -35,6 +36,8 @@ sources:
     license: CC-BY-4.0
     coverage: false        # optional: exclude from the coverage sweep (e.g. a 200-page catalogue)
 ```
+
+`format` is the version of these file formats. A project without it is `[format-missing]`; one with a version this cadrev does not read is `[format-unknown]`.
 
 `tolerance.length` is how closely the model must realise a source value. It is a modelling check, never a manufacturing tolerance. Keep `sources:` the last key: `cadrev source` appends to it. Registering an id that is already listed refreshes its `path` and `sha256` instead, which is how sources are restored into a clone or replaced by a new download.
 

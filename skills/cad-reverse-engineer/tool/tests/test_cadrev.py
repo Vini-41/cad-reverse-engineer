@@ -421,6 +421,27 @@ def test_unreadable_source_is_a_finding(proj_dir, tmp_path, name, content):
     assert "source-unreadable" in errors(proj_dir)
 
 
+def test_init_writes_the_current_format(proj_dir):
+    assert yaml.safe_load((proj_dir / "project.yaml").read_text())["format"] == 1
+    assert findings(proj_dir, "format-missing") == findings(proj_dir, "format-unknown") == []
+
+
+def test_project_without_format_is_a_finding(proj_dir):
+    edit(proj_dir, "project.yaml", lambda d: d.pop("format"))
+    code, report = verify(proj_dir)
+    assert code == 1
+    assert [f["message"] for f in report["findings"] if f["rule"] == "format-missing"] == [
+        "project.yaml: format is missing; this cadrev reads format: 1"]
+
+
+@pytest.mark.parametrize("given", [2, 1.0, "1", True, [1]])
+def test_project_of_an_unknown_format_is_a_finding(proj_dir, given):
+    edit(proj_dir, "project.yaml", lambda d: d.update(format=given))
+    code, report = verify(proj_dir)
+    messages = [f["message"] for f in report["findings"] if f["rule"] == "format-unknown"]
+    assert code == 1 and len(messages) == 1 and messages[0].startswith("project.yaml: format ")
+
+
 def test_readable_sources_raise_no_unreadable_finding(proj_dir):
     assert findings(proj_dir, "source-unreadable") == []
 
@@ -447,6 +468,7 @@ DAMAGE = {
     "text source not UTF-8": lambda r: ((r / "sources" / "b.txt").write_bytes(b"\xff\xfe 30 mm"),
                                         _add_source(r, "b", "sources/b.txt")),
     "name is a number": lambda r: _replace(r, "project.yaml", "name:", "name: 5\noldname:"),
+    "format is a mapping": lambda r: _replace(r, "project.yaml", "format:", "format: {v: 1}\nxformat:"),
     "units is a number": lambda r: _replace(r, "project.yaml", "units:", "units: 5\nxunits:"),
     "tolerance of zero": lambda r: _replace(r, "project.yaml", "tolerance:", "tolerance: {length: 0}\nxtolerance:"),
     "model_literals is a number": lambda r: _replace(r, "project.yaml", "name:", "model_literals: 5\nname:"),

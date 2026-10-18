@@ -16,6 +16,7 @@ import yaml
 
 from . import schema, sources
 
+FORMAT = 1  # the project.yaml format this cadrev reads
 BASES = ("source", "derived", "measured", "proposed")
 SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "other")
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}
@@ -397,7 +398,17 @@ def lint_model(p: Project) -> None:
                     "move it to params.yaml with a basis")
 
 
+def check_format(p: Project) -> None:
+    fmt = p.meta.get("format")
+    if fmt is None:
+        p.error("format-missing", f"project.yaml: format is missing; this cadrev reads format: {FORMAT}")
+    elif type(fmt) is not int or fmt != FORMAT:
+        p.error("format-unknown", f"project.yaml: format {fmt!r} is not one this cadrev reads "
+                f"(it reads format: {FORMAT})")
+
+
 def check_static(p: Project) -> None:
+    check_format(p)
     target = str(p.meta.get("target") or "")
     if not target or target.startswith("TODO"):
         p.error("target", "project.yaml target: name the object, version and configuration reconstructed")
