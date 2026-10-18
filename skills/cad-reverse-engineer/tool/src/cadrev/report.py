@@ -8,7 +8,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .geometry import CheckResult
-from .project import BASES, RESTS_ON, Project
+from .project import BASES, LENGTH_TOL, RESTS_ON, Project, check_tolerance
 
 
 def _cell(value) -> str:
@@ -56,6 +56,17 @@ def measured_params(p: Project) -> list[dict]:
             for n, s in p.params.items() if s.get("basis") == "measured"]
 
 
+def tolerances(p: Project) -> list[dict]:
+    """Each check whose tolerance is not cadrev's default, with that tolerance: tol for one
+    differing from LENGTH_TOL, and tol_rel for every mass check, which has no default."""
+    out = []
+    for c in p.checks:
+        tolerance = check_tolerance(p, c)
+        if tolerance is not None and tolerance != ("tol", LENGTH_TOL):
+            out.append({"check": c.get("id"), "kind": c.get("kind"), tolerance[0]: tolerance[1]})
+    return out
+
+
 def counts(p: Project, results: list[CheckResult]) -> dict[str, int]:
     """The headline numbers shown beside the status."""
     errors = sum(f.level == "error" for f in p.findings)
@@ -72,6 +83,7 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
     warnings = [f for f in p.findings if f.level == "warning"]
     bases = Counter(spec.get("basis") for spec in p.params.values())
     headline = counts(p, results)
+    loosened = tolerances(p)
 
     md = [f"# {p.meta.get('name', 'Reconstruction')}: verification report", ""]
     md += [f"**{status}**: {headline['errors']} errors, {headline['warnings']} warnings. "
@@ -98,6 +110,11 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
     md += _table(["check", "result", "expected (evidence)", "measured", "interpretation"],
                  [[r.id, "pass" if r.ok else "**FAIL**", r.expected, r.measured, r.note]
                   for r in results])
+
+    md += ["## Non-default tolerances", ""]
+    md += _table(["check", "kind", "tolerance"],
+                 [[t["check"], t["kind"], next(f"{k} {t[k]:g}" for k in ("tol", "tol_rel") if k in t)]
+                  for t in loosened])
 
     md += ["## Parameters", ""]
     md += [" · ".join(f"{b}: {bases[b]}" for b in BASES), ""]
@@ -157,6 +174,7 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
         "counts": headline,
         "findings": [asdict(f) for f in errors + warnings],
         "checks": [asdict(r) for r in results],
+        "tolerances": loosened,
         "exact": exact(p, status),
         "params": {n: {"value": p.values.get(n), "rests_on": p.rests_on.get(n), **s}
                    for n, s in p.params.items()},

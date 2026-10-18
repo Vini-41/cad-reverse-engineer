@@ -170,7 +170,7 @@ checks:
 - `mass`: Σ volume × count × density, plus any `add` params; `tol_rel` is required. Its `density` and `add` params take their units from the quote (see `units` above).
 - `interference`: overlap volume between assembly instances; all pairs when `pairs` is omitted. Needs no evidence.
 
-`tol` overrides `tolerance.length` for one check. Each source param that no check covers raises `[unchecked-source]`.
+`tol` overrides `tolerance.length` for one check. A check's tolerance is capped: `tol` (or `tolerance.length`, where the check sets none) at 5% of each value the check compares, and `tol_rel` at 0.25; above either is `[tolerance-cap]`. The report lists every non-default tolerance beside its check: each `tol` other than 0.001, and every `tol_rel`, which has no default. Each source param that no check covers raises `[unchecked-source]`.
 
 ## gaps.yaml
 
@@ -211,6 +211,7 @@ The machine-readable report `cadrev check` writes beside `report.md`, which rend
 | `counts` | `errors`, `warnings`, `checks`, `checks_passed`, `params`, and the params resting on each basis: `source`, `measured`, `proposed` |
 | `findings` | every finding as `level`, `rule`, `message` |
 | `checks` | every geometry check with its result, expected and evaluated values |
+| `tolerances` | each check with a non-default tolerance: its `check` id, `kind`, and `tol` or `tol_rel` |
 | `params` | each param's spec, its resolved `value` and the basis it `rests_on` |
 | `bases` | how many params declare each basis |
 | `rests_on_proposed` | the params resting on a proposed value |

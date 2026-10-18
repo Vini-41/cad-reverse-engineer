@@ -715,6 +715,9 @@ DAMAGE = {
     "mass check counts not numbers": lambda r: edit(r, "checks.yaml", lambda d: d["checks"].append(
         {"id": "m", "kind": "mass", "density": "pitch", "evidence": "pitch", "key": "pitch",
          "tol_rel": 0.1, "counts": {"link": "x"}})),
+    "check tol not a number": lambda r: edit(r, "checks.yaml", lambda d: d["checks"][1].update(tol="wide")),
+    "mass check tol_rel not a number": lambda r: edit(r, "checks.yaml", lambda d: d["checks"].append(
+        {"id": "m", "kind": "mass", "density": "pitch", "evidence": "pitch", "key": "pitch", "tol_rel": "x"})),
     "bbox along an unknown axis": lambda r: edit(r, "checks.yaml", lambda d: d["checks"].append(
         {"id": "q", "kind": "bbox", "part": "link", "evidence": "pitch", "axes": {"pitch": "w"}})),
     "datum of booleans": lambda r: write(r, "model.py", MODEL.replace("(-p.pitch / 2, 0, 0)", "(True, 0, 0)")),
@@ -938,6 +941,72 @@ def test_guard_mass_check_density_printed_without_a_unit_takes_the_project_units
     _mass_check(proj_dir, tmp_path, "The link weighs 1.8 g; density 0.0012.", {"m": 1.8, "rho": 0.0012})
     code, report = verify(proj_dir)
     assert code == 0 and findings(proj_dir, "unit-quantity") == []
+
+
+# Tolerance policy: a loosened check is capped and always shown.
+
+def _set_tol(root: Path, check: str, **tol) -> None:
+    edit(root, "checks.yaml", lambda d: next(c for c in d["checks"] if c["id"] == check).update(tol))
+
+
+@pytest.mark.parametrize("change", [
+    lambda root: _set_tol(root, "pitch", tol=1.51),          # pitch 30: cap 1.5
+    lambda root: _set_tol(root, "env", tol=0.3),             # W 5 is the smallest: cap 0.25
+    lambda root: edit(root, "project.yaml", lambda d: d.update(tolerance={"length": 1e9})),
+], ids=["check-tol", "bbox-smallest-axis", "project-tolerance"])
+def test_check_tolerance_above_5_percent_of_its_expected_value_is_a_finding(proj_dir, change):
+    change(proj_dir)
+    code, report = verify(proj_dir)
+    assert code == 1 and report["status"] == "NOT VERIFIED"
+    assert "tolerance-cap" in errors(proj_dir)
+
+
+def test_guard_check_tolerance_at_5_percent_of_its_expected_value(proj_dir):
+    _set_tol(proj_dir, "pitch", tol=1.5)
+    _set_tol(proj_dir, "env", tol=0.25)
+    code, _ = verify(proj_dir)
+    assert code == 0 and findings(proj_dir, "tolerance-cap") == []
+
+
+def test_mass_check_tol_rel_above_a_quarter_is_a_finding(proj_dir, tmp_path):
+    _mass_check(proj_dir, tmp_path, "The link weighs 1.8 g, printed in resin of 1.2 g/cm3.",
+                {"m": 1.8, "rho": 1.2})
+    _set_tol(proj_dir, "m", tol_rel=0.26)
+    assert errors(proj_dir) == ["tolerance-cap"]
+
+
+def test_guard_mass_check_tol_rel_of_a_quarter(proj_dir, tmp_path):
+    _mass_check(proj_dir, tmp_path, "The link weighs 1.8 g, printed in resin of 1.2 g/cm3.",
+                {"m": 1.8, "rho": 1.2})
+    _set_tol(proj_dir, "m", tol_rel=0.25)
+    code, _ = verify(proj_dir)
+    assert code == 0 and findings(proj_dir, "tolerance-cap") == []
+
+
+def test_report_lists_each_non_default_tolerance_beside_its_check(proj_dir, tmp_path):
+    _mass_check(proj_dir, tmp_path, "The link weighs 1.8 g, printed in resin of 1.2 g/cm3.",
+                {"m": 1.8, "rho": 1.2})
+    _set_tol(proj_dir, "pitch", tol=0.5)
+    code, report = verify(proj_dir)
+    assert code == 0
+    assert report["tolerances"] == [{"check": "pitch", "kind": "distance", "tol": 0.5},
+                                    {"check": "m", "kind": "mass", "tol_rel": 0.05}]
+    md = (proj_dir / "build" / "report.md").read_text()
+    assert "| pitch | distance | tol 0.5 |" in md and "| m | mass | tol_rel 0.05 |" in md
+
+
+def test_report_lists_every_length_check_under_a_project_wide_tolerance(proj_dir):
+    edit(proj_dir, "project.yaml", lambda d: d.update(tolerance={"length": 0.01}))
+    _, report = verify(proj_dir)
+    assert report["tolerances"] == [{"check": "env", "kind": "bbox", "tol": 0.01},
+                                    {"check": "pitch", "kind": "distance", "tol": 0.01}]
+
+
+def test_check_at_the_default_tolerance_is_not_listed(proj_dir):
+    _set_tol(proj_dir, "pitch", tol=0.001)
+    _, report = verify(proj_dir)
+    assert report["tolerances"] == []
+    assert "| pitch | distance |" not in (proj_dir / "build" / "report.md").read_text()
 
 
 def _ambiguous(root: Path, tmp_path: Path, quote: str) -> list[str]:

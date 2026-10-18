@@ -22,6 +22,9 @@ REFUSED = ("project-missing", "format-missing", "format-unknown")
 BASES = ("source", "derived", "measured", "proposed")
 # What a parameter can rest on, strongest first: a derived one rests on the weakest of its inputs.
 RESTS_ON = ("source", "measured", "proposed")
+LENGTH_TOL = 1e-3  # tolerance.length when project.yaml sets none
+# The loosest tolerance a check may have: tol as a fraction of each value it compares, and tol_rel.
+TOL_CAP, TOL_REL_CAP = 0.05, 0.25
 SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "other")
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}
 MATH_NAMES = {
@@ -81,7 +84,7 @@ class Project:
 
     @property
     def length_tol(self) -> float:
-        return float(self.meta.get("tolerance", {}).get("length", 1e-3))
+        return float(self.meta.get("tolerance", {}).get("length", LENGTH_TOL))
 
     @property
     def units(self) -> dict[str, str]:
@@ -430,6 +433,36 @@ def check_refs(c: dict) -> list[str]:
     return [f"{eid}.{key}" for key in (c.get("axes") or {})] + ([f"{eid}.{c['key']}"] if c.get("key") else [])
 
 
+def check_tolerance(p: Project, c: dict) -> tuple[str, float] | None:
+    """The tolerance a check compares with, as (key, value): tol, a length, for bbox and distance,
+    tol_rel, a fraction, for mass; None for a check of another kind."""
+    if c.get("kind") in ("bbox", "distance"):
+        return "tol", float(c.get("tol", p.length_tol))
+    if c.get("kind") == "mass" and "tol_rel" in c:
+        return "tol_rel", float(c["tol_rel"])
+    return None
+
+
+def check_tolerances(p: Project) -> None:
+    """No check is loosened past the cap: tol to TOL_CAP of each value it compares, tol_rel to TOL_REL_CAP."""
+    for c in p.checks:
+        cid, tolerance = c.get("id", "?"), check_tolerance(p, c)
+        if tolerance is None:
+            continue
+        key, value = tolerance
+        if key == "tol_rel":
+            if value > TOL_REL_CAP:
+                p.error("tolerance-cap", f"check {cid}: tol_rel {value:g} is above the cap of {TOL_REL_CAP:g}")
+            continue
+        where = "" if "tol" in c else " (tolerance.length)"
+        for ref in check_refs(c):
+            expected = p.evidence_value(ref)
+            if expected is not None and value > TOL_CAP * abs(expected) * (1 + 1e-9):
+                p.error("tolerance-cap", f"check {cid}: tol {value:g}{where} is above {TOL_CAP:.0%} "
+                        f"of {ref}, {expected:g}")
+                break
+
+
 def check_accounting(p: Project) -> None:
     """Every evidence value is used by a parameter, checked against geometry, or set aside."""
     used = {spec.get("from") for spec in p.params.values()}
@@ -556,4 +589,5 @@ def check_static(p: Project) -> None:
     check_accounting(p)
     check_conflicts(p)
     check_units(p)
+    check_tolerances(p)
     lint_model(p)
