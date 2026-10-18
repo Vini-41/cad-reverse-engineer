@@ -65,3 +65,43 @@ Skill and tool with run 2's fixes, commit `3e3b658`. 110 tool calls, about 19 mi
 | 6 | Overlays offer only front, top and right views, with no rotation, so photos taken in another orientation cannot be overlaid. `crop --zoom` and throwaway measuring crops are not covered in the skill. | no change | Overlays add no pass or fail, and `--help` documents `--zoom`. |
 | 7 | Battery cell counts, Jetson memory and video timestamps were swept as quantities. | no change | Same as run 2 trip 10. They are covered by skips. |
 | 8 | The shell sandbox refused `source` as an argument. `init` file mtimes looked odd (template times are preserved). | environment | No change. |
+
+## Run 4: the final run
+
+Skill and tool with run 3's fixes, commit `854789e`. 102 tool calls, about 15 minutes.
+
+**End state:** VERIFIED PENDING REVIEW, not exact: 0 errors, 0 warnings, 34/34 checks pass (30 bbox axes, 3 distances and 1 interference over 66 instances). 50 params, resting on 35 source, 1 measured and 14 proposed. Both legs were built, each with its thigh, compression four-bar, pedestal, bent linkages, paw, X-structure links and four toes. Every Table S2 row is checked, and so are the Fig. 2A paw envelope and the Fig. S1B node spans. Conflicts K1 (mass) and K2 (L14) both have resolutions.
+
+**Readings awaiting confirmation**, each to be checked against its crop by a named reviewer:
+
+| evidence | reading |
+|---|---|
+| fig2a-sole | "22mm; 56mm; 70mm" |
+| figS1b-tension | "20mm; 46mm; 60mm" |
+| fig2b-ph1 | no printed values; the measured phalanx pin inset is scaled on its 24 mm length |
+| fig2a-beta | "(βmax =40°)" (not modeled) |
+| fig2a-leg-mass | "m≈200g" (context) |
+| fig2d-D | "Dmin = 20mm; Dmax = 50mm" (context) |
+
+It hit no tool bug and none of the earlier trips.
+
+| # | Trip | Kind | Fix |
+|---|---|---|---|
+| 1 | It was unclear whether context and not-modeled image items need confirmation. They do: they hold the status at PENDING REVIEW. | doc | project-format.md says that every image item awaits confirmation, whatever its scope. |
+| 2 | The format's image example always shows `values`. The agent guessed that the image a measured param scales off may omit them. | doc | project-format.md says that such an image needs no `values`. |
+| 3 | It made no mass check. With no stated density, a mass check would only confirm a tuned density, so it kept the 200 g as context. Step 6 says to check "`mass` where a mass is stated". | open | This is a judgement the skill could make explicit. It is left for `/code-review`. |
+| 4 | A gap with no params left on it, and a gap id named only inside a conflict's text, are not flagged. | open | This is minor. It is left for `/code-review`. |
+| 5 | Overlay PNGs are downscaled from source pixels, and the interference row does not say how many pairs it evaluated. | open | This is report polish. It is left for `/code-review`. |
+| 6 | The skill asks for purchased-part datasheets, but the task allowed only the two sources. | inherent | Gap G-servos (ask: datasheet). |
+| 7 | The shell sandbox again refused `source` as an argument, globs and compound heredocs. | environment | No change. |
+
+## Out-of-scope triggers
+
+From spec #1's Out of Scope:
+
+- **Multi-object targets and subassemblies:** fired (run 1, the foot envelope over several parts). Filed as #22.
+- **Runtime parameter trace:** fired (run 1, `atan2(p.claw_H, p.claw_H)` for 45°; run 3, `w + w/2`). Filed as #23.
+- **OCR of text inside figures:** did not fire. Every run ledgered the figure-only labels (Fig. 2A, Fig. S1B, Fig. 2D) through the step 3 figure pass.
+- **`cadrev fetch`:** did not fire. Both sources are CC-BY and committed.
+- **A `standard` basis:** did not fire. The proposed values are clearances, layouts and pin sizes, and the purchased parts are datasheet gaps, not catalogue stock sizes.
+- **Publishing:** not a dogfood trigger.
