@@ -65,12 +65,19 @@ def _contract_breach(result) -> str | None:
         if not re.fullmatch(r"[\w.-]+", str(name)):
             return f"part name {name!r} must be letters, digits, '_', '.' or '-': it names build/parts/<name>.step"
     for name, point in result.get("datums", {}).items():
-        if not (isinstance(point, (tuple, list)) and len(point) == 3
-                and all(isinstance(c, (int, float)) for c in point)):
+        if not (
+            isinstance(point, (tuple, list))
+            and len(point) == 3
+            and all(isinstance(c, (int, float)) for c in point)
+        ):
             return f"datum {name} must be an (x, y, z) tuple of numbers, not {point!r}"
     for inst, entry in result.get("assembly", {}).items():
-        if not (isinstance(entry, (tuple, list)) and len(entry) == 2
-                and isinstance(entry[0], str) and isinstance(entry[1], Location)):
+        if not (
+            isinstance(entry, (tuple, list))
+            and len(entry) == 2
+            and isinstance(entry[0], str)
+            and isinstance(entry[1], Location)
+        ):
             return f"assembly instance {inst} must be a (part name, Location) pair, not {entry!r}"
     return None
 
@@ -92,7 +99,9 @@ def build(p: Project) -> Built | None:
         return None
     built = Built(
         parts=result.get("parts", {}),
-        datums={k: (float(x), float(y), float(z)) for k, (x, y, z) in result.get("datums", {}).items()},
+        datums={
+            k: (float(x), float(y), float(z)) for k, (x, y, z) in result.get("datums", {}).items()
+        },
         assembly=result.get("assembly", {}),
         used=params.used,
     )
@@ -169,10 +178,16 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
                 for key, axis in c["axes"].items():
                     expected = _expect(p, f"{c['evidence']}.{key}")
                     measured = size[AXES[axis]]
-                    results.append(CheckResult(
-                        f"{cid}.{key}", kind, abs(measured - expected) <= tol,
-                        f"{expected:g} ({c['evidence']}.{key})", f"{measured:.4g} along {axis}",
-                        c.get("interpretation", "")))
+                    results.append(
+                        CheckResult(
+                            f"{cid}.{key}",
+                            kind,
+                            abs(measured - expected) <= tol,
+                            f"{expected:g} ({c['evidence']}.{key})",
+                            f"{measured:.4g} along {axis}",
+                            c.get("interpretation", ""),
+                        )
+                    )
             elif kind == "distance":
                 a, b = (built.datums[d] for d in c["between"])
                 if c.get("along"):
@@ -181,10 +196,16 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
                 else:
                     measured = math.dist(a, b)
                 expected = _expect(p, f"{c['evidence']}.{c['key']}")
-                results.append(CheckResult(
-                    cid, kind, abs(measured - expected) <= tol,
-                    f"{expected:g} ({c['evidence']}.{c['key']})",
-                    f"{measured:.4g} {' - '.join(c['between'])}", c.get("interpretation", "")))
+                results.append(
+                    CheckResult(
+                        cid,
+                        kind,
+                        abs(measured - expected) <= tol,
+                        f"{expected:g} ({c['evidence']}.{c['key']})",
+                        f"{measured:.4g} {' - '.join(c['between'])}",
+                        c.get("interpretation", ""),
+                    )
+                )
             elif kind == "mass":
                 names = c.get("parts") or list(built.parts)
                 counts = c.get("counts", {})
@@ -193,25 +214,38 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
                 measured += sum(p.values[n] for n in c.get("add", []))
                 expected = _expect(p, f"{c['evidence']}.{c['key']}")
                 tol_rel = float(c["tol_rel"])
-                results.append(CheckResult(
-                    cid, kind, abs(measured - expected) <= tol_rel * expected,
-                    f"{expected:g} ±{tol_rel:.0%} ({c['evidence']}.{c['key']})",
-                    f"{measured:.4g}", c.get("interpretation", "")))
+                results.append(
+                    CheckResult(
+                        cid,
+                        kind,
+                        abs(measured - expected) <= tol_rel * expected,
+                        f"{expected:g} ±{tol_rel:.0%} ({c['evidence']}.{c['key']})",
+                        f"{measured:.4g}",
+                        c.get("interpretation", ""),
+                    )
+                )
             elif kind == "interference":
                 limit = overlap_limit(p, c)
                 pairs = [tuple(pair) for pair in c.get("pairs", [])]
                 shapes = dict(_instances(built))
                 if not pairs:
                     names = sorted(shapes)
-                    pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1:]]
+                    pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1 :]]
                 worst = (0.0, "")
                 for a, b in pairs:
                     overlap = shapes[a].intersect(shapes[b])
                     volume = overlap.volume if overlap is not None else 0.0
                     worst = max(worst, (volume, f"{a} ∩ {b}"))
-                results.append(CheckResult(
-                    cid, kind, worst[0] <= limit, f"overlap ≤ {limit:g}",
-                    f"{worst[0]:.4g} {worst[1]}".strip(), c.get("interpretation", "")))
+                results.append(
+                    CheckResult(
+                        cid,
+                        kind,
+                        worst[0] <= limit,
+                        f"overlap ≤ {limit:g}",
+                        f"{worst[0]:.4g} {worst[1]}".strip(),
+                        c.get("interpretation", ""),
+                    )
+                )
             else:
                 p.error("check-kind", f"check {cid}: unknown kind {kind!r}")
                 continue

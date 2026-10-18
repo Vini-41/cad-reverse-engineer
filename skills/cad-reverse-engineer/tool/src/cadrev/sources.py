@@ -27,8 +27,10 @@ _NUMBER = re.compile(rf"-?(?:\d+\s)?\d+/[1-9]\d*(?=\s?{_UNIT})|-?\d+(?:\.\d+)?")
 _DECIMAL_COMMA = re.compile(r"(?<![\d,])(\d+),(?!\d{3}(?!\d))(\d+)(?![\d,])")
 _NOT_INCHES = units.spelling(but=(units.INCH_IN, '"', "′′"))
 _LABEL_NUMBER = rf"\(?s?\d+(?:\.\d+)*(?![\d.])[a-z]?\)?(?!\s*{_NOT_INCHES})"
-_LABEL = re.compile(r"(?:\b(?:(?:fig(?:ure)?|table|equation|section)s?\.?|(?:tab|eq|sec|sect)s?\.)|§)\s*"
-                    rf"({_LABEL_NUMBER}(?:\s*(?:,|-|and|&|to)\s*{_LABEL_NUMBER})*)")
+_LABEL = re.compile(
+    r"(?:\b(?:(?:fig(?:ure)?|table|equation|section)s?\.?|(?:tab|eq|sec|sect)s?\.)|§)\s*"
+    rf"({_LABEL_NUMBER}(?:\s*(?:,|-|and|&|to)\s*{_LABEL_NUMBER})*)"
+)
 # The dash of a range ("5-10", "5 mm - 10 mm"), which separates two values rather than negating one.
 _RANGE_DASH = re.compile(rf"(?<=\d)(\s*(?:{_UNIT}\s*)?)-(?=\s*\d)")
 # What joins a number to the next one it shares a unit with: "5-10 mm", "40x8x5 mm", "1,5,10 mm",
@@ -78,8 +80,12 @@ def _tokens(text: str) -> list[_Token]:
     """Every number in normalized text with the unit printed after it. The numbers of a range,
     product or list share its last unit."""
     label_spans = [m.span(1) for m in _LABEL.finditer(text)]
-    scanned = _DECIMAL_COMMA.sub(r"\1.\2", _RANGE_DASH.sub(r"\1 ", text.replace("x", " ")))  # same length
-    found: list[tuple[re.Match[str], str | None, int]] = []  # each number, its unit, and where both end
+    scanned = _DECIMAL_COMMA.sub(
+        r"\1.\2", _RANGE_DASH.sub(r"\1 ", text.replace("x", " "))
+    )  # same length
+    found: list[
+        tuple[re.Match[str], str | None, int]
+    ] = []  # each number, its unit, and where both end
     for m in _NUMBER.finditer(scanned):
         if found and m.start() < found[-1][2]:
             continue  # a digit of the unit before it: the 3 of g/cm3
@@ -88,12 +94,24 @@ def _tokens(text: str) -> list[_Token]:
     tokens: list[_Token] = []
     for i in reversed(range(len(found))):
         m, unit, end = found[i]
-        joined = (unit is None and i + 1 < len(found)
-                  and _SHARES_UNIT.fullmatch(text, m.end(), found[i + 1][0].start()) is not None)
+        joined = (
+            unit is None
+            and i + 1 < len(found)
+            and _SHARES_UNIT.fullmatch(text, m.end(), found[i + 1][0].start()) is not None
+        )
         if joined:
             unit = tokens[0].unit
-        tokens.insert(0, _Token(_value(m.group()), m.start(), end, unit, joined,
-                                any(a <= m.start() < b for a, b in label_spans)))
+        tokens.insert(
+            0,
+            _Token(
+                _value(m.group()),
+                m.start(),
+                end,
+                unit,
+                joined,
+                any(a <= m.start() < b for a, b in label_spans),
+            ),
+        )
     return tokens
 
 
@@ -196,11 +214,17 @@ def stated_quantities(text: str) -> list[tuple[int, int, str]]:
         group.append(t)
         if t.joined:
             continue
-        product = len(group) > 1 and all(text[a.end:b.start] == "x" for a, b in zip(group, group[1:]))
+        product = len(group) > 1 and all(
+            text[a.end : b.start] == "x" for a, b in zip(group, group[1:])
+        )
         glued = group[0].start > 0 and text[group[0].start - 1].isalnum()  # in a name: ada2cc, L14
         if (t.unit or product) and not glued and not any(g.labelled for g in group):
             spans.append((group[0].start, t.end))
         group = []
     spans += [m.span() for m in _THREAD.finditer(text)]
-    whole = [(a, b) for a, b in spans if not any(c <= a and b <= d and (c, d) != (a, b) for c, d in spans)]
+    whole = [
+        (a, b)
+        for a, b in spans
+        if not any(c <= a and b <= d and (c, d) != (a, b) for c, d in spans)
+    ]
     return [(a, b, text[a:b]) for a, b in sorted(set(whole))]

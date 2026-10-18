@@ -34,6 +34,9 @@ exclude = ["src/cadrev/template"]
 venvPath = "."
 venv = ".venv"
 
+[tool.ruff]
+line-length = 100
+
 [tool.ruff.lint]
 # pyflakes and pycodestyle errors, blind excepts (each one carries a noqa with its reason), and
 # syntax the oldest Python in requires-python cannot parse.

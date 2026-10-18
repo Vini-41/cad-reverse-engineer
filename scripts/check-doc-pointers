@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+"""Fail when an agent-facing doc points at a file that does not exist.
+
+The docs are the shipped skill (SKILL.md and its references/), AGENTS.md and docs/agents/. The
+pointers are relative Markdown links and backticked paths with a slash; paths under the gitignored
+.scratch/ are exempt. Prints doc:line: target for each broken pointer and exits 1 if there is one.
+
+    scripts/check-doc-pointers [repo root, default this script's repo]
+"""
+
+import re
+import sys
+from pathlib import Path
+
+DOCS = (
+    "skills/cad-reverse-engineer/SKILL.md",
+    "skills/cad-reverse-engineer/references/**/*.md",
+    "AGENTS.md",
+    "docs/agents/**/*.md",
+)
+LINK = re.compile(r"\]\(([^)\s]+)\)")
+CODE = re.compile(r"`([\w.-]+(?:/[\w.-]+)*/(?:[\w.-]+)?)`")
+
+
+def pointers(text: str):
+    """(line number, target, is a link) for each relative link and backticked path in a text."""
+    for number, line in enumerate(text.splitlines(), 1):
+        for target in LINK.findall(line):
+            if not re.match(r"[a-z][a-z0-9+.-]*:|#", target):
+                yield number, target.split("#")[0], True
+        for target in CODE.findall(line):
+            yield number, target, False
+
+
+def is_broken(root: Path, doc: Path, target: str, link: bool) -> bool:
+    """A link resolves from its doc. A backticked path resolves from its doc or the repo root, and
+    names a repo file only when its first directory exists there: `build/report.md` is a file of a
+    reconstruction project, `Vini-41/cad-reverse-engineer` a repo name."""
+    if target.startswith(".scratch/"):
+        return False
+    if link:
+        return not (doc.parent / target).exists()
+    bases = [
+        base for base in (doc.parent, root) if (base / target.split("/")[0]).is_dir()
+    ]
+    return bool(bases) and not any((base / target).exists() for base in bases)
+
+
+def main() -> int:
+    root = Path(
+        sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parents[1]
+    )
+    broken = []
+    for pattern in DOCS:
+        for doc in sorted(root.glob(pattern)):
+            for number, target, link in pointers(doc.read_text(encoding="utf8")):
+                if is_broken(root, doc, target, link):
+                    broken.append(f"{doc.relative_to(root)}:{number}: {target}")
+    for line in broken:
+        print(line)
+    return 1 if broken else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -42,11 +42,13 @@ def _rewrite_source_entry(text: str, source_id: str, fields: dict[str, str]) -> 
             continue
         indent = len(m.group(1)) + 2
         end = i + 1
-        while end < len(lines) and (not lines[end].strip()
-                                    or len(lines[end]) - len(lines[end].lstrip()) >= indent
-                                    and not lines[end].lstrip().startswith("- ")):
+        while end < len(lines) and (
+            not lines[end].strip()
+            or len(lines[end]) - len(lines[end].lstrip()) >= indent
+            and not lines[end].lstrip().startswith("- ")
+        ):
             end += 1
-        block = lines[i + 1:end]
+        block = lines[i + 1 : end]
         for key, value in fields.items():
             new = f"{' ' * indent}{key}: {value}"
             at = [j for j, b in enumerate(block) if re.match(rf"^\s*{key}:", b)]
@@ -54,19 +56,24 @@ def _rewrite_source_entry(text: str, source_id: str, fields: dict[str, str]) -> 
                 block[at[0]] = new
             else:
                 block.insert(0, new)
-        return "\n".join(lines[:i + 1] + block + lines[end:]) + "\n"
+        return "\n".join(lines[: i + 1] + block + lines[end:]) + "\n"
     return None
 
 
 def _unignore_if_redistributable(root: Path, path: str, license_id: object) -> None:
     """Un-ignore a source in the project's .gitignore when its license allows redistribution."""
     gitignore = root / ".gitignore"
-    if (not isinstance(license_id, str) or not gitignore.is_file()
-            or not REDISTRIBUTABLE.fullmatch(re.sub(r"\s+", "-", license_id.strip()))):
+    if (
+        not isinstance(license_id, str)
+        or not gitignore.is_file()
+        or not REDISTRIBUTABLE.fullmatch(re.sub(r"\s+", "-", license_id.strip()))
+    ):
         return
     # git cannot re-include a file inside an ignored directory, so ignore its contents instead.
-    lines = ["sources/*" if line.strip() in ("sources/", "sources") else line
-             for line in gitignore.read_text().splitlines()]
+    lines = [
+        "sources/*" if line.strip() in ("sources/", "sources") else line
+        for line in gitignore.read_text().splitlines()
+    ]
     pattern = "!" + re.sub(r"([\\*?\[!#])", r"\\\1", path)
     if pattern not in lines:
         lines.append(pattern)
@@ -98,16 +105,23 @@ def cmd_source(args) -> int:
         # Restoring a source into a clone, or a fresh download: keep the entry, refresh the file.
         refreshed = _rewrite_source_entry(text, args.id, {"path": path, "sha256": digest})
         if refreshed is None:
-            print(f"source {args.id} is registered in a form cadrev cannot edit; set its path to "
-                  f"{path} and sha256 to {digest} in project.yaml", file=sys.stderr)
+            print(
+                f"source {args.id} is registered in a form cadrev cannot edit; set its path to "
+                f"{path} and sha256 to {digest} in project.yaml",
+                file=sys.stderr,
+            )
             return 1
         meta.write_text(refreshed)
         _unignore_if_redistributable(root, path, registered[args.id].get("license"))
         print(f"refreshed {args.id} -> {target}")
         return 0
-    entry = [f"  - id: {args.id}", f"    kind: {args.kind}",
-             f"    path: {path}", f"    sha256: {digest}",
-             f"    citation: {args.citation!r}"]
+    entry = [
+        f"  - id: {args.id}",
+        f"    kind: {args.kind}",
+        f"    path: {path}",
+        f"    sha256: {digest}",
+        f"    citation: {args.citation!r}",
+    ]
     entry += [f"    url: {args.url}"] if args.url else []
     entry += [f"    license: {args.license}"] if args.license else []
     text = re.sub(r"^sources: \[\]\s*$", "sources:", text, flags=re.M)
@@ -124,7 +138,10 @@ def _open(args, source: str | None = None) -> proj.Project | None:
     if p.refused:
         return None
     if source is not None and source not in p.sources:
-        print(f"unknown source {source!r}; registered: {', '.join(p.sources) or 'none'}", file=sys.stderr)
+        print(
+            f"unknown source {source!r}; registered: {', '.join(p.sources) or 'none'}",
+            file=sys.stderr,
+        )
         return None
     return p
 
@@ -165,8 +182,9 @@ def cmd_crop(args) -> int:
     with Image.open(root / args.image) as image:
         region = image.crop(tuple(args.box))
         if args.zoom != 1:
-            region = region.resize((region.width * args.zoom, region.height * args.zoom),
-                                   Image.Resampling.LANCZOS)
+            region = region.resize(
+                (region.width * args.zoom, region.height * args.zoom), Image.Resampling.LANCZOS
+            )
         region.save(target)
     print(f"image: {target.relative_to(root)}\nimage_sha256: {sources.sha256(target)}")
     return 0
@@ -198,7 +216,9 @@ def cmd_check(args) -> int:
     # A partial run makes no claim, so it writes nothing to build/.
     partial = args.no_build or args.no_coverage
     results, images = [], []
-    if not args.no_build and not any(f.rule in ("model-missing", "model-syntax") for f in p.findings):
+    if not args.no_build and not any(
+        f.rule in ("model-missing", "model-syntax") for f in p.findings
+    ):
         from . import geometry, overlay
 
         built = geometry.build(p)
@@ -212,14 +232,21 @@ def cmd_check(args) -> int:
     headline = report.counts(p, results)
     _print_findings(p.findings)
     if partial:
-        skipped = " and ".join(s for s, on in (("the build", args.no_build),
-                                                ("the coverage sweep", args.no_coverage)) if on)
-        print(f"\n{status}: {headline['errors']} errors, {headline['warnings']} warnings; skipped {skipped}, "
-              "so no claim is made and no report was written.")
+        skipped = " and ".join(
+            s
+            for s, on in (("the build", args.no_build), ("the coverage sweep", args.no_coverage))
+            if on
+        )
+        print(
+            f"\n{status}: {headline['errors']} errors, {headline['warnings']} warnings; skipped {skipped}, "
+            "so no claim is made and no report was written."
+        )
         return 1
     path = report.write(p, status, results, images)
-    print(f"\n{status}: {headline['errors']} errors, {headline['warnings']} warnings, "
-          f"{headline['checks_passed']}/{headline['checks']} checks pass. Report: {path.relative_to(p.root)}")
+    print(
+        f"\n{status}: {headline['errors']} errors, {headline['warnings']} warnings, "
+        f"{headline['checks_passed']}/{headline['checks']} checks pass. Report: {path.relative_to(p.root)}"
+    )
     return 0 if status in report.PASSING else 1
 
 
