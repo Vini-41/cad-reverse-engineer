@@ -39,6 +39,28 @@ sources:
 
 `format` is the version of these file formats. A project without it is `[format-missing]`; one with a version this cadrev does not read is `[format-unknown]`. Either way cadrev reads no other project file, every command refuses the project, and no report is written.
 
+`units` names the project's unit for length, angle, mass, force and time (defaults `mm`, `deg`, `g`, `N`, `s`); torque, pressure, density and speed follow from them (N·mm, N/mm², g/mm³, mm/s by default). A key outside those five, or a unit cadrev does not know or of another quantity (`length: g`), is `[units]`.
+
+**Units come from the quote.** A ledger value is written as printed (`values: {L: 4}` for "4 cm"), and cadrev reads the unit printed right after it and converts the value to the project's units (40 mm) wherever a param `from:`, a check or an overlay uses it; a `value` written on that param is in project units (40). The numbers of a range or product share its last unit ("3–5 mm", "40×8×5 mm"). A value with no unit printed after it, such as a table cell (`37×6.5×5`), is already in project units. `in` and `"` read as inches, except `in` before a determiner ("4 in total", "2 in each leg").
+
+Each use expects one quantity: a `bbox` or `distance` check, an overlay calibration and a param `model.py` reads expect a length (the model may also read an angle); a mass check's `key` and `add` params expect a mass, its `density` a density. A value printed in a unit of another quantity is `[unit-quantity]`; a param traces to its quote only through basis `source`. A value printed in two different units in one quote, or once with a unit and once without ("4 mm pins in 4 cm links"), is `[unit-ambiguous]`: quote only the part that states it.
+
+Recognised units, spelled-out names included (millimetre, inches, degrees, grams, seconds…):
+
+| quantity | units |
+|---|---|
+| length | mm, cm, m, µm/um/micron, in/", ft/foot/feet |
+| angle | deg/°/◦, rad |
+| mass | mg, g, kg |
+| force | N, kN, mN, kgf |
+| torque | N·m (also Nm, nm), N·mm, N·cm, mN·m, kgf·cm (also kg·cm) |
+| pressure | Pa, kPa, MPa (N/mm²), GPa, bar, psi |
+| density | g/cm³ (g/cc, g/ml), kg/m³, g/mm³ |
+| speed | mm/s, cm/s, m/s, km/h |
+| time | ms, s/sec, min, h/hr |
+
+Any other word after a number (`six turns`, `3300 mAh`) leaves it in project units.
+
 `tolerance.length` is how closely the model must realise a source value. It is a modelling check, never a manufacturing tolerance. Keep `sources:` the last key: `cadrev source` appends to it. Registering an id that is already listed refreshes its `path` and `sha256` instead, which is how sources are restored into a clone or replaced by a new download.
 
 Text formats (quote-checked and swept): PDF, DOCX, TXT, MD, HTML. A text source whose file cannot be read as text is `[source-unreadable]`. Save a web datasheet as HTML or TXT to make it quotable. Video and image files are sources for image evidence only.
@@ -68,7 +90,7 @@ One item per statement in a source. Two anchor types:
   confirmed_by: <reviewer>     # written by the human who checked the crop
 ```
 
-- **quote** is copied from `cadrev text` output. Matching ignores case, whitespace, line-break hyphenation, dash variants and `×`/`x`; everything else must be verbatim. Numbers match whole: a quote starting or ending at a digit never matches inside a larger number ("37 mm" is not found in "137 mm" or "3.7 mm"). Each value must appear as a number in the quote (or reading); both ends of a range (`5-10 mm`) count as positive values, and a number labelling a figure, table, equation or section (`Fig. 2`, `Figs. 2 and 3`, `Table S1`, `Eq. (3)`, `Sec. 4.2`) is not a value unless a unit follows it (`section 4 mm thick`). Words such as "eight" are not numbers: leave the value out or quote a numeric form.
+- **quote** is copied from `cadrev text` output. Matching ignores case, whitespace, line-break hyphenation, dash variants and `×`/`x`; everything else must be verbatim. Numbers match whole: a quote starting or ending at a digit never matches inside a larger number ("37 mm" is not found in "137 mm" or "3.7 mm"). Each value must appear as a number in the quote (or reading); both ends of a range (`5-10 mm`) count as positive values, and a number labelling a figure, table, equation or section (`Fig. 2`, `Figs. 2 and 3`, `Table S1`, `Eq. (3)`, `Sec. 4.2`) is not a value unless a unit follows it (`section 4 mm thick`; after a label, `in` is the word: `Fig. 2 in`). Words such as "eight" are not numbers: leave the value out or quote a numeric form. Write each value as printed; its unit is read from the quote (see `units` above).
 - **image** evidence covers numbers that exist only in pixels: figure labels, drawing dimensions, video frames. The crop is hashed so the reviewed image cannot change underneath its reading.
 - **scope** is optional:
   - `not-modeled` + `reason`: a real statement about the object that this reconstruction does not build (purchased springs, out-of-scope subassemblies).
@@ -139,7 +161,7 @@ checks:
 
 - `bbox`: the part's axis-aligned bounding-box size in its own frame.
 - `distance`: between two datums returned by the model.
-- `mass`: Σ volume × count × density, plus any `add` params; `tol_rel` is required.
+- `mass`: Σ volume × count × density, plus any `add` params; `tol_rel` is required. Its `density` and `add` params take their units from the quote (see `units` above).
 - `interference`: overlap volume between assembly instances; all pairs when `pairs` is omitted. Needs no evidence.
 
 `tol` overrides `tolerance.length` for one check. Each source param that no check covers raises `[unchecked-source]`.

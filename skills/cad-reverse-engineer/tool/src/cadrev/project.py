@@ -14,7 +14,7 @@ from pathlib import Path
 
 import yaml
 
-from . import schema, sources
+from . import schema, sources, units
 
 FORMAT = 1  # the project.yaml format this cadrev reads
 # Findings after which nothing else in the project is read and every command refuses it.
@@ -75,12 +75,41 @@ class Project:
     def length_tol(self) -> float:
         return float(self.meta.get("tolerance", {}).get("length", 1e-3))
 
+    @property
+    def units(self) -> dict[str, str]:
+        """The unit of each base quantity: the project's where it names a valid one, else the default."""
+        declared = self.meta.get("units") or {}
+        out = dict(units.BASE)
+        for q, spelled in declared.items():
+            unit = units.named(spelled) if isinstance(spelled, str) else None
+            if q in units.BASE and unit is not None and units.quantity(unit) == q:
+                out[q] = unit
+        return out
+
+    def printed_units(self, ref: str) -> list[str | None]:
+        """The units printed after each appearance of an evidence value in its quote or reading."""
+        item_id, _, key = ref.partition(".")
+        item = self.evidence.get(item_id) or {}
+        if key not in item.get("values", {}):
+            return []
+        text = item["quote"] if "quote" in item else str(item.get("reading", ""))
+        value = float(item["values"][key])
+        return list(dict.fromkeys(unit for v, unit in sources.quantities_in(text)
+                                  if math.isclose(v, value, rel_tol=1e-9)))
+
+    def unit_of(self, ref: str) -> str | None:
+        """The unit an evidence value is printed in; None (the project's units) if none is printed."""
+        printed = self.printed_units(ref)
+        return printed[0] if printed else None
+
     def evidence_value(self, ref: str) -> float | None:
+        """An evidence value in the project's units, converted from the unit printed in its quote."""
         item_id, _, key = ref.partition(".")
         item = self.evidence.get(item_id)
         if item is None or key not in item.get("values", {}):
             return None
-        return float(item["values"][key])
+        value, unit = float(item["values"][key]), self.unit_of(ref)
+        return value if unit is None else units.convert(value, unit, self.units)
 
 
 def read_yaml(root: Path, name: str, findings: list[Finding]) -> dict:
@@ -225,6 +254,12 @@ def check_evidence(p: Project) -> None:
                 p.warn("image-unconfirmed", f"{eid}: figure reading awaits human confirmation (confirmed_by)")
         else:
             p.error("evidence-anchor", f"{eid}: needs quote (text sources) or image + reading (figures, video)")
+        for key, value in values.items():
+            printed = p.printed_units(f"{eid}.{key}")
+            if len(printed) > 1:
+                shown = " and ".join(f"{value:g} {u}" if u else f"{value:g} with no unit" for u in printed)
+                p.error("unit-ambiguous", f"{eid}.{key} is printed as {shown} in its "
+                        f"{'quote' if 'quote' in e else 'reading'}; quote only the part that states it")
         if not e.get("locator"):
             p.error("evidence-locator", f"{eid}: locator is required (e.g. 'Table S2', 'Fig. 2A', 'Sec. 4.2')")
 
@@ -406,6 +441,54 @@ def check_conflicts(p: Project) -> None:
             p.warn("conflict-open", f"conflict {c.get('id')}: {c.get('summary', '')} (unresolved)")
 
 
+def expect_quantity(p: Project, ref: str, expected: tuple[str, ...], use: str) -> None:
+    """[unit-quantity] unless the evidence value at ref is printed in a unit of an expected
+    quantity, or in no unit."""
+    unit = p.unit_of(ref)
+    if unit is not None and units.quantity(unit) not in expected:
+        p.error("unit-quantity", f"{ref} is printed in {unit}, a unit of {units.quantity(unit)}, "
+                f"where {' or '.join(f'a {q}' for q in expected)} is expected ({use})")
+
+
+def expect_param_quantity(p: Project, name: str, expected: tuple[str, ...], use: str) -> None:
+    """expect_quantity for a param; only basis source traces to a quote."""
+    spec = p.params.get(name) or {}
+    if spec.get("basis") == "source":
+        expect_quantity(p, str(spec.get("from", "")), expected, f"param {name} {use}")
+
+
+def check_units(p: Project) -> None:
+    """The project names a unit for each quantity it sets, and each evidence value is used as
+    the quantity its printed unit measures."""
+    for q, spelled in (p.meta.get("units") or {}).items():
+        where = f"project.yaml units.{q}"
+        unit = units.named(spelled) if isinstance(spelled, str) else None
+        if q not in units.BASE:
+            p.error("units", f"{where}: units sets {', '.join(units.BASE)}; "
+                    "other quantities follow from them (torque in force × length)")
+        elif unit is None:
+            p.error("units", f"{where}: {spelled!r} is not a unit cadrev knows; one of "
+                    + ", ".join(n for n, (uq, _, _) in units.UNITS.items() if uq == q))
+        elif units.quantity(unit) != q:
+            p.error("units", f"{where}: {unit} is a unit of {units.quantity(unit)}, not {q}")
+    for c in p.checks:
+        cid, kind, eid = c.get("id", "?"), c.get("kind"), c.get("evidence")
+        if kind == "bbox":
+            for key in c.get("axes") or {}:
+                expect_quantity(p, f"{eid}.{key}", ("length",), f"check {cid}")
+        elif kind == "distance":
+            expect_quantity(p, f"{eid}.{c.get('key')}", ("length",), f"check {cid}")
+        elif kind == "mass":
+            expect_quantity(p, f"{eid}.{c.get('key')}", ("mass",), f"check {cid}")
+            expect_param_quantity(p, c.get("density") or "", ("density",), f"in check {cid}")
+            for name in c.get("add", []):
+                expect_param_quantity(p, name, ("mass",), f"in check {cid}")
+    for o in p.overlays:
+        ref = (o.get("calibration") or {}).get("evidence")
+        if ref:
+            expect_quantity(p, ref, ("length",), f"overlay {o.get('id', '?')} calibration")
+
+
 def lint_model(p: Project) -> None:
     """model.py may hold no dimension literals; every number comes through params."""
     path = p.root / "model.py"
@@ -436,4 +519,5 @@ def check_static(p: Project) -> None:
     resolve_params(p)
     check_accounting(p)
     check_conflicts(p)
+    check_units(p)
     lint_model(p)

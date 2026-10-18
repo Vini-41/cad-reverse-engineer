@@ -10,18 +10,23 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from . import units
+
 _DASHES = dict.fromkeys(map(ord, "‐‑‒–—−"), "-")
 _TIMES = dict.fromkeys(map(ord, "×✕✖⨯"), "x")
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 # The numbers naming figures, tables, equations or sections ("Fig. S2", "Eqs. (3)-(4)",
 # "Sec. 4.2", "Figs. 2 and 3"). Abbreviations other than "fig" need their period, so "2 sec"
-# stays a value, and a number followed by a unit ("section 4 mm thick") is a dimension.
-_UNIT = r"(?:mm|cm|µm|μm|um|m|°|deg|rad|g|kg)\b"
-_LABEL_NUMBER = rf"\(?s?\d+(?:\.\d+)*(?![\d.])[a-z]?\)?(?!\s*{_UNIT})"
+# stays a value, and a number followed by a unit ("section 4 mm thick") is a dimension; "in" and
+# the inch mark are left out there, so "Fig. 2 in" stays a label.
+_UNIT = units.spelling()
+_LABEL_NUMBER = rf"\(?s?\d+(?:\.\d+)*(?![\d.])[a-z]?\)?(?!\s*{units.spelling(but=(units.INCH_IN, '"', '′′'))})"
 _LABEL = re.compile(r"(?:\b(?:(?:fig(?:ure)?|table|equation|section)s?\.?|(?:tab|eq|sec|sect)s?\.)|§)\s*"
                     rf"({_LABEL_NUMBER}(?:\s*(?:,|-|and|&|to)\s*{_LABEL_NUMBER})*)")
 # The dash of a range ("5-10", "5 mm - 10 mm"), which separates two values rather than negating one.
 _RANGE_DASH = re.compile(rf"(?<=\d)(\s*(?:{_UNIT}\s*)?)-(?=\s*\d)")
+# What joins a number to the next one it shares a unit with: "5-10 mm", "40x8x5 mm", "-10 to -5 deg".
+_SHARES_UNIT = re.compile(r"\s*-\s*|x|\s+to\s+")
 
 
 def sha256(path: Path) -> str:
@@ -46,14 +51,30 @@ def squash(text: str) -> str:
     return re.sub(r"\s+", "", normalize(text))
 
 
-def numbers_in(text: str) -> list[float]:
-    """The dimension candidates of a quote: whole numeric tokens, both endpoints of a range
-    as positive values, and no number that labels a figure, table, equation or section."""
-    text = normalize(text).replace("x", " ")
+def quantities_in(text: str) -> list[tuple[float, str | None]]:
+    """The dimension candidates of a quote, each with the unit printed after it (None if none):
+    whole numeric tokens, both endpoints of a range as positive values, and no number that labels
+    a figure, table, equation or section. The numbers of a range or product share its last unit."""
+    text = normalize(text)
     label_spans = [m.span(1) for m in _LABEL.finditer(text)]
-    text = _RANGE_DASH.sub(r"\1 ", text)  # length-preserving, so label_spans still hold
-    return [float(m.group()) for m in _NUMBER.finditer(text)
+    tokens, printed, end = [], [], 0
+    for m in _NUMBER.finditer(_RANGE_DASH.sub(r"\1 ", text.replace("x", " "))):  # same length
+        if m.start() < end:
+            continue  # a digit of the unit before it: the 3 of g/cm3
+        unit = units.unit_at(text, m.end())
+        tokens.append(m)
+        printed.append(unit and unit[0])
+        end = unit[1] if unit else m.end()
+    for i in reversed(range(len(tokens) - 1)):
+        if printed[i] is None and _SHARES_UNIT.fullmatch(text, tokens[i].end(), tokens[i + 1].start()):
+            printed[i] = printed[i + 1]
+    return [(float(m.group()), unit) for m, unit in zip(tokens, printed)
             if not any(a <= m.start() < b for a, b in label_spans)]
+
+
+def numbers_in(text: str) -> list[float]:
+    """The values of quantities_in(text), without their units."""
+    return [value for value, _ in quantities_in(text)]
 
 
 def _whole(needle: str) -> re.Pattern[str]:

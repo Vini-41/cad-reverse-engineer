@@ -188,6 +188,7 @@ QUOTES = {
     "Fig. 2 shows the 4 cm link": ([4], [2]),
     "Figure S3 shows the 4 cm link": ([4], [3]),
     "Fig. 2a, 7 mm": ([7], [2]),
+    "Fig. 2 in the text shows the 4 cm link": ([4], [2]),
     "Figs. 2 and 3 show the 4 cm link": ([4], [2, 3]),
     "Table 5 lists the 4 cm link": ([4], [5]),
     "Tables 1-3 list the 4 cm link": ([4], [1, 3]),
@@ -551,6 +552,11 @@ DAMAGE = {
     "name is a number": lambda r: _replace(r, "project.yaml", "name:", "name: 5\noldname:"),
     "format is a mapping": lambda r: _replace(r, "project.yaml", "format:", "format: {v: 1}\nxformat:"),
     "units is a number": lambda r: _replace(r, "project.yaml", "units:", "units: 5\nxunits:"),
+    "unit is a list": lambda r: _replace(r, "project.yaml", "units:", "units: {length: [mm]}\nxunits:"),
+    "units keyed by a number": lambda r: _replace(r, "project.yaml", "units:", "units: {5: mm}\nxunits:"),
+    "unit is a null": lambda r: _replace(r, "project.yaml", "units:", "units: {length: null}\nxunits:"),
+    "reading is a number": lambda r: edit(r, "evidence.yaml", lambda d: d["evidence"].append(
+        {"id": "im", "source": "paper", "locator": "F", "image": "x.png", "reading": 30, "values": {"v": 30}})),
     "tolerance of zero": lambda r: _replace(r, "project.yaml", "tolerance:", "tolerance: {length: 0}\nxtolerance:"),
     "model_literals is a number": lambda r: _replace(r, "project.yaml", "name:", "model_literals: 5\nname:"),
     "deeply nested expr": lambda r: edit(r, "params.yaml", lambda d: d["params"].update(
@@ -592,3 +598,234 @@ def test_no_damage_escapes_a_verification_run(proj_dir, capsys, damage):
     # A refused project writes no report and says so; any other run reports a status.
     assert json.loads(report.read_text())["status"] if report.exists() else (
         "the project was not read, so no report was written" in out.out)
+
+
+# Units read from the quote (ADR-0001).
+
+def test_quote_in_centimetres_is_read_in_project_millimetres(proj_dir, tmp_path):
+    add_quote(proj_dir, tmp_path, "The link is 4 cm long.", "is 4 cm long", {"L": 4})
+    edit(proj_dir, "params.yaml", lambda d: d["params"]["link_L"].update({"from": "N1.L"}))
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].append(
+        {"id": "n1", "kind": "bbox", "part": "link", "evidence": "N1", "axes": {"L": "x"}}))
+    code, report = verify(proj_dir)
+    assert report["params"]["link_L"]["value"] == 40
+    assert code == 0 and report["status"] == "VERIFIED"
+
+
+# How a quote's units read: the value as printed and what it is in the default project units
+# (mm, deg, g, N, s; torque in N·mm, pressure in N/mm², density in g/mm³, speed in mm/s). Add a
+# row for every unit spelling the reader learns. Rows whose value is already in project units,
+# and words that only look like units, run as guards.
+UNITS = {
+    "The link is 4 cm long": (4, 40),
+    "a 3 centimetre boss": (3, 30),
+    "a 0.5 in shaft": (0.5, 12.7),
+    'a 0.5" shaft': (0.5, 12.7),
+    "a 2 inch shaft": (2, 50.8),
+    "a 1.5 ft boom": (1.5, 457.2),
+    "a 2 feet boom": (2, 609.6),
+    "a 2 m boom": (2, 2000),
+    "a 2 metre boom": (2, 2000),
+    "a 250 μm film": (250, 0.25),
+    "a 250 um film": (250, 0.25),
+    "a 250 micron film": (250, 0.25),
+    "spaced 30 millimeters apart": (30, 30),
+    "a 4 mm pin": (4, 4),
+    "Link 37×6.5×5": (6.5, 6.5),
+    "Walls 3–5 cm": (3, 30),
+    "Link 40×8×5 cm": (8, 80),
+    "3 m long links, 4 in total": (4, 4),
+    "2 in each leg": (2, 2),
+    "turned 0.5 rad": (0.5, 28.64788975654116),
+    "turned 0.5 radians": (0.5, 28.64788975654116),
+    "preset at 45◦": (45, 45),
+    "rotated 90°": (90, 90),
+    "rotated 30 degrees": (30, 30),
+    "tilted from -10 to -5 deg": (-10, -10),
+    "weighs 0.43 kg": (0.43, 430),
+    "weighs 420 g": (420, 420),
+    "weighs 2 grams": (2, 2),
+    "a 50 mg shim": (50, 0.05),
+    "a 5 N load": (5, 5),
+    "a 2 kN load": (2, 2000),
+    "a 30 mN load": (30, 0.03),
+    "a 2 kgf load": (2, 19.6133),
+    "torque of 1.2 kg ·cm": (1.2, 117.6798),
+    "torque of 0.3 N·m": (0.3, 300),
+    "torque of 0.3 Nm": (0.3, 300),
+    "torque of 12 N·mm": (12, 12),
+    "torque of 12 N·cm": (12, 120),
+    "torque of 12 mN·m": (12, 12),
+    "rated at 0.3 MPa": (0.3, 0.3),
+    "rated at 0.3 N/mm²": (0.3, 0.3),
+    "rated at 100 kPa": (100, 0.1),
+    "rated at 2 GPa": (2, 2000),
+    "rated at 5000 Pa": (5000, 0.005),
+    "rated at 2 bar": (2, 0.2),
+    "rated at 10 psi": (10, 0.0689475729),
+    "a resin of 1.2 g/cm3": (1.2, 0.0012),
+    "a resin of 1.2 g/cc": (1.2, 0.0012),
+    "a resin of 1.2 g/ml": (1.2, 0.0012),
+    "a resin of 1.2 g·cm−³": (1.2, 0.0012),
+    "a resin of 1200 kg/m³": (1200, 0.0012),
+    "a resin of 1200 kg·m−3": (1200, 0.0012),
+    "a resin of 0.0012 g/mm3": (0.0012, 0.0012),
+    "2 sec per stride": (2, 2),
+    "a 3 s stride": (3, 3),
+    "a 3 seconds stride": (3, 3),
+    "a 40 ms stride": (40, 0.04),
+    "a 4 min test": (4, 240),
+    "a 2 h test": (2, 7200),
+    "a 2 hours test": (2, 7200),
+    "moving at 5 mm/s": (5, 5),
+    "moving at 5 cm/s": (5, 50),
+    "moving at 2 m/s": (2, 2000),
+    "moving at 36 km/h": (36, 10000),
+}
+
+
+def _unit_read(root: Path, tmp_path: Path, quote: str) -> float:
+    """The value of a source param from the quote's printed value, in project units."""
+    add_quote(root, tmp_path, quote, quote, {"v": UNITS[quote][0]})
+    edit(root, "params.yaml", lambda d: d["params"].update(n1={"basis": "source", "from": "N1.v"}))
+    return verify(root)[1]["params"]["n1"]["value"]
+
+
+@pytest.mark.parametrize("quote", sorted(q for q, (a, b) in UNITS.items() if a != b))
+def test_quote_unit_converts_to_the_project_units(proj_dir, tmp_path, quote):
+    assert _unit_read(proj_dir, tmp_path, quote) == pytest.approx(UNITS[quote][1])
+
+
+@pytest.mark.parametrize("quote", sorted(q for q, (a, b) in UNITS.items() if a == b))
+def test_guard_quote_in_project_units_keeps_its_value(proj_dir, tmp_path, quote):
+    assert _unit_read(proj_dir, tmp_path, quote) == pytest.approx(UNITS[quote][1])
+
+
+# Where each check uses an evidence value, and the quantity it expects there.
+USES = {
+    "bbox": (40, lambda r: edit(r, "checks.yaml", lambda d: d["checks"].append(
+        {"id": "u", "kind": "bbox", "part": "link", "evidence": "N1", "axes": {"v": "x"}}))),
+    "distance": (30, lambda r: edit(r, "checks.yaml", lambda d: d["checks"].append(
+        {"id": "u", "kind": "distance", "between": ["link.a", "link.b"], "evidence": "N1", "key": "v"}))),
+    "overlay calibration": (30, lambda r: _overlay(r, calibration={"pixels": [[5, 15], [35, 15]],
+                                                                   "evidence": "N1.v"})),
+}
+
+
+def _length_use(root: Path, tmp_path: Path, use: str, unit: str) -> list[str]:
+    """unit-quantity findings when N1, printed in unit, is used as a length by use."""
+    value, add_use = USES[use]
+    value = value / 10 if unit == "cm" else value
+    text = f"The link reads {value:g} {unit} on the scale."
+    add_quote(root, tmp_path, text, text, {"v": value})
+    add_use(root)
+    return findings(root, "unit-quantity")
+
+
+@pytest.mark.parametrize("use", sorted(USES))
+@pytest.mark.parametrize("unit", ["g", "deg", "N"])
+def test_value_of_another_quantity_where_a_length_is_expected_is_a_finding(proj_dir, tmp_path, use, unit):
+    messages = _length_use(proj_dir, tmp_path, use, unit)
+    assert len(messages) == 1
+    assert messages[0].startswith("N1.v") and "where a length is expected" in messages[0]
+
+
+@pytest.mark.parametrize("use", sorted(USES))
+@pytest.mark.parametrize("unit", ["mm", "cm", ""])
+def test_guard_length_or_no_unit_where_a_length_is_expected(proj_dir, tmp_path, use, unit):
+    assert _length_use(proj_dir, tmp_path, use, unit) == []
+
+
+def _mass_check(root: Path, tmp_path: Path, text: str, values: dict) -> None:
+    """Ledger text as N1 and check the link's mass, N1.m, with the density param rho from N1.rho."""
+    add_quote(root, tmp_path, text, text, values)
+    edit(root, "params.yaml", lambda d: d["params"].update(rho={"basis": "source", "from": "N1.rho"}))
+    edit(root, "checks.yaml", lambda d: d["checks"].append(
+        {"id": "m", "kind": "mass", "parts": ["link"], "density": "rho", "evidence": "N1", "key": "m",
+         "tol_rel": 0.05}))
+
+
+def test_mass_check_reads_the_density_in_project_units(proj_dir, tmp_path):
+    # The link is 1486.9 mm³; at 1.2 g/cm³ (0.0012 g/mm³) it weighs 1.78 g.
+    _mass_check(proj_dir, tmp_path, "The link weighs 1.8 g, printed in resin of 1.2 g/cm3.",
+                {"m": 1.8, "rho": 1.2})
+    code, report = verify(proj_dir)
+    assert code == 0 and report["status"] == "VERIFIED"
+    assert findings(proj_dir, "unit-quantity") == []
+
+
+@pytest.mark.parametrize("text, values, ref", [
+    ("The link weighs 1.8 g; its wall is 0.0012 mm.", {"m": 1.8, "rho": 0.0012}, "N1.rho"),
+    ("The link weighs 1.8 g; the resin is 0.0012 g.", {"m": 1.8, "rho": 0.0012}, "N1.rho"),
+    ("The link is 1.8 mm; the resin is 1.2 g/cm3.", {"m": 1.8, "rho": 1.2}, "N1.m"),
+])
+def test_mass_check_on_a_value_of_another_quantity_is_a_finding(proj_dir, tmp_path, text, values, ref):
+    _mass_check(proj_dir, tmp_path, text, values)
+    messages = findings(proj_dir, "unit-quantity")
+    assert len(messages) == 1 and messages[0].startswith(ref)
+
+
+def test_guard_mass_check_density_printed_without_a_unit_takes_the_project_units(proj_dir, tmp_path):
+    _mass_check(proj_dir, tmp_path, "The link weighs 1.8 g; density 0.0012.", {"m": 1.8, "rho": 0.0012})
+    code, report = verify(proj_dir)
+    assert code == 0 and findings(proj_dir, "unit-quantity") == []
+
+
+def _ambiguous(root: Path, tmp_path: Path, quote: str) -> list[str]:
+    add_quote(root, tmp_path, quote, quote, {"v": 4})
+    edit(root, "params.yaml", lambda d: d["params"].update(n1={"basis": "source", "from": "N1.v"}))
+    return findings(root, "unit-ambiguous")
+
+
+@pytest.mark.parametrize("quote", ["4 mm pins in 4 cm links", "4 mm pins in 4 links"])
+def test_value_printed_in_two_units_in_its_quote_is_a_finding(proj_dir, tmp_path, quote):
+    assert len(_ambiguous(proj_dir, tmp_path, quote)) == 1
+
+
+@pytest.mark.parametrize("quote", ["4 mm pins in 4 mm holes", "4 mm pins in 4 millimetre holes"])
+def test_guard_value_printed_twice_in_one_unit(proj_dir, tmp_path, quote):
+    assert _ambiguous(proj_dir, tmp_path, quote) == []
+
+
+def test_project_units_govern_the_conversion(proj_dir, tmp_path):
+    add_quote(proj_dir, tmp_path, "The rod is 40 mm long and weighs 300 g.", "40 mm long and weighs 300 g",
+              {"L": 40, "m": 300})
+    edit(proj_dir, "project.yaml", lambda d: d.update(units={"length": "cm", "mass": "kg"}))
+    edit(proj_dir, "params.yaml", lambda d: d["params"].update(
+        L={"basis": "source", "from": "N1.L"}, m={"basis": "source", "from": "N1.m"}))
+    _, report = verify(proj_dir)
+    assert report["params"]["L"]["value"] == pytest.approx(4)
+    assert report["params"]["m"]["value"] == pytest.approx(0.3)
+
+
+@pytest.mark.parametrize("declared", [{"length": "furlong"}, {"length": "g"}, {"torque": "N·m"},
+                                      {"length": ["mm"]}])
+def test_project_units_must_name_a_unit_of_each_quantity(proj_dir, declared):
+    edit(proj_dir, "project.yaml", lambda d: d.update(units=declared))
+    messages = findings(proj_dir, "units")
+    assert len(messages) == 1 and messages[0].startswith(f"project.yaml units.{next(iter(declared))}:")
+
+
+@pytest.mark.parametrize("declared", [{"length": "millimetres"}, {"force": "kN", "time": "ms"}])
+def test_guard_project_units_spelled_out_or_of_other_base_quantities(proj_dir, declared):
+    edit(proj_dir, "project.yaml", lambda d: d.update(units=declared))
+    assert findings(proj_dir, "units") == []
+
+
+def _model_reads(root: Path, tmp_path: Path, text: str) -> None:
+    """Ledger text as N1 (value 40) and feed it to the model as link_L, checked by the T1 envelope."""
+    add_quote(root, tmp_path, text, text, {"v": 40})
+    edit(root, "params.yaml", lambda d: d["params"]["link_L"].update({"from": "N1.v"}))
+
+
+@pytest.mark.parametrize("unit", ["g", "N", "s"])
+def test_param_the_model_reads_printed_in_neither_a_length_nor_an_angle_is_a_finding(proj_dir, tmp_path, unit):
+    _model_reads(proj_dir, tmp_path, f"The link reads 40 {unit} on the gauge.")
+    messages = findings(proj_dir, "unit-quantity")
+    assert len(messages) == 1 and messages[0].startswith("N1.v") and "param link_L" in messages[0]
+
+
+@pytest.mark.parametrize("unit", ["mm", "deg", ""])
+def test_guard_param_the_model_reads_printed_in_a_length_an_angle_or_no_unit(proj_dir, tmp_path, unit):
+    _model_reads(proj_dir, tmp_path, f"The link reads 40 {unit} on the gauge.")
+    assert findings(proj_dir, "unit-quantity") == []

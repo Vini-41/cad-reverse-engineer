@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from .project import Project, expr_names
+from .project import Project, expect_param_quantity, expr_names
 
 AXES = {"x": 0, "y": 1, "z": 2}
 
@@ -96,6 +96,8 @@ def build(p: Project) -> Built | None:
         assembly=result.get("assembly", {}),
         used=params.used,
     )
+    for name in sorted(built.used):
+        expect_param_quantity(p, name, ("length", "angle"), "in model.py")
     for name in sorted(p.values.keys() - built.used - _used_by_derived(p)):
         p.warn("param-unused", f"param {name} is defined but the model never reads it")
     for name, part in built.parts.items():
