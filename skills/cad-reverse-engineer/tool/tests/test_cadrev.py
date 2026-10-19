@@ -185,7 +185,7 @@ def test_report_json_carries_status_findings_and_counts(proj_dir):
     }
 
 
-def test_guard_report_json_has_the_keys_project_format_documents(proj_dir):
+def test_report_json_has_the_keys_project_format_documents(proj_dir):
     doc = (Path(__file__).parents[2] / "references" / "project-format.md").read_text()
     rows = dict(re.findall(r"^\| `(\w+)` \| (.*) \|$", doc.split("## build/report.json")[1], re.M))
     _, report = verify(proj_dir)
