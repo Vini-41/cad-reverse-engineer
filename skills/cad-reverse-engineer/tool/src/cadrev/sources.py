@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import math
 import re
 import unicodedata
 import zipfile
@@ -26,6 +27,9 @@ _NUMBER = re.compile(rf"-?(?:\d+\s)?\d+/[1-9]\d*(?={units.UNIT_GAP}{_UNIT})|-?\d
 # A decimal comma (3,5) joins its digits into one number; the comma of a thousands figure
 # (1,250) or of a list (1,5,10) does not.
 _DECIMAL_COMMA = re.compile(r"(?<![\d,])(\d+),(?!\d{3}(?!\d))(\d+)(?![\d,])")
+# A comma before exactly three digits (1,250) is a thousands comma or a decimal one (1.25),
+# depending on the locale; a list (1,5,10) or a decimal point after it (1,250.5) settles it.
+_AMBIGUOUS_COMMA = re.compile(r"(?<![\d,])(\d+),(\d{3})(?![\d,]|\.\d)")
 _NOT_INCHES = units.spelling(but=(units.INCH_IN, '"', "′′"))
 _LABEL_NUMBER = rf"\(?s?\d+(?:\.\d+)*(?![\d.])[a-z]?\)?(?!\s*{_NOT_INCHES})"
 _LABEL = re.compile(
@@ -135,6 +139,28 @@ def quantities_in(text: str) -> list[tuple[float, str | None]]:
 def numbers_in(text: str) -> list[float]:
     """The values of quantities_in(text), without their units."""
     return [value for value, _ in quantities_in(text)]
+
+
+class Ambiguous(NamedTuple):
+    printed: str  # 1,250
+    thousands: float  # 1250
+    decimal: float  # 1.25
+    parts: tuple[float, float]  # 1 and 250, as the quote reader reads them
+
+    def reads(self, value: float) -> bool:
+        """Whether value is one way of reading the number."""
+        readings = (self.thousands, self.decimal, *self.parts)
+        return any(math.isclose(value, r, rel_tol=1e-9) for r in readings)
+
+
+def ambiguous_numbers(text: str) -> list[Ambiguous]:
+    """Each number in text whose comma could be a thousands or a decimal comma (1,250)."""
+    return [
+        Ambiguous(
+            m.group(), float(m[1] + m[2]), float(f"{m[1]}.{m[2]}"), (float(m[1]), float(m[2]))
+        )
+        for m in _AMBIGUOUS_COMMA.finditer(normalize(text))
+    ]
 
 
 def _whole(needle: str) -> re.Pattern[str]:
