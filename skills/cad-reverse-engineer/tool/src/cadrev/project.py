@@ -24,8 +24,28 @@ BASES = ("source", "derived", "measured", "proposed")
 RESTS_ON = ("source", "measured", "proposed")
 LENGTH_TOL = 1e-3  # tolerance.length when project.yaml sets none
 ANGLE_TOL = 0.01  # tolerance.angle, in degrees, when project.yaml sets none
+DEFAULT_TOL = {"length": LENGTH_TOL, "angle": ANGLE_TOL}
 # The loosest tolerance a check may have: tol as a fraction of each value it compares, and tol_rel.
 TOL_CAP, TOL_REL_CAP = 0.05, 0.25
+
+
+@dataclass(frozen=True)
+class CheckKind:
+    """What a kind of check compares with the geometry: evidence values of quantity, within tol,
+    which defaults to project.yaml's tolerance.<tolerance>; or, where tolerance is None, within
+    tol_rel, a fraction of the value, which has no default."""
+
+    quantity: str
+    tolerance: str | None
+
+
+# The kinds of check that compare with a ledger value; interference compares with none.
+CHECK_KINDS = {
+    "bbox": CheckKind("length", "length"),
+    "distance": CheckKind("length", "length"),
+    "angle": CheckKind("angle", "angle"),
+    "mass": CheckKind("mass", None),
+}
 SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "other")
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}
 MATH_NAMES = {
@@ -95,13 +115,13 @@ class Project:
     def source_path(self, source_id: str) -> Path:
         return self.root / self.sources[source_id]["path"]
 
-    @property
-    def length_tol(self) -> float:
-        return float(self.meta.get("tolerance", {}).get("length", LENGTH_TOL))
+    def tolerance(self, quantity: str) -> float:
+        """project.yaml's tolerance.<quantity>, else cadrev's default; an angle's in degrees."""
+        return float(self.meta.get("tolerance", {}).get(quantity, DEFAULT_TOL[quantity]))
 
     @property
-    def angle_tol(self) -> float:
-        return float(self.meta.get("tolerance", {}).get("angle", ANGLE_TOL))
+    def length_tol(self) -> float:
+        return self.tolerance("length")
 
     @property
     def units(self) -> dict[str, str]:
@@ -151,10 +171,11 @@ class Project:
         return value if unit is None else units.convert(value, unit, self.units)
 
     def compared_value(self, ref: str, kind: str) -> float | None:
-        """The evidence value a check of kind compares with: in degrees for an angle check, which
-        evaluates in degrees whatever the project's angle unit, else in the project's units."""
+        """The evidence value a check of kind compares with: an angle in degrees, since an angle
+        check evaluates in degrees whatever the project's angle unit, else in the project's units."""
         value = self.evidence_value(ref)
-        if value is None or kind != "angle":
+        check = CHECK_KINDS.get(kind)
+        if value is None or check is None or check.quantity != "angle":
             return value
         return value * units.size("angle", self.units) / units.UNITS["deg"].si
 
@@ -357,13 +378,32 @@ def check_evidence(p: Project) -> None:
             )
 
 
-def _starts(text: str, needle: str) -> list[int]:
+def _offsets(text: str, needle: str) -> list[int]:
     """Every offset where needle occurs in text, none for an empty needle."""
-    starts, start = [], text.find(needle) if needle else -1
+    offsets, start = [], text.find(needle) if needle else -1
     while start != -1:
-        starts.append(start)
+        offsets.append(start)
         start = text.find(needle, start + 1)
-    return starts
+    return offsets
+
+
+def _quote_spans(page: str, quote: str) -> list[tuple[int, int]]:
+    """Where quote occurs on a page normalized with its line-break hyphens marked by NUL, as spans
+    of the page with those hyphens dropped: found with them dropped (inter-|toe), else kept
+    (dual-|axis), its offsets then shifted back past each hyphen before them."""
+    dropped, kept = page.replace("\0", ""), page.replace("\0", "-")
+    for reading, to_dropped in (
+        (dropped, lambda i: i),
+        (kept, lambda i: i - page.count("\0", 0, i)),
+    ):
+        found = [
+            (to_dropped(start), to_dropped(start + len(needle)))
+            for needle in sources.needles(quote)
+            for start in _offsets(reading, needle)
+        ]
+        if found:
+            return found
+    return []
 
 
 def check_coverage(p: Project) -> list[tuple[str, int, str]]:
@@ -392,23 +432,13 @@ def check_coverage(p: Project) -> list[tuple[str, int, str]]:
         for n, raw in enumerate(texts, 1):
             if n in skipped_pages:
                 continue
-            # Line-break hyphens marked, so a quote keeping one (dual-axis) is found too.
-            marked = sources.normalize(raw, hyphen="\0")
-            text, kept = marked.replace("\0", ""), marked.replace("\0", "-")
+            page = sources.normalize(raw, hyphen="\0")
+            text = page.replace("\0", "")
             spans = []
             for a in anchors + [k for k in skips if "quote" in k]:
                 if a.get("page") not in (None, n):
                     continue
-                found = [
-                    (s, s + len(needle))
-                    for needle in sources.needles(a["quote"])
-                    for s in _starts(text, needle)
-                ] or [
-                    (s - marked.count("\0", 0, s), e - marked.count("\0", 0, e))
-                    for needle in sources.needles(a["quote"])
-                    for s in _starts(kept, needle)
-                    for e in [s + len(needle)]
-                ]
+                found = _quote_spans(page, a["quote"])
                 if found and any(a is k for k in skips):
                     matched.add(next(i for i, k in enumerate(skips) if k is a))
                 spans += found
@@ -559,10 +589,6 @@ def resolve_params(p: Project) -> None:
             break
 
 
-# The quantity of the evidence values each check kind compares with the geometry.
-CHECK_READS = {"bbox": "length", "distance": "length", "angle": "angle", "mass": "mass"}
-
-
 def check_refs(c: dict) -> list[str]:
     """The evidence values a check compares with the geometry."""
     eid = c.get("evidence")
@@ -571,7 +597,7 @@ def check_refs(c: dict) -> list[str]:
     )
 
 
-def reads(p: Project, c: dict) -> list[str]:
+def params_read_by(p: Project, c: dict) -> list[str]:
     """The params check c reads itself, in order: a mass check's density, add and counts params."""
     if c.get("kind") != "mass":
         return []
@@ -582,32 +608,36 @@ def reads(p: Project, c: dict) -> list[str]:
 
 def check_params(p: Project) -> set[str]:
     """The params the checks read themselves."""
-    return {name for c in p.checks for name in reads(p, c)}
+    return {name for c in p.checks for name in params_read_by(p, c)}
 
 
 def rests_on(p: Project, c: dict) -> tuple[str, list[str]]:
     """What check c rests on: the weakest basis among the params it reads, or source when it reads
     none, with the params it reads that rest on that basis."""
-    bases = {name: p.rests_on.get(name, "proposed") for name in reads(p, c)}
+    bases = {name: p.rests_on.get(name, "proposed") for name in params_read_by(p, c)}
     weakest = max(bases.values(), key=RESTS_ON.index, default="source")
     return weakest, [name for name, basis in bases.items() if basis == weakest]
 
 
 def check_tolerance(p: Project, c: dict) -> tuple[str, float] | None:
-    """The tolerance a check compares with, as (key, value): tol, a length, for bbox and distance,
-    tol in degrees for angle, tol_rel, a fraction, for mass; None for a check of another kind."""
-    if c.get("kind") in ("bbox", "distance"):
-        return "tol", float(c.get("tol", p.length_tol))
-    if c.get("kind") == "angle":
-        return "tol", float(c.get("tol", p.angle_tol))
-    if c.get("kind") == "mass" and "tol_rel" in c:
-        return "tol_rel", float(c["tol_rel"])
-    return None
+    """The tolerance a check compares with, as (key, value): tol, in its quantity's project units
+    (degrees for an angle), or tol_rel, a fraction; None for a kind that compares with no ledger
+    value, or a mass check missing its tol_rel."""
+    kind = CHECK_KINDS.get(str(c.get("kind")))
+    if kind is None:
+        return None
+    if kind.tolerance is None:
+        return ("tol_rel", float(c["tol_rel"])) if "tol_rel" in c else None
+    return "tol", float(c.get("tol", p.tolerance(kind.tolerance)))
 
 
-def default_tolerance(kind: str | None) -> tuple[str, float]:
-    """cadrev's own tolerance for a check of kind, where project.yaml and the check set none."""
-    return {"angle": ("tol", ANGLE_TOL)}.get(str(kind), ("tol", LENGTH_TOL))
+def default_tolerance(kind: str | None) -> tuple[str, float] | None:
+    """cadrev's own tolerance for a check of kind, where project.yaml and the check set none;
+    None for a kind with no default."""
+    check = CHECK_KINDS.get(str(kind))
+    if check is None or check.tolerance is None:
+        return None
+    return "tol", DEFAULT_TOL[check.tolerance]
 
 
 def default_overlap_limit(length_tol: float = LENGTH_TOL) -> float:
@@ -635,8 +665,7 @@ def check_tolerances(p: Project) -> None:
                     f"check {cid}: tol_rel {value:g} is above the cap of {TOL_REL_CAP:g}",
                 )
             continue
-        project_wide = "tolerance.angle" if c.get("kind") == "angle" else "tolerance.length"
-        where = "" if "tol" in c else f" ({project_wide})"
+        where = "" if "tol" in c else f" (tolerance.{CHECK_KINDS[c['kind']].tolerance})"
         for ref in check_refs(c):
             expected = p.compared_value(ref, str(c.get("kind")))
             if expected is not None and value > TOL_CAP * abs(expected) * (1 + 1e-9):
@@ -755,9 +784,9 @@ def check_units(p: Project) -> None:
             p.error("units", f"project.yaml units.{q}: {problem}")
     for c in p.checks:
         cid, kind = c.get("id", "?"), c.get("kind")
-        if kind in CHECK_READS:
+        if kind in CHECK_KINDS:
             for ref in check_refs(c):
-                expect_quantity(p, ref, (CHECK_READS[kind],), f"check {cid}")
+                expect_quantity(p, ref, (CHECK_KINDS[kind].quantity,), f"check {cid}")
         if kind == "mass":
             expect_param_quantity(p, c.get("density") or "", ("density",), f"in check {cid}")
             for name in c.get("add", []):

@@ -2897,6 +2897,22 @@ def test_mass_check_names_each_param_it_reads_resting_on_less_than_source(proj_d
     assert "rests on proposed: hardware" in row and "rho" not in row
 
 
+def test_report_json_names_the_params_a_check_rests_on(proj_dir, tmp_path):
+    report = _weighed(
+        proj_dir,
+        tmp_path,
+        "3 links weigh 6.4 g with 1 g of screws.",
+        {"n": 3, "m": 6.4},
+        check={"add": ["hardware"], "counts": {"link": "n_links"}},
+        rho=_RESIN,
+        hardware=_RESIN | {"value": 1, "rationale": "screws by count"},
+        n_links={"basis": "source", "from": "N1.n"},
+    )
+    m = _mass_result(report)
+    assert (m["rests_on"], m["rests_on_params"]) == ("proposed", ["rho", "hardware"])
+    assert all(r["rests_on_params"] == [] for r in report["checks"] if r["id"] != "m")
+
+
 def test_bbox_distance_and_interference_checks_rest_on_source(proj_dir):
     _, report = verify(proj_dir)
     assert {r["kind"]: r["rests_on"] for r in report["checks"]} == {

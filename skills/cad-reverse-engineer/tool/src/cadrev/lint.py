@@ -7,6 +7,7 @@ import math
 import operator
 import random
 from typing import TYPE_CHECKING
+from collections.abc import Callable
 
 if TYPE_CHECKING:
     from .project import Project
@@ -186,10 +187,11 @@ _FACTORS = ((0.3, 0.7), (1.4, 3.0))
 class _ParamExpressions:
     """The param expressions of build(p): those built only from p.<name> reads, allowed
     literals, arithmetic, math.* and min/max/abs calls, and local names assigned once straight
-    from such an expression."""
+    from such an expression. A name assigned more than once is not followed, since which value
+    it holds where it is read depends on the control flow."""
 
     def __init__(self, build: ast.FunctionDef, math_names: set[str], is_allowed) -> None:
-        self.p = build.args.args[0].arg if build.args.args else None
+        self.param_name = build.args.args[0].arg if build.args.args else None
         self.math_names, self.is_allowed = math_names, is_allowed
         bound: dict[str, list[ast.AST]] = {}
         for node in ast.walk(build):
@@ -198,7 +200,7 @@ class _ParamExpressions:
             elif isinstance(node, ast.arg):
                 bound.setdefault(node.arg, []).append(node)
         self.bound = set(bound)
-        self.local: dict[str, ast.AST] = {}  # name: the expression it is assigned once from
+        self.local: dict[str, ast.expr] = {}  # name: the expression it is assigned once from
         for node in ast.walk(build):
             if (
                 isinstance(node, ast.Assign)
@@ -215,7 +217,7 @@ class _ParamExpressions:
             literal = _literal(node)
             return set() if literal is not None and self.is_allowed(literal) else None
         if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
-            if node.value.id == self.p:
+            if node.value.id == self.param_name:
                 return {node.attr}
             if node.value.id in self.math_names and node.value.id not in self.bound:
                 return set() if isinstance(_MATH.get(node.attr), float) else None
@@ -243,7 +245,7 @@ class _ParamExpressions:
             return names
         return None
 
-    def function(self, func: ast.AST):
+    def function(self, func: ast.AST) -> Callable[..., float] | None:
         """The math function or min/max/abs func names, or None."""
         if isinstance(func, ast.Name) and func.id not in self.bound:
             if func.id in _BUILTINS:
@@ -261,19 +263,26 @@ class _ParamExpressions:
         return None
 
     def evaluate(self, node: ast.AST, params: dict[str, float]) -> float:
-        """node's value with params read from params; raises where it cannot be computed."""
-        if isinstance(node, ast.Constant):
-            return float(node.value)
-        if isinstance(node, ast.Attribute):
-            return params[node.attr] if node.value.id == self.p else _MATH[node.attr]
-        if isinstance(node, ast.Name):
+        """node's value with p.<name> read from params; raises ValueError where node is no param
+        expression, and whatever the arithmetic raises where it cannot be computed."""
+        literal = _literal(node)
+        if literal is not None:
+            return literal
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            if node.value.id == self.param_name and node.attr in params:
+                return params[node.attr]
+            if node.value.id in self.math_names - self.bound and isinstance(
+                _MATH.get(node.attr), float
+            ):
+                return _MATH[node.attr]
+        if isinstance(node, ast.Name) and node.id in self.local:
             return self.evaluate(self.local[node.id], params)
-        if isinstance(node, ast.UnaryOp):
-            return _FOLDS[type(node.op)](self.evaluate(node.operand, params))
-        if isinstance(node, ast.BinOp):
-            left, right = self.evaluate(node.left, params), self.evaluate(node.right, params)
-            return _FOLDS[type(node.op)](left, right)
-        return self.function(node.func)(*(self.evaluate(a, params) for a in node.args))
+        if isinstance(node, (ast.UnaryOp, ast.BinOp)) and type(node.op) in _FOLDS:
+            operands = [node.operand] if isinstance(node, ast.UnaryOp) else [node.left, node.right]
+            return _FOLDS[type(node.op)](*(self.evaluate(o, params) for o in operands))
+        if isinstance(node, ast.Call) and (function := self.function(node.func)) is not None:
+            return function(*(self.evaluate(a, params) for a in node.args))
+        raise ValueError(f"{ast.unparse(node)} is no param expression")
 
 
 def _lint_constants(p: Project, tree: ast.Module, is_allowed) -> None:
@@ -297,8 +306,7 @@ def _lint_constants(p: Project, tree: ast.Module, is_allowed) -> None:
     base = {k: v if math.isfinite(v) and v != 0 else 1.0 for k, v in p.values.items()}
 
     def visit(node: ast.AST) -> None:
-        reads = exprs.reads(node) if isinstance(node, ast.expr) else None
-        if reads is None:
+        if not isinstance(node, ast.expr) or (reads := exprs.reads(node)) is None:
             for child in ast.iter_child_nodes(node):
                 visit(child)
             return
@@ -317,7 +325,9 @@ def _lint_constants(p: Project, tree: ast.Module, is_allowed) -> None:
                 return  # a domain error, an overflow or a complex root: skipped, not judged
             values.append(float(value))
         if not math.isclose(values[0], values[1], rel_tol=1e-9, abs_tol=1e-12):
-            for child in ast.iter_child_nodes(node):  # p.y * atan2(p.h, p.h) varies; its atan2 not
+            # p.y * atan2(p.h, p.h) varies, but its atan2 does not: each part of a varying
+            # expression is judged too, beyond #31's maximal sub-expressions.
+            for child in ast.iter_child_nodes(node):
                 visit(child)
         else:
             p.error(

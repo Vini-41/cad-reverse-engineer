@@ -64,13 +64,13 @@ Take one part all the way through before modelling any other: the tracer part. C
 
 Then write the rest of model.py per [`references/modeling.md`](references/modeling.md): parts in their own frames, datums at every checked feature, the assembly as placed instances.
 
-Done when the tracer part's checks went green before a second part was modelled, and `cadrev check <dir>` builds every part with no `[model-*]`, `[part-invalid]`, `[assembly-part]` or `[param-unused]`. Red checks on the other parts are step 6's job.
+Done when the tracer part's checks went green before a second part was modelled, and `cadrev check <dir>` builds every part with no `[model-*]`, `[part-invalid]`, `[datum-off-solid]`, `[assembly-part]` or `[param-unused]`. Red checks on the other parts are step 6's job.
 
 ### 6. Check against the sources
 
 Add a check for every source value the geometry should realise: `bbox` for envelopes, `distance` between datums for pitches and spacings (over `instances` where they span parts), `angle` at a datum for stated angles, `mass` where a mass is stated, `interference` across the assembly. Where a figure shows a modelled part in a near-orthographic view, add an overlay and look at the rendered PNG; record in the param's interpretation what the overlay showed.
 
-A mass check whose density, `add` or `counts` param is proposed rests on proposed, and the report names those params beside it: it confirms the stated mass only given that choice. Add it all the same, and keep the proposed value at its rationale rather than tuning it to turn the check green; the gap is what closes it.
+Add the mass check even where its density, `add` or `counts` param is proposed, and keep that value at its rationale rather than tuning it to turn the check green: the check then rests on proposed (`checks.yaml` in [`references/project-format.md`](references/project-format.md#checksyaml)), and the gap is what closes it.
 
 Turn a red check green by changing the model or its params, and record a changed proposed param as `params.yaml` in [`references/project-format.md`](references/project-format.md#paramsyaml) describes. Evidence changes only to correct a transcription, re-copied from `cadrev text`.
 

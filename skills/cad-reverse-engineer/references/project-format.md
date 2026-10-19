@@ -135,7 +135,7 @@ A conflict naming evidence the ledger does not hold is `[conflict-ref]`. A confl
 
 ## params.yaml
 
-The only door numbers have into the model.
+The only door numbers have into the model: a number written in model.py is `[model-literal]`, and one built there from params as a constant (`atan2(p.h, p.h)`) is `[model-constant]`; [`modeling.md`](modeling.md) says how to meet both.
 
 ```yaml
 params:
@@ -183,13 +183,15 @@ checks:
 
 - `bbox`: the part's axis-aligned bounding-box size in its own frame; under `instances`, that of their union in the assembly frame.
 - `distance`: between two datums of one part, in that part's frame. Datums of two different parts (`<part>.<feature>` naming different parts) sit in unrelated frames, so without `instances` such a check is `[check-config]`.
-- `angle`: `between: [a, vertex, b]`, three datums of one part (the same rule as `distance`); the angle at `vertex` between the directions to `a` and to `b`, in degrees (0 to 180). A datum that coincides with the vertex leaves the angle undefined and is `[check-config]`. A stated joint range (a range of motion) is not an angle of the one static model: ledger it `scope: context` with a reason, and check an angle only where a source states it for the configuration `target` names.
+- `angle`: `between: [a, vertex, b]`, three datums of one part (the same rule as `distance`); the angle at `vertex` between the directions to `a` and to `b`, in degrees (0 to 180). A datum that coincides with the vertex (within `tolerance.length`) leaves the angle undefined and is `[check-config]`. A stated joint range (a range of motion) is not an angle of the one static model: ledger it `scope: context` with a reason, and check an angle only where a source states it for the configuration `target` names.
 - `mass`: Σ volume × count × density, plus any `add` params; `tol_rel` is required. Each `counts` entry names the param that counts that part (parts it leaves out count once), so a stated count is ledgered like any other number; a bare number there is `[schema]`. Its `density` and `add` params take their units from the quote (see `units` above). The check reads its `density`, `add` and `counts` params, so they need no read in model.py and no other check.
 - `interference`: overlap volume between assembly instances; all pairs when `pairs` is omitted. Needs no evidence. It passes when the overlap is at most `max_volume`, which defaults to `tolerance.length`³. This overlap limit compares with no ledger value, so it is not a tolerance and has no cap, but the report lists beside its check each limit other than cadrev's default: the default `tolerance.length`, 0.001, cubed. A project-wide `tolerance.length` therefore lists every interference check that sets no `max_volume`.
 
 A dimension that spans several parts (an envelope of a subassembly, a spacing between parts) is checked over instances: a `bbox`, `distance` or `angle` check names `instances: [<instance>, ...]` in place of `part`, and is evaluated in the assembly frame, where the instances' `Location`s place them. Its datums are named `<instance>.<feature>`: the instance's part datum `<part>.<feature>`, moved by its `Location`. Under `instances` every name resolves against the assembly, so an instance named like its part is the instance. List each instance the check reads; there are no globs. An unknown instance, a feature its part has no datum for, or an empty list is `[check-config]`; a check naming both `part` and `instances` is `[schema]`. A check of another `kind` is `[check-kind]`; one naming a part, datum, axis or evidence value that does not exist is `[check-config]`. A check whose evaluated value strays from its ledger value by more than its tolerance is `[check-failed]`.
 
-Each check rests on the weakest basis among the params it reads (proposed < measured < source), or on source when it reads none; today only a mass check reads params. report.json gives each check result its `rests_on`, and report.md's checks table shows "rests on <basis>: <params>" beside a check resting on less than source, naming the params it reads that rest on that basis. A mass check on a proposed density then confirms the model against the stated mass given that chosen density, not the density itself. What a check rests on leaves its pass/fail and the status unchanged.
+Every datum `build` returns, read by a check or not, lies on its part's solid within `tolerance.length`, else it is `[datum-off-solid]`; [`modeling.md`](modeling.md) says where to place datums.
+
+Each check rests on the weakest basis among the params it reads (proposed < measured < source), or on source when it reads none. report.json gives each check result its `rests_on` and, in `rests_on_params`, the params it reads that rest on that basis; report.md's checks table shows "rests on <basis>: <params>" beside a check resting on less than source. A mass check on a proposed density then confirms the model against the stated mass given that chosen density, not the density itself. What a check rests on leaves its pass/fail and the status unchanged.
 
 `tol` overrides `tolerance.length` for one check, or `tolerance.angle` (degrees) for an angle check. A check's tolerance is capped: `tol` (or the project tolerance, where the check sets none) at 5% of each value the check compares, and `tol_rel` at 0.25; above either is `[tolerance-cap]`. The report lists every non-default tolerance beside its check: each `tol` other than 0.001 (0.01 for an angle check), and every `tol_rel`, which has no default. Each source param that no check covers raises `[unchecked-source]`.
 
@@ -244,7 +246,7 @@ The machine-readable report `cadrev check` writes beside `report.md`, which rend
 | `exact` | whether the project is exact (see [Statuses](#statuses)) |
 | `counts` | `errors`, `warnings`, `checks`, `checks_passed`, `params`, and the params resting on each basis: `source`, `measured`, `proposed` |
 | `findings` | every finding as `level`, `rule`, `message` |
-| `checks` | every geometry check with its result, expected and evaluated values, and the basis it `rests_on` |
+| `checks` | every geometry check with its result, expected and evaluated values, the basis it `rests_on`, and the params it reads resting on that basis (`rests_on_params`) |
 | `tolerances` | each check with a non-default tolerance: its `check` id, `kind`, and `tol` or `tol_rel` |
 | `overlap_limits` | each interference check with a non-default overlap limit: its `check` id and `max_volume` |
 | `model_literals` | project.yaml's `model_literals` when it differs from the default, else null |

@@ -50,7 +50,7 @@ class CheckResult:
     note: str = ""
     # What the check rests on, and the params it reads that rest on that basis.
     rests_on: str = "source"
-    resting: list[str] = field(default_factory=list)
+    rests_on_params: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -151,6 +151,10 @@ def build(p: Project) -> Built | None:
     return built
 
 
+# How finely _off_solid samples each edge of a cylindrical face to find the face's axial extent.
+_EDGE_SAMPLES = 16
+
+
 def _off_solid(part, point: tuple[float, float, float], tol: float) -> float | None:
     """How far point is from part's solid, or None if it lies on it within tol: on the axis of a
     cylindrical face between that face's axial bounds, or on a face. The distance to an axis is
@@ -165,9 +169,9 @@ def _off_solid(part, point: tuple[float, float, float], tol: float) -> float | N
             axis = face.axis_of_rotation
             origin, direction = axis.position, axis.direction.normalized()
             spans = [  # the face's extent along its axis, from points along its edges
-                (edge.position_at(i / 16) - origin).dot(direction)
+                (edge.position_at(i / _EDGE_SAMPLES) - origin).dot(direction)
                 for edge in face.edges()
-                for i in range(17)
+                for i in range(_EDGE_SAMPLES + 1)
             ]
             if not spans:
                 continue
@@ -224,11 +228,13 @@ def _compared(
     the check's tolerance: tol, a length or for an angle check degrees, or for a mass check
     tol_rel, a fraction of that value."""
     expected = _expect(p, ref, c["kind"])
-    if c["kind"] == "mass":
-        tol_rel = float(c["tol_rel"])
-        tol, band = tol_rel * expected, f" ±{tol_rel:.0%}"
-    else:
-        tol, band = check_tolerance(p, c)[1], ""
+    tolerance = check_tolerance(p, c)
+    if tolerance is None:
+        raise KeyError("tol_rel")  # the only tolerance a comparing check can lack
+    key, tol = tolerance
+    band = ""
+    if key == "tol_rel":
+        tol, band = tol * expected, f" ±{tol:.0%}"
     return CheckResult(
         rid,
         c["kind"],
@@ -262,7 +268,7 @@ def _placed(p: Project, built: Built, c: dict) -> dict | None:
 
 
 def _envelope(p: Project, built: Built, c: dict):
-    """The shape a bbox check measures: its part in the part's frame, or the union of its
+    """The shape a bbox check evaluates: its part in the part's frame, or the union of its
     instances where the assembly places them; None after a [check-config] finding."""
     from build123d import Compound
 
@@ -274,10 +280,14 @@ def _envelope(p: Project, built: Built, c: dict):
     return Compound(children=[built.parts[part].moved(loc) for part, loc in placed.values()])
 
 
+def _prefix(name: str, owners) -> str | None:
+    """The longest of owners that name starts with as <owner>.<feature>, or None."""
+    return max((o for o in owners if str(name).startswith(f"{o}.")), key=len, default=None)
+
+
 def _owner(built: Built, datum: str) -> str | None:
     """The part a datum named <part>.<feature> belongs to, or None if its prefix names no part."""
-    named = [part for part in built.parts if str(datum).startswith(f"{part}.")]
-    return max(named, key=len, default=None)
+    return _prefix(datum, built.parts)
 
 
 def _datums(p: Project, built: Built, c: dict) -> list[tuple[float, float, float]] | None:
@@ -309,7 +319,7 @@ def _instance_datums(p: Project, built: Built, c: dict) -> list[tuple[float, flo
         return None
     cid, points = c.get("id", "?"), []
     for name in c["between"]:
-        inst = max((i for i in placed if str(name).startswith(f"{i}.")), key=len, default=None)
+        inst = _prefix(name, placed)
         if inst is None:
             p.error(
                 "check-config",
@@ -343,6 +353,8 @@ def _angle(p: Project, c: dict, points: list) -> float | None:
     a, vertex, b = points
     u, w = ([x - v for x, v in zip(end, vertex)] for end in (a, b))
     for end, d in ((names[0], u), (names[2], w)):
+        # Zero-length within tolerance.length, not exactly: a direction that short has no angle
+        # the check could confirm.
         if math.hypot(*d) <= p.length_tol:
             p.error(
                 "check-config",
@@ -440,9 +452,9 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
         except (KeyError, TypeError, ValueError) as exc:
             p.error("check-config", f"check {cid}: missing or unknown {exc}")
             continue
-        basis, resting = rests_on(p, c)
+        basis, params = rests_on(p, c)
         for r in results[start:]:
-            r.rests_on, r.resting = basis, resting
+            r.rests_on, r.rests_on_params = basis, params
     for r in results:
         if not r.ok:
             p.error("check-failed", f"{r.id}: expected {r.expected}, measured {r.measured}")

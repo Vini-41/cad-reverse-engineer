@@ -125,7 +125,9 @@ def interpretation(r: CheckResult) -> str:
     """A check's interpretation, with what it rests on when that is less than source."""
     if r.rests_on == "source":
         return r.note
-    return "; ".join(filter(None, [r.note, f"rests on {r.rests_on}: {', '.join(r.resting)}"]))
+    return "; ".join(
+        filter(None, [r.note, f"rests on {r.rests_on}: {', '.join(r.rests_on_params)}"])
+    )
 
 
 def counts(p: Project, results: list[CheckResult]) -> dict[str, int]:
@@ -320,7 +322,7 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
                 "status": status,
                 "counts": headline,
                 "findings": [asdict(f) for f in errors + warnings],
-                "checks": [{k: v for k, v in asdict(r).items() if k != "resting"} for r in results],
+                "checks": [asdict(r) for r in results],
                 "tolerances": loosened,
                 "overlap_limits": limits,
                 "model_literals": override,
