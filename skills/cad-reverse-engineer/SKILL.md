@@ -1,11 +1,11 @@
 ---
 name: cad-reverse-engineer
-description: Reverse-engineer a published object as a parametric build123d model where every dimension traces to a quoted source and is checked against it. Use when asked to rebuild a mechanism, robot, gripper or part from a paper, patent, supplement or datasheet as CAD/STEP.
+description: Reverse-engineer one published object, from a single part up to a mechanism, as a parametric build123d model where every number traces to a quoted source and every stated value, motion included, is checked against it. Use when asked to rebuild a part, gripper or mechanism from a paper, patent, supplement or datasheet as CAD, STEP or a MuJoCo model.
 ---
 
 # CAD reverse-engineer
 
-Rebuild a published object as CAD that a reviewer can audit number by number. The **ledger** is the spine: every number the sources state about the object is a verbatim quote (or a hashed figure crop) in `evidence.yaml`; every number the model uses is a parameter in `params.yaml` with a declared **basis**; every source value the geometry should realise is a **check** in `checks.yaml` that compares the built geometry with the ledger. `cadrev check` enforces all of it and writes `build/report.md`.
+Rebuild a published object as CAD that a reviewer can audit number by number. The **ledger** is the spine: every number the sources state about the object is a verbatim quote (or a hashed figure crop) in `evidence.yaml`; every number the model uses is a parameter in `params.yaml` with a declared **basis**; every source value the geometry should realise is a **check** in `checks.yaml` that compares the built geometry with the ledger. `cadrev check` enforces all of it and writes `build/report.md`. A mechanism also names its joints and loops, and its stated motion is checked on the posed model, which exports to MuJoCo.
 
 The honest product is a model whose report separates what the sources state from what the reconstruction chose. Each verification run ends on one status, and the report says whether the project is exact; both are defined under [Statuses](references/project-format.md#statuses). Proposed values are fine when named, with a gap that would close them.
 
@@ -43,6 +43,7 @@ Read every page with `cadrev text <dir> <source>` and every figure with `cadrev 
 
 - Copy quotes from `cadrev text` output, which is the text the matcher sees.
 - Numbers printed inside figures about the object (dimension labels, scale bars, inset annotations) become image evidence: `cadrev crop` the label, view the crop, write the `reading` exactly as printed. `crop` takes pixels of the extracted file; when the Read tool shows an image downscaled, multiply by the factor it reports, and confirm in the crop that the whole label is inside.
+- Ledger each stated range or angle of motion (a toe that opens 0–40°, a crank's 90° stroke) and each stated physics value (a spring's stiffness) with its `values`, in scope: step 7 reads them into params and checks them.
 - Record each disagreement between sources under `conflicts`.
 - Skip, with a reason, the stated quantities that are about something else: test objects, loads, test rigs, results.
 
@@ -56,30 +57,48 @@ Write params.yaml. Each modelled dimension takes the strongest basis available: 
 
 Format: `params.yaml` and `gaps.yaml` in [`references/project-format.md`](references/project-format.md).
 
-Done when every feature the model will need has a param, and `cadrev check <dir> --no-build` reports no `[param-*]` error and no `[unit-quantity]`. `[evidence-unused]` may remain for values only a check will cover.
+Joint ranges, poses and physics values wait for step 7.
+
+Done when every feature the model will need has a param, and `cadrev check <dir> --no-build` reports no `[param-*]` error and no `[unit-quantity]`. `[evidence-unused]` may remain for values only a check or step 7 will use.
 
 ### 5. Model, tracer part first
 
 Take one part all the way through before modelling any other: the tracer part. Choose a part with a stated envelope or pitch, model it alone, give it its checks (step 6), and run `cadrev check <dir>` until `build/report.md` shows those checks green. The tracer part proves the whole path, ledger to params to model to checks to report, while a mistake in it costs one part.
 
-Then write the rest of model.py per [`references/modeling.md`](references/modeling.md): parts in their own frames, datums at every checked feature, the assembly as placed instances, and for a mechanism its joints and loops, with each part weighed in params.yaml's [mass model](references/project-format.md#mass-model).
+Then write the rest of model.py per [`references/modeling.md`](references/modeling.md): parts in their own frames, datums at every checked feature (pivots included, which step 7 hinges on), and the assembly as placed instances, built at the configuration the sources measure their angles from. Weigh each part in params.yaml's [mass model](references/project-format.md#mass-model): a purchased part by its datasheet `mass`, a printed one by `density`.
 
-Done when the tracer part's checks went green before a second part was modelled, and `cadrev check <dir>` builds every part with no `[model-*]`, `[part-invalid]`, `[part-mass]`, `[datum-off-solid]`, `[assembly-part]`, `[mjcf-load]` or `[param-unused]`. Red checks on the other parts are step 6's job.
+Done when the tracer part's checks went green before a second part was modelled, and `cadrev check <dir>` builds every part with no `[model-*]`, `[part-invalid]`, `[part-mass]`, `[datum-off-solid]`, `[assembly-part]` or `[param-unused]`. Red checks on the other parts are step 6's job.
 
 ### 6. Check against the sources
 
-Add a check for every source value the geometry should realise: `bbox` for envelopes, `distance` between datums for pitches and spacings (over `instances` where they span parts), `angle` at a datum for stated angles, `mass` where a mass is stated, `interference` across the assembly. A value a source states at a joint angle is checked posed at that angle (`pose`). Where a figure shows a modelled part in a near-orthographic view, add an overlay and look at the rendered PNG; record in the param's interpretation what the overlay showed.
+Add a check for every source value the geometry should realise: `bbox` for envelopes, `distance` between datums for pitches and spacings (over `instances` where they span parts), `angle` at a datum for stated angles, `mass` where a mass is stated, `interference` across the assembly. Where a figure shows a modelled part in a near-orthographic view, add an overlay and look at the rendered PNG; record in the param's interpretation what the overlay showed.
 
-Add the mass check even where its density, `add` or `counts` param is proposed, and keep that value at its rationale rather than tuning it to turn the check green: the check then rests on proposed (`checks.yaml` in [`references/project-format.md`](references/project-format.md#checksyaml)), and the gap is what closes it.
+Check a stated total mass with a mass check that gives no `density`: it sums the mass model, as exported, so a datasheet or density param it weighs is covered. Add the mass check even where its density, `add` or `counts` param is proposed, and keep that value at its rationale rather than tuning it to turn the check green: the check then rests on proposed (`checks.yaml` in [`references/project-format.md`](references/project-format.md#checksyaml)), and the gap is what closes it.
 
 Turn a red check green by changing the model or its params, and record a changed proposed param as `params.yaml` in [`references/project-format.md`](references/project-format.md#paramsyaml) describes. Evidence changes only to correct a transcription, re-copied from `cadrev text`.
 
 Format, including when a check is red and how far its tolerance may loosen: `checks.yaml` and `overlays.yaml` in [`references/project-format.md`](references/project-format.md).
 
-Done when every check is green and `cadrev check <dir>` reports no `[check-*]`, `[loop-open]`, `[overlay-config]`, `[tolerance-cap]`, `[evidence-unused]`, `[unchecked-source]` or other error, so its status is VERIFIED or VERIFIED PENDING REVIEW.
+Done when every check is green and `cadrev check <dir>` reports no `[check-*]`, `[overlay-config]`, `[tolerance-cap]`, `[unchecked-source]` or other error, and no `[evidence-unused]` but on the motion values step 7 reads. A static object is then VERIFIED or VERIFIED PENDING REVIEW and goes to step 8.
 
-### 7. Hand over
+### 7. Joints, tracer loop first
 
-Report to the user from `build/report.md` of a full verification run. State the status in the report's words (NOT VERIFIED, VERIFIED PENDING REVIEW or VERIFIED; a PARTIAL run writes no report to hand over), and call the project exact only when the report prints **Exact**. Then give the headline, the parameters resting on proposed values, open conflicts, and the gaps grouped by `ask` (the `authors` group is a ready list of questions for the corresponding author). List the figure readings awaiting confirmation: the user (or a reviewer they name) checks each crop and writes their own name in `confirmed_by`.
+A mechanism moves once its static checks are green. Declare its joints and loops per [`references/modeling.md`](references/modeling.md#joints-and-loops), and its poses, ranges and sweeps per [Poses and the MJCF export](references/project-format.md#poses-and-the-mjcf-export).
 
-Done when the user has the status and exact as `build/report.json` states them (`status`, `exact`), the proposed parameters (`rests_on_proposed`), the open conflicts (`[conflict-open]`), the questions grouped by who to ask, and the crops waiting for confirmation (`awaiting_confirmation`).
+Take one closed loop all the way through before declaring any other joint: the tracer loop. Choose a loop with a source value stated at a joint angle (a four-bar's output at a stated input), declare its joints and the loop, pose a check at that angle with the ledger value as its pose, and run `cadrev check <dir>` until MuJoCo loads `build/model.mjcf` and the posed check is green. The tracer loop proves joints to MJCF to solve to posed check while a mistake costs one loop.
+
+Then the rest:
+
+- **Joints and loops** for every other ring, and a posed check for every value a source states at a joint angle.
+- **Ranges.** Read each joint's stated range into two `source` range params, each a rotation from the assembly as built. Add a `range` check whose `ends` compare those params' own ledger values; a check comparing only an output angle (`between`) leaves the input's range params unchecked. Add a swept interference check over each ranged joint, with `steps` a proposed param.
+- **Physics values** go in the joint, tendon or contact slot that applies them, each a param marked `physics: true`, in the MJCF's units (the project's mm, g and s, not SI): derive one from its ledgered value as [Physics values](references/project-format.md#physics-values) says. A value no source states is proposed, with a gap.
+
+A `[loop-open]` at a stated pose or range end means the links cannot close there: fix the link lengths or the as-built zero. Near a toggle (two links collinear) the solve itself can fail on links that do close; report that end to the user rather than trimming a stated range.
+
+Done when the tracer loop's posed check went green before a second loop was declared, every stated range has a `range` check, report.md prints **Kinematic**, and `cadrev check <dir>` reports no `[model-joint]`, `[model-loop]`, `[mjcf-load]`, `[loop-open]`, `[part-mass]`, `[param-physics]`, `[unchecked-source]` (a range param included), `[evidence-unused]` or other error, so its status is VERIFIED or VERIFIED PENDING REVIEW.
+
+### 8. Hand over
+
+Report to the user from `build/report.md` of a full verification run. State the status in the report's words (NOT VERIFIED, VERIFIED PENDING REVIEW or VERIFIED; a PARTIAL run writes no report to hand over), and call the project exact only when the report prints **Exact**, with the count of proposed physics values it prints beside it. Then give the headline, the parameters resting on proposed values, open conflicts, and the gaps grouped by `ask` (the `authors` group is a ready list of questions for the corresponding author). List the figure readings awaiting confirmation: the user (or a reviewer they name) checks each crop and writes their own name in `confirmed_by`.
+
+Done when the user has the status, exact and the proposed physics values as `build/report.json` states them (`status`, `exact`, `counts.physics_proposed`), the proposed parameters (`rests_on_proposed`), the open conflicts (`[conflict-open]`), the questions grouped by who to ask, and the crops waiting for confirmation (`awaiting_confirmation`).

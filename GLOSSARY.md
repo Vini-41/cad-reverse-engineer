@@ -113,3 +113,6 @@ _Avoid_: verified (for this stronger state)
 
 **Tracer part**:
 The first part taken through modelling, checks and the report before any other part is modelled.
+
+**Tracer loop**:
+The first closed loop of a mechanism taken through its joints, the MJCF export and a posed check before any other joint is declared.
