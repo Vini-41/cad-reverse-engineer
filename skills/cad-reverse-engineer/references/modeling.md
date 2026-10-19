@@ -43,7 +43,9 @@ A mechanism names how its instances move; a static model leaves both keys out. c
 - **Joints form a tree**: an instance is the child of at most one joint, and no instance moves itself. Instances no joint moves are fixed where `assembly` places them.
 - **A loop** closes a ring the tree leaves open: two `<instance>.<feature>` datums that must coincide, such as a four-bar's rocker tip and its ground pivot. Cut each ring at one pivot: joints for the others, a loop for that one.
 - **Build the assembly closed, at its joints' zero**: the configuration the sources measure angles from, with every loop's datums together. A pose value turns a joint from there.
-- An unknown instance, datum or param, an axis datum of another instance, or an instance two joints move is `[model-return]`. Range params need no read in model.py. Weigh every part in params.yaml's `parts` ([mass model](project-format.md#mass-model)).
+- `joints` or `loops` of the wrong shape (not a mapping, a name that is not text, an unknown key, a `type` or `drive` outside those above) is `[model-return]`, and nothing is built.
+- A joint the assembly cannot hinge is `[model-joint]`, one per joint, naming it and why: a `parent` or `child` that is no instance, an `axis` datum the child lacks, two axis datums within `tolerance.length` of each other (no direction), a `range` param params.yaml does not define or a range whose low end exceeds its high end, a child another joint already moves, or a ring of joints that moves an instance itself. A loop datum that names no `<instance>.<feature>` is `[model-loop]`, naming the loop. Either keeps the build and its unposed checks, but drops every joint and loop: no MJCF is written and no posed check is evaluated.
+- Range params need no read in model.py. Weigh every part in params.yaml's `parts` ([mass model](project-format.md#mass-model)).
 
 ## Building geometry that checks can see
 

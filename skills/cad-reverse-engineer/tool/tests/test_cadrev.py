@@ -4206,6 +4206,168 @@ def test_guard_check_with_no_pose_is_evaluated_on_the_assembly_as_built(proj_dir
     assert ac30["measured"].startswith(f"{math.hypot(*bar_pivot(0)):.4g} ")
 
 
+def _bar(old: str, new: str, count: int = -1):
+    """The four-bar with old replaced by new in its model.py."""
+
+    def change(r, t):
+        four_bar(r, t)
+        write(r, "model.py", swap(FOUR_BAR, old, new, count))
+
+    return change
+
+
+def _input_range(low: float, high: float):
+    """The four-bar with its input joint's range proposed from low to high."""
+
+    def change(r, t):
+        four_bar(r, t)
+        for name, value in (("input_min", low), ("input_max", high)):
+            _param(name, basis="proposed", value=value, rationale="x", gap="G1")(r, t)
+
+    return change
+
+
+_INPUT_AXIS = '"axis": ["crank_1.a", "crank_1.a_up"]'
+
+
+@pytest.mark.parametrize(
+    "change, says",
+    [
+        (
+            _bar('"parent": "ground_1"', '"parent": "base_1"'),
+            "joint input: parent base_1 is not an instance of the assembly",
+        ),
+        (
+            _bar('"child": "rocker_1"', '"child": "rocker_2"'),
+            "joint elbow: child rocker_2 is not an instance of the assembly",
+        ),
+        (
+            _bar(_INPUT_AXIS, '"axis": ["crank_1.a", "crank_1.top"]'),
+            "joint input: axis crank_1.top is not a datum of its child crank_1",
+        ),
+        (
+            _bar(_INPUT_AXIS, '"axis": ["crank_1.a", "ground_1.a_up"]'),
+            "joint input: axis ground_1.a_up is not a datum of its child crank_1",
+        ),
+        (
+            _bar(_INPUT_AXIS, '"axis": ["crank_1.a", "crank_1.a"]'),
+            "joint input: axis crank_1.a and crank_1.a coincide, so they give the hinge no direction",
+        ),
+        (
+            _bar('"input_max"', '"input_top"'),
+            "joint input: range names input_top, which params.yaml does not define",
+        ),
+        (_input_range(90, -90), "joint input: range input_min 90 exceeds input_max -90"),
+        (
+            _bar('"child": "rocker_1"', '"child": "coupler_1"'),
+            "joint elbow: coupler_1 is already the child of joint knee",
+        ),
+        (
+            _bar('"parent": "ground_1"', '"parent": "rocker_1"'),
+            "joint input: crank_1 moves itself through joints input, elbow and knee; "
+            "close a ring of joints with a loop instead",
+        ),
+    ],
+    ids=[
+        "unknown-parent",
+        "unknown-child",
+        "unknown-axis-datum",
+        "axis-datum-of-another-instance",
+        "coincident-axis",
+        "undefined-range-param",
+        "range-low-above-high",
+        "child-of-two-joints",
+        "ring-of-joints",
+    ],
+)
+def test_joint_the_model_cannot_hinge_is_model_joint_naming_it(proj_dir, tmp_path, change, says):
+    change(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    errors = [(f["rule"], f["message"]) for f in report["findings"] if f["level"] == "error"]
+    assert errors == [("model-joint", says)]
+    # Nothing is posed or exported as MJCF, and the posed checks are not evaluated.
+    assert report["checks"] == [] and not (proj_dir / "build" / "model.mjcf").exists()
+
+
+@pytest.mark.parametrize("datum", ["base_1.d", "ground_1.e"], ids=["instance", "feature"])
+def test_loop_naming_an_unknown_datum_is_model_loop_naming_it(proj_dir, tmp_path, datum):
+    _bar('"ground_1.d"]}', f'"{datum}"]}}')(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    errors = [(f["rule"], f["message"]) for f in report["findings"] if f["level"] == "error"]
+    says = f"loop closure: {datum} names no <instance>.<feature> datum of the assembly"
+    assert errors == [("model-loop", says)]
+
+
+def test_every_bad_joint_and_loop_is_its_own_finding(proj_dir, tmp_path):
+    four_bar(proj_dir, tmp_path)
+    model = swap(FOUR_BAR, '"parent": "ground_1"', '"parent": "base_1"')
+    model = swap(model, '"rocker_1.a_up"]', '"rocker_1.top"]')
+    write(proj_dir, "model.py", swap(model, '"ground_1.d"]}', '"ground_1.e"]}'))
+    _, report = verify(proj_dir)
+    named = [(f["rule"], f["message"].split(":")[0]) for f in report["findings"]]
+    assert [n for n in named if n[0] in ("model-joint", "model-loop")] == [
+        ("model-joint", "joint input"),
+        ("model-joint", "joint elbow"),
+        ("model-loop", "loop closure"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "old, new, says",
+    [
+        ('"joints": {', '"joints": 3, "_": {', "joints must be a mapping of names, not int"),
+        (
+            '"joints": {',
+            '"joints": ["input"], "_": {',
+            "joints must be a mapping of names, not list",
+        ),
+        ('"loops": {', '"loops": 3, "_": {', "loops must be a mapping of names, not int"),
+        (
+            '{"closure": ["rocker_1.d", "ground_1.d"]}',
+            '[["rocker_1.d", "ground_1.d"]]',
+            "loops must be a mapping of names, not list",
+        ),
+        ('"knee": {', '"knee": 3, "_": {', "joint knee must be a mapping, not int"),
+        ('"type": "revolute"', '"type": "slider"', "joint input: type must be 'revolute'"),
+        (
+            '"drive": "actuated"',
+            '"drive": "motor"',
+            "joint input: drive must be actuated or passive",
+        ),
+        ('"closure": [', '"closure": "rocker_1.d", "_": [', "loop closure must be two"),
+    ],
+    ids=[
+        "joints-number",
+        "joints-list",
+        "loops-number",
+        "loops-list",
+        "joint-number",
+        "unknown-kind",
+        "unknown-drive",
+        "loop-text",
+    ],
+)
+def test_guard_joints_or_loops_of_the_wrong_shape_are_model_return(
+    proj_dir, tmp_path, old, new, says
+):
+    _bar(old, new, 1)(proj_dir, tmp_path)
+    messages = findings(proj_dir, "model-return")
+    assert len(messages) == 1 and messages[0].startswith(f"model.build {says}"), messages
+
+
+@pytest.mark.parametrize(
+    "old, new, says",
+    [
+        ('"closure": [', "1: [", "loop 1: its name must be text, not int"),
+        ('"knee": {', "2: {", "joint 2: its name must be text, not int"),
+    ],
+    ids=["loop", "joint"],
+)
+def test_joint_or_loop_named_by_a_number_is_model_return(proj_dir, tmp_path, old, new, says):
+    _bar(old, new)(proj_dir, tmp_path)
+    assert findings(proj_dir, "model-return") == [f"model.build {says}"]
+
+
 # Every rule beside its near miss. scripts/rule-coverage fails CI unless each rule the tool emits is
 # asserted present by one test and absent by another; a rule no other test covers both ways gets a
 # row here: the change to the fixture that raises it, and the closest changes it must accept.
@@ -4443,9 +4605,17 @@ FINDINGS = {
         lambda r, t: _model_with(r, line="extra = p.pitch / p.pitch"),
         [lambda r, t: _model_with(r, line="extra = p.pitch / p.link_H")],
     ),
+    "model-joint": (
+        _bar(_INPUT_AXIS, '"axis": ["crank_1.a", "crank_1.a"]'),
+        [_bar(_INPUT_AXIS, '"axis": ["crank_1.a_up", "crank_1.a"]')],
+    ),
     "model-literal": (
         lambda r, t: _model_with(r, line="extra = 7.5"),
         [lambda r, t: _model_with(r, line="extra = 0.5")],
+    ),
+    "model-loop": (
+        _bar('"ground_1.d"]}', '"ground_1.e"]}'),
+        [_bar('["rocker_1.d", "ground_1.d"]}', '["ground_1.d", "rocker_1.d"]}')],
     ),
     "model-missing": (
         lambda r, t: (r / "model.py").rename(r / "model_v1.py"),
