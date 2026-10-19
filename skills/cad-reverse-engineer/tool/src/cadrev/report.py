@@ -70,8 +70,9 @@ def status(p: Project, partial: bool = False) -> str:
 
 
 def exact(p: Project, status: str) -> bool:
-    """Exact: VERIFIED with no parameter resting on a proposed value."""
-    return status == VERIFIED and not p.proposed
+    """Exact: VERIFIED with no parameter resting on a proposed value but physics values, which
+    exact leaves out (ADR-0008)."""
+    return status == VERIFIED and not p.proposed - p.physics
 
 
 def measured_params(p: Project) -> list[dict]:
@@ -182,15 +183,24 @@ def _posed(r: CheckResult) -> str:
 
 
 def counts(p: Project, results: list[CheckResult]) -> dict[str, int]:
-    """The headline numbers shown beside the status."""
+    """The headline numbers shown beside the status: the params by what they rest on, proposed
+    physics values counted apart from the proposed ones."""
     errors = sum(f.level == "error" for f in p.findings)
-    return {
-        "errors": errors,
-        "warnings": len(p.findings) - errors,
-        "checks": len(results),
-        "checks_passed": sum(r.ok for r in results),
-        "params": len(p.params),
-    } | {basis: sum(b == basis for b in p.rests_on.values()) for basis in RESTS_ON}
+    apart = p.proposed & p.physics
+    return (
+        {
+            "errors": errors,
+            "warnings": len(p.findings) - errors,
+            "checks": len(results),
+            "checks_passed": sum(r.ok for r in results),
+            "params": len(p.params),
+        }
+        | {
+            basis: sum(b == basis and n not in apart for n, b in p.rests_on.items())
+            for basis in RESTS_ON
+        }
+        | {"physics_proposed": len(apart)}
+    )
 
 
 def write(
@@ -218,10 +228,21 @@ def write(
         f"**{status}**: {headline['errors']} errors, {headline['warnings']} warnings. "
         f"{headline['checks_passed']}/{headline['checks']} geometry checks pass.",
         f"Of {headline['params']} parameters, {headline['source']} rest on sources, "
-        f"{headline['measured']} on measured values and {headline['proposed']} on proposed values.",
+        f"{headline['measured']} on measured values and {headline['proposed']} on proposed values"
+        + (
+            f"; {headline['physics_proposed']} more are proposed physics values."
+            if headline["physics_proposed"]
+            else "."
+        ),
         "",
     ]
-    if exact(p, status):
+    if exact(p, status) and headline["physics_proposed"]:
+        md += [
+            "**Exact**: no geometry or kinematic parameter rests on a proposed value; "
+            f"{headline['physics_proposed']} physics values are proposed.",
+            "",
+        ]
+    elif exact(p, status):
         md += ["**Exact**: no parameter rests on a proposed value.", ""]
     md += _motion_line(moves)
     md += [

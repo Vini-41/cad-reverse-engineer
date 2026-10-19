@@ -85,6 +85,7 @@ PARAM = Record(
         "rationale": str,
         "gap": str,
         "interpretation": str,
+        "physics": bool,
     }
 )
 CHECK = Record(

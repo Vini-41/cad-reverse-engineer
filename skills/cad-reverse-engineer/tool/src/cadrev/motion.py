@@ -19,6 +19,11 @@ from . import units
 from .geometry import Built, Poser, instance_datum
 from .project import Project
 
+# The MJCF attribute each physics value a joint, tendon or contact names is written to.
+JOINT_ATTRS = {"damping": "damping", "stiffness": "stiffness", "friction": "frictionloss"}
+TENDON_ATTRS = {"stiffness": "stiffness", "damping": "damping"}
+CONTACT_ATTRS = {"friction": "friction"}
+
 # Steps from the as-built pose to the one a check names: each step starts from the last, so the
 # loops close on the branch the model is built on.
 STEPS = 20
@@ -57,6 +62,12 @@ def _point(built: Built, name: str) -> tuple[float, float, float]:
     return _located(built, name)[1]
 
 
+def _physics(p: Project, entry: dict, attrs: dict[str, str]) -> dict[str, str]:
+    """The MJCF attributes of the physics params entry names, at their values: in the MJCF's
+    units, the project's (mm, g and s by default)."""
+    return {attr: _num(p.values[entry[key]]) for key, attr in attrs.items() if key in entry}
+
+
 @dataclass
 class Linkage:
     """A model's MJCF, the part meshes it reads, and MuJoCo's model of it once loaded."""
@@ -92,10 +103,10 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
 
     moved_by = {j["child"]: (name, j) for name, j in built.joints.items()}
     sites: dict[str, list[str]] = {}
-    for pair in built.loops.values():
-        for datum in pair:
+    for path in [*built.loops.values(), *(t["path"] for t in built.tendons.values())]:
+        for datum in path:
             on = sites.setdefault(_located(built, datum)[0], [])
-            if datum not in on:  # a datum two loops name is one site
+            if datum not in on:  # a datum two loops or tendons name is one site
                 on.append(datum)
 
     def body(parent: ET.Element, inst: str, parent_location) -> None:
@@ -111,8 +122,11 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
             attrs["axis"] = _num(*(y - x for x, y in zip(a, b)))
             if "range" in joint:
                 attrs["range"] = _num(*(p.values[n] * radian for n in joint["range"]))
-            ET.SubElement(element, "joint", **attrs)
-        ET.SubElement(element, "geom", type="mesh", mesh=part, contype="0", conaffinity="0")
+            ET.SubElement(element, "joint", attrs | _physics(p, joint, JOINT_ATTRS))
+        geom = {"type": "mesh", "mesh": part, "contype": "0", "conaffinity": "0"}
+        ET.SubElement(
+            element, "geom", geom | _physics(p, built.contacts.get(part, {}), CONTACT_ATTRS)
+        )
         weighed = built.masses.get(part)
         if weighed is not None:
             ET.SubElement(
@@ -136,6 +150,14 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
         equality = ET.SubElement(root, "equality")
         for name, (a, b) in built.loops.items():
             ET.SubElement(equality, "connect", name=name, site1=a, site2=b)
+    if built.tendons:
+        tendon = ET.SubElement(root, "tendon")
+        for name, t in built.tendons.items():
+            spatial = ET.SubElement(
+                tendon, "spatial", {"name": name} | _physics(p, t, TENDON_ATTRS)
+            )
+            for datum in t["path"]:
+                ET.SubElement(spatial, "site", site=datum)
     actuated = [name for name, j in built.joints.items() if j["drive"] == "actuated"]
     if actuated:
         actuator = ET.SubElement(root, "actuator")

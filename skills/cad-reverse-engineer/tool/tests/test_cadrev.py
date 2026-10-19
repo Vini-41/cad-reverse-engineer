@@ -196,6 +196,7 @@ def test_report_json_carries_status_findings_and_counts(proj_dir):
         "source": 4,
         "measured": 0,
         "proposed": 1,
+        "physics_proposed": 0,
     }
 
 
@@ -3696,6 +3697,7 @@ def test_verification_run_writes_nothing_into_the_project_outside_build(proj_dir
 
 # Crank a, coupler b, rocker c and ground d, in mm: a crank-rocker, so the crank turns fully.
 BAR = {"crank": 15, "coupler": 35, "rocker": 30, "ground": 40}
+RESIN = 1.2  # g/cm³: 0.0012 g/mm³ in the project's units
 
 FOUR_BAR = """\
 import math
@@ -3779,7 +3781,8 @@ def bar_pivot(turn: float) -> tuple[float, float]:
 
 def bar_text(turns: tuple[int, ...]) -> str:
     """The four-bar's source: its link lengths, and for each turn of the crank from upright how far
-    C lies from the crank pivot and the rocker's angle to the ground link, from the closed form."""
+    C lies from the crank pivot and the rocker's angle to the ground link, from the closed form;
+    last, the density of the resin the bars are printed in."""
     lines = [
         "The crank is {crank} mm, the coupler {coupler} mm, the rocker {rocker} mm "
         "and the ground link {ground} mm long.".format(**BAR)
@@ -3792,14 +3795,15 @@ def bar_text(turns: tuple[int, ...]) -> str:
             f"{math.hypot(cx, cy):.4f} mm from the crank pivot, "
             f"the rocker at {rock:.3f}° to the ground link."
         )
+    lines.append(f"The bars are printed in a resin of {RESIN} g/cm3.")
     return "\n".join(lines) + "\n"
 
 
 def four_bar(root: Path, tmp_path: Path, turns: tuple[int, ...] = (30, 60)) -> None:
     """Replace the project with the four-bar, built upright with one actuated joint, input, and one
-    loop, closure; each bar weighs its volume times the param density. For each turn, ledger P<turn> and check C's distance from the crank pivot and the
-    rocker's angle, posed at that turn: by the ledger key for the first turn, by a param for the
-    rest."""
+    loop, closure; each bar weighs its volume times the resin's density, ledgered R. For each
+    turn, ledger P<turn> and check C's distance from the crank pivot and the rocker's angle, posed
+    at that turn: by the ledger key for the first turn, by a param for the rest."""
     edit(root, "project.yaml", lambda d: d.update(sources=[]))
     (root / "sources" / "paper.txt").unlink()
     text = tmp_path / "bar.txt"
@@ -3815,17 +3819,18 @@ def four_bar(root: Path, tmp_path: Path, turns: tuple[int, ...] = (30, 60)) -> N
             "locator": "Sec. 1",
             "quote": lines[0].rstrip("."),
             "values": {key: BAR[name] for key, name in lengths.items()},
-        }
+        },
+        {
+            "id": "R",
+            "source": "bar",
+            "locator": "Sec. 3",
+            "quote": lines[-1].rstrip("."),
+            "values": {"rho": RESIN},
+        },
     ]
     params = {name: {"basis": "source", "from": f"L.{key}"} for key, name in lengths.items()}
-    chosen: dict[str, float] = {
-        "link_W": 5,
-        "link_H": 4,
-        "hole_d": 2,
-        "input_min": -180,
-        "input_max": 180,
-    }
-    chosen["density"] = 0.0012  # g/mm³, a printing resin
+    params["density"] = {"basis": "source", "from": "R.rho"}
+    chosen = {"link_W": 5, "link_H": 4, "hole_d": 2, "input_min": -180, "input_max": 180}
     params |= {
         name: {"basis": "proposed", "value": value, "rationale": "a printable bar", "gap": "G1"}
         for name, value in chosen.items()
@@ -3959,7 +3964,8 @@ def _density(value: float):
 
     def change(r, t):
         four_bar(r, t)
-        _param("density", basis="proposed", value=value, rationale="resin", gap="G1")(r, t)
+        spec = {"basis": "proposed", "value": value, "rationale": "resin", "from": None}
+        _param("density", gap="G1", **spec)(r, t)
 
     return change
 
@@ -4107,8 +4113,7 @@ def test_mass_check_without_a_density_weighs_the_parts_by_the_mass_model(proj_di
     assert code == 0, report["findings"]
     total = _by_id(report)["total"]
     assert total["ok"] and total["measured"].startswith("10.29")
-    assert total["rests_on"] == "proposed"
-    assert sorted(total["rests_on_params"]) == ["crank_mass", "density"]
+    assert (total["rests_on"], total["rests_on_params"]) == ("proposed", ["crank_mass"])
 
 
 def test_mass_check_over_the_mass_model_off_its_stated_total_fails(proj_dir, tmp_path):
@@ -4366,6 +4371,180 @@ def test_guard_joints_or_loops_of_the_wrong_shape_are_model_return(
 def test_joint_or_loop_named_by_a_number_is_model_return(proj_dir, tmp_path, old, new, says):
     _bar(old, new)(proj_dir, tmp_path)
     assert findings(proj_dir, "model-return") == [f"model.build {says}"]
+
+
+# Physics values: params with a basis and physics: true, written into the MJCF where they apply,
+# counted apart from the headline and left out of exact (ADR-0008).
+
+# Each physics slot the four-bar fills, the param it names and that param's value.
+PHYSICS = {
+    "knee_damping": 0.05,
+    "knee_spring": 0.4,
+    "knee_friction": 0.01,
+    "cord_k": 0.2,
+    "cord_damping": 0.03,
+    "pad_mu": 0.8,
+}
+
+
+def physical(root: Path, tmp_path: Path) -> None:
+    """The four-bar with a damped, sprung and rubbing knee, an elastic cord from the crank tip to
+    the rocker pivot, and a coupler whose contact friction is pad_mu: every physics param
+    proposed."""
+    four_bar(root, tmp_path)
+    model = swap(
+        FOUR_BAR,
+        '"axis": ["coupler_1.a", "coupler_1.a_up"],\n',
+        '"axis": ["coupler_1.a", "coupler_1.a_up"],\n'
+        '                "damping": "knee_damping",\n'
+        '                "stiffness": "knee_spring",\n'
+        '                "friction": "knee_friction",\n',
+    )
+    model = swap(
+        model,
+        '        "loops": {"closure": ["rocker_1.d", "ground_1.d"]},\n',
+        '        "loops": {"closure": ["rocker_1.d", "ground_1.d"]},\n'
+        '        "tendons": {"cord": {"path": ["crank_1.d", "rocker_1.a"],\n'
+        '                             "stiffness": "cord_k", "damping": "cord_damping"}},\n'
+        '        "contacts": {"coupler": {"friction": "pad_mu"}},\n',
+    )
+    write(root, "model.py", model)
+    add_params(
+        root,
+        **{
+            name: {
+                "basis": "proposed",
+                "value": value,
+                "rationale": "a guess",
+                "gap": "G1",
+                "physics": True,
+            }
+            for name, value in PHYSICS.items()
+        },
+    )
+
+
+def _exact_bar(root: Path) -> None:
+    """Make the four-bar's geometry rest on sources alone: its bar section and holes derived from
+    the crank length, and no joint range."""
+    model = (root / "model.py").read_text()
+    write(root, "model.py", swap(model, '"range": ["input_min", "input_max"],\n', ""))
+
+    def apply(d):
+        for name in ("input_min", "input_max"):
+            del d["params"][name]
+        exprs = {"link_W": "crank / 3", "link_H": "crank * 4 / 15", "hole_d": "crank * 2 / 15"}
+        for name, expr in exprs.items():
+            d["params"][name] = {"basis": "derived", "expr": expr}
+
+    edit(root, "params.yaml", apply)
+
+
+def test_physics_params_are_written_into_the_mjcf_on_the_joint_tendon_and_geom_they_apply_to(
+    proj_dir, tmp_path
+):
+    mujoco = importlib.import_module("mujoco")
+
+    physical(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    knee = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "knee")
+    dof = m.jnt_dofadr[knee]
+    assert m.dof_damping[dof] == pytest.approx(PHYSICS["knee_damping"])
+    assert m.jnt_stiffness[knee] == pytest.approx(PHYSICS["knee_spring"])
+    assert m.dof_frictionloss[dof] == pytest.approx(PHYSICS["knee_friction"])
+    cord = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_TENDON, "cord")
+    assert m.tendon_stiffness[cord] == pytest.approx(PHYSICS["cord_k"])
+    assert m.tendon_damping[cord] == pytest.approx(PHYSICS["cord_damping"])
+    friction = {
+        mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, m.geom_bodyid[g]): m.geom_friction[g][0]
+        for g in range(m.ngeom)
+    }
+    assert friction["coupler_1"] == pytest.approx(PHYSICS["pad_mu"])
+    # A joint, tendon or geom no physics param names keeps MuJoCo's default.
+    assert friction["crank_1"] == 1
+    assert (
+        m.dof_damping[m.jnt_dofadr[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "elbow")]] == 0
+    )
+
+
+def test_guard_physics_value_typed_into_model_py_is_a_model_literal(proj_dir, tmp_path):
+    four_bar(proj_dir, tmp_path)
+    model = swap(
+        FOUR_BAR,
+        '"axis": ["coupler_1.a", "coupler_1.a_up"],\n',
+        '"axis": ["coupler_1.a", "coupler_1.a_up"],\n                "damping": 0.05,\n',
+    )
+    write(proj_dir, "model.py", model)
+    assert "model-literal" in errors(proj_dir)
+
+
+def test_report_counts_proposed_physics_params_apart_from_the_headline(proj_dir, tmp_path):
+    physical(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    counts = report["counts"]
+    # The bar section, its holes and the input range stay proposed; the six physics params do not
+    # join them.
+    assert (counts["proposed"], counts["physics_proposed"]) == (5, len(PHYSICS))
+    assert (
+        counts["source"] + counts["measured"] + counts["proposed"] + len(PHYSICS)
+        == (counts["params"])
+    )
+    md = (proj_dir / "build" / "report.md").read_text()
+    assert "and 5 on proposed values; 6 more are proposed physics values." in md
+
+
+def test_verified_project_whose_only_proposed_params_are_physics_params_is_exact(
+    proj_dir, tmp_path
+):
+    physical(proj_dir, tmp_path)
+    _exact_bar(proj_dir)
+    code, report = verify(proj_dir)
+    assert (code, report["status"], report["exact"]) == (0, "VERIFIED", True), report["findings"]
+    assert report["counts"]["proposed"] == 0
+    md = (proj_dir / "build" / "report.md").read_text()
+    assert (
+        "**Exact**: no geometry or kinematic parameter rests on a proposed value; "
+        "6 physics values are proposed." in md
+    )
+
+
+def test_project_with_a_proposed_param_besides_physics_params_is_not_exact(proj_dir, tmp_path):
+    physical(proj_dir, tmp_path)
+    _exact_bar(proj_dir)
+    _param("hole_d", basis="proposed", value=2, rationale="a drill", gap="G1", expr=None)(
+        proj_dir, tmp_path
+    )
+    code, report = verify(proj_dir)
+    assert (code, report["status"], report["exact"]) == (0, "VERIFIED", False)
+
+
+def test_source_physics_param_needs_no_check_and_its_quoted_value_is_exported(proj_dir, tmp_path):
+    mujoco = importlib.import_module("mujoco")
+
+    physical(proj_dir, tmp_path)
+    add_quote(
+        proj_dir, tmp_path, "The cord stiffness is 0.25.", "cord stiffness is 0.25", {"k": 0.25}
+    )
+    _param("cord_k", basis="source", value=None, rationale=None, gap=None, **{"from": "N1.k"})(
+        proj_dir, tmp_path
+    )
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    unchecked = [f["message"] for f in report["findings"] if f["rule"] == "unchecked-source"]
+    assert unchecked and not [m for m in unchecked if "cord_k" in m]
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    assert m.tendon_stiffness[0] == pytest.approx(0.25)
+
+
+def test_physics_slot_naming_a_param_without_physics_true_is_param_physics(proj_dir, tmp_path):
+    physical(proj_dir, tmp_path)
+    _param("knee_damping", physics=None)(proj_dir, tmp_path)
+    assert findings(proj_dir, "param-physics") == [
+        "param knee_damping: joint knee's damping is a physics value, so mark the param "
+        "physics: true"
+    ]
 
 
 # Every rule beside its near miss. scripts/rule-coverage fails CI unless each rule the tool emits is
@@ -4643,6 +4822,7 @@ FINDINGS = {
         _param("half", basis="derived", expr="pitch / 2", value=14),
         [_param("half", basis="derived", expr="pitch / 2", value=15)],
     ),
+    "param-physics": (_param("hole_d", physics=True), [physical]),
     "param-proposed": (_param("hole_d", rationale=None), [_param("hole_d", rationale="an M3 pin")]),
     "param-unused": (
         _param("spare", basis="proposed", value=3, rationale="x", gap="G1"),
