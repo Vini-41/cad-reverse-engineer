@@ -24,6 +24,26 @@ _TIMES = dict.fromkeys(map(ord, "×✕✖⨯"), "x")
 _UNIT = units.spelling()
 # A number as printed: 3.5, or a fraction before a unit (1/4 inch, 1 1/2 in, 1/4-in.; a bare 1/50 is two).
 _NUMBER = re.compile(rf"-?(?:\d+\s)?\d+/[1-9]\d*(?={units.UNIT_GAP}{_UNIT})|-?\d+(?:\.\d+)?")
+# The cardinals zero to ninety-nine in words, whole: eight is not read inside eighteen or weight,
+# nor seven inside seventy. A compound may be hyphenated, spaced, or re-joined across a line break.
+_ONES = "zero one two three four five six seven eight nine".split()
+_TEENS = "ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split()
+_TENS = "twenty thirty forty fifty sixty seventy eighty ninety".split()
+_WORD_VALUES: dict[str, int] = {
+    word: value
+    for words, values in ((_ONES, range(10)), (_TEENS, range(10, 20)), (_TENS, range(20, 100, 10)))
+    for word, value in zip(words, values)
+}
+# Nor is a word read that only begins a larger number, an ordinal or a fraction: twenty-first,
+# one hundred, two-thirds.
+_WORD_SCALED = (
+    r"(?!-?(?:first|second)(?![a-z])|[\s-]?(?:hundred|thousand|million|billion|half|halves|third"
+    r"|quarter|fourth|fifth|sixth|seventh|eighth|ninth|tenth)s?(?![a-z]))"
+)
+_WORD_NUMBER = re.compile(
+    rf"(?<![a-z0-9])(?:({'|'.join(_TENS)})(?:-\s?|\s)?({'|'.join(_ONES[1:])})"
+    rf"|({'|'.join(sorted(_WORD_VALUES, key=len, reverse=True))}))(?![a-z0-9]){_WORD_SCALED}"
+)
 # A decimal comma (3,5) joins its digits into one number; the comma of a thousands figure
 # (1,250) or of a list (1,5,10) does not.
 _DECIMAL_COMMA = re.compile(r"(?<![\d,])(\d+),(?!\d{3}(?!\d))(\d+)(?![\d,])")
@@ -74,6 +94,12 @@ def squash(text: str, hyphen: str = "") -> str:
     return re.sub(r"\s+", "", normalize(text, hyphen))
 
 
+class _Number(NamedTuple):
+    value: float
+    start: int
+    stop: int  # after the number as printed
+
+
 class _Token(NamedTuple):
     value: float
     start: int
@@ -81,6 +107,11 @@ class _Token(NamedTuple):
     unit: str | None
     joined: bool  # shares its unit with the next token, as 5 does in "5-10 mm"
     labelled: bool  # numbers a figure, table, equation or section
+
+
+def _word_value(m: re.Match[str]) -> float:
+    tens, ones, alone = m.groups()
+    return float(_WORD_VALUES[alone] if alone else _WORD_VALUES[tens] + _WORD_VALUES[ones])
 
 
 def _value(printed: str) -> float:
@@ -91,39 +122,38 @@ def _value(printed: str) -> float:
 
 
 def _tokens(text: str) -> list[_Token]:
-    """Every number in normalized text with the unit printed after it. The numbers of a range,
-    product or list share its last unit."""
+    """Every number in normalized text, in digits or as a word from zero to ninety-nine, with the
+    unit printed after it. The numbers of a range, product or list share its last unit."""
     label_spans = [m.span(1) for m in _LABEL.finditer(text)]
     scanned = _DECIMAL_COMMA.sub(
         r"\1.\2", _RANGE_DASH.sub(r"\1 ", text.replace("x", " "))
     )  # same length
-    found: list[
-        tuple[re.Match[str], str | None, int]
-    ] = []  # each number, its unit, and where both end
-    for m in _NUMBER.finditer(scanned):
-        if found and m.start() < found[-1][2]:
+    # Words are read in text, since scanned blanks the x of six.
+    numbers = sorted(
+        [_Number(_value(m.group()), *m.span()) for m in _NUMBER.finditer(scanned)]
+        + [_Number(_word_value(m), *m.span()) for m in _WORD_NUMBER.finditer(text)],
+        key=lambda n: n.start,
+    )
+    found: list[tuple[_Number, str | None, int]] = []  # each number, its unit, and where both end
+    for n in numbers:
+        if found and n.start < found[-1][2]:
             continue  # a digit of the unit before it: the 3 of g/cm3
-        unit, end = units.unit_at(text, m.end()) or (None, m.end())
-        found.append((m, unit, end))
+        unit, end = units.unit_at(text, n.stop) or (None, n.stop)
+        found.append((n, unit, end))
     tokens: list[_Token] = []
     for i in reversed(range(len(found))):
-        m, unit, end = found[i]
+        n, unit, end = found[i]
         joined = (
             unit is None
             and i + 1 < len(found)
-            and _SHARES_UNIT.fullmatch(text, m.end(), found[i + 1][0].start()) is not None
+            and _SHARES_UNIT.fullmatch(text, n.stop, found[i + 1][0].start) is not None
         )
         if joined:
             unit = tokens[0].unit
         tokens.insert(
             0,
             _Token(
-                _value(m.group()),
-                m.start(),
-                end,
-                unit,
-                joined,
-                any(a <= m.start() < b for a, b in label_spans),
+                n.value, n.start, end, unit, joined, any(a <= n.start < b for a, b in label_spans)
             ),
         )
     return tokens
@@ -131,8 +161,8 @@ def _tokens(text: str) -> list[_Token]:
 
 def quantities_in(text: str) -> list[tuple[float, str | None]]:
     """The values a quote states, each with the unit printed after it (None if none):
-    whole numeric tokens, both endpoints of a range as positive values, and no number that labels
-    a figure, table, equation or section. The numbers of a range or product share its last unit."""
+    whole numeric tokens and number words from zero to ninety-nine, both endpoints of a range as
+    positive values, and no number that labels a figure, table, equation or section. The numbers of a range or product share its last unit."""
     return [(t.value, t.unit) for t in _tokens(normalize(text)) if not t.labelled]
 
 

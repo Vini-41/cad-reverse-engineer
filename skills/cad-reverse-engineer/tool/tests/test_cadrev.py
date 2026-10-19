@@ -387,6 +387,19 @@ QUOTES = {
     "gear ratio 1/50": ([1, 50], [0.02]),
     "widths 1,5,10 mm": ([1, 5, 10], [1.5]),
     "a 1/4-in. bolt": ([0.25], [1, 4]),
+    "Eight tension springs": ([8], [18]),
+    "twenty-four bolts": ([24], [20, 4]),
+    "twenty four bolts": ([24], [20, 4]),
+    "twenty-\nfour bolts": ([24], [20, 4]),
+    "eighteen springs": ([18], [8]),
+    "the weight of the springs": ([], [8]),
+    "seventy links": ([70], [7]),
+    "the first link": ([], [1]),
+    "a pair of pins": ([], [1, 2]),
+    "one of the links": ([1], []),
+    "the twenty-first link": ([], [20, 21]),
+    "one hundred links": ([], [1, 100]),
+    "two-thirds of the plate": ([], [2]),
 }
 
 
@@ -2324,6 +2337,8 @@ SWEPT = {
     "1/4-in.": "1/4-in",
     "5-mm": "5-mm",
     "5-10 mm": "5-10 mm",
+    "six turns": "six turns",
+    "three degrees": "three degrees",
 }
 
 
@@ -2346,6 +2361,16 @@ def test_coverage_lists_nothing_where_no_quantity_is_stated(proj_dir, tmp_path, 
         )
         == []
     )
+
+
+def test_guard_coverage_lists_no_number_word_without_a_unit(proj_dir, tmp_path, capsys):
+    assert swept(proj_dir, tmp_path, capsys, "Eight tension springs hold one of the links.") == []
+
+
+def test_coverage_counts_a_number_word_with_a_unit_as_ledgered_by_its_value(proj_dir, tmp_path):
+    add_quote(proj_dir, tmp_path, "The spring has six turns.", "six turns", {"n": 6})
+    assert findings(proj_dir, "coverage") == []
+    assert "value-not-in-quote" not in errors(proj_dir)
 
 
 def test_source_with_coverage_off_is_a_warning_in_the_report(proj_dir):
@@ -3212,6 +3237,21 @@ def test_mass_check_on_source_density_add_and_counts_rests_on_source(proj_dir, t
     )
     assert _mass_result(report)["rests_on"] == "source"
     assert "rests on" not in _check_row(proj_dir, "m")
+
+
+def test_mass_check_counts_a_part_by_a_count_its_source_states_in_words(proj_dir, tmp_path):
+    report = _weighed(
+        proj_dir,
+        tmp_path,
+        "Three links weigh 6.4 g with 1 g of screws, printed in resin of 1.2 g/cm3.",
+        {"n": 3, "m": 6.4, "screws": 1, "rho": 1.2},
+        check={"add": ["hardware"], "counts": {"link": "n_links"}},
+        rho={"basis": "source", "from": "N1.rho"},
+        hardware={"basis": "source", "from": "N1.screws"},
+        n_links={"basis": "source", "from": "N1.n"},
+    )
+    assert report["params"]["n_links"]["rests_on"] == "source"
+    assert _mass_result(report)["rests_on"] == "source"
 
 
 def test_mass_check_names_each_param_it_reads_resting_on_less_than_source(proj_dir, tmp_path):
