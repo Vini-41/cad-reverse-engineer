@@ -1,6 +1,6 @@
 # CAD reverse-engineering
 
-Rebuilding a published object as CAD in which every number is either traced to a quoted source or named as a reconstruction choice.
+Rebuilding a published object, from a single part up to a mechanism like the LegClaw, from its sources (including geometry its authors released) as parametric CAD, optionally with a kinematic model that exports to MuJoCo. Every number is traced to a quoted source or named as a reconstruction choice, and every stated value, motion included, is checked against the built model. The result can be modified and simulated kinematically. It does not cover the reconstructor's own measurements of a physical object, behavioural simulation, fabrication-ready tolerances, or whole robots (ADR-0007).
 
 ## Evidence
 
