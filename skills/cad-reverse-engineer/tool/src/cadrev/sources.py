@@ -21,8 +21,8 @@ _TIMES = dict.fromkeys(map(ord, "×✕✖⨯"), "x")
 # stays a value, and a number followed by a unit ("section 4 mm thick") is a value; "in" and
 # the inch mark are left out there, so "Fig. 2 in" stays a label.
 _UNIT = units.spelling()
-# A number as printed: 3.5, or a fraction before a unit (1/4 inch, 1 1/2 in; a bare 1/50 is two).
-_NUMBER = re.compile(rf"-?(?:\d+\s)?\d+/[1-9]\d*(?=\s?{_UNIT})|-?\d+(?:\.\d+)?")
+# A number as printed: 3.5, or a fraction before a unit (1/4 inch, 1 1/2 in, 1/4-in.; a bare 1/50 is two).
+_NUMBER = re.compile(rf"-?(?:\d+\s)?\d+/[1-9]\d*(?={units.UNIT_GAP}{_UNIT})|-?\d+(?:\.\d+)?")
 # A decimal comma (3,5) joins its digits into one number; the comma of a thousands figure
 # (1,250) or of a list (1,5,10) does not.
 _DECIMAL_COMMA = re.compile(r"(?<![\d,])(\d+),(?!\d{3}(?!\d))(\d+)(?![\d,])")

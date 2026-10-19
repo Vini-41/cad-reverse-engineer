@@ -100,12 +100,16 @@ def spelling(but: tuple[str, ...] = ()) -> str:
     return rf"(?:{words})(?![a-z0-9/^])"
 
 
-_FOLLOWING = re.compile(rf"\s?({spelling()})")
+# What may sit between a number and its unit: a space, or the hyphen of a unit used as an
+# adjective (2-in. plate, 5-mm pin), unless another number follows the word (2-in-1). No
+# spelling starts with a digit, so 5-10 mm stays a range.
+UNIT_GAP = r"(?:\s|-(?!\w+-\d))?"
+_FOLLOWING = re.compile(rf"{UNIT_GAP}({spelling()})")
 _SPELLED = {name: re.compile(rf"(?:{'|'.join(unit.spellings)})") for name, unit in UNITS.items()}
 
 
 def unit_at(text: str, pos: int) -> tuple[str, int] | None:
-    """The unit printed at text[pos:] (normalized text, one optional space first) and where its
+    """The unit printed at text[pos:] (normalized text, after an optional UNIT_GAP) and where its
     spelling ends, or None."""
     m = _FOLLOWING.match(text, pos)
     if m is None:
