@@ -51,6 +51,8 @@ class CheckResult:
     # What the check rests on, and the params it reads that rest on that basis.
     rests_on: str = "source"
     rests_on_params: list[str] = field(default_factory=list)
+    # How many instance pairs an interference check evaluated; None for other kinds.
+    pairs: int | None = None
 
 
 @dataclass
@@ -428,6 +430,7 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
                 limit = overlap_limit(p, c)
                 pairs = [tuple(pair) for pair in c.get("pairs", [])]
                 shapes = dict(_instances(built))
+                pair_set = "listed" if pairs else "all"
                 if not pairs:
                     names = sorted(shapes)
                     pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1 :]]
@@ -442,8 +445,10 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
                         kind,
                         worst[0] <= limit,
                         f"overlap ≤ {limit:g}",
-                        f"{worst[0]:.4g} {worst[1]}".strip(),
+                        f"{worst[0]:.4g} {worst[1]}".strip()
+                        + f" over {len(pairs)} pair{'s' * (len(pairs) != 1)} ({pair_set})",
                         c.get("interpretation", ""),
+                        pairs=len(pairs),
                     )
                 )
             else:

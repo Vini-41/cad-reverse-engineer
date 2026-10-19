@@ -322,7 +322,10 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
                 "status": status,
                 "counts": headline,
                 "findings": [asdict(f) for f in errors + warnings],
-                "checks": [asdict(r) for r in results],
+                "checks": [
+                    {k: v for k, v in asdict(r).items() if k != "pairs" or v is not None}
+                    for r in results
+                ],
                 "tolerances": loosened,
                 "overlap_limits": limits,
                 "model_literals": override,

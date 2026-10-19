@@ -873,6 +873,70 @@ def test_overlay_renders_against_a_figure(proj_dir):
     assert "overlays/front.png" in (proj_dir / "build" / "report.md").read_text()
 
 
+def _front_overlay(root: Path, image) -> Path:
+    """Render the fixture's link over image in a front-view overlay, 10 px per mm with model
+    (0, 0) at pixel (200, 100) and the calibration span from (50, 150) to (350, 150); return the
+    PNG."""
+    (root / "figures").mkdir(exist_ok=True)
+    image.save(root / "figures" / "fig.png")
+    calibration = {"pixels": [[50, 150], [350, 150]], "evidence": "pitch.pitch"}
+    overlay = {"id": "front", "image": "figures/fig.png", "part": "link", "view": "front"}
+    write(
+        root,
+        "overlays.yaml",
+        {"overlays": [overlay | {"origin": [200, 100], "calibration": calibration}]},
+    )
+    assert cli.main(["check", str(root)]) == 0
+    return root / "build" / "overlays" / "front.png"
+
+
+def test_overlay_draws_its_image_one_pixel_to_one_pixel_below_its_title(proj_dir):
+    from PIL import Image
+
+    source = Image.new("RGB", (400, 200), "white")
+    source.putpixel((0, 0), (255, 0, 0))
+    source.putpixel((399, 199), (0, 255, 0))
+    png = Image.open(_front_overlay(proj_dir, source)).convert("RGB")
+    strip = png.height - 200
+    assert png.width == 400 and strip > 0, png.size
+    assert png.getpixel((0, strip)) == (255, 0, 0)
+    assert png.getpixel((399, strip + 199)) == (0, 255, 0)
+    title = [png.getpixel((x, y)) for x in range(400) for y in range(strip)]
+    assert any(c != (255, 255, 255) for c in title), "no title in the strip above the image"
+
+
+def test_overlay_calibration_marker_lands_on_the_pixels_it_names(proj_dir):
+    import numpy as np
+    from PIL import Image
+
+    png = np.asarray(Image.open(_front_overlay(proj_dir, Image.new("RGB", (400, 200), "white"))))
+    image = png[png.shape[0] - 200 :, :, :3].astype(int)  # the image area, below the title strip
+    ys, xs = np.nonzero((image[:, :, 2] > 150) & (image[:, :, 0] < 120))  # the blue marks
+    assert abs(ys.mean() - 150) <= 0.5, ys.mean()
+    assert xs.min() + xs.max() == 50 + 350 and 50 - 4 <= xs.min() < 50, (xs.min(), xs.max())
+
+
+def test_overlay_title_wraps_inside_a_narrow_image(proj_dir):
+    import numpy as np
+    from PIL import Image
+
+    png = np.asarray(Image.open(_front_overlay(proj_dir, Image.new("RGB", (120, 200), "white"))))
+    strip = png[: png.shape[0] - 200, :, :3]
+    assert png.shape[1] == 120 and (strip < 128).any(), "no title in the strip"
+    assert (strip[:, [0, -1]] == 255).all(), "the title runs off the edge of the PNG"
+
+
+def test_overlay_model_edges_land_on_the_pixels_their_scale_puts_them(proj_dir):
+    import numpy as np
+    from PIL import Image
+
+    png = np.asarray(Image.open(_front_overlay(proj_dir, Image.new("RGB", (400, 200), "white"))))
+    column = png[png.shape[0] - 200 :, 100, :3].astype(int)  # model x = -10, clear of the holes
+    rows = np.nonzero((column[:, 0] > 150) & (column[:, 1] < 150))[0]  # the magenta edges
+    # The link's top and bottom faces, z = ±4 at 10 px per mm about row 100.
+    assert [rows[rows < 100].mean(), rows[rows > 100].mean()] == [60, 140], rows
+
+
 # Basis: what each parameter rests on, and the headline that counts them.
 
 
@@ -2702,6 +2766,46 @@ def test_interference_check_with_no_overlap_names_no_pair(proj_dir):
     code, report = verify(proj_dir)
     clear = next(c for c in report["checks"] if c["id"] == "clear")
     assert code == 0 and clear["ok"] and "∩" not in clear["measured"]
+
+
+def _three_links(root: Path, pairs: list | None = None) -> dict:
+    """The clear check over three links, link_2 overlapping link_1 and link_3 clear of both;
+    return its entry in report.json."""
+    write(
+        root,
+        "model.py",
+        _placed("Location()", "Location((p.pitch / 2, 0, 0))", "Location((0, 0, p.link_H * 2))"),
+    )
+    if pairs is not None:
+        edit(root, "checks.yaml", lambda d: d["checks"][-1].update(pairs=pairs))
+    _, report = verify(root)
+    return next(c for c in report["checks"] if c["id"] == "clear")
+
+
+def test_interference_check_without_pairs_states_it_evaluated_every_pair(proj_dir):
+    clear = _three_links(proj_dir)
+    assert clear["measured"].endswith(" link_1 ∩ link_2 over 3 pairs (all)"), clear["measured"]
+    assert clear["pairs"] == 3 and type(clear["pairs"]) is int
+
+
+def test_interference_check_with_pairs_states_it_evaluated_its_list(proj_dir):
+    clear = _three_links(proj_dir, [["link_1", "link_3"], ["link_2", "link_3"]])
+    assert clear["measured"] == "0 over 2 pairs (listed)" and clear["ok"]
+    assert clear["pairs"] == 2
+    assert "| 0 over 2 pairs (listed) |" in (proj_dir / "build" / "report.md").read_text()
+
+
+def test_interference_check_over_one_listed_pair_says_pair(proj_dir):
+    clear = _three_links(proj_dir, [["link_1", "link_2"]])
+    assert clear["measured"].endswith(" link_1 ∩ link_2 over 1 pair (listed)"), clear["measured"]
+    assert not clear["ok"] and clear["pairs"] == 1
+
+
+def test_only_interference_results_carry_a_pair_count(proj_dir):
+    _, report = verify(proj_dir)
+    assert [c["id"] for c in report["checks"] if "pairs" in c] == ["clear"]
+    env = next(c for c in report["checks"] if c["id"] == "env.L")
+    assert env["measured"] == "40 along x"
 
 
 def _mass_with_hardware(root: Path, tmp_path: Path, hardware: dict) -> None:
