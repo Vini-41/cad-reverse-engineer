@@ -8,6 +8,8 @@
 set -uo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
+# This clone runs the repo's git hooks (.githooks) unless it already uses others.
+[ -n "$(git -C "$repo" config core.hooksPath)" ] || git -C "$repo" config core.hooksPath .githooks
 cd "$repo/skills/cad-reverse-engineer/tool" || exit 2
 failed=()
 

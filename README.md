@@ -85,6 +85,8 @@ uv sync --locked -p 3.12 --extra test
 uv run pytest -q
 ```
 
+`scripts/check` runs every CI step locally, and sets this clone's `core.hooksPath` to `.githooks`, whose pre-commit hook ruff-formats staged Python.
+
 ## License
 
 The code is under the MIT license. The example's sources and figure crop come from the CC BY 4.0 article cited above and keep that license and attribution.
