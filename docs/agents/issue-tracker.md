@@ -9,7 +9,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
-- **Close**: `gh issue close <number> --comment "..."`
+- **Close**: `gh issue close <number> --comment "..."`. An issue closes once its fix is pushed and CI is green on that commit: first comment any departures from the brief, then close with `Landed in <sha>; CI green on <sha>.`
 
 Repo: `Vini-41/cad-reverse-engineer`. Infer it from `git remote -v`; `gh` does this automatically when run inside a clone.
 
