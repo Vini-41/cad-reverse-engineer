@@ -150,6 +150,49 @@ def test_test_importing_a_cadrev_module_but_the_cli_fails(tmp_path):
     ]
 
 
+FIXTURE_EDITS = """
+
+MODEL = "def build(p):\\n"
+
+
+def test_edits(tmp_path):
+    a = MODEL.replace("build", "make").replace("p", "q")
+    b = re.sub(r"^def", "async def", (tmp_path / "m.py").read_text(), flags=re.M)
+    c = "a(b)".replace("(", "[")
+"""
+SWAPPED_EDITS = """
+
+MODEL = "def build(p):\\n"
+
+
+def test_edits(tmp_path):
+    a = swap(swap(MODEL, "build", "make"), "p", "q")
+    b = swap((tmp_path / "m.py").read_text(), r"^def", "async def", regex=True)
+    c = "a(b)".replace("(", "[")
+"""
+
+
+def test_test_editing_a_fixture_without_swap_fails(tmp_path):
+    tests = TESTS + FIXTURE_EDITS
+    result = check(repo(tmp_path, tests=tests))
+    a, b = (
+        n for n, line in enumerate(tests.splitlines(), 1) if line.startswith(("    a =", "    b ="))
+    )
+    where = "skills/cad-reverse-engineer/tool/tests/test_cadrev.py"
+    use = "use swap, which fails when the text it replaces is absent"
+    assert result.returncode == 1
+    assert result.stdout.splitlines()[1:] == [
+        f"{where}:{a}: edits a fixture with replace; {use}",
+        f"{where}:{a}: edits a fixture with replace; {use}",
+        f"{where}:{b}: edits a fixture with re.sub; {use}",
+    ]
+
+
+def test_guard_test_editing_a_fixture_with_swap_passes(tmp_path):
+    result = check(repo(tmp_path, tests=TESTS + SWAPPED_EDITS))
+    assert (result.returncode, result.stdout.splitlines()[1:]) == (0, [])
+
+
 FINDINGS_TESTS = """\
 from cadrev import cli
 import pytest

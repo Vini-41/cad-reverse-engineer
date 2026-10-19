@@ -49,7 +49,7 @@ def proj_dir(tmp_path):
     root = tmp_path / "demo"
     assert cli.main(["init", str(root)]) == 0
     meta = root / "project.yaml"
-    meta.write_text(meta.read_text().replace("TODO one sentence", "A demo link,"))
+    meta.write_text(swap(meta.read_text(), "TODO one sentence", "A demo link,"))
     paper = tmp_path / "paper.txt"
     paper.write_text(PAPER)
     assert (
@@ -157,6 +157,17 @@ def run(*args: str) -> tuple[int, str]:
     with contextlib.redirect_stdout(out):
         code = cli.main(list(args))
     return code, out.getvalue()
+
+
+def swap(text: str, old: str, new: str, count: int = -1, *, regex: bool = False) -> str:
+    """text with old replaced by new, failing when old is absent, so editing a fixture never leaves
+    it as it was. With regex, old is a pattern matched line by line."""
+    if regex:
+        out, found = re.subn(old, new, text, count=max(count, 0), flags=re.M)
+    else:
+        out, found = text.replace(old, new, count), old in text
+    assert found, f"{old!r} is not in the text it should replace"
+    return out
 
 
 def sha256(path: Path) -> str:
@@ -420,21 +431,21 @@ def test_quote_yields_its_values_and_refuses_near_misses(proj_dir, tmp_path, quo
 
 
 def test_source_tampering_is_caught(proj_dir):
-    (proj_dir / "sources" / "paper.txt").write_text(PAPER.replace("40", "45"))
+    (proj_dir / "sources" / "paper.txt").write_text(swap(PAPER, "40", "45"))
     assert "source-hash" in errors(proj_dir)
 
 
 def test_source_rewritten_between_runs_is_read_afresh(proj_dir):
     assert verify(proj_dir)[0] == 0
     paper = proj_dir / "sources" / "paper.txt"
-    paper.write_text(PAPER.replace("30 mm apart", "32 mm apart"))
+    paper.write_text(swap(PAPER, "30 mm apart", "32 mm apart"))
     register = ["source", str(proj_dir), str(paper), "--id", "paper", "--kind", "paper"]
     assert cli.main([*register, "--citation", "Doe 2026"]) == 0
     assert "quote-not-found" in errors(proj_dir)
 
 
 def test_model_literal_is_rejected(proj_dir):
-    write(proj_dir, "model.py", MODEL.replace("p.link_H)\n    link -=", "7.5)\n    link -=", 1))
+    write(proj_dir, "model.py", swap(MODEL, "p.link_H)\n    link -=", "7.5)\n    link -=", 1))
     assert "model-literal" in errors(proj_dir)
 
 
@@ -444,7 +455,7 @@ def test_model_literal_is_rejected(proj_dir):
 def _model_with(root: Path, header: str = "", line: str = "") -> None:
     """model.py with header above it and line as the first statement of build(), on model.py
     line 5 + header's line count (an empty header counts as one blank line)."""
-    body = MODEL.replace("def build(p):\n", f"def build(p):\n    {line}\n") if line else MODEL
+    body = swap(MODEL, "def build(p):\n", f"def build(p):\n    {line}\n") if line else MODEL
     write(root, "model.py", header + "\n" + body)
 
 
@@ -748,7 +759,7 @@ def test_unaccounted_evidence_is_reported(proj_dir):
 
 
 def test_geometry_that_misses_the_paper_fails(proj_dir):
-    write(proj_dir, "model.py", MODEL.replace("Box(p.link_L,", "Box(p.link_L + p.hole_d,"))
+    write(proj_dir, "model.py", swap(MODEL, "Box(p.link_L,", "Box(p.link_L + p.hole_d,"))
     assert cli.main(["check", str(proj_dir)]) == 1
     report = (proj_dir / "build" / "report.json").read_text()
     assert "check-failed" in report
@@ -1227,7 +1238,7 @@ def test_well_shaped_project_raises_no_schema_finding(proj_dir):
 
 
 def test_model_syntax_error_is_a_finding(proj_dir):
-    write(proj_dir, "model.py", MODEL.replace("def build(p):", "def build(p)"))
+    write(proj_dir, "model.py", swap(MODEL, "def build(p):", "def build(p)"))
     messages = findings(proj_dir, "model-syntax")
     assert len(messages) == 1 and messages[0].startswith("model.py line 4:")
 
@@ -1254,7 +1265,7 @@ def test_derived_expr_syntax_error_is_a_finding_and_other_params_still_evaluate(
 )
 def test_build_returning_the_wrong_shape_is_a_finding(proj_dir, returned):
     write(
-        proj_dir, "model.py", MODEL.replace("    return {", f"    return {returned}\n    _ = {{", 1)
+        proj_dir, "model.py", swap(MODEL, "    return {", f"    return {returned}\n    _ = {{", 1)
     )
     code, report = verify(proj_dir)
     assert code == 1
@@ -1435,8 +1446,11 @@ def test_source_reregistered_after_a_sorted_pyyaml_redump_is_refreshed(proj_dir)
 
 def _block_citation(root: Path) -> None:
     meta = root / "project.yaml"
-    text = re.sub(
-        r"citation: .*", "citation: |\n      Doe 2026\n\n      Adv. Sci.", meta.read_text()
+    text = swap(
+        meta.read_text(),
+        r"citation: .*",
+        "citation: |\n      Doe 2026\n\n      Adv. Sci.",
+        regex=True,
     )
     meta.write_text(text)
 
@@ -1577,8 +1591,7 @@ def test_source_joins_an_empty_sources_list_with_a_comment_keeping_it(tmp_path):
     root = tmp_path / "demo"
     assert cli.main(["init", str(root)]) == 0
     meta = root / "project.yaml"
-    meta.write_text(meta.read_text().replace("sources: []", "sources: []  # none yet"))
-    assert "sources: []  # none yet" in meta.read_text().splitlines()
+    meta.write_text(swap(meta.read_text(), "sources: []", "sources: []  # none yet"))
     assert _register_notes(root) == 0
     assert _source_ids(root) == ["notes"]
     assert "sources:  # none yet" in meta.read_text().splitlines()
@@ -1586,16 +1599,14 @@ def test_source_joins_an_empty_sources_list_with_a_comment_keeping_it(tmp_path):
 
 def test_source_joins_a_sources_list_whose_head_has_a_comment_after_its_entries(proj_dir):
     meta = proj_dir / "project.yaml"
-    meta.write_text(re.sub(r"^sources:$", "sources:  # papers", meta.read_text(), flags=re.M))
-    assert "sources:  # papers" in meta.read_text().splitlines()
+    meta.write_text(swap(meta.read_text(), r"^sources:$", "sources:  # papers", regex=True))
     assert _register_notes(proj_dir) == 0
     assert _source_ids(proj_dir) == ["paper", "notes"]
 
 
 def _set_paper_id_line(root: Path, id_line: str) -> None:
     meta = root / "project.yaml"
-    meta.write_text(re.sub(r"^(\s*)- id: paper$", rf"\g<1>{id_line}", meta.read_text(), flags=re.M))
-    assert id_line in [line.strip() for line in meta.read_text().splitlines()]
+    meta.write_text(swap(meta.read_text(), r"^(\s*)- id: paper$", rf"\g<1>{id_line}", regex=True))
 
 
 @pytest.mark.parametrize("id_line", ["- id: paper  # main", '- id: "paper"  # main'])
@@ -1728,12 +1739,12 @@ def _zero_pitch(root: Path) -> None:
             lambda r: write(
                 r,
                 "model.py",
-                MODEL.replace("def build(p):", "raise SystemExit(3)\n\ndef build(p):"),
+                swap(MODEL, "def build(p):", "raise SystemExit(3)\n\ndef build(p):"),
             ),
             "model-build",
         ),
         (
-            lambda r: write(r, "model.py", MODEL.replace('{"link": link}', '{"a/b": link}')),
+            lambda r: write(r, "model.py", swap(MODEL, '{"link": link}', '{"a/b": link}')),
             "model-return",
         ),
         (lambda r: (r / "sources" / "paper.txt").write_bytes(b"\xff\xfe\x00broken"), "source-hash"),
@@ -1836,7 +1847,7 @@ def _add_source(root: Path, sid: str, path: str) -> None:
 
 
 def _replace(root: Path, name: str, old: str, new: str) -> None:
-    (root / name).write_text((root / name).read_text().replace(old, new))
+    (root / name).write_text(swap((root / name).read_text(), old, new))
 
 
 # Damage that once crashed, or plausibly could crash, a verification run. Add a case for every
@@ -1949,10 +1960,10 @@ DAMAGE = {
         ),
     ),
     "datum of booleans": lambda r: write(
-        r, "model.py", MODEL.replace("(-p.pitch / 2, 0, 0)", "(True, 0, 0)")
+        r, "model.py", swap(MODEL, "(-p.pitch / 2, 0, 0)", "(True, 0, 0)")
     ),
     "part name is a number": lambda r: write(
-        r, "model.py", MODEL.replace('{"link": link}', '{"link": link, 3: link}')
+        r, "model.py", swap(MODEL, '{"link": link}', '{"link": link, 3: link}')
     ),
     "unhashable YAML key": lambda r: write(
         r, "params.yaml", "params:\n  ? [a, b]\n  : {basis: proposed}\n"
@@ -2753,7 +2764,7 @@ def test_redistributable_source_whose_name_is_a_glob_is_committed_alone(proj_dir
 def test_redistributable_source_is_committed_from_a_project_that_ignores_all_of_sources(proj_dir):
     # Projects made before sources could be committed ignore the whole directory.
     gitignore = proj_dir / ".gitignore"
-    gitignore.write_text(re.sub(r"^sources/.*$", "sources/", gitignore.read_text(), flags=re.M))
+    gitignore.write_text(swap(gitignore.read_text(), r"^sources/.*$", "sources/", regex=True))
     assert not gitignored(proj_dir, "open.txt", "CC-BY-4.0")
 
 
@@ -2945,7 +2956,7 @@ def test_guard_crop_writes_the_region_zoomed_and_prints_its_sha256(proj_dir):
 def _placed(*instances: str) -> str:
     """The fixture's model with the link placed at each Location in instances."""
     entries = ", ".join(f'"link_{i}": ("link", {loc})' for i, loc in enumerate(instances, 1))
-    return MODEL.replace('{"link_1": ("link", Location())}', "{" + entries + "}")
+    return swap(MODEL, '{"link_1": ("link", Location())}', "{" + entries + "}")
 
 
 def test_interference_between_overlapping_instances_fails_the_check_without_a_traceback(
@@ -3033,9 +3044,15 @@ def test_source_param_a_mass_check_adds_is_checked_by_it(proj_dir, tmp_path):
     assert findings(proj_dir, "unchecked-source") == []
 
 
-_TWO_PARTS = MODEL.replace(
-    '"parts": {"link": link},', '"parts": {"link": link, "pin": Cylinder(p.hole_d / 2, p.link_H)},'
-).replace('"link.b": (p.pitch / 2, 0, 0)}', '"link.b": (p.pitch / 2, 0, 0), "pin.c": (0, 0, 0)}')
+_TWO_PARTS = swap(
+    swap(
+        MODEL,
+        '"parts": {"link": link},',
+        '"parts": {"link": link, "pin": Cylinder(p.hole_d / 2, p.link_H)},',
+    ),
+    '"link.b": (p.pitch / 2, 0, 0)}',
+    '"link.b": (p.pitch / 2, 0, 0), "pin.c": (0, 0, 0)}',
+)
 
 
 def test_distance_between_datums_of_two_parts_is_a_finding(proj_dir):
@@ -3054,7 +3071,8 @@ def test_guard_distance_between_datums_of_one_part_beside_another_part(proj_dir)
 # Angle checks: the angle at one datum between the directions to two others, in degrees.
 
 # link.c sits on hole b's axis at the top face, so link.a - link.b - link.c is a right angle.
-_CORNER = MODEL.replace(
+_CORNER = swap(
+    MODEL,
     '"link.b": (p.pitch / 2, 0, 0)}',
     '"link.b": (p.pitch / 2, 0, 0), "link.c": (p.pitch / 2, 0, p.link_H / 2)}',
 )
@@ -3276,7 +3294,7 @@ def test_instance_sharing_its_part_name_resolves_as_the_instance(proj_dir, tmp_p
     check = {"kind": "distance", "between": ["link_1.a", "link.a"], "key": "gap"}
     _over_instances(proj_dir, tmp_path, "The links sit 20 mm apart.", {"gap": 20}, check)
     placed = '{"link_1": ("link", Location()), "link": ("link", Location((0, 0, p.link_L / 2)))}'
-    write(proj_dir, "model.py", MODEL.replace('{"link_1": ("link", Location())}', placed))
+    write(proj_dir, "model.py", swap(MODEL, '{"link_1": ("link", Location())}', placed))
     edit(proj_dir, "checks.yaml", lambda d: d["checks"][-1].update(instances=["link_1", "link"]))
     code, report = verify(proj_dir)
     assert code == 0, report["findings"]
@@ -3326,7 +3344,8 @@ def _datum_at(root: Path, at: str, model: str = MODEL) -> list[str]:
     return findings(root, "datum-off-solid")
 
 
-_SLOT = MODEL.replace(
+_SLOT = swap(
+    MODEL,
     "    return {",
     "    link -= extrude(SlotCenterToCenter(p.pitch / 2, p.hole_d), p.link_H, both=True)\n"
     "    return {",
@@ -3362,23 +3381,21 @@ def test_datum_on_a_hole_axis_beyond_the_hole_is_off_solid(proj_dir):
 
 
 def test_datum_a_check_reads_is_off_solid_too(proj_dir):
-    write(
-        proj_dir, "model.py", MODEL.replace('"link.b": (p.pitch / 2, 0, 0)', '"link.b": (0, 0, 0)')
-    )
+    write(proj_dir, "model.py", swap(MODEL, '"link.b": (p.pitch / 2, 0, 0)', '"link.b": (0, 0, 0)'))
     messages = findings(proj_dir, "datum-off-solid")
     assert len(messages) == 1 and "link.b" in messages[0]
 
 
 def test_part_of_two_disjoint_solids_is_invalid(proj_dir):
     split = "link += Pos(p.link_L, 0, 0) * Box(p.link_W, p.link_W, p.link_H)\n    return {"
-    write(proj_dir, "model.py", MODEL.replace("return {", split))
+    write(proj_dir, "model.py", swap(MODEL, "return {", split))
     messages = findings(proj_dir, "part-invalid")
     assert len(messages) == 1 and "2 solids" in messages[0]
 
 
 def test_guard_part_of_two_touching_bodies_fused_into_one_solid(proj_dir):
     fused = "link += Pos(p.link_L / 2, 0, 0) * Box(p.link_W, p.link_W, p.link_H)\n    return {"
-    write(proj_dir, "model.py", MODEL.replace("return {", fused))
+    write(proj_dir, "model.py", swap(MODEL, "return {", fused))
     assert findings(proj_dir, "part-invalid") == []
 
 
@@ -3599,7 +3616,7 @@ def test_bbox_distance_and_interference_checks_rest_on_source(proj_dir):
 
 def test_report_md_labels_the_declared_bases_apart_from_what_params_rest_on(proj_dir):
     add_params(proj_dir, half={"basis": "derived", "expr": "hole_d / 2"})
-    write(proj_dir, "model.py", MODEL.replace("p.hole_d / 2", "p.half"))
+    write(proj_dir, "model.py", swap(MODEL, "p.hole_d / 2", "p.half"))
     verify(proj_dir)
     md = (proj_dir / "build" / "report.md").read_text()
     assert "Declared basis: source: 4 · derived: 1 · measured: 0 · proposed: 1" in md
@@ -3737,15 +3754,13 @@ def _skip(**skip):
 
 
 def _assembly(entry: str):
-    return lambda r, t: write(
-        r, "model.py", MODEL.replace('{"link_1": ("link", Location())}', entry)
-    )
+    return lambda r, t: write(r, "model.py", swap(MODEL, '{"link_1": ("link", Location())}', entry))
 
 
 def _shell(faces: str):
     """The link rebuilt as a solid from a shell of its faces[faces]."""
     part = f'{{"link": Solid(Shell(link.faces(){faces}))}}'
-    return lambda r, t: write(r, "model.py", MODEL.replace('{"link": link}', part))
+    return lambda r, t: write(r, "model.py", swap(MODEL, '{"link": link}', part))
 
 
 def _reading(**fields):
@@ -3809,7 +3824,7 @@ _EXTRA = {
     "quote": "branches of 60 mm diameter",
 }
 _CONFLICT = {"id": "C1", "evidence": ["T1-link", "pitch"], "summary": "pitch exceeds the link"}
-_MOVED = MODEL.replace("\n\n\n", "\n\n# v1\n")
+_MOVED = swap(MODEL, "\n\n\n", "\n\n# v1\n")
 
 FINDINGS = {
     "assembly-part": (

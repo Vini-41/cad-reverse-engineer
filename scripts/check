@@ -59,7 +59,7 @@ step "pyright" uv run pyright
 step "ruff check" uv run ruff check ../../..
 step "ruff format" uv run ruff format --check ../../..
 step "agent-facing docs point only at files that exist" ../../../scripts/check-doc-pointers
-step "every rule is tested raised and not raised, documented and held by a step; tests use only the CLI" \
+step "every rule is tested raised and not raised, documented and held by a step; tests use only the CLI and edit fixtures through swap" \
   uv run python ../../../scripts/rule-coverage
 step "plugin manifests validate" plugin_validate
 step "red-on-main: new tests are red holes or green guards" red_on_main_or_notice

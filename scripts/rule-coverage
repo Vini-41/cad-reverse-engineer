@@ -10,6 +10,8 @@
 - every unit in cadrev.units.UNITS is read by a row of the test suite's UNITS table: a quote whose
   value the quote reader assigns that unit;
 - the tests import no cadrev module but the CLI entry point, cadrev.cli.
+- the tests edit a fixture (a module constant such as MODEL, or a file's read_text()) only through
+  swap, which fails when the text it replaces is absent, so an edit never leaves a test vacuous.
 
     scripts/rule-coverage [repo root, default this script's repo]
         LIST=1 also lists each rule with the tests that assert it
@@ -380,6 +382,53 @@ def stray_imports() -> list[str]:
     return out
 
 
+def fixture(node: ast.AST) -> bool:
+    """Whether node is fixture text: a module constant (MODEL, _SLOT), a file's read_text(), or an
+    edit of either."""
+    if isinstance(node, ast.Name):
+        return node.id.lstrip("_").isupper()
+    if not isinstance(node, ast.Call):
+        return False
+    func = node.func
+    if isinstance(func, ast.Attribute):
+        return func.attr == "read_text" or (func.attr == "replace" and fixture(func.value))
+    return (
+        isinstance(func, ast.Name)
+        and func.id == "swap"
+        and bool(node.args)
+        and fixture(node.args[0])
+    )
+
+
+def unchecked_edits() -> list[str]:
+    """Each edit of fixture text in the tests by str.replace or re.sub, which leave it unchanged
+    when the text to replace is absent."""
+    out = []
+    for path in sorted(TESTS.rglob("*.py")):
+        calls = [
+            n
+            for n in ast.walk(ast.parse(path.read_text(encoding="utf8")))
+            if isinstance(n, ast.Call)
+        ]
+        for node in sorted(calls, key=lambda n: (n.lineno, n.col_offset)):
+            if not isinstance(node.func, ast.Attribute):
+                continue
+            func = node.func
+            if func.attr == "replace" and fixture(func.value):
+                name = "replace"
+            elif (
+                func.attr in ("sub", "subn")
+                and ast.unparse(func.value) == "re"
+                and len(node.args) > 2
+                and fixture(node.args[2])
+            ):
+                name = f"re.{func.attr}"
+            else:
+                continue
+            out.append(f"{path.relative_to(REPO)}:{node.lineno}: edits a fixture with {name}")
+    return out
+
+
 def main() -> int:
     rules = emitted()
     asserts = Asserts(rules)
@@ -410,6 +459,10 @@ def main() -> int:
     problems += unsorted_findings()
     problems += [f"unit {u} is read by no row of the tests' UNITS table" for u in unread_units()]
     problems += [f"{where}; tests import only cadrev.cli" for where in stray_imports()]
+    problems += [
+        f"{where}; use swap, which fails when the text it replaces is absent"
+        for where in unchecked_edits()
+    ]
     print(
         f"{len(rules)} rules emitted; "
         f"{sum(bool(asserts.present[r] and asserts.absent[r]) for r in rules)} asserted both present and absent"
