@@ -39,7 +39,7 @@ def build(p):
 
 A mechanism names how its instances move; a static model leaves both keys out. checks.yaml then poses checks at joint values ([`project-format.md`](project-format.md#poses-and-the-mjcf-export)).
 
-- **A joint** moves its `child` instance relative to its `parent`: `type: revolute` (the one type), `axis` two datums of the child, as `<instance>.<feature>`, on the hinge axis (a pivot's datum at mid-thickness and one on its end face), `range` two param names giving its limits in the project's angle unit (optional), and `drive: actuated` (an input, held where a pose sets it or else as built) or `passive` (moved to close the loops).
+- **A joint** moves its `child` instance relative to its `parent`: `type: revolute` (the one type), `axis` two datums of the child, as `<instance>.<feature>`, on the hinge axis (a pivot's datum at mid-thickness and one on its end face), `range` two param names giving its limits in the project's angle unit, or one for a turn from as built to it (optional), and `drive: actuated` (an input, held where a pose sets it or else as built) or `passive` (moved to close the loops).
 - **Joints form a tree**: an instance is the child of at most one joint, and no instance moves itself. Instances no joint moves are fixed where `assembly` places them.
 - **A loop** closes a ring the tree leaves open: two `<instance>.<feature>` datums that must coincide, such as a four-bar's rocker tip and its ground pivot. Cut each ring at one of its hinges: a joint for each of the others, a loop for that one.
 - **Build the assembly closed, at its joints' zero**: the configuration the sources measure angles from, with every loop's datums together. A pose value turns a joint from there.

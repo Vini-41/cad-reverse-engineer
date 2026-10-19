@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from . import units
-from .geometry import PHYSICS, Built, Poser, located, pose_text, printed
+from .geometry import PHYSICS, Built, Poser, located, pose_text, printed, range_ends
 from .project import Project
 
 # Steps from the as-built pose to the one a check names: each step starts from the last, so the
@@ -126,7 +126,7 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
             attrs = {"name": name, "type": "hinge", "pos": _num(*a)}
             attrs["axis"] = _num(*(y - x for x, y in zip(a, b)))
             if "range" in joint:
-                attrs["range"] = _num(*(p.values[n] * radian for n in joint["range"]))
+                attrs["range"] = _num(*(value * radian for _, value in range_ends(p, joint)))
             ET.SubElement(element, "joint", attrs | _physics(p, joint, "joint"))
         ET.SubElement(element, "geom", type="mesh", mesh=part, contype="0", conaffinity="0")
         weighed = built.masses.get(part)
@@ -311,7 +311,7 @@ def _solve(
         if "range" not in joint or name in set_by_check:
             continue
         turned = float(d.qpos[m.jnt_qposadr[jid[name]]]) / radian
-        (low_name, high_name), (low, high) = joint["range"], (p.values[n] for n in joint["range"])
+        (low_name, low), (high_name, high) = range_ends(p, joint)
         if not low - slack <= turned <= high + slack:
             p.error(
                 "joint-range",

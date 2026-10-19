@@ -19,6 +19,8 @@ uv run -q --project <this skill's base directory>/tool cadrev --help
 
 `cadrev` below stands for that command. The first run installs build123d and MuJoCo (about a minute). Before writing any project YAML, read [`references/project-format.md`](references/project-format.md).
 
+A script that writes project YAML (checks repeated per leg, per toe) lives in the project directory, and the file it writes names it in a comment, so the project alone reproduces how the file was written.
+
 ## Steps
 
 Each step ends on a criterion `cadrev` confirms: the rules named in brackets are the findings that must be absent, and at every step so are `[project-missing]`, `[yaml-syntax]` and `[schema]`. `cadrev check <dir> --no-build` reports every rule except the build's and the checks'; [Statuses](references/project-format.md#statuses) gives the status such a run ends on.
@@ -57,7 +59,7 @@ Write params.yaml. Each modelled dimension takes the strongest basis available: 
 
 Format: `params.yaml` and `gaps.yaml` in [`references/project-format.md`](references/project-format.md).
 
-Joint ranges, poses and physics values wait for step 7.
+Joint ranges, poses and physics values wait for step 7, and the mass model's `parts` entries for step 5, where each part gets its entry as it is modelled.
 
 Done when every feature the model will need has a param, and `cadrev check <dir> --no-build` reports no `[param-*]` error and no `[unit-quantity]`. `[evidence-unused]` may remain for values only a check or step 7 will use.
 
@@ -65,7 +67,7 @@ Done when every feature the model will need has a param, and `cadrev check <dir>
 
 Take one part all the way through before modelling any other: the tracer part. Choose a part with a stated envelope or pitch, model it alone, give it its checks (step 6), and run `cadrev check <dir>` until `build/report.md` shows those checks green. The tracer part proves the whole path, ledger to params to model to checks to report, while a mistake in it costs one part.
 
-Then write the rest of model.py per [`references/modeling.md`](references/modeling.md): parts in their own frames, datums at every checked feature (pivots included, which step 7 hinges on), and the assembly as placed instances, built at the configuration the sources measure their angles from. Weigh each part in params.yaml's [mass model](references/project-format.md#mass-model): a purchased part by its datasheet `mass`, a printed one by `density`.
+Then write the rest of model.py per [`references/modeling.md`](references/modeling.md): parts in their own frames, datums at every checked feature (pivots included, which step 7 hinges on), and the assembly as placed instances, built at the configuration the sources measure their angles from. Weigh each part in params.yaml's [mass model](references/project-format.md#mass-model) as you model it, never ahead of model.py: a purchased part by its datasheet `mass`, a printed one by `density`.
 
 Done when the tracer part's checks went green before a second part was modelled, and `cadrev check <dir>` builds every part with no `[model-*]`, `[part-invalid]`, `[part-mass]`, `[datum-off-solid]`, `[assembly-part]` or `[param-unused]`. Red checks on the other parts are step 6's job.
 
@@ -85,12 +87,12 @@ Done when every check is green and `cadrev check <dir>` reports no `[check-*]`, 
 
 A mechanism moves once its static checks are green. Declare its joints and loops per [`references/modeling.md`](references/modeling.md#joints-and-loops), and its poses, ranges and sweeps per [Poses and the MJCF export](references/project-format.md#poses-and-the-mjcf-export).
 
-Take one closed loop all the way through before declaring any other joint: the tracer loop. Choose a loop with a source value stated at a joint angle (a four-bar's output at a stated input), declare its joints and the loop, pose a check at that angle with the ledger value as its pose, and run `cadrev check <dir>` until MuJoCo loads `build/model.mjcf` and the posed check is green. The tracer loop proves joints to MJCF to solve to posed check while a mistake costs one loop.
+Take one closed loop all the way through before declaring any other joint: the tracer loop. Choose a loop with a source value stated at a joint angle (a four-bar's output at a stated input), declare its joints and the loop, pose a check at that angle with the ledger value as its pose, and run `cadrev check <dir>` until MuJoCo loads `build/model.mjcf` and the posed check is green. Where no source states a value at a joint angle, choose a loop whose joint has a stated range and confirm that range with a `range` check instead; with no stated range either, pose an `interference` check across the loop at a proposed angle. The tracer loop proves joints to MJCF to solve to posed check while a mistake costs one loop.
 
 Then the rest:
 
 - **Joints and loops** for every other ring, and a posed check for every value a source states at a joint angle.
-- **Ranges.** Read each stated range into its joint's two `source` range params, confirm it with a `range` check that covers them, and sweep interference across each ranged joint with a proposed `steps` param ([Ranges and sweeps](references/project-format.md#ranges-and-sweeps)).
+- **Ranges.** Read each stated range into its joint's `source` range params (one param for a motion stated from the as-built pose, `a 180° rotation`), confirm it with a `range` check that covers them, and sweep interference across each ranged joint with a proposed `steps` param ([Ranges and sweeps](references/project-format.md#ranges-and-sweeps)).
 - **Physics values** go in the joint or tendon slot that applies them, each a param marked `physics: true` ([Physics values](references/project-format.md#physics-values)). A value no source states is proposed, with a gap.
 
 On a `[loop-open]` or `[joint-range]` at a stated pose or range end, fix the link lengths, the ranges or the as-built zero. Near a toggle (two links collinear) the solve itself can fail on links that do close; report that end to the user rather than trimming a stated range.

@@ -8,7 +8,7 @@ from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 
-from .geometry import PHYSICS, Built, CheckResult, pose_text, printed
+from .geometry import PHYSICS, Built, CheckResult, pose_text, printed, range_ends
 from .lint import MODEL_LITERALS
 from .project import (
     BASES,
@@ -147,11 +147,8 @@ def motion(p: Project, built: Built) -> dict:
     for name, j in built.joints.items():
         joints[name] = {k: j[k] for k in ("parent", "child", "drive")}
         if "range" in j:
-            low, high = j["range"]
-            joints[name]["range"] = {
-                "from": [low, high],
-                "value": list(printed(p.values[low], p.values[high])),
-            }
+            (low, lo), (high, hi) = range_ends(p, j)
+            joints[name]["range"] = {"from": [low, high], "value": list(printed(lo, hi))}
         joints[name] |= _valued(p, j, PHYSICS["joint"])
     return {
         "joints": joints,

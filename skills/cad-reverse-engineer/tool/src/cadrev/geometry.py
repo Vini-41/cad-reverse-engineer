@@ -134,6 +134,17 @@ PHYSICS = {
     },
 }
 JOINT_KEYS = ("type", "parent", "child", "axis", "range", "drive", *PHYSICS["joint"])
+# What names the as-built end of a one-ended range, a turn of 0 that no param states.
+AS_BUILT = "as built"
+
+
+def range_ends(p: Project, joint: dict) -> list[tuple[str, float]]:
+    """A joint's range as its two ends, low first, each as (the param it is from, its value): a
+    range of one param turns from the assembly as built (AS_BUILT, 0) to that param, either way."""
+    ends: list[tuple[str, float]] = [(str(name), p.values[name]) for name in joint["range"]]
+    if len(ends) == 1:
+        ends = sorted([(AS_BUILT, 0.0), *ends], key=lambda end: end[1])
+    return ends
 
 
 def _names(value, count: int) -> bool:
@@ -163,8 +174,8 @@ def _motion_breach(result) -> str | None:
                 return f"joint {name}: {key} must name an assembly instance"
         if not _names(joint.get("axis"), 2):
             return f"joint {name}: axis must be two datums of its child, not {joint.get('axis')!r}"
-        if "range" in joint and not _names(joint["range"], 2):
-            return f"joint {name}: range must be two param names, not {joint['range']!r}"
+        if "range" in joint and not (_names(joint["range"], 1) or _names(joint["range"], 2)):
+            return f"joint {name}: range must be one or two param names, not {joint['range']!r}"
         if joint.get("drive") not in DRIVES:
             return f"joint {name}: drive must be actuated or passive, not {joint.get('drive')!r}"
         problem = _physics_breach(f"joint {name}", joint, PHYSICS["joint"], JOINT_KEYS)
@@ -430,7 +441,7 @@ def _joint_flaw(p: Project, built: Built, joint: dict, moved_by: dict) -> str | 
         if param not in p.values:
             return f"range names {param}, which params.yaml does not define"
     if "range" in joint:
-        (low, lo), (high, hi) = ((n, p.values[n]) for n in joint["range"])
+        (low, lo), (high, hi) = range_ends(p, joint)
         if lo > hi:
             return f"range {low} {lo:g} exceeds {high} {hi:g}"
     return None
@@ -750,8 +761,7 @@ def _sweep(p: Project, built: Built, c: dict, poser: Poser | None) -> tuple[dict
             "a whole number",
         )
         return None
-    low_name, high_name = joint["range"]
-    low, high = p.values[low_name], p.values[high_name]
+    (low_name, low), (high_name, high) = range_ends(p, joint)
     label, count, poses = f"{low_name}..{high_name}", int(steps), []
     for i in range(count):
         posed = poser(c, {name: (low + (high - low) * i / (count - 1), label)})
@@ -771,8 +781,9 @@ def _range(p: Project, built: Built, c: dict, poser: Poser | None) -> list[Check
     if joint is None or poser is None:
         return []
     cid, name, ends = c.get("id", "?"), joint["name"], c["ends"]
-    if len(ends) != 2:
-        p.error("check-config", f"check {cid}: ends names {len(ends)} values, not [low, high]")
+    if len(ends) != len(joint["range"]):
+        wanted = "[low, high]" if len(joint["range"]) == 2 else "[end]"
+        p.error("check-config", f"check {cid}: ends names {len(ends)} values, not {wanted}")
         return []
     degrees = units.size("angle", p.units) / units.UNITS["deg"].si
     results = []
