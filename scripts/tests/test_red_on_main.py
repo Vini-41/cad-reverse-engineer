@@ -50,11 +50,14 @@ def repo(tmp_path: Path, dependencies: str) -> Path:
     return root
 
 
-def red_on_main(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+def red_on_main(
+    root: Path, *args: str, base: str | None = "HEAD~1"
+) -> subprocess.CompletedProcess[str]:
+    env = {k: v for k, v in os.environ.items() if k != "BASE"}
     return subprocess.run(
         ["bash", str(SCRIPT), *args],
         cwd=root,
-        env={**os.environ, "BASE": "HEAD~1"},
+        env=env if base is None else {**env, "BASE": base},
         capture_output=True,
         text=True,
     )
@@ -81,3 +84,13 @@ def test_guard_hole_test_counts_red(tmp_path):
 def test_guard_collect_only_passes(tmp_path):
     result = red_on_main(repo(tmp_path, dependencies='"pytest"'), "--co", "-q")
     assert result.returncode == 0, result.stderr
+
+
+def test_branch_with_no_upstream_compares_against_its_merge_base_with_main(tmp_path):
+    root = repo(tmp_path, dependencies='"pytest"')
+    git(root, "switch", "-qc", "ticket")
+    git(root, "branch", "-f", "main", "HEAD~1")
+    result = red_on_main(root, base=None)
+    assert result.returncode == 0, result.stderr
+    assert "1 red (holes), 0 green" in result.stdout
+    assert "merge-base with main" in result.stdout

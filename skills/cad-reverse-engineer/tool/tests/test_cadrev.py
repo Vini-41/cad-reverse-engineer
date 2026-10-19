@@ -3312,7 +3312,7 @@ FINDINGS = {
 
 
 @pytest.mark.parametrize("rule", sorted(FINDINGS))
-def test_guard_change_raises_its_rule(proj_dir, tmp_path, rule):
+def test_change_raises_its_rule(proj_dir, tmp_path, rule):
     FINDINGS[rule][0](proj_dir, tmp_path)
     assert rule in rules(proj_dir)
 

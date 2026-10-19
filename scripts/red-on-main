@@ -5,22 +5,30 @@
 # the counts and each misnamed test, and exits 1 if there is one: a test_guard_* that goes red, or
 # a test function new since BASE that stays green without the name. It exits 2 if pytest ran no
 # test, so a missing pytest or an empty selection never reads as a clean comparison. New rows of a
-# test function BASE already has (the QUOTES and UNITS tables) carry near misses, so only their red
-# guards count.
+# test function BASE already has (the QUOTES, UNITS and FINDINGS tables) carry near misses, so only
+# their red guards count.
 #
 #   scripts/red-on-main [pytest args, e.g. -k units]     LIST=1 also lists every test as red or green
 #
 # With no pytest args it runs the test functions new since BASE or edited in its diff. A row added
-# to a table (QUOTES, UNITS) edits the table, not the test that reads it: pass -k for those.
+# to a table (QUOTES, UNITS, FINDINGS) edits the table, not the test that reads it: pass -k for those.
 #
 # BASE is the commit before the fix: by default the upstream branch (origin/main), so unpushed
-# commits on main count as the fix. Set BASE=<ref> to compare against another commit.
+# commits on main count as the fix. A branch with no upstream, such as a worktree's, compares
+# against its merge-base with main. Set BASE=<ref> to compare against another commit.
 set -euo pipefail
 
 repo=$(git rev-parse --show-toplevel)
 tool="$repo/skills/cad-reverse-engineer/tool"
-upstream="@{upstream}"
-base=$(git -C "$repo" rev-parse "${BASE:-$upstream}")
+if [ -n "${BASE:-}" ]; then
+  label=$BASE
+  base=$(git -C "$repo" rev-parse "$BASE")
+elif base=$(git -C "$repo" rev-parse -q --verify "@{upstream}" 2>/dev/null); then
+  label=upstream
+else
+  label="merge-base with main"
+  base=$(git -C "$repo" merge-base HEAD main)
+fi
 if [ "$base" = "$(git -C "$repo" rev-parse HEAD)" ] && git -C "$repo" diff --quiet HEAD -- "$tool/src"; then
   echo "BASE is HEAD and the tool source is unchanged, so there is no fix to compare; set BASE=<ref>" >&2
   exit 2
@@ -35,7 +43,7 @@ git -C "$repo" diff --binary "$base" -- . ":(exclude)skills/cad-reverse-engineer
 rm -rf "$tree/skills/cad-reverse-engineer/tool/tests"
 cp -R "$tool/tests" "$tree/skills/cad-reverse-engineer/tool/tests"
 
-echo "working tree, but tool source from ${BASE:-upstream} ($(git -C "$repo" rev-parse --short "$base"))"
+echo "working tree, but tool source from $label ($(git -C "$repo" rev-parse --short "$base"))"
 existing="$tree.existing"  # the test functions BASE already has
 git -C "$repo" grep -hoE '^def test_[A-Za-z0-9_]+' "$base" -- "$tool/tests" | sed 's/^def //' >"$existing" || true
 if [ $# -eq 0 ]; then
@@ -60,11 +68,11 @@ for path, lines in changed.items():
 ' "$repo"
               } | sort -u || true)
   if [ -z "$selected" ]; then
-    echo "no test function is new or changed since ${BASE:-upstream}; pass -k to choose tests" >&2
+    echo "no test function is new or changed since $label; pass -k to choose tests" >&2
     exit 2
   fi
   set -- -k "$(echo "$selected" | paste -sd ' ' - | sed 's/ / or /g')"
-  echo "running the $(echo "$selected" | wc -l | tr -d ' ') test functions new or changed since ${BASE:-upstream}"
+  echo "running the $(echo "$selected" | wc -l | tr -d ' ') test functions new or changed since $label"
 fi
 cd "$tree/skills/cad-reverse-engineer/tool"
 # PYTHONPATH puts the base's src ahead of the editable install of the working tree's.
@@ -76,7 +84,7 @@ results=$(sed -nE 's/^(.+) (FAILED|ERROR) +\[ *[0-9]+%\]$/red    \1/p; s/^(.+) P
 # (pytest missing from the tool's environment), means nothing was compared, so say so and fail.
 if { [ "$code" -ne 0 ] && [ "$code" -ne 1 ]; } || { [ "$code" -eq 1 ] && [ -z "$results" ]; }; then
   tail -n 20 "$log" >&2
-  echo "pytest ran no test against ${BASE:-upstream} (exit $code), so nothing was compared; is pytest in the tool's environment (uv sync --extra test)?" >&2
+  echo "pytest ran no test against $label (exit $code), so nothing was compared; is pytest in the tool's environment (uv sync --extra test)?" >&2
   exit 2
 fi
 [ -n "${LIST:-}" ] && echo "$results"
