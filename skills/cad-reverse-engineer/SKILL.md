@@ -89,13 +89,13 @@ Take one closed loop all the way through before declaring any other joint: the t
 
 Then the rest:
 
-- **Joints and loops** for every other ring, and a posed check for every value a source states at a joint angle.
+- **Joints and loops** for every other ring, and a posed check for every value a source states at a joint angle or stroke. Each joint takes the [type](references/modeling.md#joints-and-loops) of how its child moves: `revolute` on a pivot, `slide` along a sliding shaft, `fixed` for a part fastened to another (a servo in its mount), so only what moves gets a drive and a motor. Meshed gears or a belt between two joints are a `gear` with its ratio a param.
 - **Ranges.** Read each stated range into its joint's two `source` range params, confirm it with a `range` check that covers them, and sweep interference across each ranged joint with a proposed `steps` param ([Ranges and sweeps](references/project-format.md#ranges-and-sweeps)).
 - **Physics values** go in the joint or tendon slot that applies them, each a param marked `physics: true` ([Physics values](references/project-format.md#physics-values)). A value no source states is proposed, with a gap.
 
 On a `[loop-open]` or `[joint-range]` at a stated pose or range end, fix the link lengths, the ranges or the as-built zero. Near a toggle (two links collinear) the solve itself can fail on links that do close; report that end to the user rather than trimming a stated range.
 
-Done when the tracer loop's posed check went green before a second loop was declared, every stated range has a `range` check, report.md prints **Kinematic**, and `cadrev check <dir>` reports no `[model-joint]`, `[model-loop]`, `[mjcf-load]`, `[loop-open]`, `[joint-range]`, `[part-mass]`, `[param-physics]`, `[unchecked-source]` (a range param included), `[evidence-unused]` or other error, so its status is VERIFIED or VERIFIED PENDING REVIEW.
+Done when the tracer loop's posed check went green before a second loop was declared, every stated range has a `range` check, report.md prints **Kinematic**, and `cadrev check <dir>` reports no `[model-joint]`, `[model-loop]`, `[model-gear]`, `[mjcf-load]`, `[loop-open]`, `[joint-range]`, `[part-mass]`, `[param-physics]`, `[unchecked-source]` (a range param included), `[evidence-unused]` or other error, so its status is VERIFIED or VERIFIED PENDING REVIEW.
 
 ### 8. Hand over
 

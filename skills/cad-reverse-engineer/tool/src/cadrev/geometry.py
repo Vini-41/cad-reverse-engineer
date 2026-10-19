@@ -12,9 +12,11 @@ from typing import NamedTuple, Protocol
 
 from . import units
 from .project import (
+    CHECK_KINDS,
     Project,
     check_params,
     check_tolerance,
+    expect_joint_value,
     expect_param_quantity,
     expr_names,
     mass_params,
@@ -70,17 +72,25 @@ class Built:
     datums: dict[str, tuple[float, float, float]]
     assembly: dict
     used: set[str]
-    # joint name -> {type, parent, child, axis: [datum, datum], range: [param, param], drive}
+    # joint name -> {type, parent, child, axis: [datum, datum], range: [param, param], drive}; a
+    # fixed joint has the first three alone
     joints: dict = field(default_factory=dict)
     # loop name -> [<instance>.<feature>, <instance>.<feature>], two datums that must coincide
     loops: dict = field(default_factory=dict)
     # tendon name -> {path: [<instance>.<feature>, ...], stiffness: param, damping: param}
     tendons: dict = field(default_factory=dict)
+    # gear name -> {driver: joint, driven: joint, ratio: param}: driven moves ratio times driver
+    gears: dict = field(default_factory=dict)
     # part name -> its Mass, for each part params.yaml's parts weighs
     masses: dict = field(default_factory=dict)
-    # True when a [model-joint], [model-loop] or [model-return] finding dropped the joints, loops
-    # and tendons build() returned
+    # True when a [model-joint], [model-loop], [model-gear] or [model-return] finding dropped the
+    # joints, loops, gears and tendons build() returned
     dropped: bool = False
+
+    @property
+    def moving(self) -> dict:
+        """The joints that move their child relative to their parent: all but the fixed ones."""
+        return {n: j for n, j in self.joints.items() if JOINT_TYPES[j["type"]].mjcf is not None}
 
 
 @dataclass
@@ -111,6 +121,25 @@ def pose_text(pose: dict) -> str:
 
 
 DRIVES = ("actuated", "passive")
+
+
+class JointType(NamedTuple):
+    """What a joint type is in the MJCF: its joint element's type, None where the child is welded
+    into its parent's body; the quantity its value, range and poses are in; and the verb a
+    finding says it moves by."""
+
+    mjcf: str | None
+    quantity: str | None
+    moves: str
+
+
+JOINT_TYPES = {
+    "revolute": JointType("hinge", "angle", "turns"),
+    "slide": JointType("slide", "length", "slides"),
+    "fixed": JointType(None, None, "stays"),
+}
+# What a fixed joint takes: its child moves with its parent, so it has no axis, range or drive.
+FIXED_KEYS = ("type", "parent", "child")
 
 
 class Slot(NamedTuple):
@@ -144,9 +173,13 @@ def _names(value, count: int) -> bool:
     )
 
 
+GEAR_KEYS = ("driver", "driven", "ratio")
+
+
 def _motion_breach(result) -> str | None:
-    """Why build()'s joints or loops break the model contract, or None if they keep it."""
-    for kind in ("joint", "loop"):
+    """Why build()'s joints, loops, gears or tendons break the model contract, or None if they
+    keep it."""
+    for kind in ("joint", "loop", "gear"):
         for name in result.get(f"{kind}s", {}):
             if not isinstance(name, str):
                 return f"{kind} {name}: its name must be text, not {type(name).__name__}"
@@ -156,11 +189,14 @@ def _motion_breach(result) -> str | None:
         unknown = sorted(set(joint) - set(JOINT_KEYS))
         if unknown:
             return f"joint {name}: unknown key {unknown[0]!r}"
-        if joint.get("type") != "revolute":
-            return f"joint {name}: type must be 'revolute', not {joint.get('type')!r}"
+        if joint.get("type") not in JOINT_TYPES:
+            kinds = " or ".join(repr(t) for t in JOINT_TYPES)
+            return f"joint {name}: type must be {kinds}, not {joint.get('type')!r}"
         for key in ("parent", "child"):
             if not isinstance(joint.get(key), str):
                 return f"joint {name}: {key} must name an assembly instance"
+        if JOINT_TYPES[joint["type"]].mjcf is None:
+            continue  # a fixed joint takes nothing else, which [model-joint] says
         if not _names(joint.get("axis"), 2):
             return f"joint {name}: axis must be two datums of its child, not {joint.get('axis')!r}"
         if "range" in joint and not _names(joint["range"], 2):
@@ -173,6 +209,15 @@ def _motion_breach(result) -> str | None:
     for name, pair in result.get("loops", {}).items():
         if not _names(pair, 2):
             return f"loop {name} must be two <instance>.<feature> datums, not {pair!r}"
+    for name, gear in result.get("gears", {}).items():
+        if not isinstance(gear, dict):
+            return f"gear {name} must be a mapping, not {type(gear).__name__}"
+        for key in sorted(set(gear) - set(GEAR_KEYS)):
+            return f"gear {name}: unknown key {key!r}"
+        for key in GEAR_KEYS:
+            if not isinstance(gear.get(key), str):
+                what = "a param name" if key == "ratio" else "a joint name"
+                return f"gear {name}: {key} must be {what}, not {gear.get(key)!r}"
     for name, tendon in result.get("tendons", {}).items():
         if not isinstance(tendon, dict):
             return f"tendon {name} must be a mapping, not {type(tendon).__name__}"
@@ -216,7 +261,7 @@ def _contract_breach(result) -> str | None:
 
     if not isinstance(result, dict):
         return f"must return a mapping of parts, datums and assembly, not {type(result).__name__}"
-    for key in ("parts", "datums", "assembly", "joints", "loops", "tendons"):
+    for key in ("parts", "datums", "assembly", "joints", "loops", "gears", "tendons"):
         if not isinstance(result.get(key, {}), dict):
             return f"{key} must be a mapping of names, not {type(result[key]).__name__}"
     for name, part in result.get("parts", {}).items():
@@ -270,18 +315,26 @@ def build(p: Project) -> Built | None:
         joints=result.get("joints", {}),
         loops=result.get("loops", {}),
         tendons=result.get("tendons", {}),
+        gears=result.get("gears", {}),
     )
     for name in sorted(built.used):
         expect_param_quantity(p, name, ("length", "angle"), "in model.py")
     ranges = {n for joint in built.joints.values() for n in joint.get("range", [])}
-    for name in sorted(ranges & p.values.keys()):
-        expect_param_quantity(p, name, ("angle",), "in a joint's range")
+    for joint in built.joints.values():
+        quantity = JOINT_TYPES[joint["type"]].quantity
+        for name in joint.get("range", []):
+            if name in p.values and quantity is not None:
+                expect_param_quantity(p, name, (quantity,), f"in a {joint['type']} joint's range")
+    ratios = {gear["ratio"] for gear in built.gears.values()}
+    for name, gear in built.gears.items():
+        if gear["ratio"] in p.values:
+            expect_param_quantity(p, gear["ratio"], ("fraction",), f"as gear {name}'s ratio")
     slots = physics_slots(built)
     for name, where in sorted(slots.items()):
         for place, slot in where:
             expect_param_quantity(p, name, (slot.quantity,), f"as {place}")
-    _check_physics(p, built, slots, ranges)
-    exported = ranges | slots.keys() | set(mass_params(p))
+    _check_physics(p, built, slots, ranges | ratios)
+    exported = ranges | ratios | slots.keys() | set(mass_params(p))
     derived = _used_by_derived(p)
     p.resolution = resolution_params(p) - built.used - derived - exported
     unread = p.values.keys() - built.used - derived - check_params(p) - exported
@@ -312,13 +365,33 @@ def build(p: Project) -> Built | None:
             p.error("assembly-part", f"assembly instance {inst}: unknown part {part!r}")
             del built.assembly[inst]
     flawed = _linkage_flaws(p, built)
+    flawed = _gear_flaws(p, built) or flawed
     problem = _physics_unfit(p, built)
     if problem:
         p.error("model-return", f"model.build {problem}")
     if flawed or problem:
-        built.joints, built.loops, built.tendons, built.dropped = {}, {}, {}, True
+        built.joints, built.loops, built.tendons, built.gears = {}, {}, {}, {}
+        built.dropped = True
+    _joint_values(p, built)
     built.masses = _mass_model(p, built)
     return built
+
+
+def _joint_values(p: Project, built: Built) -> None:
+    """[unit-quantity] for each pose value, and each end of a range check without between, in
+    the other quantity than its joint's: a length for a revolute joint, an angle for a slide."""
+    for c in p.checks:
+        cid = c.get("id", "?")
+        named = [
+            (j, str(ref), f"in check {cid}'s pose") for j, ref in (c.get("pose") or {}).items()
+        ]
+        kind = CHECK_KINDS.get(str(c.get("kind")))
+        if kind is not None and kind.joint_valued and "between" not in c:
+            named += [(c.get("joint"), str(ref), f"check {cid}") for ref in c.get("ends") or []]
+        for joint, ref, use in named:
+            if joint in built.moving:
+                quantity = JOINT_TYPES[built.moving[joint]["type"]].quantity
+                expect_joint_value(p, ref, quantity, use)
 
 
 def printed(*values: float) -> tuple[float, ...]:
@@ -418,6 +491,14 @@ def _joint_flaw(p: Project, built: Built, joint: dict, moved_by: dict) -> str | 
             return f"{key} {joint[key]} is not an instance of the assembly"
     if joint["child"] in moved_by:
         return f"{joint['child']} is already the child of joint {moved_by[joint['child']]}"
+    if JOINT_TYPES[joint["type"]].mjcf is None:
+        extra = [key for key in joint if key not in FIXED_KEYS]
+        if extra:
+            return (
+                f"a fixed joint moves {joint['child']} with {joint['parent']}, so it takes no "
+                f"{', '.join(extra)}; make it revolute or slide if it moves"
+            )
+        return None
     points = []
     for datum in joint["axis"]:
         named = instance_datum(built, datum)
@@ -477,6 +558,35 @@ def _linkage_flaws(p: Project, built: Built) -> bool:
                 )
                 flawed = True
                 break
+    return flawed
+
+
+def _gear_flaw(p: Project, built: Built, gear: dict) -> str | None:
+    """What keeps this gear from coupling its joints, or None."""
+    for key in ("driver", "driven"):
+        if gear[key] not in built.joints:
+            return f"{key} {gear[key]} is not a joint"
+        if gear[key] not in built.moving:
+            return f"{key} {gear[key]} is a fixed joint, which does not move"
+    if gear["driver"] == gear["driven"]:
+        return f"driver and driven are both {gear['driver']}; a gear couples two joints"
+    driver, driven = (built.joints[gear[key]]["type"] for key in ("driver", "driven"))
+    if driver != driven:
+        return f"couples a {driver} joint with a {driven} one; a gear couples two of one type"
+    if gear["ratio"] not in p.values:
+        return f"ratio names {gear['ratio']}, which params.yaml does not define"
+    return None
+
+
+def _gear_flaws(p: Project, built: Built) -> bool:
+    """Add [model-gear] for each gear that cannot couple its joints (an unknown or fixed joint,
+    one joint twice, joints of two types, an undefined ratio param); True if there is any."""
+    flawed = False
+    for name, gear in built.gears.items():
+        flaw = _gear_flaw(p, built, gear)
+        if flaw:
+            p.error("model-gear", f"gear {name}: {flaw}")
+            flawed = True
     return flawed
 
 
@@ -564,13 +674,26 @@ def _expect(p: Project, ref: str, kind: str) -> float:
 
 
 def _compared(
-    p: Project, c: dict, rid: str, ref: str, measured: float, shown: str = ""
+    p: Project,
+    c: dict,
+    rid: str,
+    ref: str,
+    measured: float,
+    shown: str = "",
+    quantity: str | None = None,
 ) -> CheckResult:
     """The comparison of a value a check evaluates with the ledger value at ref: it passes within
     the check's tolerance: tol, a length or for an angle check degrees, or for a mass check
-    tol_rel, a fraction of that value."""
-    expected = _expect(p, ref, c["kind"])
-    tolerance = check_tolerance(p, c)
+    tol_rel, a fraction of that value. quantity, where given, is the one a range check compares
+    its joint's own value in."""
+    if quantity is None:
+        expected = _expect(p, ref, c["kind"])
+    else:
+        value = p.value_as(ref, quantity)
+        if value is None:
+            raise KeyError(f"evidence value {ref}")
+        expected = value
+    tolerance = check_tolerance(p, c, quantity)
     if tolerance is None:
         raise KeyError("tol_rel")  # the only tolerance a comparing check can lack
     key, tol = tolerance
@@ -774,7 +897,9 @@ def _range(p: Project, built: Built, c: dict, poser: Poser | None) -> list[Check
     if len(ends) != 2:
         p.error("check-config", f"check {cid}: ends names {len(ends)} values, not [low, high]")
         return []
-    degrees = units.size("angle", p.units) / units.UNITS["deg"].si
+    quantity = JOINT_TYPES[joint["type"]].quantity
+    scale = units.size("angle", p.units) / units.UNITS["deg"].si if quantity == "angle" else 1.0
+    unit = "°" if quantity == "angle" else ""
     results = []
     for param, ref in zip(joint["range"], ends):
         if "between" in c:
@@ -796,9 +921,10 @@ def _range(p: Project, built: Built, c: dict, poser: Poser | None) -> list[Check
             if reached is None:
                 continue
             pose = reached[1]
-            measured = p.values[param] * degrees
-            shown = f"° {name}'s range end ({param})"
-        result = _compared(p, c, f"{cid}.{param}", ref, measured, shown)
+            measured = p.values[param] * scale
+            shown = f"{unit} {name}'s range end ({param})"
+        compared_in = None if "between" in c else quantity
+        result = _compared(p, c, f"{cid}.{param}", ref, measured, shown, compared_in)
         result.pose = pose
         results.append(result)
     return results

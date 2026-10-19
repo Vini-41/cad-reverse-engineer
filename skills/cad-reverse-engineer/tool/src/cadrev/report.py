@@ -140,12 +140,13 @@ def _valued(p: Project, entry: dict, keys) -> dict:
 
 
 def motion(p: Project, built: Built) -> dict:
-    """How the model moves, as the MJCF exports it: each joint with what it joins, its drive, its
-    range and its physics values, each loop, and each tendon with its path and physics values;
-    no joints means the model is static, unless a finding dropped them."""
+    """How the model moves, as the MJCF exports it: each joint with its type, what it joins, its
+    drive, its range and its physics values, each loop, each gear with its joints and ratio, and
+    each tendon with its path and physics values; no joints means the model is static, unless a
+    finding dropped them."""
     joints = {}
     for name, j in built.joints.items():
-        joints[name] = {k: j[k] for k in ("parent", "child", "drive")}
+        joints[name] = {k: j[k] for k in ("type", "parent", "child", "drive") if k in j}
         if "range" in j:
             low, high = j["range"]
             joints[name]["range"] = {
@@ -156,6 +157,10 @@ def motion(p: Project, built: Built) -> dict:
     return {
         "joints": joints,
         "loops": {name: list(pair) for name, pair in built.loops.items()},
+        "gears": {
+            name: {"driver": g["driver"], "driven": g["driven"]} | _valued(p, g, ("ratio",))
+            for name, g in built.gears.items()
+        },
         "tendons": {
             name: {"path": list(t["path"])} | _valued(p, t, PHYSICS["tendon"])
             for name, t in built.tendons.items()

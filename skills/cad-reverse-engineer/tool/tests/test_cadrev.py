@@ -3962,6 +3962,7 @@ def test_model_with_joints_exports_mjcf_and_a_mesh_per_part_that_mujoco_loads(pr
     model = mujoco.MjModel.from_xml_path(str(build / "model.mjcf"))
     assert (model.njnt, model.neq, model.nu) == (3, 1, 1)
     assert report["motion"]["joints"]["input"] == {
+        "type": "revolute",
         "parent": "ground_1",
         "child": "crank_1",
         "drive": "actuated",
@@ -3995,7 +3996,13 @@ def test_model_with_no_joints_writes_no_mjcf_and_its_report_says_it_is_static(pr
     code, report = verify(proj_dir)
     assert code == 0
     assert not (proj_dir / "build" / "model.mjcf").exists()
-    assert report["motion"] == {"joints": {}, "loops": {}, "tendons": {}, "dropped": False}
+    assert report["motion"] == {
+        "joints": {},
+        "loops": {},
+        "gears": {},
+        "tendons": {},
+        "dropped": False,
+    }
     assert (
         "**Static**: model.py returns no joints" in (proj_dir / "build" / "report.md").read_text()
     )
@@ -4932,6 +4939,476 @@ def test_sweep_steps_not_a_whole_number_of_two_or_more_is_check_config(proj_dir,
     ]
 
 
+# Joint kinds: a slide moves its child along an axis, a fixed joint carries it with its parent,
+# and a gear couples two joints by a ratio.
+
+# Crank a and connecting rod b of a slider-crank, in mm, the slider on the line through the crank
+# pivot.
+SLIDER = {"crank": 15, "rod": 35}
+
+SLIDER_CRANK = """\
+import math
+
+from build123d import *
+
+
+def bar(p, length):
+    body = Pos(length / 2, 0, 0) * Box(length + p.link_W, p.link_W, p.link_H)
+    body -= Cylinder(p.hole_d / 2, p.link_H)
+    body -= Pos(length, 0, 0) * Cylinder(p.hole_d / 2, p.link_H)
+    return body
+
+
+def build(p):
+    a, b = p.crank, p.rod
+    # As built the crank stands upright, B = (0, a), and the rod reaches the slider on the x axis.
+    reach = math.sqrt(b * b - a * a)
+    lengths = {"ground": a, "crank": a, "rod": b}
+    datums = {"slider.a": (0, 0, 0), "slider.e": (p.link_W, 0, 0)}
+    for name, length in lengths.items():
+        datums[f"{name}.a"] = (0, 0, 0)
+        datums[f"{name}.a_up"] = (0, 0, p.link_H / 2)
+        datums[f"{name}.d"] = (length, 0, 0)
+    slider = Box(p.link_W * 2, p.link_W, p.link_H) - Cylinder(p.hole_d / 2, p.link_H)
+    return {
+        "parts": {**{name: bar(p, length) for name, length in lengths.items()}, "slider": slider},
+        "datums": datums,
+        "assembly": {
+            "ground_1": ("ground", Location()),
+            "crank_1": ("crank", Location((0, 0, 0), (0, 0, 90))),
+            "rod_1": ("rod", Location((0, a, 0), (0, 0, math.degrees(math.atan2(-a, reach))))),
+            "slider_1": ("slider", Location((reach, 0, 0))),
+        },
+        "joints": {
+            "input": {
+                "type": "revolute",
+                "parent": "ground_1",
+                "child": "crank_1",
+                "axis": ["crank_1.a", "crank_1.a_up"],
+                "range": ["input_min", "input_max"],
+                "drive": "actuated",
+            },
+            "knee": {
+                "type": "revolute",
+                "parent": "crank_1",
+                "child": "rod_1",
+                "axis": ["rod_1.a", "rod_1.a_up"],
+                "drive": "passive",
+            },
+            "slide": {
+                "type": "slide",
+                "parent": "ground_1",
+                "child": "slider_1",
+                "axis": ["slider_1.a", "slider_1.e"],
+                "range": ["slide_min", "slide_max"],
+                "drive": "passive",
+            },
+        },
+        "loops": {"closure": ["rod_1.d", "slider_1.a"]},
+    }
+"""
+
+
+def slider_at(turn: float) -> float:
+    """The slider-crank's closed form: how far the slider pin lies from the crank pivot with the
+    crank turned turn degrees from upright."""
+    a, b = SLIDER["crank"], SLIDER["rod"]
+    theta = math.radians(90 + turn)
+    return a * math.cos(theta) + math.sqrt(b * b - (a * math.sin(theta)) ** 2)
+
+
+def slider_crank(root: Path, tmp_path: Path, turns: tuple[int, ...] = (30, 60)) -> None:
+    """Replace the project with the slider-crank, built upright: an actuated crank, input, a
+    passive rod and a passive slider, slide, ranged -15 to 20 mm, and one loop, closure. For each
+    turn, ledger S<turn> and check the slider pin's distance from the crank pivot along x, posed
+    at that turn."""
+    edit(root, "project.yaml", lambda d: d.update(sources=[]))
+    (root / "sources" / "paper.txt").unlink()
+    lines = ["The crank is {crank} mm and the connecting rod {rod} mm long.".format(**SLIDER)]
+    lines += [
+        f"Turned {turn}° from upright, the crank puts the slider pin {slider_at(turn):.4f} mm "
+        "from the crank pivot."
+        for turn in turns
+    ]
+    lines.append(f"The parts are printed in a resin of {RESIN} g/cm3.")
+    text = tmp_path / "slider.txt"
+    text.write_text("\n".join(lines) + "\n")
+    register = ["source", str(root), str(text), "--id", "slider", "--kind", "paper"]
+    assert cli.main([*register, "--citation", "Roe 2026"]) == 0
+    quote = {"source": "slider", "locator": "Sec. 1"}
+    evidence = [
+        {"id": "L", **quote, "quote": lines[0].rstrip("."), "values": {"a": 15, "b": 35}},
+        {"id": "R", **quote, "quote": lines[-1].rstrip("."), "values": {"rho": RESIN}},
+    ]
+    params = {
+        "crank": {"basis": "source", "from": "L.a"},
+        "rod": {"basis": "source", "from": "L.b"},
+        "density": {"basis": "source", "from": "R.rho"},
+    }
+    chosen = {"link_W": 5, "link_H": 4, "hole_d": 2, "input_min": -180, "input_max": 180}
+    chosen |= {"slide_min": -15, "slide_max": 20}
+    params |= {
+        name: {"basis": "proposed", "value": value, "rationale": "a printable part", "gap": "G1"}
+        for name, value in chosen.items()
+    }
+    checks = []
+    for turn, line in zip(turns, lines[1:-1]):
+        eid = f"S{turn}"
+        values = {"turn": turn, "x": round(slider_at(turn), 4)}
+        evidence.append({"id": eid, **quote, "quote": line.rstrip("."), "values": values})
+        checks.append(
+            {
+                "id": f"x{turn}",
+                "kind": "distance",
+                "instances": ["ground_1", "slider_1"],
+                "between": ["ground_1.a", "slider_1.a"],
+                "along": "x",
+                "evidence": eid,
+                "key": "x",
+                "pose": {"input": f"{eid}.turn"},
+            }
+        )
+    write(root, "evidence.yaml", {"evidence": evidence, "skipped": [], "conflicts": []})
+    parts = {name: {"density": "density"} for name in ("ground", "crank", "rod", "slider")}
+    write(root, "params.yaml", {"params": params, "parts": parts})
+    write(root, "gaps.yaml", {"gaps": [{"id": "G1", "question": "part size?", "ask": "authors"}]})
+    write(root, "checks.yaml", {"checks": checks})
+    write(root, "model.py", SLIDER_CRANK)
+
+
+def test_slider_crank_posed_at_two_crank_angles_puts_the_slider_where_its_closed_form_does(
+    proj_dir, tmp_path
+):
+    mujoco = importlib.import_module("mujoco")
+
+    slider_crank(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    checks = _by_id(report)
+    # Each check compares with the closed form at its pose within tolerance.length; the slider
+    # moves between the two poses, along a slide joint in the MJCF.
+    for turn in (30, 60):
+        assert checks[f"x{turn}"]["ok"]
+        assert checks[f"x{turn}"]["expected"] == f"{round(slider_at(turn), 4):g} (S{turn}.x)"
+    assert slider_at(30) - slider_at(60) > 1
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    slide = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "slide")
+    assert m.jnt_type[slide] == mujoco.mjtJoint.mjJNT_SLIDE
+    assert list(m.jnt_range[slide]) == pytest.approx([-15, 20])
+
+
+_PIN = """\
+            "pin": {"type": "fixed", "parent": "crank_1", "child": "pin_1"},
+"""
+
+
+def pinned(root: Path, tmp_path: Path, pin: str = _PIN) -> None:
+    """The slider-crank with a pin at the crank's tip, its own part fixed to the crank by the
+    joint pin, and the rod hinged on the pin rather than on the crank."""
+    slider_crank(root, tmp_path)
+    model = swap(
+        SLIDER_CRANK,
+        '"slider": slider},',
+        '"slider": slider, "pin": Cylinder(p.hole_d / 2, p.link_H)},',
+    )
+    model = swap(
+        model, '"slider.e": (p.link_W, 0, 0)}', '"slider.e": (p.link_W, 0, 0), "pin.c": (0, 0, 0)}'
+    )
+    model = swap(
+        model,
+        '"slider_1": ("slider", Location((reach, 0, 0))),',
+        '"slider_1": ("slider", Location((reach, 0, 0))),\n'
+        '            "pin_1": ("pin", Location((0, a, 0))),',
+    )
+    model = swap(model, '"parent": "crank_1"', '"parent": "pin_1"')
+    write(root, "model.py", swap(model, '        "joints": {\n', '        "joints": {\n' + pin))
+    _parts(pin={"density": "density"})(root, tmp_path)
+
+
+def test_fixed_child_follows_its_parent_at_every_pose_with_no_joint_or_motor_in_the_mjcf(
+    proj_dir, tmp_path
+):
+    mujoco = importlib.import_module("mujoco")
+
+    pinned(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    # The rod hangs on the pin, so the slider reaches its closed form only if the pin turns with
+    # the crank.
+    assert code == 0, report["findings"]
+    assert all(c["ok"] for c in report["checks"]) and len(report["checks"]) == 2
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    assert (m.njnt, m.nu) == (3, 1)
+    assert mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "pin") == -1
+    assert report["motion"]["joints"]["pin"] == {
+        "type": "fixed",
+        "parent": "crank_1",
+        "child": "pin_1",
+    }
+
+
+@pytest.mark.parametrize(
+    "extra, named",
+    [
+        ('"axis": ["pin_1.c", "pin_1.c"]', "axis"),
+        ('"range": ["slide_min", "slide_max"]', "range"),
+        ('"drive": "passive"', "drive"),
+    ],
+)
+def test_fixed_joint_given_an_axis_range_or_drive_is_model_joint_naming_it(
+    proj_dir, tmp_path, extra, named
+):
+    pinned(proj_dir, tmp_path, swap(_PIN, '"pin_1"}', f'"pin_1", {extra}}}'))
+    assert findings(proj_dir, "model-joint") == [
+        f"joint pin: a fixed joint moves pin_1 with crank_1, so it takes no {named}; "
+        "make it revolute or slide if it moves"
+    ]
+
+
+def _quoted_range(joint: str, text: str):
+    """The slider-crank with joint's range params read from text, ledgered as N1 (lo, hi)."""
+    names = {"input": ("input_min", "input_max"), "slide": ("slide_min", "slide_max")}[joint]
+
+    def change(r, t):
+        slider_crank(r, t)
+        add_quote(r, t, text + "\n", text.rstrip("."), {"lo": -15, "hi": 20})
+        for name, end in zip(names, ("lo", "hi")):
+            spec = {"from": f"N1.{end}", "value": None, "rationale": None, "gap": None}
+            _param(name, basis="source", **spec)(r, t)
+
+    return change
+
+
+@pytest.mark.parametrize(
+    "joint, text, quantity",
+    [
+        ("slide", "The slider travels from -15° to 20°.", "length"),
+        ("input", "The crank turns from -15 mm to 20 mm.", "angle"),
+    ],
+    ids=["slide-in-degrees", "revolute-in-mm"],
+)
+def test_joint_range_quoted_in_a_unit_of_another_quantity_is_unit_quantity(
+    proj_dir, tmp_path, joint, text, quantity
+):
+    _quoted_range(joint, text)(proj_dir, tmp_path)
+    messages = findings(proj_dir, "unit-quantity")
+    assert len(messages) == 2 and all(f"where a {quantity} is expected" in m for m in messages)
+
+
+def test_guard_slide_range_quoted_in_mm_is_no_unit_finding(proj_dir, tmp_path):
+    _quoted_range("slide", "The slider travels from -15 mm to 20 mm.")(proj_dir, tmp_path)
+    assert findings(proj_dir, "unit-quantity") == []
+
+
+STROKE = "The slider travels from -10 mm to 15 mm."
+
+
+def slide_driven(root: Path, tmp_path: Path) -> None:
+    """The slider-crank driven by its slider: slide actuated, its stated stroke ledgered as N1 (lo,
+    hi) and read by the source params slide_min and slide_max, and the crank passive; one check,
+    stroke, a range check of slide over N1."""
+    slider_crank(root, tmp_path, turns=())
+    model = swap(SLIDER_CRANK, '"drive": "actuated"', '"drive": "passive"')
+    ranged = '"range": ["slide_min", "slide_max"],\n                "drive": '
+    write(root, "model.py", swap(model, ranged + '"passive"', ranged + '"actuated"'))
+    add_quote(root, tmp_path, STROKE + "\n", STROKE.rstrip("."), {"lo": -10, "hi": 15})
+    for name, end in (("slide_min", "lo"), ("slide_max", "hi")):
+        spec = {"from": f"N1.{end}", "value": None, "rationale": None, "gap": None}
+        _param(name, basis="source", **spec)(root, tmp_path)
+    stroke = {"id": "stroke", "kind": "range", "joint": "slide", "ends": ["N1.lo", "N1.hi"]}
+    _append("checks.yaml", "checks", stroke)(root, tmp_path)
+
+
+def test_range_check_on_a_slide_joint_compares_its_length_range_with_the_stated_stroke(
+    proj_dir, tmp_path
+):
+    slide_driven(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    checks = _by_id(report)
+    low, high = checks["stroke.slide_min"], checks["stroke.slide_max"]
+    assert low["ok"] and high["ok"]
+    assert high["pose"] == {"slide": {"from": "N1.hi", "value": 15}}
+    assert high["measured"] == "15 slide's range end (slide_max)"
+    # Compared in the length unit: 15.002 mm is outside tolerance.length.
+    _param("slide_max", basis="proposed", value=15.002, rationale="x", gap="G1", **{"from": None})(
+        proj_dir, tmp_path
+    )
+    assert findings(proj_dir, "check-failed") == [
+        "stroke.slide_max: expected 15 (N1.hi), measured 15 slide's range end (slide_max)"
+    ]
+
+
+def test_swept_interference_on_a_slide_joint_catches_a_collision_mid_stroke(proj_dir, tmp_path):
+    slide_driven(proj_dir, tmp_path)
+    model = (proj_dir / "model.py").read_text()
+    model = swap(
+        model, '"slider": slider},', '"slider": slider, "post": Box(p.link_W, p.link_W, p.link_H)},'
+    )
+    model = swap(
+        model,
+        '"ground_1": ("ground", Location()),',
+        '"ground_1": ("ground", Location()), "post_1": ("post", Location((p.post_x, 0, 0))),',
+    )
+    write(proj_dir, "model.py", model)
+    _parts(post={"density": "density"})(proj_dir, tmp_path)
+    # The slider spans 10 mm, from x = 21.6 to 46.6 across the stroke: clear of a post at 33.6 at
+    # either end, through it mid-stroke.
+    for name, value in (("post_x", 33.6), ("sweep_steps", 3)):
+        _param(name, basis="proposed", value=value, rationale="a test post", gap="G1")(
+            proj_dir, tmp_path
+        )
+    sweep = {
+        "id": "clear",
+        "kind": "interference",
+        "pairs": [["slider_1", "post_1"]],
+        "sweep": {"joint": "slide", "steps": "sweep_steps"},
+    }
+    _append("checks.yaml", "checks", sweep)(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    clear = _by_id(report)["clear"]
+    assert code == 1 and not clear["ok"]
+    assert clear["pose"] == {"slide": {"from": "slide_min..slide_max", "value": 2.5}}
+    assert clear["sweep"]["range"] == [-10, 15]
+
+
+_WHEEL = """\
+            "wheel": {
+                "type": "revolute",
+                "parent": "ground_1",
+                "child": "wheel_1",
+                "axis": ["wheel_1.a", "wheel_1.a_up"],
+                "drive": "passive",
+            },
+"""
+_MESH = (
+    '        "gears": {"mesh": {"driver": "input", "driven": "wheel", "ratio": "gear_ratio"}},\n'
+)
+
+
+def wheel_tips(turn: float, ratio: float = 0.5) -> float:
+    """The geared slider-crank's closed form: how far the crank's tip lies from the wheel's with
+    the crank turned turn degrees from upright and the wheel ratio times as far."""
+    a, turned = SLIDER["crank"], math.radians(turn)
+    crank_tip = (-a * math.sin(turned), a * math.cos(turned))
+    wheel_tip = (a + a * math.cos(ratio * turned), a * math.sin(ratio * turned))
+    return math.dist(crank_tip, wheel_tip)
+
+
+def geared(root: Path, tmp_path: Path, mesh: str = _MESH) -> None:
+    """The slider-crank with a wheel, a crank-long bar hinged at the ground link's far end and
+    lying along it as built, turned by the gear mesh at gear_ratio (proposed 0.5) times the crank;
+    its tip checked from the crank's tip, posed with the crank turned 30°."""
+    slider_crank(root, tmp_path, turns=(30,))
+    model = swap(SLIDER_CRANK, '"ground": a, "crank": a,', '"ground": a, "crank": a, "wheel": a,')
+    model = swap(
+        model,
+        '"slider_1": ("slider", Location((reach, 0, 0))),',
+        '"slider_1": ("slider", Location((reach, 0, 0))),\n'
+        '            "wheel_1": ("wheel", Location((a, 0, 0))),',
+    )
+    model = swap(model, '        "joints": {\n', '        "joints": {\n' + _WHEEL)
+    model = swap(model, '        "loops": {', mesh + '        "loops": {')
+    write(root, "model.py", model)
+    _parts(wheel={"density": "density"})(root, tmp_path)
+    spec = {"basis": "proposed", "value": 0.5, "rationale": "a guess", "gap": "G1"}
+    _param("gear_ratio", **spec)(root, tmp_path)
+    tips = {
+        "id": "tips",
+        "kind": "distance",
+        "instances": ["crank_1", "wheel_1"],
+        "between": ["crank_1.d", "wheel_1.d"],
+        "evidence": "N1",
+        "key": "tips",
+        "pose": {"input": "S30.turn"},
+    }
+    _append("checks.yaml", "checks", tips)(root, tmp_path)
+    text = f"There the crank's tip lies {wheel_tips(30):.4f} mm from the wheel's tip."
+    add_quote(root, tmp_path, text + "\n", text.rstrip("."), {"tips": round(wheel_tips(30), 4)})
+
+
+def test_joints_coupled_by_a_gear_move_in_its_ratio_and_the_mjcf_and_report_carry_it(
+    proj_dir, tmp_path
+):
+    mujoco = importlib.import_module("mujoco")
+
+    geared(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    # The wheel turns 15°, half the crank's 30°, the same way: not as built, nor the other way.
+    assert code == 0, report["findings"]
+    assert _by_id(report)["tips"]["ok"]
+    assert min(abs(wheel_tips(30) - wheel_tips(30, r)) for r in (0, -0.5)) > 1
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    mesh = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_EQUALITY, "mesh")
+    assert m.eq_type[mesh] == mujoco.mjtEq.mjEQ_JOINT
+    joint = mujoco.mjtObj.mjOBJ_JOINT
+    assert (m.eq_obj1id[mesh], m.eq_obj2id[mesh]) == (
+        mujoco.mj_name2id(m, joint, "wheel"),
+        mujoco.mj_name2id(m, joint, "input"),
+    )
+    assert list(m.eq_data[mesh][:5]) == pytest.approx([0, 0.5, 0, 0, 0])
+    assert report["motion"]["gears"] == {
+        "mesh": {
+            "driver": "input",
+            "driven": "wheel",
+            "ratio": {"from": "gear_ratio", "value": 0.5},
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    "old, new, says",
+    [
+        ('"driven": "wheel"', '"driven": "axle"', "driven axle is not a joint"),
+        (
+            '"ratio": "gear_ratio"',
+            '"ratio": "gear_teeth"',
+            "ratio names gear_teeth, which params.yaml does not define",
+        ),
+        (
+            '"driven": "wheel"',
+            '"driven": "slide"',
+            "couples a revolute joint with a slide one; a gear couples two of one type",
+        ),
+        (
+            '"driven": "wheel"',
+            '"driven": "input"',
+            "driver and driven are both input; a gear couples two joints",
+        ),
+    ],
+    ids=["unknown-joint", "undefined-ratio", "two-types", "one-joint"],
+)
+def test_gear_naming_an_unknown_joint_or_undefined_ratio_is_model_gear_naming_it(
+    proj_dir, tmp_path, old, new, says
+):
+    geared(proj_dir, tmp_path, swap(_MESH, old, new))
+    _, report = verify(proj_dir)
+    errors = [(f["rule"], f["message"]) for f in report["findings"] if f["level"] == "error"]
+    assert errors == [("model-gear", f"gear mesh: {says}")]
+    # Like a joint the assembly cannot hinge, it drops the motion: no MJCF, no posed check.
+    assert report["checks"] == [] and not (proj_dir / "build" / "model.mjcf").exists()
+
+
+def test_pose_setting_both_joints_of_a_gear_out_of_its_ratio_is_check_config(proj_dir, tmp_path):
+    geared(proj_dir, tmp_path)
+    _check("tips", pose={"input": "S30.turn", "wheel": "S30.turn"})(proj_dir, tmp_path)
+    assert findings(proj_dir, "check-config") == [
+        "check tips: pose input at 30 (S30.turn), wheel at 30 (S30.turn): gear mesh moves wheel "
+        "0.5 times input, so set one of them and the gear moves the other"
+    ]
+
+
+def test_gear_ratio_typed_into_model_py_is_model_return(proj_dir, tmp_path):
+    geared(proj_dir, tmp_path, swap(_MESH, '"gear_ratio"', "3"))
+    assert findings(proj_dir, "model-return") == [
+        "model.build gear mesh: ratio must be a param name, not 3"
+    ]
+
+
+def test_guard_gear_ratio_typed_into_model_py_is_a_model_literal(proj_dir, tmp_path):
+    geared(proj_dir, tmp_path, swap(_MESH, '"gear_ratio"', "3"))
+    assert "model-literal" in errors(proj_dir)
+
+
 # Every rule beside its near miss. scripts/rule-coverage fails CI unless each rule the tool emits is
 # asserted present by one test and absent by another; a rule no other test covers both ways gets a
 # row here: the change to the fixture that raises it, and the closest changes it must accept.
@@ -5169,6 +5646,10 @@ FINDINGS = {
     "model-constant": (
         lambda r, t: _model_with(r, line="extra = p.pitch / p.pitch"),
         [lambda r, t: _model_with(r, line="extra = p.pitch / p.link_H")],
+    ),
+    "model-gear": (
+        lambda r, t: geared(r, t, swap(_MESH, '"driven": "wheel"', '"driven": "axle"')),
+        [lambda r, t: geared(r, t, swap(_MESH, '"driver": "input"', '"driver": "knee"'))],
     ),
     "model-joint": (
         _bar(_INPUT_AXIS, '"axis": ["crank_1.a", "crank_1.a"]'),

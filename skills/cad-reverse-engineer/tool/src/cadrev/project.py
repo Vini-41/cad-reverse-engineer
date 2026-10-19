@@ -44,12 +44,20 @@ class CheckKind:
     which defaults to project.yaml's tolerance.<tolerance>; or, where tolerance is None, within
     tol_rel, a fraction of the value, which has no default. reads gives the params a check of
     the kind reads itself; span_capped caps its tol against the span between the two values it
-    compares, rather than against each."""
+    compares, rather than against each. A joint_valued check without between compares its
+    joint's own value, so quantity and tolerance are its joint's: an angle for a revolute joint,
+    a length for a slide."""
 
     quantity: str
     tolerance: str | None
     reads: Callable[[Project, dict], list[str]] | None = None
     span_capped: bool = False
+    joint_valued: bool = False
+
+
+# The quantities a joint's value is in: a revolute joint's angle, a slide's length. Before the
+# build names the joint, a pose value or range end may be either.
+JOINT_QUANTITIES = ("angle", "length")
 
 
 # The kinds of check that compare with a ledger value; interference compares with none.
@@ -58,8 +66,9 @@ CHECK_KINDS = {
     "distance": CheckKind("length", "length"),
     "angle": CheckKind("angle", "angle"),
     "mass": CheckKind("mass", None, reads=_mass_reads),
-    # A joint's range: an angle at each end, compared with a stated end that is often 0.
-    "range": CheckKind("angle", "angle", span_capped=True),
+    # A joint's range: an angle at each end, or a slide's length, compared with a stated end that
+    # is often 0.
+    "range": CheckKind("angle", "angle", span_capped=True, joint_valued=True),
 }
 SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "other")
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}
@@ -199,9 +208,14 @@ class Project:
     def compared_value(self, ref: str, kind: str) -> float | None:
         """The evidence value a check of kind compares with: an angle in degrees, since an angle
         check evaluates in degrees whatever the project's angle unit, else in the project's units."""
-        value = self.evidence_value(ref)
         check = CHECK_KINDS.get(kind)
-        if value is None or check is None or check.quantity != "angle":
+        return self.value_as(ref, check.quantity if check is not None else None)
+
+    def value_as(self, ref: str, quantity: str | None) -> float | None:
+        """The evidence value at ref compared as quantity: an angle in degrees, else in the
+        project's units."""
+        value = self.evidence_value(ref)
+        if value is None or quantity != "angle":
             return value
         return value * units.size("angle", self.units) / units.UNITS["deg"].si
 
@@ -705,16 +719,17 @@ def rests_on(p: Project, c: dict, also: tuple[str, ...] = ()) -> tuple[str, list
     return weakest, [name for name, basis in bases.items() if basis == weakest]
 
 
-def check_tolerance(p: Project, c: dict) -> tuple[str, float] | None:
+def check_tolerance(p: Project, c: dict, quantity: str | None = None) -> tuple[str, float] | None:
     """The tolerance a check compares with, as (key, value): tol, in its quantity's project units
     (degrees for an angle), or tol_rel, a fraction; None for a kind that compares with no ledger
-    value, or a mass check missing its tol_rel."""
+    value, or a mass check missing its tol_rel. quantity, where given, is the one a joint_valued
+    check compares in, its joint's."""
     kind = CHECK_KINDS.get(str(c.get("kind")))
     if kind is None:
         return None
     if kind.tolerance is None:
         return ("tol_rel", float(c["tol_rel"])) if "tol_rel" in c else None
-    return "tol", float(c.get("tol", p.tolerance(kind.tolerance)))
+    return "tol", float(c.get("tol", p.tolerance(quantity or kind.tolerance)))
 
 
 def default_tolerance(kind: str | None) -> tuple[str, float] | None:
@@ -880,6 +895,22 @@ def expect_param_quantity(p: Project, name: str, expected: tuple[str, ...], use:
         expect_quantity(p, ref, expected, f"param {source}{via} {use}")
 
 
+def expect_joint_value(p: Project, ref: str, quantity: str | None, use: str) -> None:
+    """expect_quantity for a joint value, a param's traced quote or a ledger value: of
+    JOINT_QUANTITIES before the build, or of quantity, its joint's, after it. check_units has
+    then held it to JOINT_QUANTITIES already, so only the other joint quantity is a finding."""
+    expected = JOINT_QUANTITIES if quantity is None else (quantity,)
+    if quantity is not None:
+        traced = _traced(p, ref) if ref in p.params else (ref, ref)
+        unit = None if traced is None else p.unit_of(traced[1])
+        if unit is None or units.quantity(unit) not in JOINT_QUANTITIES:
+            return
+    if ref in p.params:
+        expect_param_quantity(p, ref, expected, use)
+    else:
+        expect_quantity(p, ref, expected, use)
+
+
 def check_units(p: Project) -> None:
     """The project names a unit for each quantity it sets, and each evidence value is used as
     the quantity its printed unit measures."""
@@ -890,14 +921,14 @@ def check_units(p: Project) -> None:
     for c in p.checks:
         cid, kind = c.get("id", "?"), c.get("kind")
         if kind in CHECK_KINDS:
+            check = CHECK_KINDS[kind]
+            expected = (check.quantity,)
+            if check.joint_valued and "between" not in c:
+                expected = JOINT_QUANTITIES  # the build holds each to its joint's
             for ref in check_refs(c):
-                expect_quantity(p, ref, (CHECK_KINDS[kind].quantity,), f"check {cid}")
+                expect_quantity(p, ref, expected, f"check {cid}")
         for ref in pose_refs(c):
-            use = f"in check {cid}'s pose"
-            if ref in p.params:
-                expect_param_quantity(p, ref, ("angle",), use)
-            else:
-                expect_quantity(p, ref, ("angle",), use)
+            expect_joint_value(p, ref, None, f"in check {cid}'s pose")
         if kind == "mass":
             expect_param_quantity(p, c.get("density") or "", ("density",), f"in check {cid}")
             for name in c.get("add", []):

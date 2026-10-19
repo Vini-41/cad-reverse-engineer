@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from . import units
-from .geometry import PHYSICS, Built, Poser, located, pose_text, printed
+from .geometry import JOINT_TYPES, PHYSICS, Built, Poser, located, pose_text, printed
 from .project import Project
 
 # Steps from the as-built pose to the one a check names: each step starts from the last, so the
@@ -59,6 +59,12 @@ def mjcf_size(p: Project, quantity: str) -> float:
     return math.prod(base[q] ** power for q, power in units.DERIVED[quantity].items())
 
 
+def joint_size(p: Project, joint: dict) -> float:
+    """The size of one of the project's units of a joint's quantity in the MJCF's: a radian for a
+    revolute joint's angle, 1 for a slide's length, which the MJCF keeps in the project's unit."""
+    return units.size("angle", p.units) if JOINT_TYPES[joint["type"]].quantity == "angle" else 1.0
+
+
 def _physics(p: Project, entry: dict, kind: str) -> dict[str, str]:
     """The MJCF attributes of the physics params entry names, at their values converted from
     the project's units to the MJCF's."""
@@ -98,7 +104,6 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
             export_stl(part, str(path))
             meshes[f"{name}.stl"] = path.read_bytes()
 
-    radian = units.size("angle", p.units)
     root = ET.Element("mujoco", model=str(p.meta.get("name", "model")))
     ET.SubElement(root, "compiler", angle="radian", meshdir="meshes", autolimits="true")
     ET.SubElement(root, "option", gravity="0 0 0")
@@ -120,13 +125,14 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
             location if parent_location is None else parent_location.inverse() * location
         )
         element = ET.SubElement(parent, "body", {"name": inst, **frame})
-        if inst in moved_by:
+        if inst in moved_by and moved_by[inst][0] in built.moving:  # a fixed child is welded
             name, joint = moved_by[inst]
             a, b = (_point(built, d) for d in joint["axis"])
-            attrs = {"name": name, "type": "hinge", "pos": _num(*a)}
+            attrs = {"name": name, "type": str(JOINT_TYPES[joint["type"]].mjcf), "pos": _num(*a)}
             attrs["axis"] = _num(*(y - x for x, y in zip(a, b)))
             if "range" in joint:
-                attrs["range"] = _num(*(p.values[n] * radian for n in joint["range"]))
+                size = joint_size(p, joint)
+                attrs["range"] = _num(*(p.values[n] * size for n in joint["range"]))
             ET.SubElement(element, "joint", attrs | _physics(p, joint, "joint"))
         ET.SubElement(element, "geom", type="mesh", mesh=part, contype="0", conaffinity="0")
         weighed = built.masses.get(part)
@@ -148,17 +154,27 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
     for inst in built.assembly:
         if inst not in moved_by:
             body(world, inst, None)
-    if built.loops:
+    if built.loops or built.gears:
         equality = ET.SubElement(root, "equality")
         for name, (a, b) in built.loops.items():
             ET.SubElement(equality, "connect", name=name, site1=a, site2=b)
+        for name, gear in built.gears.items():
+            ratio = _num(0, p.values[gear["ratio"]], 0, 0, 0)  # driven = ratio × driver
+            ET.SubElement(
+                equality,
+                "joint",
+                name=name,
+                joint1=gear["driven"],
+                joint2=gear["driver"],
+                polycoef=ratio,
+            )
     if built.tendons:
         tendon = ET.SubElement(root, "tendon")
         for name, t in built.tendons.items():
             spatial = ET.SubElement(tendon, "spatial", {"name": name} | _physics(p, t, "tendon"))
             for datum in t["path"]:
                 ET.SubElement(spatial, "site", site=datum)
-    actuated = [name for name, j in built.joints.items() if j["drive"] == "actuated"]
+    actuated = [name for name, j in built.moving.items() if j["drive"] == "actuated"]
     if actuated:
         actuator = ET.SubElement(root, "actuator")
         for name in actuated:
@@ -221,8 +237,9 @@ def poser(p: Project, built: Built, linkage: Linkage) -> Poser:
             return None  # the [mjcf-load] finding says no posed check is evaluated
         values, pose = {}, {}
         for joint, ref in named.items():
-            if joint not in built.joints:
-                p.error("check-config", f"check {cid}: pose names {joint}, which is not a joint")
+            if joint not in built.moving:
+                why = "a fixed joint" if joint in built.joints else "not a joint"
+                p.error("check-config", f"check {cid}: pose names {joint}, which is {why}")
                 return None
             value = p.values[ref] if ref in p.params else p.evidence_value(ref)
             if value is None or math.isnan(value):
@@ -234,6 +251,10 @@ def poser(p: Project, built: Built, linkage: Linkage) -> Poser:
             values[joint], pose[joint] = value, {"from": ref, "value": printed(value)[0]}
         for joint, (value, label) in (set_to or {}).items():
             values[joint], pose[joint] = value, {"from": label, "value": printed(value)[0]}
+        clash = _geared(p, built, values)
+        if clash:
+            p.error("check-config", f"check {cid}: pose {pose_text(pose)}: {clash}")
+            return None
         key = (tuple(sorted(values.items())), tuple(sorted(set_to or {})))
         if key not in linkage.posed:
             linkage.posed[key] = _solve(p, built, linkage, values, pose, set(set_to or {}))
@@ -241,6 +262,28 @@ def poser(p: Project, built: Built, linkage: Linkage) -> Poser:
         return None if placed is None else (placed, pose)
 
     return place
+
+
+def _geared(p: Project, built: Built, values: dict) -> str | None:
+    """Set in values each joint a gear couples to one values sets: its driven joint at ratio
+    times its driver, or its driver at its driven over ratio. Why not, where values sets a gear's
+    two joints out of its ratio."""
+    changed = True
+    while changed:
+        changed = False
+        for name, gear in built.gears.items():
+            ratio, (driver, driven) = p.values[gear["ratio"]], (gear["driver"], gear["driven"])
+            if driver in values and driven not in values:
+                values[driven], changed = ratio * values[driver], True
+            elif driven in values and driver not in values and ratio:
+                values[driver], changed = values[driven] / ratio, True
+            elif driver in values and driven in values:
+                if not math.isclose(values[driven], ratio * values[driver], abs_tol=1e-9):
+                    return (
+                        f"gear {name} moves {driven} {ratio:g} times {driver}, so set one of "
+                        "them and the gear moves the other"
+                    )
+    return None
 
 
 def _solve(
@@ -255,12 +298,13 @@ def _solve(
 
     from build123d import Location, Plane
 
-    m, tol, radian = linkage.model, p.length_tol, units.size("angle", p.units)
+    m, tol = linkage.model, p.length_tol
+    size = {name: joint_size(p, joint) for name, joint in built.moving.items()}
     d = mujoco.MjData(m)
-    jid = {name: mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, name) for name in built.joints}
+    jid = {name: mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, name) for name in built.moving}
     free = [
         jid[name]
-        for name, joint in built.joints.items()
+        for name, joint in built.moving.items()
         if joint["drive"] == "passive" and name not in values
     ]
     dofs = [m.jnt_dofadr[j] for j in free]
@@ -270,16 +314,31 @@ def _solve(
         for name, pair in built.loops.items()
     }
     jac1, jac2 = np.zeros((3, m.nv)), np.zeros((3, m.nv))
+    # Each gear whose joints values leaves free to move: (driven, driver, ratio) as MuJoCo ids.
+    gears = [
+        (jid[g["driven"]], jid[g["driver"]], p.values[g["ratio"]])
+        for g in built.gears.values()
+        if not {g["driver"], g["driven"]} <= values.keys()
+    ]
+    gear_rows = np.zeros((len(gears), m.nv))
+    for row, (driven, driver, ratio) in zip(gear_rows, gears):
+        row[m.jnt_dofadr[driven]] += 1
+        row[m.jnt_dofadr[driver]] -= ratio
 
     def residual():
-        return np.concatenate([d.site_xpos[a] - d.site_xpos[b] for a, b in loops.values()])
+        loop_gaps = [d.site_xpos[a] - d.site_xpos[b] for a, b in loops.values()]
+        turns = [
+            [d.qpos[m.jnt_qposadr[driven]] - ratio * d.qpos[m.jnt_qposadr[driver]]]
+            for driven, driver, ratio in gears
+        ]
+        return np.concatenate([*loop_gaps, *turns])
 
     for step in range(1, STEPS + 1):
         for name, value in values.items():
-            d.qpos[m.jnt_qposadr[jid[name]]] = value * radian * step / STEPS
+            d.qpos[m.jnt_qposadr[jid[name]]] = value * size[name] * step / STEPS
         for _ in range(ITERATIONS):
             mujoco.mj_kinematics(m, d)
-            if not loops or not dofs:
+            if not (loops or gears) or not dofs:
                 break
             mujoco.mj_comPos(m, d)
             r = residual()
@@ -290,6 +349,7 @@ def _solve(
                 mujoco.mj_jacSite(m, d, jac1, None, a)
                 mujoco.mj_jacSite(m, d, jac2, None, b)
                 rows.append(jac1 - jac2)
+            rows.append(gear_rows)
             d.qpos[qpos] += np.linalg.lstsq(np.vstack(rows)[:, dofs], -r, rcond=None)[0]
     mujoco.mj_kinematics(m, d)
     at = pose_text(pose)
@@ -306,16 +366,19 @@ def _solve(
             reached = False
     if not reached:
         return None
-    slack = p.tolerance("angle") * units.UNITS["deg"].si / radian
-    for name, joint in built.joints.items():
+    for name, joint in built.moving.items():
         if "range" not in joint or name in set_by_check:
             continue
-        turned = float(d.qpos[m.jnt_qposadr[jid[name]]]) / radian
+        kind = JOINT_TYPES[joint["type"]]
+        slack = p.tolerance(str(kind.quantity))
+        if kind.quantity == "angle":  # tolerance.angle is in degrees
+            slack *= units.UNITS["deg"].si / size[name]
+        turned = float(d.qpos[m.jnt_qposadr[jid[name]]]) / size[name]
         (low_name, high_name), (low, high) = joint["range"], (p.values[n] for n in joint["range"])
         if not low - slack <= turned <= high + slack:
             p.error(
                 "joint-range",
-                f"joint {name}: turns {turned:.4g} with {at}, outside its range {low_name} "
+                f"joint {name}: {kind.moves} {turned:.4g} with {at}, outside its range {low_name} "
                 f"{low:g} to {high_name} {high:g}; the mechanism cannot reach this pose, so "
                 "checks at it are not evaluated",
             )

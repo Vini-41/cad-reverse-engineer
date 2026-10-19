@@ -65,8 +65,12 @@ A named point on a part's solid that distance and angle checks measure: on the a
 _Avoid_: reference point, marker
 
 **Joint**:
-A hinge between two instances about an axis through two datums of the moving one, either actuated (an input) or passive (moved by the rest of the mechanism).
-_Avoid_: pivot (for the joint itself; a pivot is its datum), DOF
+How one instance moves relative to another: revolute (turning about an axis through two datums of the moving one), slide (sliding along such an axis) or fixed (moving with the other as one body). A revolute joint or slide is either actuated (an input) or passive (moved by the rest of the mechanism).
+_Avoid_: pivot (for the joint itself; a pivot is its datum), prismatic, weld, DOF
+
+**Gear**:
+A coupling of two joints of one type, so one moves a stated ratio times as far as the other: meshed gears or a belt.
+_Avoid_: transmission, mimic joint
 
 **Loop**:
 A pair of datums on two instances that must coincide, closing a ring of joints such as a four-bar.
