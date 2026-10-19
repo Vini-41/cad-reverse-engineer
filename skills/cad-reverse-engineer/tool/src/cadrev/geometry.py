@@ -68,6 +68,10 @@ class Built:
     joints: dict = field(default_factory=dict)
     # loop name -> [<instance>.<feature>, <instance>.<feature>], two datums that must coincide
     loops: dict = field(default_factory=dict)
+    # tendon name -> {path: [<instance>.<feature>, ...], stiffness: param, damping: param}
+    tendons: dict = field(default_factory=dict)
+    # part name -> {friction: param}, the contact values of every instance of that part
+    contacts: dict = field(default_factory=dict)
 
 
 # What poses a check: the assembly placed at the joint values the check's pose names, with the
@@ -75,7 +79,11 @@ class Built:
 Poser = Callable[[dict], "tuple[Built, dict] | None"]
 
 DRIVES = ("actuated", "passive")
-JOINT_KEYS = ("type", "parent", "child", "axis", "range", "drive")
+# The physics values (ADR-0008) a joint, tendon or part's contact may name, each as a param.
+JOINT_PHYSICS = ("damping", "stiffness", "friction")
+TENDON_PHYSICS = ("stiffness", "damping")
+CONTACT_PHYSICS = ("friction",)
+JOINT_KEYS = ("type", "parent", "child", "axis", "range", "drive", *JOINT_PHYSICS)
 # The param the MJCF export weighs every part by, as its volume times this density, where
 # params.yaml defines it; without it MuJoCo infers each moving body's mass from its mesh.
 EXPORT_DENSITY = "density"
@@ -112,10 +120,55 @@ def _motion_breach(result) -> str | None:
             return f"joint {name}: range must be two param names, not {joint['range']!r}"
         if joint.get("drive") not in DRIVES:
             return f"joint {name}: drive must be actuated or passive, not {joint.get('drive')!r}"
+        problem = _physics_breach(f"joint {name}", joint, JOINT_PHYSICS, JOINT_KEYS)
+        if problem:
+            return problem
     for name, pair in result.get("loops", {}).items():
         if not _names(pair, 2):
             return f"loop {name} must be two <instance>.<feature> datums, not {pair!r}"
+    for name, tendon in result.get("tendons", {}).items():
+        if not isinstance(tendon, dict):
+            return f"tendon {name} must be a mapping, not {type(tendon).__name__}"
+        path = tendon.get("path")
+        if not (isinstance(path, (list, tuple)) and len(path) >= 2 and _names(path, len(path))):
+            return f"tendon {name}: path must be two or more datums, not {path!r}"
+        problem = _physics_breach(f"tendon {name}", tendon, TENDON_PHYSICS, ("path",))
+        if problem:
+            return problem
+    for part, contact in result.get("contacts", {}).items():
+        if not isinstance(contact, dict):
+            return f"contact {part} must be a mapping, not {type(contact).__name__}"
+        problem = _physics_breach(f"contact {part}", contact, CONTACT_PHYSICS, ())
+        if problem:
+            return problem
     return None
+
+
+def _physics_breach(what: str, entry: dict, physics: tuple, other: tuple) -> str | None:
+    """Why entry has a key neither physics nor other names, or a physics value that is not a param
+    name."""
+    unknown = sorted(set(entry) - {*physics, *other})
+    if unknown:
+        return f"{what}: unknown key {unknown[0]!r}"
+    for key in physics:
+        if key in entry and not isinstance(entry[key], str):
+            return f"{what}: {key} must be a param name, not {entry[key]!r}"
+    return None
+
+
+def physics_slots(built: Built) -> dict[str, list[str]]:
+    """Each param a joint, tendon or contact names as a physics value, with where it applies."""
+    slots: dict[str, list[str]] = {}
+    for kind, entries, keys in (
+        ("joint", built.joints, JOINT_PHYSICS),
+        ("tendon", built.tendons, TENDON_PHYSICS),
+        ("contact", built.contacts, CONTACT_PHYSICS),
+    ):
+        for name, entry in entries.items():
+            for key in keys:
+                if key in entry:
+                    slots.setdefault(entry[key], []).append(f"{kind} {name}'s {key}")
+    return slots
 
 
 def _contract_breach(result) -> str | None:
@@ -125,7 +178,7 @@ def _contract_breach(result) -> str | None:
 
     if not isinstance(result, dict):
         return f"must return a mapping of parts, datums and assembly, not {type(result).__name__}"
-    for key in ("parts", "datums", "assembly", "joints", "loops"):
+    for key in ("parts", "datums", "assembly", "joints", "loops", "tendons", "contacts"):
         if not isinstance(result.get(key, {}), dict):
             return f"{key} must be a mapping of names, not {type(result[key]).__name__}"
     for name, part in result.get("parts", {}).items():
@@ -178,13 +231,17 @@ def build(p: Project) -> Built | None:
         used=params.used,
         joints=result.get("joints", {}),
         loops=result.get("loops", {}),
+        tendons=result.get("tendons", {}),
+        contacts=result.get("contacts", {}),
     )
     for name in sorted(built.used):
         expect_param_quantity(p, name, ("length", "angle"), "in model.py")
     ranges = {n for joint in built.joints.values() for n in joint.get("range", [])}
     for name in sorted(ranges & p.values.keys()):
         expect_param_quantity(p, name, ("angle",), "in a joint's range")
-    exported = ranges | ({EXPORT_DENSITY} if built.joints else set())
+    slots = physics_slots(built)
+    _check_physics(p, built, slots, ranges)
+    exported = ranges | slots.keys() | ({EXPORT_DENSITY} if built.joints else set())
     unread = p.values.keys() - built.used - _used_by_derived(p) - check_params(p) - exported
     for name in sorted(unread):
         p.warn("param-unused", f"param {name} is defined but the model never reads it")
@@ -212,9 +269,31 @@ def build(p: Project) -> Built | None:
         if part not in built.parts:
             p.error("assembly-part", f"assembly instance {inst}: unknown part {part!r}")
             del built.assembly[inst]
-    if _linkage_flaws(p, built):
-        built.joints, built.loops = {}, {}
+    flawed = _linkage_flaws(p, built)
+    problem = _physics_unfit(p, built)
+    if problem:
+        p.error("model-return", f"model.build {problem}")
+    if flawed or problem:
+        built.joints, built.loops, built.tendons, built.contacts = {}, {}, {}, {}
     return built
+
+
+def _check_physics(p: Project, built: Built, slots: dict[str, list[str]], ranges: set) -> None:
+    """[param-physics]: a param a physics slot names must be marked physics: true, and one so
+    marked must not be read as geometry or kinematics, since exact leaves it out (ADR-0008)."""
+    for name, where in sorted(slots.items()):
+        if name in p.params and name not in p.physics:
+            p.error(
+                "param-physics",
+                f"param {name}: {where[0]} is a physics value, so mark the param physics: true",
+            )
+    read = built.used | check_params(p) | ranges
+    for name in sorted(p.physics & read):
+        p.error(
+            "param-physics",
+            f"param {name}: is marked physics: true, but the model's geometry, a joint range or a "
+            "check reads it; a physics value only goes to a joint, tendon or contact",
+        )
 
 
 def instance_datum(built: Built, name: str) -> tuple[str, str] | None:
@@ -294,6 +373,22 @@ def _linkage_flaws(p: Project, built: Built) -> bool:
                 flawed = True
                 break
     return flawed
+
+
+def _physics_unfit(p: Project, built: Built) -> str | None:
+    """Why the tendons, contacts or physics slots build() returns do not fit its assembly: an
+    unknown datum, part or param."""
+    for name, tendon in built.tendons.items():
+        for datum in tendon["path"]:
+            if instance_datum(built, datum) is None:
+                return f"tendon {name}: {datum} names no <instance>.<feature> datum of the assembly"
+    for part in built.contacts:
+        if part not in built.parts:
+            return f"contact {part}: {part} is not a part"
+    for param, where in physics_slots(built).items():
+        if param not in p.values:
+            return f"{where[0]} names {param}, which params.yaml does not define"
+    return None
 
 
 # How finely _off_solid samples each edge of a cylindrical face to find the face's axial extent.
