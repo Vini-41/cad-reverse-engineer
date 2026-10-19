@@ -44,6 +44,7 @@ evidence:
     values: {L: 70, W: 56, H: 22}
     scope: not-modeled
     reason: Foot not modeled in this example; Figure S1 gives a different 60 x 46 x 20 schematic.
+    confirmed_by: Vini Rezanejad
 
   - id: tension-springs
     source: paper
