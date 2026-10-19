@@ -3,8 +3,10 @@
 # before the fix: those that go red there are holes the fix closes, those that stay green are
 # guards, named test_guard_*. Prints
 # the counts and each misnamed test, and exits 1 if there is one: a test_guard_* that goes red, or
-# a test function new since BASE that stays green without the name. New rows of a test function
-# BASE already has (the QUOTES and UNITS tables) carry near misses, so only their red guards count.
+# a test function new since BASE that stays green without the name. It exits 2 if pytest ran no
+# test, so a missing pytest or an empty selection never reads as a clean comparison. New rows of a
+# test function BASE already has (the QUOTES and UNITS tables) carry near misses, so only their red
+# guards count.
 #
 #   scripts/red-on-main [pytest args, e.g. -k units]     LIST=1 also lists every test as red or green
 #
@@ -25,7 +27,7 @@ if [ "$base" = "$(git -C "$repo" rev-parse HEAD)" ] && git -C "$repo" diff --qui
 fi
 
 tree=$(mktemp -d)
-trap 'git -C "$repo" worktree remove --force "$tree" >/dev/null 2>&1 || true; rm -f "$tree.existing" "$tree.patch"' EXIT
+trap 'git -C "$repo" worktree remove --force "$tree" >/dev/null 2>&1 || true; rm -f "$tree.existing" "$tree.patch" "$tree.log"' EXIT
 git -C "$repo" worktree add --detach --quiet "$tree" "$base"
 # Everything but the tool source comes from the working tree: the tests read the READMEs and examples too.
 git -C "$repo" diff --binary "$base" -- . ":(exclude)skills/cad-reverse-engineer/tool/src" >"$tree.patch"
@@ -66,9 +68,17 @@ for path, lines in changed.items():
 fi
 cd "$tree/skills/cad-reverse-engineer/tool"
 # PYTHONPATH puts the base's src ahead of the editable install of the working tree's.
-results=$(PYTHONPATH="$PWD/src" uv run --project "$tool" python -m pytest -v --tb=no -p no:cacheprovider "$@" \
-  | sed -nE 's/^(.+) (FAILED|ERROR) +\[ *[0-9]+%\]$/red    \1/p; s/^(.+) PASSED +\[ *[0-9]+%\]$/green  \1/p' \
-  | sort || true)
+log="$tree.log"
+code=0
+PYTHONPATH="$PWD/src" uv run --project "$tool" python -m pytest -v --tb=no -p no:cacheprovider "$@" >"$log" 2>&1 || code=$?
+results=$(sed -nE 's/^(.+) (FAILED|ERROR) +\[ *[0-9]+%\]$/red    \1/p; s/^(.+) PASSED +\[ *[0-9]+%\]$/green  \1/p' "$log" | sort || true)
+# pytest exits 1 when a test fails, which is a hole; any other failure, or exit 1 with no test run
+# (pytest missing from the tool's environment), means nothing was compared, so say so and fail.
+if { [ "$code" -ne 0 ] && [ "$code" -ne 1 ]; } || { [ "$code" -eq 1 ] && [ -z "$results" ]; }; then
+  tail -n 20 "$log" >&2
+  echo "pytest ran no test against ${BASE:-upstream} (exit $code), so nothing was compared; is pytest in the tool's environment (uv sync --extra test)?" >&2
+  exit 2
+fi
 [ -n "${LIST:-}" ] && echo "$results"
 echo "$results" | awk '
   FNR == NR { old[$1] = 1; next }

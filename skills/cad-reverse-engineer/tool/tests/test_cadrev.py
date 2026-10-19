@@ -184,7 +184,7 @@ def test_report_json_carries_status_findings_and_counts(proj_dir):
     }
 
 
-def test_report_json_has_the_keys_project_format_documents(proj_dir):
+def test_guard_report_json_has_the_keys_project_format_documents(proj_dir):
     doc = (Path(__file__).parents[2] / "references" / "project-format.md").read_text()
     rows = dict(re.findall(r"^\| `(\w+)` \| (.*) \|$", doc.split("## build/report.json")[1], re.M))
     _, report = verify(proj_dir)
@@ -525,7 +525,7 @@ def test_report_shows_no_override_when_the_project_keeps_the_default_literals(pr
     assert md.split("## Model literal override\n\n")[1].startswith("_None._")
 
 
-def test_unledgered_stated_quantity_is_reported(proj_dir):
+def test_guard_unledgered_stated_quantity_is_reported(proj_dir):
     data = yaml.safe_load((proj_dir / "evidence.yaml").read_text())
     data["skipped"] = []
     write(proj_dir, "evidence.yaml", data)
@@ -1979,7 +1979,7 @@ def documented_status() -> tuple[str, int, int, int, int]:
     return status, errors, warnings, passed, checks
 
 
-def test_example_reaches_the_status_its_readme_documents(tmp_path):
+def test_guard_example_reaches_the_status_its_readme_documents(tmp_path):
     root = tmp_path / "legclaw-links"
     shutil.copytree(EXAMPLE, root, ignore=shutil.ignore_patterns("build", "__pycache__"))
     code, report = verify(root)
