@@ -121,6 +121,13 @@ def overlap_limits(p: Project) -> list[dict]:
     return out
 
 
+def interpretation(r: CheckResult) -> str:
+    """A check's interpretation, with what it rests on when that is less than source."""
+    if r.rests_on == "source":
+        return r.note
+    return "; ".join(filter(None, [r.note, f"rests on {r.rests_on}: {', '.join(r.resting)}"]))
+
+
 def counts(p: Project, results: list[CheckResult]) -> dict[str, int]:
     """The headline numbers shown beside the status."""
     errors = sum(f.level == "error" for f in p.findings)
@@ -181,7 +188,10 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
     md += ["## Geometry checks against the sources", ""]
     md += _table(
         ["check", "result", "expected (evidence)", "measured", "interpretation"],
-        [[r.id, "pass" if r.ok else "**FAIL**", r.expected, r.measured, r.note] for r in results],
+        [
+            [r.id, "pass" if r.ok else "**FAIL**", r.expected, r.measured, interpretation(r)]
+            for r in results
+        ],
     )
 
     md += ["## Non-default tolerances", ""]
@@ -310,7 +320,7 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
                 "status": status,
                 "counts": headline,
                 "findings": [asdict(f) for f in errors + warnings],
-                "checks": [asdict(r) for r in results],
+                "checks": [{k: v for k, v in asdict(r).items() if k != "resting"} for r in results],
                 "tolerances": loosened,
                 "overlap_limits": limits,
                 "model_literals": override,

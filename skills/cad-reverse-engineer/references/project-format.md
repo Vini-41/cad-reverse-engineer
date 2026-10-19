@@ -189,6 +189,8 @@ checks:
 
 A dimension that spans several parts (an envelope of a subassembly, a spacing between parts) is checked over instances: a `bbox`, `distance` or `angle` check names `instances: [<instance>, ...]` in place of `part`, and is evaluated in the assembly frame, where the instances' `Location`s place them. Its datums are named `<instance>.<feature>`: the instance's part datum `<part>.<feature>`, moved by its `Location`. Under `instances` every name resolves against the assembly, so an instance named like its part is the instance. List each instance the check reads; there are no globs. An unknown instance, a feature its part has no datum for, or an empty list is `[check-config]`; a check naming both `part` and `instances` is `[schema]`. A check of another `kind` is `[check-kind]`; one naming a part, datum, axis or evidence value that does not exist is `[check-config]`. A check whose evaluated value strays from its ledger value by more than its tolerance is `[check-failed]`.
 
+Each check rests on the weakest basis among the params it reads (proposed < measured < source), or on source when it reads none; today only a mass check reads params. report.json gives each check result its `rests_on`, and report.md's checks table shows "rests on <basis>: <params>" beside a check resting on less than source, naming the params it reads that rest on that basis. A mass check on a proposed density then confirms the model against the stated mass given that chosen density, not the density itself. What a check rests on leaves its pass/fail and the status unchanged.
+
 `tol` overrides `tolerance.length` for one check, or `tolerance.angle` (degrees) for an angle check. A check's tolerance is capped: `tol` (or the project tolerance, where the check sets none) at 5% of each value the check compares, and `tol_rel` at 0.25; above either is `[tolerance-cap]`. The report lists every non-default tolerance beside its check: each `tol` other than 0.001 (0.01 for an angle check), and every `tol_rel`, which has no default. Each source param that no check covers raises `[unchecked-source]`.
 
 ## gaps.yaml
@@ -242,7 +244,7 @@ The machine-readable report `cadrev check` writes beside `report.md`, which rend
 | `exact` | whether the project is exact (see [Statuses](#statuses)) |
 | `counts` | `errors`, `warnings`, `checks`, `checks_passed`, `params`, and the params resting on each basis: `source`, `measured`, `proposed` |
 | `findings` | every finding as `level`, `rule`, `message` |
-| `checks` | every geometry check with its result, expected and evaluated values |
+| `checks` | every geometry check with its result, expected and evaluated values, and the basis it `rests_on` |
 | `tolerances` | each check with a non-default tolerance: its `check` id, `kind`, and `tol` or `tol_rel` |
 | `overlap_limits` | each interference check with a non-default overlap limit: its `check` id and `max_volume` |
 | `model_literals` | project.yaml's `model_literals` when it differs from the default, else null |

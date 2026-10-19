@@ -510,6 +510,61 @@ def test_guard_model_allowed_literal_in_any_spelling(proj_dir, literal):
     assert code == 0
 
 
+# A constant built from params hides its number as well as a literal does.
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        "atan2(p.link_H, p.link_H)",
+        "p.link_W / p.link_W",
+        "p.link_W - p.link_W",
+        "atan2(2 * p.link_H, p.link_H + p.link_H)",
+        "math.degrees(math.atan2(p.link_H, p.link_H)) * p.pitch / p.pitch",
+    ],
+)
+def test_model_constant_built_from_params_is_a_finding_on_its_line(proj_dir, expr):
+    _model_with(proj_dir, header="import math\nfrom math import atan2", line=f"extra = {expr}")
+    messages = findings(proj_dir, "model-constant")
+    assert errors(proj_dir) == ["model-constant"] and len(messages) == 1
+    assert messages[0].startswith(f"model.py:7: {expr}")
+
+
+def test_model_constant_through_a_local_alias_is_a_finding(proj_dir):
+    _model_with(proj_dir, line="w = p.link_W; extra = w / w")
+    messages = findings(proj_dir, "model-constant")
+    assert errors(proj_dir) == ["model-constant"] and len(messages) == 1
+    assert messages[0].startswith("model.py:6: w / w")
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "extra = p.link_L - p.link_L / 2",
+        "extra = p.link_H - 1",
+        "extra = -p.pitch / 2",
+        "extra = p.link_H // 2, p.link_H % 2",
+        "w = p.link_W; extra = w / p.link_H",
+        "w = p.link_W; w = 1; extra = w / p.link_W",
+        "extra = [h / h for h in (p.link_H,)]",
+    ],
+)
+def test_guard_model_relation_that_varies_with_its_params(proj_dir, line):
+    _model_with(proj_dir, line=line)
+    code, _ = verify(proj_dir)
+    assert code == 0 and findings(proj_dir, "model-constant") == []
+
+
+@pytest.mark.parametrize(
+    "line",
+    ["extra = 0 if p.link_H else math.asin(p.link_L / p.link_H + p.link_L / p.link_L)"],
+)
+def test_guard_model_expression_failing_to_evaluate_is_skipped(proj_dir, line):
+    _model_with(proj_dir, header="import math", line=line)
+    code, _ = verify(proj_dir)
+    assert code == 0 and findings(proj_dir, "model-constant") == []
+
+
 def test_report_shows_the_project_override_of_the_allowed_literals(proj_dir):
     edit(proj_dir, "project.yaml", lambda d: d.update(model_literals=[0, 1, 2, 7.5]))
     code, report = verify(proj_dir)
@@ -2581,6 +2636,66 @@ def test_check_naming_both_part_and_instances_is_a_schema_finding(proj_dir, tmp_
     assert len(messages) == 1 and "part" in messages[0] and "instances" in messages[0]
 
 
+# Datums are confirmed on their part's solid (ADR-0006). The fixture's link is 40 x 5 x 8, centred
+# on the origin, with its holes 3 across on the Z axis at x = ±15.
+
+
+def _datum(at: str, model: str = MODEL):
+    """The fixture's model returning one more datum, link.extra at the point expression at."""
+    return model.replace(
+        '"link.b": (p.pitch / 2, 0, 0)}', f'"link.b": (p.pitch / 2, 0, 0), "link.extra": {at}}}'
+    )
+
+
+def _datum_at(root: Path, at: str, model: str = MODEL) -> list[str]:
+    """The datum-off-solid messages of a run whose model also returns link.extra at at."""
+    write(root, "model.py", _datum(at, model))
+    return findings(root, "datum-off-solid")
+
+
+_SLOT = MODEL.replace(
+    "    return {",
+    "    link -= extrude(SlotCenterToCenter(p.pitch / 2, p.hole_d), p.link_H, both=True)\n"
+    "    return {",
+)
+
+
+def test_guard_datum_at_a_hole_centre_on_its_axis_raises_no_finding(proj_dir):
+    assert findings(proj_dir, "datum-off-solid") == []
+
+
+def test_guard_datum_on_a_slot_end_axis_raises_no_finding(proj_dir):
+    assert _datum_at(proj_dir, "(p.pitch / 2 / 2, 0, 0)", _SLOT) == []
+
+
+def test_guard_datum_on_an_end_face_raises_no_finding(proj_dir):
+    assert _datum_at(proj_dir, "(p.link_L / 2, 0, 0)") == []
+
+
+def test_datum_inside_the_solid_where_no_hole_is_is_off_solid(proj_dir):
+    messages = _datum_at(proj_dir, "(0, 0, 0)")
+    assert len(messages) == 1
+    assert "link.extra" in messages[0] and "part link" in messages[0] and "2.5" in messages[0]
+
+
+def test_datum_in_mid_air_is_off_solid(proj_dir):
+    messages = _datum_at(proj_dir, "(0, 0, p.link_L)")
+    assert len(messages) == 1 and "link.extra" in messages[0] and "36" in messages[0]
+
+
+def test_datum_on_a_hole_axis_beyond_the_hole_is_off_solid(proj_dir):
+    messages = _datum_at(proj_dir, "(p.pitch / 2, 0, p.link_L)")
+    assert len(messages) == 1 and "link.extra" in messages[0] and "36" in messages[0]
+
+
+def test_datum_a_check_reads_is_off_solid_too(proj_dir):
+    write(
+        proj_dir, "model.py", MODEL.replace('"link.b": (p.pitch / 2, 0, 0)', '"link.b": (0, 0, 0)')
+    )
+    messages = findings(proj_dir, "datum-off-solid")
+    assert len(messages) == 1 and "link.b" in messages[0]
+
+
 def test_part_of_two_disjoint_solids_is_invalid(proj_dir):
     split = "link += Pos(p.link_L, 0, 0) * Box(p.link_W, p.link_W, p.link_H)\n    return {"
     write(proj_dir, "model.py", MODEL.replace("return {", split))
@@ -2652,6 +2767,115 @@ def test_mass_check_count_given_as_a_bare_number_is_a_finding(proj_dir, tmp_path
     _mass_of_two_links(proj_dir, tmp_path, 2)
     messages = findings(proj_dir, "schema")
     assert len(messages) == 1 and "counts" in messages[0]
+
+
+# What a check rests on: the weakest basis among the params it reads.
+
+
+def _check_row(root: Path, check: str) -> str:
+    """The row of check in report.md's checks table."""
+    md = (root / "build" / "report.md").read_text()
+    return next(line for line in md.splitlines() if line.startswith(f"| {check} |"))
+
+
+_RESIN = {"basis": "proposed", "value": 0.0012, "rationale": "a typical resin", "gap": "G1"}
+
+
+def _weighed(root: Path, tmp_path: Path, text: str, values: dict, check=(), **params) -> dict:
+    """Ledger text as N1, add params, and check the link's mass N1.m with the density param rho,
+    its check entry updated by check; report.json."""
+    add_quote(root, tmp_path, text, text, values)
+    add_params(root, **params)
+    mass = {
+        "id": "m",
+        "kind": "mass",
+        "parts": ["link"],
+        "density": "rho",
+        "evidence": "N1",
+        "key": "m",
+        "tol_rel": 0.05,
+    }
+    edit(root, "checks.yaml", lambda d: d["checks"].append(mass | dict(check)))
+    return verify(root)[1]
+
+
+def _mass_result(report: dict) -> dict:
+    assert report["status"] == "VERIFIED", report["findings"]
+    return next(r for r in report["checks"] if r["id"] == "m")
+
+
+_MEASURED = {
+    "basis": "measured",
+    "from": "F2",
+    "value": 0.0012,
+    "method": "weighed offcut",
+    "uncertainty": "±5%",
+}
+
+
+@pytest.mark.parametrize(
+    "rho, rests_on",
+    [
+        (_RESIN, "proposed"),
+        (_MEASURED, "measured"),
+        ({"basis": "derived", "expr": "foot_w * 0.0012 / 5.5"}, "measured"),
+        ({"basis": "derived", "expr": "hole_d * 0.0004"}, "proposed"),
+    ],
+    ids=["proposed", "measured", "derived-from-measured", "derived-from-proposed"],
+)
+def test_mass_check_rests_on_the_basis_its_density_rests_on(proj_dir, tmp_path, rho, rests_on):
+    add_measured(proj_dir)
+    m = _mass_result(_weighed(proj_dir, tmp_path, "The link weighs 1.8 g.", {"m": 1.8}, rho=rho))
+    assert m["ok"] and m["rests_on"] == rests_on
+    assert f"rests on {rests_on}: rho" in _check_row(proj_dir, "m")
+
+
+def test_guard_failing_mass_check_on_a_proposed_density_still_fails(proj_dir, tmp_path):
+    rho = _RESIN | {"value": 0.002}
+    report = _weighed(proj_dir, tmp_path, "The link weighs 1.8 g.", {"m": 1.8}, rho=rho)
+    assert report["status"] == "NOT VERIFIED"
+    assert [f["rule"] for f in report["findings"] if f["level"] == "error"] == ["check-failed"]
+
+
+def test_mass_check_on_source_density_add_and_counts_rests_on_source(proj_dir, tmp_path):
+    text = "3 links weigh 6.4 g with 1 g of screws, printed in resin of 1.2 g/cm3."
+    report = _weighed(
+        proj_dir,
+        tmp_path,
+        text,
+        {"n": 3, "m": 6.4, "screws": 1, "rho": 1.2},
+        check={"add": ["hardware"], "counts": {"link": "n_links"}},
+        rho={"basis": "source", "from": "N1.rho"},
+        hardware={"basis": "source", "from": "N1.screws"},
+        n_links={"basis": "source", "from": "N1.n"},
+    )
+    assert _mass_result(report)["rests_on"] == "source"
+    assert "rests on" not in _check_row(proj_dir, "m")
+
+
+def test_mass_check_names_each_param_it_reads_resting_on_less_than_source(proj_dir, tmp_path):
+    report = _weighed(
+        proj_dir,
+        tmp_path,
+        "The link weighs 2.8 g, printed in resin of 1.2 g/cm3.",
+        {"m": 2.8, "rho": 1.2},
+        check={"add": ["hardware"]},
+        rho={"basis": "source", "from": "N1.rho"},
+        hardware=_RESIN | {"value": 1, "rationale": "screws by count"},
+    )
+    assert _mass_result(report)["rests_on"] == "proposed"
+    row = _check_row(proj_dir, "m")
+    assert "rests on proposed: hardware" in row and "rho" not in row
+
+
+def test_bbox_distance_and_interference_checks_rest_on_source(proj_dir):
+    _, report = verify(proj_dir)
+    assert {r["kind"]: r["rests_on"] for r in report["checks"]} == {
+        "bbox": "source",
+        "distance": "source",
+        "interference": "source",
+    }
+    assert all("rests on" not in _check_row(proj_dir, c) for c in ("env.L", "pitch", "clear"))
 
 
 def test_report_md_labels_the_declared_bases_apart_from_what_params_rest_on(proj_dir):
@@ -2891,6 +3115,13 @@ FINDINGS = {
             _skip(**{"from": "Tests used", "to": "diameter."}, reason="test condition"),
         ],
     ),
+    "datum-off-solid": (
+        lambda r, t: write(r, "model.py", _datum("(0, 0, p.link_L)")),
+        [
+            lambda r, t: write(r, "model.py", _datum("(p.link_L / 2, 0, 0)")),
+            lambda r, t: write(r, "model.py", _datum("(p.pitch / 2, 0, p.link_H / 2)")),
+        ],
+    ),
     "evidence-anchor": (_evidence("pitch", quote=None), [_reading()]),
     "evidence-id": (
         _append(
@@ -2945,6 +3176,10 @@ FINDINGS = {
     "model-build": (
         lambda r, t: _model_with(r, line="extra = p.pitch_2"),
         [lambda r, t: _model_with(r, line="extra = p.pitch")],
+    ),
+    "model-constant": (
+        lambda r, t: _model_with(r, line="extra = p.pitch / p.pitch"),
+        [lambda r, t: _model_with(r, line="extra = p.pitch / p.link_H")],
     ),
     "model-literal": (
         lambda r, t: _model_with(r, line="extra = 7.5"),
