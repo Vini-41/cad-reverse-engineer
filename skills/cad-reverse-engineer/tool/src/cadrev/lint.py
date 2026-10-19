@@ -27,6 +27,12 @@ _FOLDS = {
 }
 _TEXT_TO_NUMBER = ("float", "int", "complex", "eval")
 _SUM = (ast.Add, ast.Sub)
+_ARITHMETIC = (ast.Add, ast.Sub, ast.Mult, ast.Div)
+
+
+def _same(a: float, b: float) -> bool:
+    """Whether two computed values are one number, past rounding."""
+    return math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-12)
 
 
 def _literal(node: ast.AST) -> float | None:
@@ -103,7 +109,8 @@ def _fold_chain(node: ast.BinOp, folded: set[ast.AST]) -> float | None:
 def lint_model(p: Project) -> None:
     """model.py may hold no dimension literals; every number comes through params: it imports
     only build123d and math, converts no text to a number, and its constant arithmetic, and the
-    literals of each chain of one commutative operator, fold to an allowed literal."""
+    literals of each chain of one commutative operator, fold to an allowed literal, as does the
+    factor each arithmetic of params multiplies a param by."""
     path = p.root / "model.py"
     if not path.is_file():
         p.error("model-missing", "model.py not found")
@@ -118,11 +125,10 @@ def lint_model(p: Project) -> None:
         return
 
     def is_allowed(value: float) -> bool:  # a sign is free: -90 rotates as readably as 90
-        return any(math.isclose(abs(value), abs(a), rel_tol=1e-9, abs_tol=1e-12) for a in allowed)
-
-    _lint_constants(p, tree, is_allowed)
+        return any(_same(abs(value), abs(a)) for a in allowed)
 
     folded: set[ast.AST] = set()  # nodes inside a constant expression or chain already folded
+    flagged: set[ast.AST] = set()  # the BinOps raised as model-arithmetic
     for node in ast.walk(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             modules = (
@@ -170,11 +176,13 @@ def lint_model(p: Project) -> None:
                 value = _fold_chain(node, folded)
                 what = "folds its literals to"
             if value is not None and not is_allowed(value):
+                flagged.add(node)
                 p.error(
                     "model-arithmetic",
                     f"model.py:{node.lineno}: {ast.unparse(node)} {what} "
                     f"{value:g}, not an allowed literal; move it to params.yaml with a basis",
                 )
+    _lint_param_expressions(p, tree, is_allowed, flagged)
 
 
 _MATH = {name: getattr(math, name) for name in dir(math) if not name.startswith("_")}
@@ -245,6 +253,27 @@ class _ParamExpressions:
             return names
         return None
 
+    def arithmetic(self, node: ast.AST, skip: set[ast.AST]) -> bool:
+        """Whether param expression node, through local names too, is built from p.<name> reads,
+        literals, + - * / and signs alone, with no node in skip."""
+        if node in skip:
+            return False
+        if isinstance(node, ast.Constant):
+            return True
+        if isinstance(node, ast.Attribute):
+            return isinstance(node.value, ast.Name) and node.value.id == self.param_name
+        if isinstance(node, ast.Name) and node.id in self.local and node.id not in self._following:
+            self._following.add(node.id)
+            try:
+                return self.arithmetic(self.local[node.id], skip)
+            finally:
+                self._following.discard(node.id)
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+            return self.arithmetic(node.operand, skip)
+        if isinstance(node, ast.BinOp) and isinstance(node.op, _ARITHMETIC):
+            return self.arithmetic(node.left, skip) and self.arithmetic(node.right, skip)
+        return False
+
     def function(self, func: ast.AST) -> Callable[..., float] | None:
         """The math function or min/max/abs func names, or None."""
         if isinstance(func, ast.Name) and func.id not in self.bound:
@@ -285,10 +314,14 @@ class _ParamExpressions:
         raise ValueError(f"{ast.unparse(node)} is no param expression")
 
 
-def _lint_constants(p: Project, tree: ast.Module, is_allowed) -> None:
+def _lint_param_expressions(
+    p: Project, tree: ast.Module, is_allowed, flagged: set[ast.AST]
+) -> None:
     """A param expression in build(p), or one inside it, whose value stays put when its params
     are scaled is a constant built from params (atan2(p.h, p.h)): its number belongs in
-    params.yaml."""
+    params.yaml. So does the factor an arithmetic of params multiplies a param by alike at both
+    scalings (p.h + p.h / 2 multiplies h by 1.5), unless one allowed literal multiplies or
+    divides by it, or the arithmetic holds a number flagged already."""
     build = next(
         (n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "build"), None
     )
@@ -305,6 +338,43 @@ def _lint_constants(p: Project, tree: ast.Module, is_allowed) -> None:
     exprs = _ParamExpressions(build, math_names, is_allowed)
     base = {k: v if math.isfinite(v) and v != 0 else 1.0 for k, v in p.values.items()}
 
+    def evaluate(node: ast.AST, params: dict[str, float]) -> float | None:
+        """node's finite value with these params, or None where it cannot be computed."""
+        try:
+            value = exprs.evaluate(node, params)
+        except (ArithmeticError, ValueError, TypeError, RecursionError):
+            return None
+        return float(value) if isinstance(value, (int, float)) and math.isfinite(value) else None
+
+    def lint_factors(
+        node: ast.expr, text: str, points: list[dict[str, float]], values: list[float]
+    ) -> bool:
+        """Raise each param node multiplies by the same factor at both points, the change in its
+        value per unit change of the param, unless that factor or its reciprocal is an allowed
+        literal; whether any was raised."""
+        raised = False
+        for name in points[0]:
+            factors = []
+            for params, value in zip(points, values):
+                shifted = evaluate(node, {**params, name: 2 * params[name]})
+                if shifted is None:
+                    break
+                factors.append((shifted - value) / params[name])
+            if (
+                len(factors) == len(points)
+                and _same(factors[0], factors[1])
+                and not is_allowed(factors[0])
+                and not (factors[0] and is_allowed(1 / factors[0]))  # p.x / 90 divides by 90
+            ):
+                raised = True
+                p.error(
+                    "model-arithmetic",
+                    f"model.py:{node.lineno}: {text} multiplies {name} by {factors[0]:g}, not "
+                    "an allowed literal; move the number to params.yaml as a derived param "
+                    "with a basis",
+                )
+        return raised
+
     def visit(node: ast.AST) -> None:
         if not isinstance(node, ast.expr) or (reads := exprs.reads(node)) is None:
             for child in ast.iter_child_nodes(node):
@@ -314,17 +384,16 @@ def _lint_constants(p: Project, tree: ast.Module, is_allowed) -> None:
             return
         text = ast.unparse(node)
         rng = random.Random(f"{node.lineno}:{text}")
-        values = []
-        for low, high in _FACTORS:
-            params = {k: base.get(k, 1.0) * rng.uniform(low, high) for k in sorted(reads)}
-            try:
-                value = exprs.evaluate(node, params)
-                if not (isinstance(value, (int, float)) and math.isfinite(value)):
-                    return
-            except (ArithmeticError, ValueError, TypeError, RecursionError):
-                return  # a domain error, an overflow or a complex root: skipped, not judged
-            values.append(float(value))
-        if not math.isclose(values[0], values[1], rel_tol=1e-9, abs_tol=1e-12):
+        points = [
+            {k: base.get(k, 1.0) * rng.uniform(low, high) for k in sorted(reads)}
+            for low, high in _FACTORS
+        ]
+        values = [v for params in points if (v := evaluate(node, params)) is not None]
+        if len(values) < len(points):
+            return  # a domain error, an overflow or a complex root: skipped, not judged
+        if not _same(values[0], values[1]):
+            if exprs.arithmetic(node, flagged) and lint_factors(node, text, points, values):
+                return
             # p.y * atan2(p.h, p.h) varies, but its atan2 does not: each part of a varying
             # expression is judged too, beyond #31's maximal sub-expressions.
             for child in ast.iter_child_nodes(node):

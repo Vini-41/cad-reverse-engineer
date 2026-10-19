@@ -584,9 +584,89 @@ def test_guard_model_relation_that_varies_with_its_params(proj_dir, line):
     assert code == 0 and findings(proj_dir, "model-constant") == []
 
 
+# A factor respelled from allowed literals hides its number as well as the literal would.
+
+
+@pytest.mark.parametrize(
+    "line, expr, param, factor",
+    [
+        ("extra = p.link_H + p.link_H / 2", "p.link_H + p.link_H / 2", "link_H", "1.5"),
+        ("w = p.link_W; extra = w + w / 2", "w + w / 2", "link_W", "1.5"),
+        ("extra = p.link_L / 2 / 2", "p.link_L / 2 / 2", "link_L", "0.25"),
+        ("extra = p.pitch + p.pitch + p.pitch", "p.pitch + p.pitch + p.pitch", "pitch", "3"),
+        (
+            "extra = p.link_W / 2 + p.link_W / 2 + p.link_W / 2",
+            "p.link_W / 2 + p.link_W / 2 + p.link_W / 2",
+            "link_W",
+            "1.5",
+        ),
+        (
+            "extra = math.sin(p.link_H + p.link_H / 2)",
+            "p.link_H + p.link_H / 2",
+            "link_H",
+            "1.5",
+        ),
+        (
+            "extra = (p.link_H + p.link_H / 2) * p.pitch",
+            "p.link_H + p.link_H / 2",
+            "link_H",
+            "1.5",
+        ),
+    ],
+)
+def test_model_factor_respelled_from_allowed_literals_is_a_finding(
+    proj_dir, line, expr, param, factor
+):
+    _model_with(proj_dir, header="import math", line=line)
+    messages = findings(proj_dir, "model-arithmetic")
+    assert errors(proj_dir) == ["model-arithmetic"] and len(messages) == 1
+    assert messages[0].startswith(f"model.py:6: {expr} multiplies {param} by {factor},")
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        "p.link_L - p.link_L / 2",
+        "-p.pitch / 2",
+        "p.link_H - 1",
+        "p.pitch + p.link_H / 2",
+        "p.link_H / 2 + p.link_H / 2",
+        "p.pitch + p.pitch",
+        "(p.link_L - p.link_W) / 2",
+        "2 * p.link_W - p.link_H",
+        "p.link_L * math.cos(p.pitch)",
+        "math.atan2(p.link_H, p.link_L)",
+        "p.link_H ** 2",
+        "p.pitch * math.pi",
+        "min(p.link_H, p.link_W) / 2",
+        "p.pitch / 90",
+    ],
+)
+def test_guard_model_factor_that_is_an_allowed_literal_or_not_constant(proj_dir, expr):
+    _model_with(proj_dir, header="import math", line=f"extra = {expr}")
+    code, _ = verify(proj_dir)
+    assert code == 0, findings(proj_dir, "model-arithmetic")
+
+
+@pytest.mark.parametrize(
+    "expr, rule",
+    [
+        ("3 * p.link_H / 2", "model-literal"),
+        ("p.link_W / p.link_W", "model-constant"),
+        ("2 * p.link_W * 2", "model-arithmetic"),
+    ],
+)
+def test_guard_model_number_already_flagged_gets_no_factor_finding(proj_dir, expr, rule):
+    _model_with(proj_dir, line=f"extra = {expr}")
+    assert errors(proj_dir) == [rule] and len(findings(proj_dir, rule)) == 1
+
+
 @pytest.mark.parametrize(
     "line",
-    ["extra = 0 if p.link_H else math.asin(p.link_L / p.link_H + p.link_L / p.link_L)"],
+    [
+        "extra = 0 if p.link_H else math.asin(p.link_L / p.link_H + p.link_L / p.link_L)",
+        "extra = 0 if p.link_H else (p.link_L + p.link_L / 2) / (p.pitch - p.pitch)",
+    ],
 )
 def test_guard_model_expression_failing_to_evaluate_is_skipped(proj_dir, line):
     _model_with(proj_dir, header="import math", line=line)
