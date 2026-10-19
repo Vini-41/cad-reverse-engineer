@@ -68,7 +68,7 @@ Done when the tracer part's checks went green before a second part was modelled,
 
 ### 6. Check against the sources
 
-Add a check for every source value the geometry should realise: `bbox` for envelopes, `distance` between datums for pitches and spacings, `mass` where a mass is stated, `interference` across the assembly. Where a figure shows a modelled part in a near-orthographic view, add an overlay and look at the rendered PNG; record in the param's interpretation what the overlay showed.
+Add a check for every source value the geometry should realise: `bbox` for envelopes, `distance` between datums for pitches and spacings, `angle` at a datum for stated angles, `mass` where a mass is stated, `interference` across the assembly. Where a figure shows a modelled part in a near-orthographic view, add an overlay and look at the rendered PNG; record in the param's interpretation what the overlay showed.
 
 Turn a red check green by changing the model or its params, and record a changed proposed param as `params.yaml` in [`references/project-format.md`](references/project-format.md#paramsyaml) describes. Evidence changes only to correct a transcription, re-copied from `cadrev text`.
 

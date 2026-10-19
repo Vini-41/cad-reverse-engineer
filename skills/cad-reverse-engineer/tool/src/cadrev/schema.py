@@ -127,7 +127,7 @@ FILES = {
         "name": (TEXT_OR_NUMBER, None),
         "target": (str, None),
         "units": (dict, None),
-        "tolerance": (Record({"length": NUMBER}), None),
+        "tolerance": (Record({"length": NUMBER, "angle": NUMBER}), None),
         "model_literals": (Items(NUMBER), None),
         "sources": (SOURCE, list),
     },

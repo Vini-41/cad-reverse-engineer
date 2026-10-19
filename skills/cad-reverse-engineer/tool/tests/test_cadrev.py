@@ -2322,6 +2322,181 @@ def test_guard_distance_between_datums_of_one_part_beside_another_part(proj_dir)
     assert findings(proj_dir, "check-config") == []
 
 
+# Angle checks: the angle at one datum between the directions to two others, in degrees.
+
+# link.c sits on hole b's axis at the top face, so link.a - link.b - link.c is a right angle.
+_CORNER = MODEL.replace(
+    '"link.b": (p.pitch / 2, 0, 0)}',
+    '"link.b": (p.pitch / 2, 0, 0), "link.c": (p.pitch / 2, 0, p.link_H / 2)}',
+)
+
+
+def _angle_check(root: Path, tmp_path: Path, text: str, value: float, **changes) -> None:
+    """Ledger text as N1 (its angle a = value) and check the angle at link.b against it."""
+    add_quote(root, tmp_path, text, text, {"a": value})
+    write(root, "model.py", _CORNER)
+    check = {
+        "id": "ang",
+        "kind": "angle",
+        "between": ["link.a", "link.b", "link.c"],
+        "evidence": "N1",
+        "key": "a",
+    }
+    edit(root, "checks.yaml", lambda d: d["checks"].append({**check, **changes}))
+
+
+def _angle(report: dict) -> dict:
+    return next(c for c in report["checks"] if c["id"] == "ang")
+
+
+def test_angle_check_on_a_right_angle_passes_against_90_degrees(proj_dir, tmp_path):
+    _angle_check(proj_dir, tmp_path, "The arms meet at 90° at the pivot.", 90)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert _angle(report)["ok"] and _angle(report)["measured"].startswith("90°")
+
+
+def test_angle_check_on_a_right_angle_fails_against_80_degrees(proj_dir, tmp_path):
+    _angle_check(proj_dir, tmp_path, "The arms meet at 80° at the pivot.", 80)
+    code, report = verify(proj_dir)
+    assert code == 1 and not _angle(report)["ok"]
+    assert "check-failed" in errors(proj_dir)
+
+
+def test_angle_check_compares_a_value_stated_in_radians_in_degrees(proj_dir, tmp_path):
+    _angle_check(proj_dir, tmp_path, "The arms meet at 1.5708 rad at the pivot.", 1.5708)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert _angle(report)["ok"] and _angle(report)["expected"].startswith("90.0002 ")
+
+
+def test_angle_check_against_a_length_is_a_finding(proj_dir, tmp_path):
+    _angle_check(proj_dir, tmp_path, "The arms reach 90 mm from the pivot.", 90)
+    messages = findings(proj_dir, "unit-quantity")
+    assert len(messages) == 1 and messages[0].startswith("N1.a") and "check ang" in messages[0]
+
+
+def test_angle_check_tolerance_defaults_to_a_hundredth_of_a_degree(proj_dir, tmp_path):
+    _angle_check(proj_dir, tmp_path, "The arms meet at 90.02° at the pivot.", 90.02)
+    code, report = verify(proj_dir)
+    assert code == 1 and not _angle(report)["ok"]
+    assert "check-failed" in errors(proj_dir)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda root: _set_tol(root, "ang", tol=0.05),
+        lambda root: edit(root, "project.yaml", lambda d: d.update(tolerance={"angle": 0.05})),
+    ],
+    ids=["check-tol", "tolerance-angle"],
+)
+def test_angle_check_tolerance_is_set_by_tol_or_tolerance_angle(proj_dir, tmp_path, change):
+    _angle_check(proj_dir, tmp_path, "The arms meet at 90.02° at the pivot.", 90.02)
+    change(proj_dir)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert _angle(report)["ok"]
+
+
+@pytest.mark.parametrize(
+    "change, where",
+    [
+        (lambda root: _set_tol(root, "ang", tol=4.51), "tol 4.51 is"),
+        (
+            lambda root: edit(root, "project.yaml", lambda d: d.update(tolerance={"angle": 4.51})),
+            "tol 4.51 (tolerance.angle)",
+        ),
+    ],
+    ids=["check-tol", "tolerance-angle"],
+)
+def test_angle_check_tolerance_above_5_percent_of_its_value_is_a_finding(
+    proj_dir, tmp_path, change, where
+):
+    _angle_check(proj_dir, tmp_path, "The arms meet at 90° at the pivot.", 90)  # cap 4.5°
+    change(proj_dir)
+    messages = findings(proj_dir, "tolerance-cap")
+    assert len(messages) == 1 and "check ang" in messages[0] and where in messages[0]
+
+
+def test_guard_angle_check_tolerance_at_5_percent_of_its_value(proj_dir, tmp_path):
+    _angle_check(proj_dir, tmp_path, "The arms meet at 90° at the pivot.", 90, tol=4.5)
+    assert findings(proj_dir, "tolerance-cap") == []
+
+
+@pytest.mark.parametrize(
+    "change, tol",
+    [
+        (lambda root: _set_tol(root, "ang", tol=0.5), 0.5),
+        (
+            lambda root: edit(root, "project.yaml", lambda d: d.update(tolerance={"angle": 0.05})),
+            0.05,
+        ),
+    ],
+    ids=["check-tol", "tolerance-angle"],
+)
+def test_report_lists_a_non_default_angle_tolerance_beside_its_check(
+    proj_dir, tmp_path, change, tol
+):
+    _angle_check(proj_dir, tmp_path, "The arms meet at 90° at the pivot.", 90)
+    change(proj_dir)
+    _, report = verify(proj_dir)
+    assert report["tolerances"] == [{"check": "ang", "kind": "angle", "tol": tol}]
+    assert f"| ang | angle | tol {tol:g} |" in (proj_dir / "build" / "report.md").read_text()
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda root: None,
+        lambda root: _set_tol(root, "ang", tol=0.01),
+        lambda root: edit(root, "project.yaml", lambda d: d.update(tolerance={"length": 0.01})),
+    ],
+    ids=["unset", "tol-at-default", "tolerance-length"],
+)
+def test_guard_angle_check_at_the_default_angle_tolerance_is_not_listed(proj_dir, tmp_path, change):
+    _angle_check(proj_dir, tmp_path, "The arms meet at 90° at the pivot.", 90)
+    change(proj_dir)
+    _, report = verify(proj_dir)
+    assert "ang" not in [t["check"] for t in report["tolerances"]]
+
+
+def test_guard_source_angle_an_angle_check_covers_is_checked_by_it(proj_dir, tmp_path):
+    _angle_check(proj_dir, tmp_path, "The arms meet at 90° at the pivot.", 90)
+    edit(
+        proj_dir,
+        "params.yaml",
+        lambda d: d["params"].update(ang={"basis": "source", "from": "N1.a"}),
+    )
+    assert findings(proj_dir, "unchecked-source") == []
+
+
+def test_angle_check_at_a_vertex_its_datum_coincides_with_is_a_finding(proj_dir, tmp_path):
+    _angle_check(
+        proj_dir,
+        tmp_path,
+        "The arms meet at 90° at the pivot.",
+        90,
+        between=["link.a", "link.b", "link.b"],
+    )
+    code, report = verify(proj_dir)
+    messages = findings(proj_dir, "check-config")
+    assert code == 1 and len(messages) == 1 and "coincides" in messages[0]
+
+
+def test_angle_check_between_datums_of_two_parts_is_a_finding(proj_dir, tmp_path):
+    _angle_check(
+        proj_dir,
+        tmp_path,
+        "The arms meet at 90° at the pivot.",
+        90,
+        between=["link.a", "link.b", "pin.c"],
+    )
+    write(proj_dir, "model.py", _TWO_PARTS)
+    messages = findings(proj_dir, "check-config")
+    assert len(messages) == 1 and "link.a" in messages[0] and "pin.c" in messages[0]
+
+
 def test_part_of_two_disjoint_solids_is_invalid(proj_dir):
     split = "link += Pos(p.link_L, 0, 0) * Box(p.link_W, p.link_W, p.link_H)\n    return {"
     write(proj_dir, "model.py", MODEL.replace("return {", split))

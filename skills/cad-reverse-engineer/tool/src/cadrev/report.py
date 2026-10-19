@@ -12,11 +12,11 @@ from .geometry import CheckResult
 from .lint import MODEL_LITERALS
 from .project import (
     BASES,
-    LENGTH_TOL,
     RESTS_ON,
     Project,
     check_tolerance,
     default_overlap_limit,
+    default_tolerance,
     overlap_limit,
 )
 
@@ -91,11 +91,12 @@ def measured_params(p: Project) -> list[dict]:
 
 def tolerances(p: Project) -> list[dict]:
     """Each check whose tolerance is not cadrev's default, with that tolerance: tol for one
-    differing from LENGTH_TOL, and tol_rel for every mass check, which has no default."""
+    differing from LENGTH_TOL (ANGLE_TOL for an angle check), and tol_rel for every mass check,
+    which has no default."""
     out = []
     for c in p.checks:
         tolerance = check_tolerance(p, c)
-        if tolerance is not None and tolerance != ("tol", LENGTH_TOL):
+        if tolerance is not None and tolerance != default_tolerance(c.get("kind")):
             out.append({"check": c.get("id"), "kind": c.get("kind"), tolerance[0]: tolerance[1]})
     return out
 

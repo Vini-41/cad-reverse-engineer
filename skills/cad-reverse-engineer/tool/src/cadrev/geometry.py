@@ -9,7 +9,14 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from .project import Project, check_params, expect_param_quantity, expr_names, overlap_limit
+from .project import (
+    Project,
+    check_params,
+    check_tolerance,
+    expect_param_quantity,
+    expr_names,
+    overlap_limit,
+)
 
 AXES = {"x": 0, "y": 1, "z": 2}
 
@@ -164,8 +171,8 @@ def export(p: Project, built: Built) -> list[Path]:
     return written
 
 
-def _expect(p: Project, ref: str) -> float:
-    value = p.evidence_value(ref)
+def _expect(p: Project, ref: str, kind: str) -> float:
+    value = p.compared_value(ref, kind)
     if value is None:
         raise KeyError(f"evidence value {ref}")
     return value
@@ -175,13 +182,14 @@ def _compared(
     p: Project, c: dict, rid: str, ref: str, measured: float, shown: str = ""
 ) -> CheckResult:
     """The comparison of a value a check evaluates with the ledger value at ref: it passes within
-    the check's tolerance, tol, a length, or for a mass check tol_rel, a fraction of that value."""
-    expected = _expect(p, ref)
+    the check's tolerance: tol, a length or for an angle check degrees, or for a mass check
+    tol_rel, a fraction of that value."""
+    expected = _expect(p, ref, c["kind"])
     if c["kind"] == "mass":
         tol_rel = float(c["tol_rel"])
         tol, band = tol_rel * expected, f" ±{tol_rel:.0%}"
     else:
-        tol, band = float(c.get("tol", p.length_tol)), ""
+        tol, band = check_tolerance(p, c)[1], ""
     return CheckResult(
         rid,
         c["kind"],
@@ -201,6 +209,44 @@ def _owner(built: Built, datum: str) -> str | None:
     """The part a datum named <part>.<feature> belongs to, or None if its prefix names no part."""
     named = [part for part in built.parts if str(datum).startswith(f"{part}.")]
     return max(named, key=len, default=None)
+
+
+def _datums(p: Project, built: Built, c: dict) -> list[tuple[float, float, float]] | None:
+    """The points of the datums a distance or angle check names in between, in one part's frame;
+    None, after a [check-config] finding, when they belong to different parts."""
+    owners = {_owner(built, d) for d in c["between"]} - {None}
+    if len(owners) > 1:
+        p.error(
+            "check-config",
+            f"check {c.get('id', '?')}: {' and '.join(c['between'])} are datums of different "
+            f"parts, each in its own frame; a {c['kind']} compares datums of one part",
+        )
+        return None
+    return [built.datums[d] for d in c["between"]]
+
+
+def _angle(p: Project, c: dict, points: list) -> float | None:
+    """The angle in degrees at between[1] from the direction to between[0] to that to between[2];
+    None, after a [check-config] finding, when there are not three datums or one coincides with
+    the vertex, which leaves the angle undefined."""
+    cid, names = c.get("id", "?"), c["between"]
+    if len(points) != 3:
+        p.error(
+            "check-config", f"check {cid}: between names {len(points)} datums, not [a, vertex, b]"
+        )
+        return None
+    a, vertex, b = points
+    u, w = ([x - v for x, v in zip(end, vertex)] for end in (a, b))
+    for end, d in ((names[0], u), (names[2], w)):
+        if math.hypot(*d) <= p.length_tol:
+            p.error(
+                "check-config",
+                f"check {cid}: {end} coincides with the vertex {names[1]}, "
+                "so the angle is undefined",
+            )
+            return None
+    cross = (u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0])
+    return math.degrees(math.atan2(math.hypot(*cross), sum(x * y for x, y in zip(u, w))))
 
 
 def _count(p: Project, counts: dict, part: str) -> float:
@@ -230,15 +276,10 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
                     ref, measured = f"{c['evidence']}.{key}", size[AXES[axis]]
                     results.append(_compared(p, c, f"{cid}.{key}", ref, measured, f" along {axis}"))
             elif kind == "distance":
-                owners = {_owner(built, d) for d in c["between"]} - {None}
-                if len(owners) > 1:
-                    p.error(
-                        "check-config",
-                        f"check {cid}: {' and '.join(c['between'])} are datums of different parts, "
-                        "each in its own frame; a distance compares two datums of one part",
-                    )
+                points = _datums(p, built, c)
+                if points is None:
                     continue
-                a, b = (built.datums[d] for d in c["between"])
+                a, b = points
                 if c.get("along"):
                     i = AXES[c["along"]]
                     measured = abs(a[i] - b[i])
@@ -246,6 +287,14 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
                     measured = math.dist(a, b)
                 ref, between = f"{c['evidence']}.{c['key']}", " - ".join(c["between"])
                 results.append(_compared(p, c, cid, ref, measured, f" {between}"))
+            elif kind == "angle":
+                points = _datums(p, built, c)
+                measured = None if points is None else _angle(p, c, points)
+                if measured is None:
+                    continue
+                ref, (a, vertex, b) = f"{c['evidence']}.{c['key']}", c["between"]
+                shown = f"° at {vertex} between {a} and {b}"
+                results.append(_compared(p, c, cid, ref, measured, shown))
             elif kind == "mass":
                 names = c.get("parts") or list(built.parts)
                 counts = c.get("counts", {})

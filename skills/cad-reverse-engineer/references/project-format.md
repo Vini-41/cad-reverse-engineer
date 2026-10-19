@@ -24,7 +24,7 @@ format: 1                # written by `cadrev init`
 name: gripper
 target: Version-3 two-finger gripper as reported in Doe 2025, fingers open (not the Fig. S4 prototype)
 units: {length: mm, angle: deg, mass: g}
-tolerance: {length: 0.001}
+tolerance: {length: 0.001, angle: 0.01}
 model_literals: [0, 1, 2, -1, 0.5, 90, 180, 270, 360]   # optional; numbers model.py may contain (modeling.md)
 sources:
   - id: paper
@@ -45,7 +45,7 @@ sources:
 
 **Units come from the quote.** A ledger value is written as printed (`values: {L: 4}` for "4 cm"), and cadrev reads the unit printed right after it and converts the value to the project's units (40 mm) wherever a param `from:`, a check or an overlay uses it; a `value` written on that param is in project units (40). The numbers of a range or product share its last unit ("3–5 mm", "40×8×5 mm"). A value with no unit printed after it, such as a table cell (`37×6.5×5`), is already in project units. `in` and `"` read as inches, except `in` before a determiner ("4 in total", "2 in each leg").
 
-Each use expects one quantity: a `bbox` or `distance` check, an overlay calibration and a param `model.py` reads expect a length (the model may also read an angle); a mass check's `key` and `add` params expect a mass, its `density` a density. A value printed in a unit of another quantity is `[unit-quantity]`; a param traces to its quote through basis `source`, or through a `derived` expr that only scales one param by constants (`rho * 1000`). A value printed in two different units in one quote, or once with a unit and once without ("4 mm pins in 4 cm links"), is `[unit-ambiguous]`: quote only the part that states it.
+Each use expects one quantity: a `bbox` or `distance` check, an overlay calibration and a param `model.py` reads expect a length (the model may also read an angle); an `angle` check's value expects an angle, in degrees or radians, and is compared in degrees; a mass check's `key` and `add` params expect a mass, its `density` a density. A value printed in a unit of another quantity is `[unit-quantity]`; a param traces to its quote through basis `source`, or through a `derived` expr that only scales one param by constants (`rho * 1000`). A value printed in two different units in one quote, or once with a unit and once without ("4 mm pins in 4 cm links"), is `[unit-ambiguous]`: quote only the part that states it.
 
 Recognised units, spelled-out names included (millimetre, inches, degrees, grams, seconds…):
 
@@ -67,7 +67,7 @@ Recognised units, spelled-out names included (millimetre, inches, degrees, grams
 
 Any other word after a number (`12 links`) leaves it in project units.
 
-`tolerance.length` is how closely the model must realise a source value. It is a modelling check, never a manufacturing tolerance. Keep `sources:` the last key: `cadrev source` appends to it. Registering an id that is already listed refreshes its entry instead: the file's `path` and `sha256`, and the `kind`, `citation`, `url` and `license` the command gives. That is how sources are restored into a clone, replaced by a new download, or given a license after the fact. A source whose `license` is CC0-1.0, CC-BY-x.y or CC-BY-SA-x.y gets a `!sources/<file>` line in the project's `.gitignore`, so it is committed and the project reruns from a clone; any other license, or none, leaves the file ignored.
+`tolerance.length` is how closely the model must realise a source value. It is a modelling check, never a manufacturing tolerance. `tolerance.angle` is the same for angle checks, in degrees whatever `units.angle` says (default 0.01). Keep `sources:` the last key: `cadrev source` appends to it. Registering an id that is already listed refreshes its entry instead: the file's `path` and `sha256`, and the `kind`, `citation`, `url` and `license` the command gives. That is how sources are restored into a clone, replaced by a new download, or given a license after the fact. A source whose `license` is CC0-1.0, CC-BY-x.y or CC-BY-SA-x.y gets a `!sources/<file>` line in the project's `.gitignore`, so it is committed and the project reruns from a clone; any other license, or none, leaves the file ignored.
 
 A source's `kind` outside the list above is `[source-kind]`, and an empty `citation` is `[source-citation]`. A `path` with no file is `[source-missing]`, whose message names the `url` to download from; a file whose sha256 differs from the pinned one is `[source-hash]`: after a deliberate change, register it again.
 
@@ -170,6 +170,8 @@ checks:
      axes: {L: x, H: z, W: y}, interpretation: L×H×W read as part X×Z×Y}
   - {id: pitch-link, kind: distance, between: [finger_link.pin_a, finger_link.pin_b],
      evidence: L3-design, key: L3, along: x}          # along is optional
+  - {id: tilt-link, kind: angle, between: [finger_link.pin_a, finger_link.pin_b, finger_link.tip],
+     evidence: S2-tilt, key: theta, tol: 0.5}          # the angle at pin_b, in degrees
   - {id: gripper-mass, kind: mass, parts: [palm, finger_link], counts: {finger_link: n_links},
      density: resin_density, add: [servo_mass], evidence: fig3b-mass, key: m, tol_rel: 0.15}
   - {id: clear, kind: interference, pairs: [[palm_1, finger_link_1]], max_volume: 0.001}
@@ -177,12 +179,13 @@ checks:
 
 - `bbox`: the part's axis-aligned bounding-box size in its own frame.
 - `distance`: between two datums of one part, in that part's frame. Datums of two different parts (`<part>.<feature>` naming different parts) sit in unrelated frames, so such a check is `[check-config]`.
+- `angle`: `between: [a, vertex, b]`, three datums of one part (the same rule as `distance`); the angle at `vertex` between the directions to `a` and to `b`, in degrees (0 to 180). A datum that coincides with the vertex leaves the angle undefined and is `[check-config]`. A stated joint range (a range of motion) is not an angle of the one static model: ledger it `scope: context` with a reason, and check an angle only where a source states it for the configuration `target` names.
 - `mass`: Σ volume × count × density, plus any `add` params; `tol_rel` is required. Each `counts` entry names the param that counts that part (parts it leaves out count once), so a stated count is ledgered like any other number; a bare number there is `[schema]`. Its `density` and `add` params take their units from the quote (see `units` above). The check reads its `density`, `add` and `counts` params, so they need no read in model.py and no other check.
 - `interference`: overlap volume between assembly instances; all pairs when `pairs` is omitted. Needs no evidence. It passes when the overlap is at most `max_volume`, which defaults to `tolerance.length`³. This overlap limit compares with no ledger value, so it is not a tolerance and has no cap, but the report lists beside its check each limit other than cadrev's default: the default `tolerance.length`, 0.001, cubed. A project-wide `tolerance.length` therefore lists every interference check that sets no `max_volume`.
 
 Every check reads parts, never assembly instances: a dimension that spans several parts (an envelope of a subassembly, a spacing between parts) has no check yet, so record it as a `not-modeled` item or model the span as datums of one part. A check of another `kind` is `[check-kind]`; one naming a part, datum, axis or evidence value that does not exist is `[check-config]`. A check whose evaluated value strays from its ledger value by more than its tolerance is `[check-failed]`.
 
-`tol` overrides `tolerance.length` for one check. A check's tolerance is capped: `tol` (or `tolerance.length`, where the check sets none) at 5% of each value the check compares, and `tol_rel` at 0.25; above either is `[tolerance-cap]`. The report lists every non-default tolerance beside its check: each `tol` other than 0.001, and every `tol_rel`, which has no default. Each source param that no check covers raises `[unchecked-source]`.
+`tol` overrides `tolerance.length` for one check, or `tolerance.angle` (degrees) for an angle check. A check's tolerance is capped: `tol` (or the project tolerance, where the check sets none) at 5% of each value the check compares, and `tol_rel` at 0.25; above either is `[tolerance-cap]`. The report lists every non-default tolerance beside its check: each `tol` other than 0.001 (0.01 for an angle check), and every `tol_rel`, which has no default. Each source param that no check covers raises `[unchecked-source]`.
 
 ## gaps.yaml
 

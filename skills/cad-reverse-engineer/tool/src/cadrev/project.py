@@ -23,6 +23,7 @@ BASES = ("source", "derived", "measured", "proposed")
 # What a parameter can rest on, strongest first: a derived one rests on the weakest of its inputs.
 RESTS_ON = ("source", "measured", "proposed")
 LENGTH_TOL = 1e-3  # tolerance.length when project.yaml sets none
+ANGLE_TOL = 0.01  # tolerance.angle, in degrees, when project.yaml sets none
 # The loosest tolerance a check may have: tol as a fraction of each value it compares, and tol_rel.
 TOL_CAP, TOL_REL_CAP = 0.05, 0.25
 SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "other")
@@ -99,6 +100,10 @@ class Project:
         return float(self.meta.get("tolerance", {}).get("length", LENGTH_TOL))
 
     @property
+    def angle_tol(self) -> float:
+        return float(self.meta.get("tolerance", {}).get("angle", ANGLE_TOL))
+
+    @property
     def units(self) -> dict[str, str]:
         """The unit of each base quantity: the project's where it names a valid one, else the default."""
         out = dict(units.BASE)
@@ -144,6 +149,14 @@ class Project:
             return None
         value, unit = ledgered[0], self.unit_of(ref)
         return value if unit is None else units.convert(value, unit, self.units)
+
+    def compared_value(self, ref: str, kind: str) -> float | None:
+        """The evidence value a check of kind compares with: in degrees for an angle check, which
+        evaluates in degrees whatever the project's angle unit, else in the project's units."""
+        value = self.evidence_value(ref)
+        if value is None or kind != "angle":
+            return value
+        return value * units.size("angle", self.units) / units.UNITS["deg"].si
 
 
 def read_yaml(root: Path, name: str, findings: list[Finding]) -> dict:
@@ -530,7 +543,7 @@ def resolve_params(p: Project) -> None:
 
 
 # The quantity of the evidence values each check kind compares with the geometry.
-CHECK_READS = {"bbox": "length", "distance": "length", "mass": "mass"}
+CHECK_READS = {"bbox": "length", "distance": "length", "angle": "angle", "mass": "mass"}
 
 
 def check_refs(c: dict) -> list[str]:
@@ -553,12 +566,19 @@ def check_params(p: Project) -> set[str]:
 
 def check_tolerance(p: Project, c: dict) -> tuple[str, float] | None:
     """The tolerance a check compares with, as (key, value): tol, a length, for bbox and distance,
-    tol_rel, a fraction, for mass; None for a check of another kind."""
+    tol in degrees for angle, tol_rel, a fraction, for mass; None for a check of another kind."""
     if c.get("kind") in ("bbox", "distance"):
         return "tol", float(c.get("tol", p.length_tol))
+    if c.get("kind") == "angle":
+        return "tol", float(c.get("tol", p.angle_tol))
     if c.get("kind") == "mass" and "tol_rel" in c:
         return "tol_rel", float(c["tol_rel"])
     return None
+
+
+def default_tolerance(kind: str | None) -> tuple[str, float]:
+    """cadrev's own tolerance for a check of kind, where project.yaml and the check set none."""
+    return {"angle": ("tol", ANGLE_TOL)}.get(str(kind), ("tol", LENGTH_TOL))
 
 
 def default_overlap_limit(length_tol: float = LENGTH_TOL) -> float:
@@ -586,9 +606,10 @@ def check_tolerances(p: Project) -> None:
                     f"check {cid}: tol_rel {value:g} is above the cap of {TOL_REL_CAP:g}",
                 )
             continue
-        where = "" if "tol" in c else " (tolerance.length)"
+        project_wide = "tolerance.angle" if c.get("kind") == "angle" else "tolerance.length"
+        where = "" if "tol" in c else f" ({project_wide})"
         for ref in check_refs(c):
-            expected = p.evidence_value(ref)
+            expected = p.compared_value(ref, str(c.get("kind")))
             if expected is not None and value > TOL_CAP * abs(expected) * (1 + 1e-9):
                 p.error(
                     "tolerance-cap",
