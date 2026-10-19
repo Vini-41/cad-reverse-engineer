@@ -4,6 +4,8 @@
 - every rule name the tool emits (the literal rule of each p.error, p.warn and Finding) is asserted
   present by one test and asserted absent by another, and is documented as `[rule-name]` in
   skills/cad-reverse-engineer/references/*.md;
+- every error rule is named by a completion criterion of SKILL.md (a "Done when" line, or the line
+  of criteria every step shares), as `[rule-name]` or `[prefix-*]`;
 - every unit in cadrev.units.UNITS is read by a row of the test suite's UNITS table: a quote whose
   value the quote reader assigns that unit;
 - the tests import no cadrev module but the CLI entry point, cadrev.cli.
@@ -38,6 +40,7 @@ from cadrev import sources, units  # noqa: E402  (after the path to the tool sou
 
 EMITTERS = {"error": 0, "warn": 0, "Finding": 1}  # the call and the position of its rule argument
 BRACKETED = re.compile(r"\[([a-z][a-z0-9-]*)\]")
+DONE_NAME = re.compile(r"\[([a-z][a-z0-9-]*)(\*?)\]")  # a rule name, or a prefix ending in "-*"
 UNRUN = ("skip", "skipif", "xfail")  # marks under which a test or case may assert nothing
 CASE_BUILTINS = {
     f.__name__: f
@@ -122,6 +125,40 @@ def emitted() -> set[str]:
                 if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
                     rules.add(arg.value)
     return rules
+
+
+def emitted_errors() -> set[str]:
+    """The rule names the tool source passes as a literal to p.error or to Finding("error", ...)."""
+    rules = set()
+    for path in SRC.rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf8"))):
+            if not isinstance(node, ast.Call):
+                continue
+            literals = [a.value if isinstance(a, ast.Constant) else None for a in node.args]
+            if isinstance(node.func, ast.Attribute) and node.func.attr == "error":
+                rule = literals[0] if literals else None
+            elif getattr(node.func, "id", None) == "Finding" and literals[:1] == ["error"]:
+                rule = literals[1] if len(literals) > 1 else None
+            else:
+                continue
+            if isinstance(rule, str):
+                rules.add(rule)
+    return rules
+
+
+def unheld_errors() -> list[str]:
+    """Error rules that no completion criterion of SKILL.md names, directly or by a prefix."""
+    lines = [
+        line
+        for line in (SKILL / "SKILL.md").read_text().splitlines()
+        if line.startswith(("Done when", "Each step ends on a criterion"))
+    ]
+    names = {(n, bool(star)) for line in lines for n, star in DONE_NAME.findall(line)}
+    return sorted(
+        rule
+        for rule in emitted_errors()
+        if not any(rule.startswith(n) if star else rule == n for n, star in names)
+    )
 
 
 class Asserts:
@@ -348,6 +385,10 @@ def main() -> int:
     problems += [
         f"[{rule}] is not documented as [{rule}] in references/*.md"
         for rule in sorted(rules - documented())
+    ]
+    problems += [
+        f"[{rule}] is an error no completion criterion of SKILL.md names, as [{rule}] or a [prefix-*]"
+        for rule in unheld_errors()
     ]
     problems += [f"unit {u} is read by no row of the tests' UNITS table" for u in unread_units()]
     problems += [f"{where}; tests import only cadrev.cli" for where in stray_imports()]

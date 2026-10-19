@@ -16,6 +16,7 @@ def check(p):
     p.warn("open-end", "the end is open")
 """
 DOC = "A long link is `[too-long]`; an open end is `[open-end]`.\n"
+SKILL_MD = "### 1. Model the link\n\nDone when `cadrev check` reports no `[too-long]`.\n"
 TESTS = """\
 from cadrev import cli
 import pytest
@@ -51,9 +52,11 @@ def test_guard_closed_end(tmp_path):
 """
 
 
-def repo(tmp_path: Path, source=SOURCE, doc=DOC, tests=TESTS, unit_names=("mm",)) -> Path:
-    """A repo whose tool emits source's rules, documents doc and is tested by tests, with a unit
-    table of the real cadrev's units named in unit_names."""
+def repo(
+    tmp_path: Path, source=SOURCE, doc=DOC, tests=TESTS, unit_names=("mm",), skill_md=SKILL_MD
+) -> Path:
+    """A repo whose tool emits source's rules, documents doc, steps through skill_md and is tested
+    by tests, with a unit table of the real cadrev's units named in unit_names."""
     src = tmp_path / "skills/cad-reverse-engineer/tool/src/cadrev"
     src.mkdir(parents=True)
     for name in ("__init__.py", "sources.py", "units.py"):
@@ -72,6 +75,7 @@ def repo(tmp_path: Path, source=SOURCE, doc=DOC, tests=TESTS, unit_names=("mm",)
     refs = tmp_path / "skills/cad-reverse-engineer/references"
     refs.mkdir(parents=True)
     (refs / "rules.md").write_text(doc)
+    (refs.parent / "SKILL.md").write_text(skill_md)
     tool_tests = tmp_path / "skills/cad-reverse-engineer/tool/tests"
     tool_tests.mkdir(parents=True)
     (tool_tests / "test_cadrev.py").write_text(tests)
@@ -105,6 +109,25 @@ def test_undocumented_rule_fails(tmp_path):
     assert result.stdout.splitlines()[1:] == [
         "[open-end] is not documented as [open-end] in references/*.md"
     ]
+
+
+def test_error_no_done_line_of_skill_md_names_fails(tmp_path):
+    result = check(repo(tmp_path, skill_md=SKILL_MD.replace("[too-long]", "[open-end]")))
+    assert result.returncode == 1
+    assert result.stdout.splitlines()[1:] == [
+        "[too-long] is an error no completion criterion of SKILL.md names, as [too-long] or a [prefix-*]"
+    ]
+
+
+def test_guard_error_a_done_line_names_by_its_prefix_passes(tmp_path):
+    result = check(repo(tmp_path, skill_md=SKILL_MD.replace("[too-long]", "[too-*]")))
+    assert (result.returncode, result.stdout.splitlines()[1:]) == (0, [])
+
+
+def test_guard_error_the_criteria_every_step_shares_names_passes(tmp_path):
+    shared = "Each step ends on a criterion `cadrev` confirms, and at every step `[too-long]`.\n\n"
+    result = check(repo(tmp_path, skill_md=shared + SKILL_MD.replace("[too-long]", "[open-end]")))
+    assert (result.returncode, result.stdout.splitlines()[1:]) == (0, [])
 
 
 def test_unit_no_units_row_reads_fails(tmp_path):

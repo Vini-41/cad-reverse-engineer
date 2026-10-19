@@ -21,7 +21,7 @@ uv run -q --project <this skill's base directory>/tool cadrev --help
 
 ## Steps
 
-Each step ends on a criterion `cadrev` confirms: the rules named in brackets are the findings that must be absent. `cadrev check <dir> --no-build` reports every rule except the build's and the checks'; [Statuses](references/project-format.md#statuses) gives the status such a run ends on.
+Each step ends on a criterion `cadrev` confirms: the rules named in brackets are the findings that must be absent, and at every step so are `[project-missing]`, `[yaml-syntax]` and `[schema]`. `cadrev check <dir> --no-build` reports every rule except the build's and the checks'; [Statuses](references/project-format.md#statuses) gives the status such a run ends on.
 
 ### 1. Scope the target
 
@@ -76,7 +76,7 @@ Turn a red check green by changing the model or its params, and record a changed
 
 Format, including when a check is red and how far its tolerance may loosen: `checks.yaml` and `overlays.yaml` in [`references/project-format.md`](references/project-format.md).
 
-Done when every check is green and `cadrev check <dir>` reports no `[check-*]`, `[tolerance-cap]`, `[evidence-unused]`, `[unchecked-source]` or other error, so its status is VERIFIED or VERIFIED PENDING REVIEW.
+Done when every check is green and `cadrev check <dir>` reports no `[check-*]`, `[overlay-config]`, `[tolerance-cap]`, `[evidence-unused]`, `[unchecked-source]` or other error, so its status is VERIFIED or VERIFIED PENDING REVIEW.
 
 ### 7. Hand over
 
