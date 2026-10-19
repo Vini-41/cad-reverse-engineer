@@ -9,7 +9,9 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
-- **Close**: `gh issue close <number> --comment "..."`. An issue closes once its fix is pushed and CI is green on that commit: first comment any departures from the brief, then close with `Landed in <sha>; CI green on <sha>.`
+- **Close**: `gh issue close <number> --comment "..."`. An issue closes once its fix is pushed and CI is green on that commit: first comment any departures from the brief, then close with `Landed in <sha>; CI green on <sha>.` A spec's close-out names, for each part of its work order, the issue or commit that shows it done.
+- **File a spec's tickets**: `scripts/file-tickets <spec> <dir> --label enhancement --label ready-for-agent`, from one `t<n>.md` per ticket (`# <title>`, then the body, naming blockers as `- Blocked by T<k>`). It files them in order as sub-issues with blocking edges and reads both back; `--dry-run` prints the plan.
+- **Merge a PR**: `gh pr merge <n> --rebase --delete-branch`, once CI is green on its head commit.
 
 Repo: `Vini-41/cad-reverse-engineer`. Infer it from `git remote -v`; `gh` does this automatically when run inside a clone.
 
