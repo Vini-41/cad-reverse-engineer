@@ -4,7 +4,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 ## Conventions
 
-- **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
+- **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies. A bug's body gives, for each claim, the `cadrev` command that shows it and the output it printed; a claim read from the code alone is marked *unconfirmed*.
 - **Read an issue**: `gh issue view <number> --json title,body,labels,comments --jq '.title, .body, [.labels[].name], (.comments[].body)'`. (`--comments` alone prints only the comments, never the body.)
 - **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
