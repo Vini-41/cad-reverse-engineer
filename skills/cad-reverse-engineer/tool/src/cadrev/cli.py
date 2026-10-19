@@ -290,17 +290,24 @@ def cmd_check(args) -> int:
         proj.check_coverage(p)
     # A partial run makes no claim, so it writes nothing to build/.
     partial = args.no_build or args.no_coverage
-    results, images = [], []
+    results, images, motion = [], [], None
     if not args.no_build and not any(
         f.rule in ("model-missing", "model-syntax") for f in p.findings
     ):
         from . import geometry, overlay
+        from . import motion as kinematics
 
         built = geometry.build(p)
         if built is not None:
-            results = geometry.run_checks(p, built)
+            linkage = kinematics.mjcf(p, built)
+            pose = None if linkage is None else kinematics.poser(p, built, linkage)
+            results = geometry.run_checks(p, built, pose)
+            motion = report.motion(built)
             if not partial:
-                for path in geometry.export(p, built):
+                written = geometry.export(p, built)
+                if linkage is not None:
+                    written += kinematics.write(p, linkage)
+                for path in written:
                     print(f"wrote {path.relative_to(p.root)}")
                 images = overlay.render(p, built)
     status = report.status(p, partial)
@@ -317,7 +324,7 @@ def cmd_check(args) -> int:
             "so no claim is made and no report was written."
         )
         return 1
-    path = report.write(p, status, results, images)
+    path = report.write(p, status, results, images, motion)
     print(
         f"\n{status}: {headline['errors']} errors, {headline['warnings']} warnings, "
         f"{headline['checks_passed']}/{headline['checks']} checks pass. Report: {path.relative_to(p.root)}"

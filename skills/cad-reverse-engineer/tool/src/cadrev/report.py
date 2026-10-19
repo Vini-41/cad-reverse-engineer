@@ -8,7 +8,7 @@ from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 
-from .geometry import CheckResult
+from .geometry import Built, CheckResult
 from .lint import MODEL_LITERALS
 from .project import (
     BASES,
@@ -130,6 +130,43 @@ def interpretation(r: CheckResult) -> str:
     )
 
 
+def motion(built: Built) -> dict:
+    """How the model moves: each joint with what it joins and its drive, and each loop; no
+    joints means the model is static."""
+    return {
+        "joints": {
+            name: {k: j[k] for k in ("parent", "child", "drive")}
+            for name, j in built.joints.items()
+        },
+        "loops": {name: list(pair) for name, pair in built.loops.items()},
+    }
+
+
+def _motion_line(moves: dict | None) -> list[str]:
+    if moves is None:
+        return []
+    if not moves["joints"]:
+        return [
+            "**Static**: model.py returns no joints, so nothing is posed or exported as MJCF.",
+            "",
+        ]
+    joints, loops = len(moves["joints"]), len(moves["loops"])
+    return [
+        f"**Kinematic**: {joints} joint{'s' * (joints != 1)} and {loops} "
+        f"loop{'s' * (loops != 1)}, exported as `build/model.mjcf`; "
+        "a posed check shows its pose beside its interpretation.",
+        "",
+    ]
+
+
+def _posed(r: CheckResult) -> str:
+    """A check's interpretation, after the pose it was evaluated at, if any."""
+    if r.pose is None:
+        return interpretation(r)
+    at = ", ".join(f"{j} {s['value']:g} ({s['from']})" for j, s in r.pose.items())
+    return "; ".join(filter(None, [f"posed: {at}", interpretation(r)]))
+
+
 def counts(p: Project, results: list[CheckResult]) -> dict[str, int]:
     """The headline numbers shown beside the status."""
     errors = sum(f.level == "error" for f in p.findings)
@@ -142,7 +179,15 @@ def counts(p: Project, results: list[CheckResult]) -> dict[str, int]:
     } | {basis: sum(b == basis for b in p.rests_on.values()) for basis in RESTS_ON}
 
 
-def write(p: Project, status: str, results: list[CheckResult], images: list[Path]) -> Path:
+def write(
+    p: Project,
+    status: str,
+    results: list[CheckResult],
+    images: list[Path],
+    moves: dict | None = None,
+) -> Path:
+    """Write build/report.md and build/report.json. moves: how the model moves, None when no
+    model was built."""
     out = p.root / "build"
     out.mkdir(exist_ok=True)
     errors = [f for f in p.findings if f.level == "error"]
@@ -163,6 +208,7 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
     ]
     if exact(p, status):
         md += ["**Exact**: no parameter rests on a proposed value.", ""]
+    md += _motion_line(moves)
     md += [
         "VERIFIED means every number in the model is accounted for and the geometry matches "
         "every checked source value. It does not mean the sources fully define the part: "
@@ -191,7 +237,7 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
     md += _table(
         ["check", "result", "expected (evidence)", "measured", "interpretation"],
         [
-            [r.id, "pass" if r.ok else "**FAIL**", r.expected, r.measured, interpretation(r)]
+            [r.id, "pass" if r.ok else "**FAIL**", r.expected, r.measured, _posed(r)]
             for r in results
         ],
     )
@@ -323,13 +369,18 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
                 "counts": headline,
                 "findings": [asdict(f) for f in errors + warnings],
                 "checks": [
-                    {k: v for k, v in asdict(r).items() if k != "pairs" or v is not None}
+                    {
+                        k: v
+                        for k, v in asdict(r).items()
+                        if k not in ("pairs", "pose") or v is not None
+                    }
                     for r in results
                 ],
                 "tolerances": loosened,
                 "overlap_limits": limits,
                 "model_literals": override,
                 "exact": exact(p, status),
+                "motion": moves,
                 "params": {
                     n: {"value": p.values.get(n), "rests_on": p.rests_on.get(n), **s}
                     for n, s in p.params.items()

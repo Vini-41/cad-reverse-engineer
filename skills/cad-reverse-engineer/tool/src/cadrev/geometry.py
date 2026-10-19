@@ -8,6 +8,7 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from collections.abc import Callable
 
 from .project import (
     Project,
@@ -53,6 +54,8 @@ class CheckResult:
     rests_on_params: list[str] = field(default_factory=list)
     # How many instance pairs an interference check evaluated; None for other kinds.
     pairs: int | None = None
+    # The joint values a posed check was evaluated at: joint -> {from, value}; None when unposed.
+    pose: dict | None = None
 
 
 @dataclass
@@ -61,6 +64,54 @@ class Built:
     datums: dict[str, tuple[float, float, float]]
     assembly: dict
     used: set[str]
+    # joint name -> {type, parent, child, axis: [datum, datum], range: [param, param], drive}
+    joints: dict = field(default_factory=dict)
+    # loop name -> [<instance>.<feature>, <instance>.<feature>], two datums that must coincide
+    loops: dict = field(default_factory=dict)
+
+
+# What poses a check: the assembly placed at the joint values the check's pose names, with the
+# pose as report.json shows it; None after a finding saying why it cannot be posed.
+Poser = Callable[[dict], "tuple[Built, dict] | None"]
+
+DRIVES = ("actuated", "passive")
+JOINT_KEYS = ("type", "parent", "child", "axis", "range", "drive")
+# The param the MJCF export weighs every part by, as its volume times this density, where
+# params.yaml defines it; without it MuJoCo infers each moving body's mass from its mesh.
+EXPORT_DENSITY = "density"
+
+
+def _names(value, count: int) -> bool:
+    return (
+        isinstance(value, (list, tuple))
+        and len(value) == count
+        and all(isinstance(v, str) for v in value)
+    )
+
+
+def _motion_breach(result) -> str | None:
+    """Why build()'s joints or loops break the model contract, or None if they keep it."""
+    for name, joint in result.get("joints", {}).items():
+        if not isinstance(joint, dict):
+            return f"joint {name} must be a mapping, not {type(joint).__name__}"
+        unknown = sorted(set(joint) - set(JOINT_KEYS))
+        if unknown:
+            return f"joint {name}: unknown key {unknown[0]!r}"
+        if joint.get("type") != "revolute":
+            return f"joint {name}: type must be 'revolute', not {joint.get('type')!r}"
+        for key in ("parent", "child"):
+            if not isinstance(joint.get(key), str):
+                return f"joint {name}: {key} must name an assembly instance"
+        if not _names(joint.get("axis"), 2):
+            return f"joint {name}: axis must be two datums of its child, not {joint.get('axis')!r}"
+        if "range" in joint and not _names(joint["range"], 2):
+            return f"joint {name}: range must be two param names, not {joint['range']!r}"
+        if joint.get("drive") not in DRIVES:
+            return f"joint {name}: drive must be actuated or passive, not {joint.get('drive')!r}"
+    for name, pair in result.get("loops", {}).items():
+        if not _names(pair, 2):
+            return f"loop {name} must be two <instance>.<feature> datums, not {pair!r}"
+    return None
 
 
 def _contract_breach(result) -> str | None:
@@ -70,7 +121,7 @@ def _contract_breach(result) -> str | None:
 
     if not isinstance(result, dict):
         return f"must return a mapping of parts, datums and assembly, not {type(result).__name__}"
-    for key in ("parts", "datums", "assembly"):
+    for key in ("parts", "datums", "assembly", "joints", "loops"):
         if not isinstance(result.get(key, {}), dict):
             return f"{key} must be a mapping of names, not {type(result[key]).__name__}"
     for name, part in result.get("parts", {}).items():
@@ -93,7 +144,7 @@ def _contract_breach(result) -> str | None:
             and isinstance(entry[1], Location)
         ):
             return f"assembly instance {inst} must be a (part name, Location) pair, not {entry!r}"
-    return None
+    return _motion_breach(result)
 
 
 def build(p: Project) -> Built | None:
@@ -121,10 +172,17 @@ def build(p: Project) -> Built | None:
         },
         assembly=result.get("assembly", {}),
         used=params.used,
+        joints=result.get("joints", {}),
+        loops=result.get("loops", {}),
     )
     for name in sorted(built.used):
         expect_param_quantity(p, name, ("length", "angle"), "in model.py")
-    for name in sorted(p.values.keys() - built.used - _used_by_derived(p) - check_params(p)):
+    ranges = {n for joint in built.joints.values() for n in joint.get("range", [])}
+    for name in sorted(ranges & p.values.keys()):
+        expect_param_quantity(p, name, ("angle",), "in a joint's range")
+    exported = ranges | ({EXPORT_DENSITY} if built.joints else set())
+    unread = p.values.keys() - built.used - _used_by_derived(p) - check_params(p) - exported
+    for name in sorted(unread):
         p.warn("param-unused", f"param {name} is defined but the model never reads it")
     for name, part in built.parts.items():
         solids = len(part.solids())
@@ -150,7 +208,53 @@ def build(p: Project) -> Built | None:
         if part not in built.parts:
             p.error("assembly-part", f"assembly instance {inst}: unknown part {part!r}")
             del built.assembly[inst]
+    problem = _linkage_breach(p, built)
+    if problem:
+        p.error("model-return", f"model.build {problem}")
+        built.joints, built.loops = {}, {}
     return built
+
+
+def instance_datum(built: Built, name: str) -> tuple[str, str] | None:
+    """The instance <instance>.<feature> names and its part's datum <part>.<feature>, or None if
+    it names no datum of an instance of the assembly."""
+    inst = _prefix(name, built.assembly)
+    if inst is None:
+        return None
+    datum = f"{built.assembly[inst][0]}.{name[len(inst) + 1 :]}"
+    return (inst, datum) if datum in built.datums else None
+
+
+def _linkage_breach(p: Project, built: Built) -> str | None:
+    """Why the joints and loops build() returns do not describe a linkage of its assembly: an
+    unknown instance, datum or param, or an instance two joints move or that moves itself."""
+    parent_of: dict[str, str] = {}
+    for name, joint in built.joints.items():
+        for key in ("parent", "child"):
+            if joint[key] not in built.assembly:
+                return f"joint {name}: {key} {joint[key]} is not an instance of the assembly"
+        for datum in joint["axis"]:
+            named = instance_datum(built, datum)
+            if named is None or named[0] != joint["child"]:
+                return f"joint {name}: axis {datum} is not a datum of its child {joint['child']}"
+        for param in joint.get("range", []):
+            if param not in p.values:
+                return f"joint {name}: range names {param}, which params.yaml does not define"
+        if joint["child"] in parent_of:
+            return f"joint {name}: {joint['child']} is already the child of another joint"
+        parent_of[joint["child"]] = joint["parent"]
+    for start in parent_of:
+        seen, inst = {start}, start
+        while inst in parent_of:
+            inst = parent_of[inst]
+            if inst in seen:
+                return f"joints: {start} moves itself; close a ring of joints with a loop instead"
+            seen.add(inst)
+    for name, pair in built.loops.items():
+        for datum in pair:
+            if instance_datum(built, datum) is None:
+                return f"loop {name}: {datum} names no <instance>.<feature> datum of the assembly"
+    return None
 
 
 # How finely _off_solid samples each edge of a cylindrical face to find the face's axial extent.
@@ -382,14 +486,29 @@ def _volume(overlap) -> float:
     return overlap.volume
 
 
-def run_checks(p: Project, built: Built) -> list[CheckResult]:
+def run_checks(p: Project, built: Built, pose: Poser | None = None) -> list[CheckResult]:
+    """Evaluate every check: on the assembly as built, or, for a check that names a pose, on the
+    assembly pose(check) places at it, a check that cannot be posed adding a finding instead."""
     results = []
     for c in p.checks:
         cid, kind = c.get("id", "?"), c.get("kind")
         start = len(results)
+        view, posed = built, None
+        if c.get("pose"):
+            if pose is None:
+                joints = ", ".join(c["pose"])
+                p.error(
+                    "check-config",
+                    f"check {cid}: its pose names {joints}, but model.build returns no joints",
+                )
+                continue
+            at = pose(c)
+            if at is None:
+                continue
+            view, posed = at
         try:
             if kind == "bbox":
-                shape = _envelope(p, built, c)
+                shape = _envelope(p, view, c)
                 if shape is None:
                     continue
                 s = shape.bounding_box().size
@@ -398,7 +517,7 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
                     ref, measured = f"{c['evidence']}.{key}", size[AXES[axis]]
                     results.append(_compared(p, c, f"{cid}.{key}", ref, measured, f" along {axis}"))
             elif kind == "distance":
-                points = _datums(p, built, c)
+                points = _datums(p, view, c)
                 if points is None:
                     continue
                 a, b = points
@@ -410,7 +529,7 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
                 ref, between = f"{c['evidence']}.{c['key']}", " - ".join(c["between"])
                 results.append(_compared(p, c, cid, ref, measured, f" {between}"))
             elif kind == "angle":
-                points = _datums(p, built, c)
+                points = _datums(p, view, c)
                 measured = None if points is None else _angle(p, c, points)
                 if measured is None:
                     continue
@@ -429,7 +548,7 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
             elif kind == "interference":
                 limit = overlap_limit(p, c)
                 pairs = [tuple(pair) for pair in c.get("pairs", [])]
-                shapes = dict(_instances(built))
+                shapes = dict(_instances(view))
                 pair_set = "listed" if pairs else "all"
                 if not pairs:
                     names = sorted(shapes)
@@ -459,7 +578,7 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
             continue
         basis, params = rests_on(p, c)
         for r in results[start:]:
-            r.rests_on, r.rests_on_params = basis, params
+            r.rests_on, r.rests_on_params, r.pose = basis, params, posed
     for r in results:
         if not r.ok:
             p.error("check-failed", f"{r.id}: expected {r.expected}, measured {r.measured}")

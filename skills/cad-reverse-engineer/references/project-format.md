@@ -14,7 +14,7 @@ overlays.yaml   optional: model edges drawn over figures
 model.py        build123d model; see modeling.md
 sources/        registered source files (pinned by sha256)
 figures/        extracted images; figures/crops/ holds pinned evidence crops
-build/          STEP files, overlays, report.md, report.json
+build/          STEP files, overlays, report.md, report.json; model.mjcf and meshes/ for a model with joints
 ```
 
 ## project.yaml
@@ -37,7 +37,7 @@ sources:
     coverage: false        # optional: exclude from the coverage sweep (e.g. a 200-page catalogue; see `skipped`)
 ```
 
-`format` is the version of these file formats. A project without it is `[format-missing]`; one with a version this cadrev does not read is `[format-unknown]`. Either way cadrev reads no other project file, every command refuses the project, and no report is written.
+`format` is the version of these file formats. A project without it is `[format-missing]`; one with a version this cadrev does not read is `[format-unknown]`. Either way cadrev reads no other project file, every command refuses the project, and no report is written. Joints, loops and `pose` are additions to format 1: a project without them reads as before, so neither needs a new version.
 
 `target` names the object, version and configuration reconstructed; one missing or still starting with `TODO` is `[target]`.
 
@@ -185,7 +185,7 @@ checks:
 
 - `bbox`: the part's axis-aligned bounding-box size in its own frame; under `instances`, that of their union in the assembly frame.
 - `distance`: between two datums of one part, in that part's frame. Datums of two different parts (`<part>.<feature>` naming different parts) sit in unrelated frames, so without `instances` such a check is `[check-config]`.
-- `angle`: `between: [a, vertex, b]`, three datums of one part (the same rule as `distance`); the angle at `vertex` between the directions to `a` and to `b`, in degrees (0 to 180). A datum that coincides with the vertex (within `tolerance.length`) leaves the angle undefined and is `[check-config]`. A stated joint range (a range of motion) is not an angle of the one static model: ledger it `scope: context` with a reason, and check an angle only where a source states it for the configuration `target` names.
+- `angle`: `between: [a, vertex, b]`, three datums of one part (the same rule as `distance`); the angle at `vertex` between the directions to `a` and to `b`, in degrees (0 to 180). A datum that coincides with the vertex (within `tolerance.length`) leaves the angle undefined and is `[check-config]`. An angle a source states at another configuration than the one `target` names is checked posed (see [Poses](#poses-and-the-mjcf-export)); a stated joint range (a range of motion) is ledgered `scope: context` with a reason.
 - `mass`: Σ volume × count × density, plus any `add` params; `tol_rel` is required. Each `counts` entry names the param that counts that part (parts it leaves out count once), so a stated count is ledgered like any other number; a bare number there is `[schema]`. Its `density` and `add` params take their units from the quote (see `units` above). The check reads its `density`, `add` and `counts` params, so they need no read in model.py and no other check.
 - `interference`: overlap volume between assembly instances; all pairs when `pairs` is omitted. Needs no evidence. Its result gives the worst overlap, the pair that produced it, and how many pairs it evaluated: `0 over 2145 pairs (all)` when `pairs` is omitted, `0.31 palm_1 ∩ finger_link_1 over 2 pairs (listed)` from a `pairs` list. It passes when the overlap is at most `max_volume`, which defaults to `tolerance.length`³. This overlap limit compares with no ledger value, so it is not a tolerance and has no cap, but the report lists beside its check each limit other than cadrev's default: the default `tolerance.length`, 0.001, cubed. A project-wide `tolerance.length` therefore lists every interference check that sets no `max_volume`.
 
@@ -196,6 +196,23 @@ Every datum `build` returns, read by a check or not, lies on its part's solid wi
 Each check rests on the weakest basis among the params it reads (proposed < measured < source), or on source when it reads none. report.json gives each check result its `rests_on` and, in `rests_on_params`, the params it reads that rest on that basis; report.md's checks table shows "rests on <basis>: <params>" beside a check resting on less than source. A mass check on a proposed density then confirms the model against the stated mass given that chosen density, not the density itself. What a check rests on leaves its pass/fail and the status unchanged.
 
 `tol` overrides `tolerance.length` for one check, or `tolerance.angle` (degrees) for an angle check. A check's tolerance is capped: `tol` (or the project tolerance, where the check sets none) at 5% of each value the check compares, and `tol_rel` at 0.25; above either is `[tolerance-cap]`. The report lists every non-default tolerance beside its check: each `tol` other than 0.001 (0.01 for an angle check), and every `tol_rel`, which has no default. Each source param that no check covers raises `[unchecked-source]`.
+
+## Poses and the MJCF export
+
+A model whose `build` returns `joints` and `loops` ([`modeling.md`](modeling.md)) moves. A check posed at joint values names them in `pose`, each joint mapped to a param or a ledger value `<evidence>.<key>`, never a bare number (`[schema]`):
+
+```yaml
+  - {id: reach-30, kind: distance, instances: [ground_1, rocker_1], between: [ground_1.a, rocker_1.a],
+     evidence: S3-sweep, key: AC, pose: {input: S3-sweep.turn}}
+```
+
+- **A pose value is a rotation from the assembly as built**, in the project's angle unit: `input: 30` turns that joint 30° from where `assembly` places its child. Build the assembly at the configuration the source measures its angles from (the zero of its joints), so a stated angle is the pose value itself.
+- cadrev exports the assembly as MJCF, sets each joint the pose names, holds every other `actuated` joint as built, and lets MuJoCo move the `passive` joints until every loop's two datums coincide. It then places each instance where MuJoCo puts its body and evaluates the check on its own geometry, with the same rules as an unposed check. A check without `pose` is evaluated on the assembly as built.
+- A loop whose datums stay more than `tolerance.length` apart after solving is `[loop-open]`, naming the loop and the pose: the links cannot close there (too short, or past a toggle), and the checks at that pose are not evaluated.
+- A `pose` naming no joint, or a value that is neither a param nor a ledger value, is `[check-config]`; so is a `pose` on a model with no joints. A pose value is read by its check: a param it names needs no read in model.py, the check rests on it, and a ledger value it names counts as used. A pose value printed in a unit other than an angle's is `[unit-quantity]`.
+- Name `instances` on a posed check: a check in one part's own frame reads the same at every pose.
+
+A verification run of a model with joints writes `build/model.mjcf` and one `build/meshes/<part>.stl` per part, and loads the MJCF in MuJoCo; MuJoCo rejecting it is `[mjcf-load]` with MuJoCo's reason, and then no posed check is evaluated. Each instance is a body framed as its part, each joint a hinge, each loop a `connect` between two sites named after its datums, and each `actuated` joint has a motor. The MJCF is in the project's units (mm and g by default, not SI) without gravity: a kinematic model, its lengths the report's lengths. A part weighs its volume times the param `density` where params.yaml defines one; otherwise MuJoCo infers each moving body's mass from its mesh. Per-part masses belong in params.yaml, the one door numbers have into the model, never in project.yaml. A model with no joints is static: it writes no MJCF, and report.md says so under the headline.
 
 ## gaps.yaml
 
@@ -254,9 +271,10 @@ The machine-readable report `cadrev check` writes beside `report.md`, which rend
 | `exact` | whether the project is exact (see [Statuses](#statuses)) |
 | `counts` | `errors`, `warnings`, `checks`, `checks_passed`, `params`, and the params resting on each basis: `source`, `measured`, `proposed` |
 | `findings` | every finding as `level`, `rule`, `message` |
-| `checks` | every geometry check with its result, expected and evaluated values, the basis it `rests_on`, and the params it reads resting on that basis (`rests_on_params`); for an interference check, also the number of pairs it evaluated (`pairs`) |
+| `checks` | every geometry check with its result, expected and evaluated values, the basis it `rests_on`, and the params it reads resting on that basis (`rests_on_params`); for an interference check, also the number of pairs it evaluated (`pairs`); for a posed check, its `pose`: each joint with the param or ledger value it is set `from` and that `value` |
 | `tolerances` | each check with a non-default tolerance: its `check` id, `kind`, and `tol` or `tol_rel` |
 | `overlap_limits` | each interference check with a non-default overlap limit: its `check` id and `max_volume` |
+| `motion` | the model's `joints`, each with its `parent`, `child` and `drive`, and its `loops`, each as its two datums; no joints means static; null when no model was built |
 | `model_literals` | project.yaml's `model_literals` when it differs from the default, else null |
 | `params` | each param's spec, its resolved `value` and the basis it `rests_on` |
 | `bases` | how many params declare each basis |

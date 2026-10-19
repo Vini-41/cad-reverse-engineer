@@ -17,7 +17,7 @@ The CLI ships in this skill's `tool/` directory and needs [`uv`](https://docs.as
 uv run -q --project <this skill's base directory>/tool cadrev --help
 ```
 
-`cadrev` below stands for that command. The first run installs build123d (about a minute). Before writing any project YAML, read [`references/project-format.md`](references/project-format.md).
+`cadrev` below stands for that command. The first run installs build123d and MuJoCo (about a minute). Before writing any project YAML, read [`references/project-format.md`](references/project-format.md).
 
 ## Steps
 
@@ -62,13 +62,13 @@ Done when every feature the model will need has a param, and `cadrev check <dir>
 
 Take one part all the way through before modelling any other: the tracer part. Choose a part with a stated envelope or pitch, model it alone, give it its checks (step 6), and run `cadrev check <dir>` until `build/report.md` shows those checks green. The tracer part proves the whole path, ledger to params to model to checks to report, while a mistake in it costs one part.
 
-Then write the rest of model.py per [`references/modeling.md`](references/modeling.md): parts in their own frames, datums at every checked feature, the assembly as placed instances.
+Then write the rest of model.py per [`references/modeling.md`](references/modeling.md): parts in their own frames, datums at every checked feature, the assembly as placed instances, and for a mechanism its joints and loops.
 
-Done when the tracer part's checks went green before a second part was modelled, and `cadrev check <dir>` builds every part with no `[model-*]`, `[part-invalid]`, `[datum-off-solid]`, `[assembly-part]` or `[param-unused]`. Red checks on the other parts are step 6's job.
+Done when the tracer part's checks went green before a second part was modelled, and `cadrev check <dir>` builds every part with no `[model-*]`, `[part-invalid]`, `[datum-off-solid]`, `[assembly-part]`, `[mjcf-load]` or `[param-unused]`. Red checks on the other parts are step 6's job.
 
 ### 6. Check against the sources
 
-Add a check for every source value the geometry should realise: `bbox` for envelopes, `distance` between datums for pitches and spacings (over `instances` where they span parts), `angle` at a datum for stated angles, `mass` where a mass is stated, `interference` across the assembly. Where a figure shows a modelled part in a near-orthographic view, add an overlay and look at the rendered PNG; record in the param's interpretation what the overlay showed.
+Add a check for every source value the geometry should realise: `bbox` for envelopes, `distance` between datums for pitches and spacings (over `instances` where they span parts), `angle` at a datum for stated angles, `mass` where a mass is stated, `interference` across the assembly. A value a source states at a joint angle is checked posed at that angle (`pose`). Where a figure shows a modelled part in a near-orthographic view, add an overlay and look at the rendered PNG; record in the param's interpretation what the overlay showed.
 
 Add the mass check even where its density, `add` or `counts` param is proposed, and keep that value at its rationale rather than tuning it to turn the check green: the check then rests on proposed (`checks.yaml` in [`references/project-format.md`](references/project-format.md#checksyaml)), and the gap is what closes it.
 
@@ -76,7 +76,7 @@ Turn a red check green by changing the model or its params, and record a changed
 
 Format, including when a check is red and how far its tolerance may loosen: `checks.yaml` and `overlays.yaml` in [`references/project-format.md`](references/project-format.md).
 
-Done when every check is green and `cadrev check <dir>` reports no `[check-*]`, `[overlay-config]`, `[tolerance-cap]`, `[evidence-unused]`, `[unchecked-source]` or other error, so its status is VERIFIED or VERIFIED PENDING REVIEW.
+Done when every check is green and `cadrev check <dir>` reports no `[check-*]`, `[loop-open]`, `[overlay-config]`, `[tolerance-cap]`, `[evidence-unused]`, `[unchecked-source]` or other error, so its status is VERIFIED or VERIFIED PENDING REVIEW.
 
 ### 7. Hand over
 

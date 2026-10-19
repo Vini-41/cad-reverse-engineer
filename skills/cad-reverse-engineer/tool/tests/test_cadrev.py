@@ -1,8 +1,10 @@
 import ast
 import contextlib
 import hashlib
+import importlib
 import io
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -3689,6 +3691,316 @@ def test_verification_run_writes_nothing_into_the_project_outside_build(proj_dir
     }
 
 
+# Motion: a four-bar posed through MuJoCo, its checks evaluated on cadrev's own geometry (ADR-0008).
+
+# Crank a, coupler b, rocker c and ground d, in mm: a crank-rocker, so the crank turns fully.
+BAR = {"crank": 15, "coupler": 35, "rocker": 30, "ground": 40}
+
+FOUR_BAR = """\
+import math
+
+from build123d import *
+
+
+def bar(p, length):
+    body = Pos(length / 2, 0, 0) * Box(length + p.link_W, p.link_W, p.link_H)
+    body -= Cylinder(p.hole_d / 2, p.link_H)
+    body -= Pos(length, 0, 0) * Cylinder(p.hole_d / 2, p.link_H)
+    return body
+
+
+def build(p):
+    a, b, c, d = p.crank, p.coupler, p.rocker, p.ground
+    # As built the crank stands upright, B = (0, a), and the coupler and rocker close the loop.
+    reach = math.hypot(d, a)
+    along = (b * b - c * c + reach * reach) / (2 * reach)
+    up = math.sqrt(b * b - along * along)
+    ux, uy = d / reach, -a / reach
+    cx, cy = along * ux - up * uy, a + along * uy + up * ux
+    lengths = {"ground": d, "crank": a, "coupler": b, "rocker": c}
+    datums = {}
+    for name, length in lengths.items():
+        datums[f"{name}.a"] = (0, 0, 0)
+        datums[f"{name}.a_up"] = (0, 0, p.link_H / 2)
+        datums[f"{name}.d"] = (length, 0, 0)
+    coupler_at = math.degrees(math.atan2(cy - a, cx))
+    rocker_at = math.degrees(math.atan2(-cy, d - cx))
+    return {
+        "parts": {name: bar(p, length) for name, length in lengths.items()},
+        "datums": datums,
+        "assembly": {
+            "ground_1": ("ground", Location()),
+            "crank_1": ("crank", Location((0, 0, 0), (0, 0, 90))),
+            "coupler_1": ("coupler", Location((0, a, 0), (0, 0, coupler_at))),
+            "rocker_1": ("rocker", Location((cx, cy, 0), (0, 0, rocker_at))),
+        },
+        "joints": {
+            "input": {
+                "type": "revolute",
+                "parent": "ground_1",
+                "child": "crank_1",
+                "axis": ["crank_1.a", "crank_1.a_up"],
+                "range": ["input_min", "input_max"],
+                "drive": "actuated",
+            },
+            "knee": {
+                "type": "revolute",
+                "parent": "crank_1",
+                "child": "coupler_1",
+                "axis": ["coupler_1.a", "coupler_1.a_up"],
+                "drive": "passive",
+            },
+            "elbow": {
+                "type": "revolute",
+                "parent": "coupler_1",
+                "child": "rocker_1",
+                "axis": ["rocker_1.a", "rocker_1.a_up"],
+                "drive": "passive",
+            },
+        },
+        "loops": {"closure": ["rocker_1.d", "ground_1.d"]},
+    }
+"""
+
+
+def bar_pivot(turn: float) -> tuple[float, float]:
+    """The four-bar's closed form: where the coupler meets the rocker (C) with the crank turned
+    turn degrees from upright, on the branch the model is built on."""
+    a, b, c, d = (BAR[n] for n in ("crank", "coupler", "rocker", "ground"))
+    theta = math.radians(90 + turn)
+    bx, by = a * math.cos(theta), a * math.sin(theta)
+    reach = math.hypot(d - bx, -by)
+    along = (b * b - c * c + reach * reach) / (2 * reach)
+    up = math.sqrt(b * b - along * along)
+    ux, uy = (d - bx) / reach, -by / reach
+    return bx + along * ux - up * uy, by + along * uy + up * ux
+
+
+def bar_text(turns: tuple[int, ...]) -> str:
+    """The four-bar's source: its link lengths, and for each turn of the crank from upright how far
+    C lies from the crank pivot and the rocker's angle to the ground link, from the closed form."""
+    lines = [
+        "The crank is {crank} mm, the coupler {coupler} mm, the rocker {rocker} mm "
+        "and the ground link {ground} mm long.".format(**BAR)
+    ]
+    for turn in turns:
+        cx, cy = bar_pivot(turn)
+        rock = math.degrees(math.atan2(cy, BAR["ground"] - cx))
+        lines.append(
+            f"Turned {turn}° from upright, the crank puts the rocker pivot "
+            f"{math.hypot(cx, cy):.4f} mm from the crank pivot, "
+            f"the rocker at {rock:.3f}° to the ground link."
+        )
+    return "\n".join(lines) + "\n"
+
+
+def four_bar(root: Path, tmp_path: Path, turns: tuple[int, ...] = (30, 60)) -> None:
+    """Replace the project with the four-bar, built upright with one actuated joint, input, and one
+    loop, closure. For each turn, ledger P<turn> and check C's distance from the crank pivot and the
+    rocker's angle, posed at that turn: by the ledger key for the first turn, by a param for the
+    rest."""
+    edit(root, "project.yaml", lambda d: d.update(sources=[]))
+    (root / "sources" / "paper.txt").unlink()
+    text = tmp_path / "bar.txt"
+    text.write_text(bar_text(turns))
+    register = ["source", str(root), str(text), "--id", "bar", "--kind", "paper"]
+    assert cli.main([*register, "--citation", "Roe 2026"]) == 0
+    lines = text.read_text().splitlines()
+    lengths = {"a": "crank", "b": "coupler", "c": "rocker", "d": "ground"}
+    evidence = [
+        {
+            "id": "L",
+            "source": "bar",
+            "locator": "Sec. 1",
+            "quote": lines[0].rstrip("."),
+            "values": {key: BAR[name] for key, name in lengths.items()},
+        }
+    ]
+    params = {name: {"basis": "source", "from": f"L.{key}"} for key, name in lengths.items()}
+    chosen = {"link_W": 5, "link_H": 4, "hole_d": 2, "input_min": -180, "input_max": 180}
+    params |= {
+        name: {"basis": "proposed", "value": value, "rationale": "a printable bar", "gap": "G1"}
+        for name, value in chosen.items()
+    }
+    checks = []
+    for i, (turn, line) in enumerate(zip(turns, lines[1:])):
+        eid = f"P{turn}"
+        _, dist, rock = (float(v) for v in re.findall(r"\d+(?:\.\d+)?", line))
+        evidence.append(
+            {
+                "id": eid,
+                "source": "bar",
+                "locator": "Sec. 2",
+                "quote": line.rstrip("."),
+                "values": {"turn": turn, "AC": dist, "rock": rock},
+            }
+        )
+        pose = f"{eid}.turn"
+        if i:
+            pose = f"turn_{turn}"
+            params[pose] = {"basis": "source", "from": f"{eid}.turn"}
+        over = {"instances": ["ground_1", "rocker_1"], "evidence": eid, "pose": {"input": pose}}
+        checks += [
+            {
+                "id": f"ac{turn}",
+                "kind": "distance",
+                "between": ["ground_1.a", "rocker_1.a"],
+                "key": "AC",
+                **over,
+            },
+            {
+                "id": f"rock{turn}",
+                "kind": "angle",
+                "between": ["ground_1.a", "ground_1.d", "rocker_1.a"],
+                "key": "rock",
+                **over,
+            },
+        ]
+    write(root, "evidence.yaml", {"evidence": evidence, "skipped": [], "conflicts": []})
+    write(root, "params.yaml", {"params": params})
+    write(root, "gaps.yaml", {"gaps": [{"id": "G1", "question": "bar section?", "ask": "authors"}]})
+    write(root, "checks.yaml", {"checks": checks})
+    write(root, "model.py", FOUR_BAR)
+
+
+def _by_id(report: dict) -> dict[str, dict]:
+    return {c["id"]: c for c in report["checks"]}
+
+
+def test_four_bar_posed_at_two_input_angles_matches_its_closed_form(proj_dir, tmp_path):
+    four_bar(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    # Only the link lengths no check compares are flagged: the range and pose params are read.
+    assert {f["rule"] for f in report["findings"]} == {"unchecked-source"}
+    checks = _by_id(report)
+    assert set(checks) == {"ac30", "rock30", "ac60", "rock60"}
+    assert all(c["ok"] for c in checks.values()), checks
+    # Each check compares with the closed form at its pose, which differs from pose to pose.
+    assert checks["ac30"]["expected"] != checks["ac60"]["expected"]
+
+
+def test_report_json_gives_each_posed_check_its_pose(proj_dir, tmp_path):
+    four_bar(proj_dir, tmp_path)
+    checks = _by_id(verify(proj_dir)[1])
+    assert checks["ac30"]["pose"] == {"input": {"from": "P30.turn", "value": 30}}
+    assert checks["rock60"]["pose"] == {"input": {"from": "turn_60", "value": 60}}
+    md = (proj_dir / "build" / "report.md").read_text()
+    assert "| posed: input 60 (turn_60) |" in md
+
+
+def _coupler(length: float):
+    """The four-bar with its coupler proposed at length: at 20 the crank turned 60° pulls B 53.5
+    from D, beyond the coupler and rocker's reach of 50; turned 30°, 49.2, within it."""
+
+    def change(r, t):
+        four_bar(r, t)
+        spec = {"basis": "proposed", "value": length, "rationale": "x", "from": None}
+        _param("coupler", **spec)(r, t)
+
+    return change
+
+
+def test_loop_that_cannot_close_at_a_pose_is_loop_open_naming_loop_and_pose(proj_dir, tmp_path):
+    _coupler(20)(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    opened = [f["message"] for f in report["findings"] if f["rule"] == "loop-open"]
+    assert code == 1 and len(opened) == 1, opened
+    assert opened[0].startswith("loop closure: rocker_1.d and ground_1.d stay ")
+    assert "with input at 60 (turn_60)" in opened[0]
+    # The checks at the pose that closes are evaluated; those at the open one are not.
+    assert set(_by_id(report)) == {"ac30", "rock30"}
+
+
+def test_model_with_joints_exports_mjcf_and_a_mesh_per_part_that_mujoco_loads(proj_dir, tmp_path):
+    mujoco = importlib.import_module("mujoco")
+
+    four_bar(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    build = proj_dir / "build"
+    assert sorted(f.name for f in (build / "meshes").iterdir()) == [
+        "coupler.stl",
+        "crank.stl",
+        "ground.stl",
+        "rocker.stl",
+    ]
+    model = mujoco.MjModel.from_xml_path(str(build / "model.mjcf"))
+    assert (model.njnt, model.neq, model.nu) == (3, 1, 1)
+    assert report["motion"]["joints"]["input"] == {
+        "parent": "ground_1",
+        "child": "crank_1",
+        "drive": "actuated",
+    }
+    assert "**Kinematic**: 3 joints and 1 loop" in (build / "report.md").read_text()
+
+
+def test_model_with_no_joints_writes_no_mjcf_and_its_report_says_it_is_static(proj_dir):
+    code, report = verify(proj_dir)
+    assert code == 0
+    assert not (proj_dir / "build" / "model.mjcf").exists()
+    assert report["motion"] == {"joints": {}, "loops": {}}
+    assert (
+        "**Static**: model.py returns no joints" in (proj_dir / "build" / "report.md").read_text()
+    )
+
+
+def _density(value: float):
+    """The four-bar, its export weighing each part by a proposed density of value."""
+
+    def change(r, t):
+        four_bar(r, t)
+        _param("density", basis="proposed", value=value, rationale="resin", gap="G1")(r, t)
+
+    return change
+
+
+def test_export_mujoco_rejects_is_mjcf_load_naming_why(proj_dir, tmp_path):
+    _density(0)(proj_dir, tmp_path)
+    messages = findings(proj_dir, "mjcf-load")
+    assert len(messages) == 1
+    assert messages[0].startswith("MuJoCo rejects build/model.mjcf, so no check with a pose")
+    assert "inertia must have positive eigenvalues" in messages[0]
+
+
+def test_pose_value_that_is_a_bare_number_is_a_schema_finding(proj_dir, tmp_path):
+    four_bar(proj_dir, tmp_path)
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"][0].update(pose={"input": 30}))
+    assert findings(proj_dir, "schema") == [
+        "checks.yaml checks[0].pose.input: must be text, not 30"
+    ]
+
+
+def test_pose_of_a_static_model_is_a_check_config_finding(proj_dir):
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"][1].update(pose={"input": "pitch.pitch"}))
+    assert findings(proj_dir, "check-config") == [
+        "check pitch: its pose names input, but model.build returns no joints"
+    ]
+
+
+@pytest.mark.parametrize(
+    "pose, says",
+    [
+        ({"hip": "P30.turn"}, "pose names hip, which is not a joint"),
+        ({"input": "P30.spin"}, "pose input: P30.spin names neither a param nor a ledger value"),
+    ],
+)
+def test_pose_naming_an_unknown_joint_or_value_is_a_check_config_finding(
+    proj_dir, tmp_path, pose, says
+):
+    four_bar(proj_dir, tmp_path)
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"][0].update(pose=pose))
+    assert findings(proj_dir, "check-config") == [f"check ac30: {says}"]
+
+
+def test_guard_check_with_no_pose_is_evaluated_on_the_assembly_as_built(proj_dir, tmp_path):
+    four_bar(proj_dir, tmp_path)
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"][0].pop("pose"))
+    ac30 = _by_id(verify(proj_dir)[1])["ac30"]
+    assert not ac30["ok"] and "pose" not in ac30
+    assert ac30["measured"].startswith(f"{math.hypot(*bar_pivot(0)):.4g} ")
+
+
 # Every rule beside its near miss. scripts/rule-coverage fails CI unless each rule the tool emits is
 # asserted present by one test and absent by another; a rule no other test covers both ways gets a
 # row here: the change to the fixture that raises it, and the closest changes it must accept.
@@ -3912,6 +4224,8 @@ FINDINGS = {
     "image-hash": (_reading(image_sha256="0" * 64), [_reading()]),
     "image-missing": (_unpinned_reading, [_reading()]),
     "image-reading": (_reading(reading=""), [_reading(reading="70")]),
+    "loop-open": (_coupler(20), [_coupler(25)]),
+    "mjcf-load": (_density(0), [_density(0.0012)]),
     "model-arithmetic": (
         lambda r, t: _model_with(r, line="extra = 2 * 2 - 0.5"),
         [lambda r, t: _model_with(r, line="extra = 2 * 2 - 2")],

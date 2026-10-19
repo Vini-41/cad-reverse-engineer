@@ -628,12 +628,18 @@ def check_refs(c: dict) -> list[str]:
     )
 
 
+def pose_refs(c: dict) -> list[str]:
+    """The joint values check c's pose names: each a param or an <evidence>.<key> ledger value."""
+    return [str(v) for v in (c.get("pose") or {}).values()]
+
+
 def params_read_by(p: Project, c: dict) -> list[str]:
-    """The params check c reads itself, in order: a mass check's density, add and counts params."""
-    if c.get("kind") != "mass":
-        return []
-    names = [str(c.get("density"))] + [str(n) for n in c.get("add") or []]
-    names += [str(n) for n in (c.get("counts") or {}).values()]
+    """The params check c reads itself, in order: the params its pose names, then a mass check's
+    density, add and counts params."""
+    names = pose_refs(c)
+    if c.get("kind") == "mass":
+        names += [str(c.get("density"))] + [str(n) for n in c.get("add") or []]
+        names += [str(n) for n in (c.get("counts") or {}).values()]
     return [n for n in dict.fromkeys(names) if n in p.params]
 
 
@@ -717,7 +723,7 @@ def check_accounting(p: Project) -> None:
         if spec.get("basis") == "measured"
     }
     checked = {ref for c in p.checks for ref in check_refs(c)}
-    used |= checked
+    used |= checked | {ref for c in p.checks for ref in pose_refs(c)}
     for eid, e in p.evidence.items():
         if eid in measured_from and not e.get("values"):
             continue
@@ -826,6 +832,12 @@ def check_units(p: Project) -> None:
         if kind in CHECK_KINDS:
             for ref in check_refs(c):
                 expect_quantity(p, ref, (CHECK_KINDS[kind].quantity,), f"check {cid}")
+        for ref in pose_refs(c):
+            use = f"in check {cid}'s pose"
+            if ref in p.params:
+                expect_param_quantity(p, ref, ("angle",), use)
+            else:
+                expect_quantity(p, ref, ("angle",), use)
         if kind == "mass":
             expect_param_quantity(p, c.get("density") or "", ("density",), f"in check {cid}")
             for name in c.get("add", []):

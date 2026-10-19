@@ -106,6 +106,7 @@ CHECK = Record(
         "tol_rel": NUMBER,
         "max_volume": NUMBER,
         "pairs": Items(Items(str)),
+        "pose": Table(str),
         "interpretation": str,
     },
     exclusive=(("part", "instances"),),
