@@ -151,10 +151,10 @@ params:
 |---|---|---|
 | `source` | `from` (an evidence value); `value` optional and must match | stated by a source |
 | `derived` | `expr`; `value` optional and must match; `gap` optional, and with it the param rests on proposed and needs `interpretation` | computed from other params; `pi sqrt sin cos tan asin acos atan atan2 radians degrees hypot min max abs` are available |
-| `measured` | `from` (an image evidence id), `value`, `method`, `uncertainty` | scaled off an image or video frame against a known reference |
+| `measured` | `from` (an image evidence id), `value`, `method`, `uncertainty`; `gap` optional: the question whose answer would replace the measurement with a stated value | scaled off an image or video frame against a known reference |
 | `proposed` | `value`, `rationale`; `gap` expected | a reconstruction choice the sources do not make |
 
-A basis outside these four is `[param-basis]`. A missing requirement is `[param-from]` (`from` names no evidence value, or for `measured` no image evidence), `[param-measured]` or `[param-proposed]`; an `expr` that does not parse, names an undefined param, fails to evaluate or depends on itself is `[param-derived]`, as is a derived param naming a `gap` without an `interpretation`. A `value` that differs from its evidence value or `expr` is `[param-mismatch]`. A proposed param that names no `gap` raises the warning `[param-gap]`, and a proposed or derived param naming a gap gaps.yaml lacks is the error `[param-gap]`.
+A basis outside these four is `[param-basis]`. A missing requirement is `[param-from]` (`from` names no evidence value, or for `measured` no image evidence), `[param-measured]` or `[param-proposed]`; an `expr` that does not parse, names an undefined param, fails to evaluate or depends on itself is `[param-derived]`, as is a derived param naming a `gap` without an `interpretation`. A `value` that differs from its evidence value or `expr` is `[param-mismatch]`. A proposed param that names no `gap` raises the warning `[param-gap]`. A `gap` on a source param, which has no value for a gap to replace, or one naming a gap gaps.yaml lacks on any other basis, is the error `[param-gap]`.
 
 A proposed param whose value was changed to turn a check green says so in its `rationale`, naming the check: that check now confirms the choice rather than a source.
 
@@ -212,7 +212,7 @@ gaps:
     ask: datasheet
 ```
 
-The report lists every gap with the params that rest on it: this is the list of questions to send the authors.
+The report lists every gap with the params that name it in their `gap`: this is the list of questions to send the authors. Only a param's `gap` names a gap, so a gap no param names is the warning `[gap-unused]` even when a conflict's text cites its id; when a resolution leaves a question open, put the gap on the param whose value the resolution chose.
 
 ## overlays.yaml
 

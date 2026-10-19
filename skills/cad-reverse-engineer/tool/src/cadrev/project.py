@@ -532,8 +532,6 @@ def resolve_params(p: Project) -> None:
                 p.error("param-proposed", f"param {name}: proposed needs value and rationale")
             if not spec.get("gap"):
                 p.warn("param-gap", f"param {name}: proposed value names no gap to close it")
-            elif spec["gap"] not in p.gaps:
-                p.error("param-gap", f"param {name}: unknown gap {spec['gap']!r}")
             p.values[name] = float(spec.get("value", math.nan))
             p.rests_on[name] = "proposed"
             pending.pop(name)
@@ -545,8 +543,10 @@ def resolve_params(p: Project) -> None:
                     f"param {name}: derived naming a gap needs interpretation, "
                     "the choice its expr makes",
                 )
-            if spec["gap"] not in p.gaps:
-                p.error("param-gap", f"param {name}: unknown gap {spec['gap']!r}")
+        if spec.get("gap") and basis == "source":
+            p.error("param-gap", f"param {name}: source has no value for a gap to replace")
+        elif spec.get("gap") and spec["gap"] not in p.gaps:
+            p.error("param-gap", f"param {name}: unknown gap {spec['gap']!r}")
     # Derived parameters may depend on each other; resolve until no progress.
     while pending:
         progressed = False
@@ -726,6 +726,14 @@ def check_accounting(p: Project) -> None:
             )
 
 
+def check_gaps(p: Project) -> None:
+    """Every gap is named by a param's gap; an id in a conflict's text does not count."""
+    named = {spec.get("gap") for spec in p.params.values()}
+    for gid in p.gaps:
+        if gid not in named:
+            p.warn("gap-unused", f"gap {gid}: no param names it")
+
+
 def check_conflicts(p: Project) -> None:
     for c in p.conflicts:
         for eid in c.get("evidence", []):
@@ -821,6 +829,7 @@ def check_static(p: Project) -> None:
     check_evidence(p)
     resolve_params(p)
     check_accounting(p)
+    check_gaps(p)
     check_conflicts(p)
     check_units(p)
     check_tolerances(p)

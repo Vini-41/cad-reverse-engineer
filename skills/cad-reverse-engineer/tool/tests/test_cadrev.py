@@ -948,6 +948,60 @@ def test_derived_param_naming_a_gap_needs_a_known_gap_and_an_interpretation(proj
     assert errors(proj_dir) == [rule]
 
 
+def add_gap(root: Path, gid: str) -> None:
+    edit(root, "gaps.yaml", lambda d: d["gaps"].append({"id": gid, "question": "foot width?"}))
+
+
+def test_gap_no_param_names_is_a_gap_unused_warning(proj_dir):
+    add_gap(proj_dir, "G2")
+    assert findings(proj_dir, "gap-unused") == ["gap G2: no param names it"]
+
+
+@pytest.mark.parametrize("field", ["summary", "resolution"])
+def test_gap_named_only_in_a_conflicts_text_is_still_unused(proj_dir, field):
+    add_gap(proj_dir, "G2")
+    conflict = {"id": "C1", "evidence": ["pitch"], "summary": "pitch disputed"}
+    conflict[field] = "foot width is open, see G2"
+    edit(proj_dir, "evidence.yaml", lambda d: d["conflicts"].append(conflict))
+    assert findings(proj_dir, "gap-unused") == ["gap G2: no param names it"]
+
+
+def test_measured_param_naming_a_gap_clears_gap_unused_and_is_listed_under_it(proj_dir):
+    add_gap(proj_dir, "G2")
+    add_measured(proj_dir)
+    assert findings(proj_dir, "gap-unused") == ["gap G2: no param names it"]
+    edit(proj_dir, "params.yaml", lambda d: d["params"]["foot_w"].update(gap="G2"))
+    code, report = verify(proj_dir)
+    assert code == 0
+    assert {f["rule"] for f in report["findings"]} & {"param-gap", "gap-unused"} == set()
+    gaps = (proj_dir / "build" / "report.md").read_text().split("## Open gaps")[1].split("\n## ")[0]
+    assert re.search(r"^\| G2 \|.*\| foot_w \|$", gaps, re.M)
+
+
+def test_guard_measured_param_naming_no_gap_raises_no_param_gap(proj_dir):
+    add_measured(proj_dir)
+    assert findings(proj_dir, "param-gap") == []
+
+
+def test_derived_param_naming_a_gap_clears_gap_unused(proj_dir):
+    add_gap(proj_dir, "G2")
+    assert findings(proj_dir, "gap-unused") == ["gap G2: no param names it"]
+    add_params(proj_dir, centres=_CENTRED | {"gap": "G2"})
+    _, report = verify(proj_dir)
+    assert {f["rule"] for f in report["findings"]} & {"param-gap", "gap-unused"} == set()
+
+
+@pytest.mark.parametrize(
+    "name, change",
+    [("foot_w", {"gap": "G9"}), ("pitch", {"gap": "G1"})],
+    ids=["measured-unknown-gap", "source-with-gap"],
+)
+def test_param_gap_is_an_error_on_a_measured_unknown_gap_or_any_source_gap(proj_dir, name, change):
+    add_measured(proj_dir)
+    edit(proj_dir, "params.yaml", lambda d: d["params"][name].update(change))
+    assert errors(proj_dir) == ["param-gap"]
+
+
 def test_report_headline_counts_parameters_by_what_they_rest_on(proj_dir):
     add_measured(proj_dir)
     add_params(
@@ -3362,6 +3416,15 @@ FINDINGS = {
     "evidence-values": (
         _append("evidence.yaml", "evidence", _EXTRA),
         [_append("evidence.yaml", "evidence", {**_EXTRA, "scope": "context", "reason": "a test"})],
+    ),
+    "gap-unused": (
+        lambda r, t: add_gap(r, "G2"),
+        [
+            lambda r, t: (
+                add_gap(r, "G2"),
+                _param("spare", basis="proposed", value=3, rationale="x", gap="G2")(r, t),
+            )
+        ],
     ),
     "image-hash": (_reading(image_sha256="0" * 64), [_reading()]),
     "image-missing": (_unpinned_reading, [_reading()]),
