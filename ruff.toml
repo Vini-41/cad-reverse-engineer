@@ -1,8 +1,8 @@
 # One config for every Python file in the repo, so ruff gives the same answer from any directory.
 line-length = 100
-# Extensionless Python scripts; a new shell script in scripts/ joins red-on-main and cadrev here.
+# Extensionless Python scripts; a new shell script in scripts/ joins red-on-main, cadrev and check here.
 extend-include = ["scripts/*"]
-extend-exclude = ["scripts/red-on-main", "scripts/cadrev", ".claude"]
+extend-exclude = ["scripts/red-on-main", "scripts/cadrev", "scripts/check", ".claude"]
 
 [format]
 # Code blocks in the reference docs keep their hand-aligned comments.

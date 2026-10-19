@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# CI run locally: every step of .github/workflows/test.yml, which calls this script. Runs each step,
+# prints the ones that failed, and exits 1 if any did.
+#
+#   scripts/check
+#
+# The plugin manifests are validated only where the `claude` CLI is installed; CI installs it.
+set -uo pipefail
+
+repo=$(cd "$(dirname "$0")/.." && pwd)
+cd "$repo/skills/cad-reverse-engineer/tool" || exit 2
+failed=()
+
+step() {
+  local name=$1
+  shift
+  echo "== $name"
+  "$@" || failed+=("$name")
+}
+
+example_status() {
+  local example=../../../examples/legclaw-links expected log
+  expected=$(sed -n 's/^Expected status: `\(.*\)`$/\1/p' "$example/README.md")
+  [ -n "$expected" ] || { echo "$example/README.md states no expected status"; return 1; }
+  log=$(mktemp)
+  uv run cadrev check "$example" | tee "$log"
+  grep -qF "$expected. Report:" "$log" || { echo "expected: $expected"; rm -f "$log"; return 1; }
+  rm -f "$log"
+}
+
+plugin_validate() {
+  if command -v claude >/dev/null; then
+    (cd "$repo" && claude plugin validate .)
+  else
+    echo "skipped: no claude CLI on PATH"
+  fi
+}
+
+step "tool tests" uv run pytest -q
+step "script tests" uv run pytest -q ../../../scripts/tests
+step "pyright" uv run pyright
+step "ruff check" uv run ruff check ../../..
+step "ruff format" uv run ruff format --check ../../..
+step "agent-facing docs point only at files that exist" ../../../scripts/check-doc-pointers
+step "every rule is tested raised and not raised, documented and held by a step; tests use only the CLI" \
+  uv run python ../../../scripts/rule-coverage
+step "plugin manifests validate" plugin_validate
+step "red-on-main runs" env BASE=HEAD~1 ../../../scripts/red-on-main --co -q
+step "example reaches its documented status" example_status
+
+if [ ${#failed[@]} -gt 0 ]; then
+  printf 'failed: %s\n' "${failed[@]}"
+  exit 1
+fi
+echo "all steps passed"
