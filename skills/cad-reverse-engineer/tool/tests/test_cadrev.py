@@ -510,6 +510,61 @@ def test_guard_model_allowed_literal_in_any_spelling(proj_dir, literal):
     assert code == 0
 
 
+# A constant built from params hides its number as well as a literal does.
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        "atan2(p.link_H, p.link_H)",
+        "p.link_W / p.link_W",
+        "p.link_W - p.link_W",
+        "atan2(2 * p.link_H, p.link_H + p.link_H)",
+        "math.degrees(math.atan2(p.link_H, p.link_H)) * p.pitch / p.pitch",
+    ],
+)
+def test_model_constant_built_from_params_is_a_finding_on_its_line(proj_dir, expr):
+    _model_with(proj_dir, header="import math\nfrom math import atan2", line=f"extra = {expr}")
+    messages = findings(proj_dir, "model-constant")
+    assert errors(proj_dir) == ["model-constant"] and len(messages) == 1
+    assert messages[0].startswith(f"model.py:7: {expr}")
+
+
+def test_model_constant_through_a_local_alias_is_a_finding(proj_dir):
+    _model_with(proj_dir, line="w = p.link_W; extra = w / w")
+    messages = findings(proj_dir, "model-constant")
+    assert errors(proj_dir) == ["model-constant"] and len(messages) == 1
+    assert messages[0].startswith("model.py:6: w / w")
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "extra = p.link_L - p.link_L / 2",
+        "extra = p.link_H - 1",
+        "extra = -p.pitch / 2",
+        "extra = p.link_H // 2, p.link_H % 2",
+        "w = p.link_W; extra = w / p.link_H",
+        "w = p.link_W; w = 1; extra = w / p.link_W",
+        "extra = [h / h for h in (p.link_H,)]",
+    ],
+)
+def test_guard_model_relation_that_varies_with_its_params(proj_dir, line):
+    _model_with(proj_dir, line=line)
+    code, _ = verify(proj_dir)
+    assert code == 0 and findings(proj_dir, "model-constant") == []
+
+
+@pytest.mark.parametrize(
+    "line",
+    ["extra = 0 if p.link_H else math.asin(p.link_L / p.link_H + p.link_L / p.link_L)"],
+)
+def test_guard_model_expression_failing_to_evaluate_is_skipped(proj_dir, line):
+    _model_with(proj_dir, header="import math", line=line)
+    code, _ = verify(proj_dir)
+    assert code == 0 and findings(proj_dir, "model-constant") == []
+
+
 def test_report_shows_the_project_override_of_the_allowed_literals(proj_dir):
     edit(proj_dir, "project.yaml", lambda d: d.update(model_literals=[0, 1, 2, 7.5]))
     code, report = verify(proj_dir)
@@ -2928,6 +2983,10 @@ FINDINGS = {
     "model-build": (
         lambda r, t: _model_with(r, line="extra = p.pitch_2"),
         [lambda r, t: _model_with(r, line="extra = p.pitch")],
+    ),
+    "model-constant": (
+        lambda r, t: _model_with(r, line="extra = p.pitch / p.pitch"),
+        [lambda r, t: _model_with(r, line="extra = p.pitch / p.link_H")],
     ),
     "model-literal": (
         lambda r, t: _model_with(r, line="extra = 7.5"),
