@@ -33,7 +33,7 @@ _Avoid_: exclusion, ignore
 The declared origin of a parameter's value: `source`, `derived`, `measured` or `proposed`. A parameter with basis `source` *traces to a source*.
 
 **Rests on**:
-The basis a parameter's value ultimately depends on: its own, or for a derived parameter the weakest among the parameters it is computed from, proposed being weaker than measured and measured weaker than source.
+The basis a parameter's value ultimately depends on: its own, or for a derived parameter the weakest among the parameters it is computed from, proposed being weaker than measured and measured weaker than source. A check rests on the weakest among the parameters it reads, or on source when it reads none.
 _Avoid_: traces to (for a derived parameter), effective basis
 
 **Measured**:
@@ -48,8 +48,16 @@ A question that, once answered, would replace a proposed or measured value with 
 
 ## Verification
 
+**Instance**:
+One placement of a part in the assembly; a check over several instances reads them where the assembly places them.
+_Avoid_: copy, occurrence
+
+**Datum**:
+A named point on a part's solid that distance and angle checks measure: on the axis of a cylindrical face (a pin, a hole, a pivot) or on a face.
+_Avoid_: reference point, marker
+
 **Check**:
-One comparison between the built geometry and a ledger value: an envelope, a distance between datums, a mass or an interference.
+One comparison between the built geometry and a ledger value: an envelope, a distance or an angle between datums, a mass or an interference.
 _Avoid_: test, assertion
 
 **Tolerance**:
