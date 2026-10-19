@@ -33,7 +33,7 @@ _Avoid_: exclusion, ignore
 The declared origin of a parameter's value: `source`, `derived`, `measured` or `proposed`. A parameter with basis `source` *traces to a source*.
 
 **Rests on**:
-The basis a parameter's value ultimately depends on: its own, or for a derived parameter the weakest among the parameters it is computed from, proposed being weaker than measured and measured weaker than source. A check rests on the weakest among the parameters it reads, or on source when it reads none.
+The basis a parameter's value ultimately depends on: its own; proposed for a derived parameter that names a gap, since its computation is itself a reconstruction choice; or for any other derived parameter the weakest among the parameters it is computed from, proposed being weaker than measured and measured weaker than source. A check rests on the weakest among the parameters it reads, or on source when it reads none.
 _Avoid_: traces to (for a derived parameter), effective basis
 
 **Measured**:
@@ -44,7 +44,7 @@ The basis of a value the reconstruction chooses because no source states it.
 _Avoid_: assumed, guessed
 
 **Gap**:
-A question that, once answered, would replace a proposed or measured value with a stated one.
+A question that, once answered, would replace a proposed or measured value, or the choice a derived parameter's computation makes, with a stated one.
 
 ## Verification
 
