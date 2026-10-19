@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""File a spec's tickets as GitHub issues: sub-issues of the spec, with native blocking edges.
+
+A ticket is a file t<n>.md in the directory: its first line is `# <title>`, the rest its body. A
+body names other tickets as T<k>, and its blockers as lines `- Blocked by T<k>`. Every T<k> a
+ticket names must be a lower-numbered ticket, so tickets are created in order and each T<k> is
+replaced by its issue number before the issue exists. Bad input exits 2 before anything is
+created. After filing, each issue's blockers and the spec's sub-issues are read back from GitHub;
+a mismatch, or a gh call that fails part way, prints what was filed and exits 1.
+
+    scripts/file-tickets <spec issue number> <ticket dir> [--label <name>]... [--dry-run]
+
+GH names the gh executable (default gh).
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+REF = re.compile(r"(?<![\w-])T(\d+)(?![\w-])")
+BLOCKER = re.compile(r"^- Blocked by T(\d+)\s*$", re.M)
+API = "repos/{owner}/{repo}/issues"
+
+
+class Bad(Exception):
+    pass
+
+
+def read_tickets(folder: Path) -> dict[int, tuple[str, str]]:
+    """{n: (title, body)} for each t<n>.md, numbered 1 to N with no gap."""
+    tickets = {}
+    for path in folder.glob("t*.md"):
+        match = re.fullmatch(r"t(\d+)\.md", path.name)
+        if not match:
+            continue
+        title, _, body = path.read_text().partition("\n")
+        if not title.startswith("# ") or not title[2:].strip():
+            raise Bad(f"{path.name}: the first line must be '# <title>'")
+        tickets[int(match[1])] = (title[2:].strip(), body.strip() + "\n")
+    if not tickets:
+        raise Bad(f"{folder}: no t<n>.md tickets")
+    if sorted(tickets) != list(range(1, len(tickets) + 1)):
+        raise Bad(f"tickets must be numbered 1 to {len(tickets)} with no gap: {sorted(tickets)}")
+    for n, (_, body) in tickets.items():
+        for k in map(int, REF.findall(body)):
+            if k not in tickets:
+                raise Bad(f"t{n}.md names T{k}, which is not a ticket")
+            if k >= n:
+                raise Bad(f"t{n}.md names T{k}: a ticket may name only lower-numbered tickets")
+    return tickets
+
+
+def gh(*args: str) -> str:
+    result = subprocess.run([os.environ.get("GH", "gh"), *args], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"gh {' '.join(args[:3])}: {result.stderr.strip()}")
+    return result.stdout
+
+
+def issue_id(number: int) -> int:
+    return json.loads(gh("api", f"{API}/{number}"))["id"]
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("spec", type=int)
+    parser.add_argument("folder", type=Path)
+    parser.add_argument("--label", action="append", default=[])
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+    try:
+        tickets = read_tickets(args.folder)
+    except Bad as error:
+        print(error, file=sys.stderr)
+        return 2
+    blockers = {n: sorted(set(map(int, BLOCKER.findall(body)))) for n, (_, body) in tickets.items()}
+
+    if args.dry_run:
+        for n, (title, _) in sorted(tickets.items()):
+            after = ", ".join(f"T{k}" for k in blockers[n]) or "none"
+            print(f"T{n}: {title} (blocked by {after})")
+        return 0
+
+    numbers: dict[int, int] = {}
+    try:
+        for n, (title, body) in sorted(tickets.items()):
+            body = REF.sub(lambda m: f"#{numbers[int(m[1])]}", body)
+            labels = [flag for label in args.label for flag in ("--label", label)]
+            url = gh("issue", "create", "--title", title, "--body", body, *labels).strip()
+            numbers[n] = int(url.rsplit("/", 1)[1])
+            print(f"T{n} -> #{numbers[n]} {title}")
+            gh(
+                "api",
+                "--method",
+                "POST",
+                f"{API}/{args.spec}/sub_issues",
+                "-F",
+                f"sub_issue_id={issue_id(numbers[n])}",
+                "--silent",
+            )
+        for n, ks in blockers.items():
+            for k in ks:
+                gh(
+                    "api",
+                    "--method",
+                    "POST",
+                    f"{API}/{numbers[n]}/dependencies/blocked_by",
+                    "-F",
+                    f"issue_id={issue_id(numbers[k])}",
+                    "--silent",
+                )
+    except RuntimeError as error:
+        print(f"{error}\nfiled so far: {numbers}", file=sys.stderr)
+        return 1
+
+    try:
+        wrong = read_back(args.spec, numbers, blockers)
+    except RuntimeError as error:
+        print(f"{error}\nfiled: {numbers}", file=sys.stderr)
+        return 1
+    for line in wrong:
+        print(line, file=sys.stderr)
+    return 1 if wrong else 0
+
+
+def read_back(spec: int, numbers: dict[int, int], blockers: dict[int, list[int]]) -> list[str]:
+    """What GitHub holds that differs from the tickets: each issue's blockers, the spec's children."""
+    wrong = []
+    for n, number in numbers.items():
+        held = json.loads(gh("api", f"{API}/{number}/dependencies/blocked_by?per_page=100"))
+        found = sorted(i["number"] for i in held)
+        expected = sorted(numbers[k] for k in blockers[n])
+        if found != expected:
+            wrong.append(f"#{number} (T{n}) is blocked by {found}, expected {expected}")
+    children = {i["number"] for i in json.loads(gh("api", f"{API}/{spec}/sub_issues?per_page=100"))}
+    for n, number in numbers.items():
+        if number not in children:
+            wrong.append(f"#{number} (T{n}) is not a sub-issue of #{spec}")
+    return wrong
+
+
+if __name__ == "__main__":
+    sys.exit(main())
