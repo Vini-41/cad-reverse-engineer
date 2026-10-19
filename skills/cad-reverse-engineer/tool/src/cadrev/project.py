@@ -45,6 +45,8 @@ CHECK_KINDS = {
     "distance": CheckKind("length", "length"),
     "angle": CheckKind("angle", "angle"),
     "mass": CheckKind("mass", None),
+    # A joint's range: an angle at each end, the joint's own or one between datums.
+    "range": CheckKind("angle", "angle"),
 }
 SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "other")
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}
@@ -623,8 +625,10 @@ def resolve_params(p: Project) -> None:
 def check_refs(c: dict) -> list[str]:
     """The evidence values a check compares with the geometry."""
     eid = c.get("evidence")
-    return [f"{eid}.{key}" for key in (c.get("axes") or {})] + (
-        [f"{eid}.{c['key']}"] if c.get("key") else []
+    return (
+        [f"{eid}.{key}" for key in (c.get("axes") or {})]
+        + ([f"{eid}.{c['key']}"] if c.get("key") else [])
+        + [str(ref) for ref in c.get("ends") or []]
     )
 
 
@@ -634,9 +638,11 @@ def pose_refs(c: dict) -> list[str]:
 
 
 def params_read_by(p: Project, c: dict) -> list[str]:
-    """The params check c reads itself, in order: the params its pose names, then a mass check's
-    density, add and counts params."""
+    """The params check c reads itself, in order: the params its pose names, its sweep's steps,
+    then a mass check's density, add and counts params."""
     names = pose_refs(c)
+    if isinstance(c.get("sweep"), dict):
+        names.append(str(c["sweep"].get("steps")))
     if c.get("kind") == "mass":
         names += [str(c.get("density"))] + [str(n) for n in c.get("add") or []]
         names += [str(n) for n in (c.get("counts") or {}).values()]
@@ -648,10 +654,12 @@ def check_params(p: Project) -> set[str]:
     return {name for c in p.checks for name in params_read_by(p, c)}
 
 
-def rests_on(p: Project, c: dict) -> tuple[str, list[str]]:
-    """What check c rests on: the weakest basis among the params it reads, or source when it reads
-    none, with the params it reads that rest on that basis."""
-    bases = {name: p.rests_on.get(name, "proposed") for name in params_read_by(p, c)}
+def rests_on(p: Project, c: dict, also: tuple[str, ...] = ()) -> tuple[str, list[str]]:
+    """What check c rests on: the weakest basis among the params it reads, and also those of
+    the params the model gives it (a joint's range), or source when it reads none, with the
+    params it reads that rest on that basis."""
+    names = dict.fromkeys([*params_read_by(p, c), *also])
+    bases = {name: p.rests_on.get(name, "proposed") for name in names}
     weakest = max(bases.values(), key=RESTS_ON.index, default="source")
     return weakest, [name for name, basis in bases.items() if basis == weakest]
 
@@ -688,6 +696,18 @@ def overlap_limit(p: Project, c: dict) -> float:
     return float(c.get("max_volume", default_overlap_limit(p.length_tol)))
 
 
+def _capped(p: Project, c: dict) -> list[tuple[str, float | None]]:
+    """The values check c's tolerance is capped against, each with how it is named: each value it
+    compares, but for a range check the span between its ends, since an end may be 0."""
+    kind = str(c.get("kind"))
+    refs = check_refs(c)
+    if kind == "range" and len(refs) == 2:
+        low, high = (p.compared_value(ref, kind) for ref in refs)
+        span = None if low is None or high is None else high - low
+        return [(f"the range {refs[0]} to {refs[1]}", span)]
+    return [(ref, p.compared_value(ref, kind)) for ref in refs]
+
+
 def check_tolerances(p: Project) -> None:
     """No check is loosened past the cap: tol to TOL_CAP of each value it compares, tol_rel to TOL_REL_CAP."""
     for c in p.checks:
@@ -703,8 +723,7 @@ def check_tolerances(p: Project) -> None:
                 )
             continue
         where = "" if "tol" in c else f" (tolerance.{CHECK_KINDS[c['kind']].tolerance})"
-        for ref in check_refs(c):
-            expected = p.compared_value(ref, str(c.get("kind")))
+        for ref, expected in _capped(p, c):
             if expected is not None and value > TOL_CAP * abs(expected) * (1 + 1e-9):
                 p.error(
                     "tolerance-cap",

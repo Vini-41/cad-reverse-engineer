@@ -161,10 +161,17 @@ def _motion_line(moves: dict | None) -> list[str]:
 
 def _posed(r: CheckResult) -> str:
     """A check's interpretation, after the pose it was evaluated at, if any."""
-    if r.pose is None:
-        return interpretation(r)
-    at = ", ".join(f"{j} {s['value']:g} ({s['from']})" for j, s in r.pose.items())
-    return "; ".join(filter(None, [f"posed: {at}", interpretation(r)]))
+    posed = swept = ""
+    if r.pose is not None:
+        at = ", ".join(f"{j} {s['value']:g} ({s['from']})" for j, s in r.pose.items())
+        posed = f"posed: {at}"
+    if r.sweep is not None:
+        (low, high), (low_from, high_from) = r.sweep["range"], r.sweep["from"]
+        swept = (
+            f"swept: {r.sweep['joint']} {low:g} to {high:g} ({low_from} to {high_from}), "
+            f"{r.sweep['poses']} poses"
+        )
+    return "; ".join(filter(None, [swept, posed, interpretation(r)]))
 
 
 def counts(p: Project, results: list[CheckResult]) -> dict[str, int]:
@@ -372,7 +379,7 @@ def write(
                     {
                         k: v
                         for k, v in asdict(r).items()
-                        if k not in ("pairs", "pose") or v is not None
+                        if k not in ("pairs", "pose", "sweep") or v is not None
                     }
                     for r in results
                 ],
