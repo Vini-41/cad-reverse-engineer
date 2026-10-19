@@ -56,7 +56,8 @@ def _sources_block(lines: list[str]) -> _SourcesBlock | None:
     However project.yaml was last written: entries indented or not (PyYAML writes them flush),
     and other keys after `sources:` (PyYAML sorts them)."""
     head = next(
-        (i for i, line in enumerate(lines) if re.match(r"^sources:\s*(\[\])?\s*$", line)), None
+        (i for i, line in enumerate(lines) if re.match(r"^sources:(\s*\[\])?(\s+#.*)?\s*$", line)),
+        None,
     )
     if head is None:
         return None
@@ -96,8 +97,9 @@ def _rewrite_source_entry(text: str, source_id: str, fields: dict[str, str]) -> 
     for head, next_head in zip(heads, heads[1:] + [block.end]):
         entry = lines[head:next_head]
         id_line = key_line(entry, "id")
+        escaped = re.escape(source_id)
         if id_line is None or not re.fullmatch(
-            rf"id: ['\"]?{re.escape(source_id)}['\"]?\s*", entry[id_line][key_col:]
+            rf"id: ({escaped}|'{escaped}'|\"{escaped}\")(\s+#.*)?\s*", entry[id_line][key_col:]
         ):
             continue
         for key, value in fields.items():
@@ -118,6 +120,14 @@ def _rewrite_source_entry(text: str, source_id: str, fields: dict[str, str]) -> 
     return None
 
 
+def _read_keeping_newline(path: Path) -> tuple[str, str]:
+    """path's text with "\n" line ends, and the line end its first line uses, to write it back with."""
+    with path.open(newline="") as f:
+        text = f.read()
+    newline = "\r\n" if re.match(r"[^\n]*\r\n", text) else "\n"
+    return text.replace("\r\n", "\n"), newline
+
+
 def _unignore_if_redistributable(root: Path, path: str, license_id: object) -> None:
     """Un-ignore a source in the project's .gitignore when its license allows redistribution."""
     gitignore = root / ".gitignore"
@@ -128,14 +138,15 @@ def _unignore_if_redistributable(root: Path, path: str, license_id: object) -> N
     ):
         return
     # git cannot re-include a file inside an ignored directory, so ignore its contents instead.
+    text, newline = _read_keeping_newline(gitignore)
     lines = [
         "sources/*" if line.strip() in ("sources/", "sources") else line
-        for line in gitignore.read_text().splitlines()
+        for line in text.splitlines()
     ]
     pattern = "!" + re.sub(r"([\\*?\[!#])", r"\\\1", path)
     if pattern not in lines:
         lines.append(pattern)
-    gitignore.write_text("\n".join(lines) + "\n")
+    gitignore.write_text("\n".join(lines) + "\n", newline=newline)
 
 
 def cmd_source(args) -> int:
@@ -162,7 +173,7 @@ def cmd_source(args) -> int:
     fields |= {"citation": _quoted(args.citation)}
     fields |= {"url": args.url} if args.url else {}
     fields |= {"license": args.license} if args.license else {}
-    text = meta.read_text()
+    text, newline = _read_keeping_newline(meta)
     if args.id in registered:
         # Restoring a source into a clone, or a fresh download: keep the entry, refresh the file
         # and whatever the command states about it.
@@ -174,12 +185,12 @@ def cmd_source(args) -> int:
                 file=sys.stderr,
             )
             return 1
-        meta.write_text(refreshed)
+        meta.write_text(refreshed, newline=newline)
         license_id = args.license or registered[args.id].get("license")
         _unignore_if_redistributable(root, path, license_id)
         print(f"refreshed {args.id} -> {target}")
         return 0
-    lines = re.sub(r"^sources:\s*\[\]\s*$", "sources:", text, flags=re.M).splitlines()
+    lines = re.sub(r"^sources:\s*\[\](\s+#.*)?\s*$", r"sources:\1", text, flags=re.M).splitlines()
     block = _sources_block(lines)
     if block is None:
         print(f"project.yaml has no block-style sources list for {args.id}", file=sys.stderr)
@@ -187,7 +198,9 @@ def cmd_source(args) -> int:
     pad = " " * (block.indent + 2)
     entry = [f"{' ' * block.indent}- id: {args.id}"]
     entry += [f"{pad}{key}: {value}" for key, value in fields.items()]
-    meta.write_text("\n".join(lines[: block.end] + entry + lines[block.end :]) + "\n")
+    meta.write_text(
+        "\n".join(lines[: block.end] + entry + lines[block.end :]) + "\n", newline=newline
+    )
     _unignore_if_redistributable(root, path, args.license)
     print(f"registered {args.id} -> {target}")
     return 0

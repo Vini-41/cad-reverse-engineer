@@ -1475,6 +1475,204 @@ def test_source_into_a_flow_style_sources_list_is_refused_leaving_it_intact(
     assert "sources" in capsys.readouterr().err
 
 
+def _to_crlf(path: Path) -> None:
+    path.write_bytes(path.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+
+
+def _lines_end_crlf(path: Path) -> bool:
+    data = path.read_bytes()
+    return data.endswith(b"\r\n") and data.count(b"\n") == data.count(b"\r\n")
+
+
+def _register_notes(root: Path, *flags: str) -> int:
+    notes = root.parent / "notes.txt"
+    notes.write_text("No dimensions.\n")
+    code, _ = run(
+        "source",
+        str(root),
+        str(notes),
+        "--id",
+        "notes",
+        "--kind",
+        "other",
+        "--citation",
+        "N",
+        *flags,
+    )
+    return code
+
+
+def _refresh_paper(root: Path) -> int:
+    """Re-register the paper source after its file changed, as from a fresh download."""
+    paper = root / "sources" / "paper.txt"
+    paper.write_text(PAPER + "Received 1 March.\n")
+    code, _ = run(
+        "source",
+        str(root),
+        str(paper),
+        "--id",
+        "paper",
+        "--kind",
+        "paper",
+        "--citation",
+        "Doe 2026",
+    )
+    return code
+
+
+def _loaded_sources(root: Path) -> list[dict]:
+    """The project's sources, once a verification run shows project.yaml still loads."""
+    assert findings(root, "yaml-syntax") == []
+    return yaml.safe_load((root / "project.yaml").read_text())["sources"]
+
+
+def _source_ids(root: Path) -> list[str]:
+    return [s["id"] for s in _loaded_sources(root)]
+
+
+def test_source_registered_into_a_crlf_project_yaml_keeps_it_crlf(proj_dir):
+    meta = proj_dir / "project.yaml"
+    _to_crlf(meta)
+    assert _register_notes(proj_dir) == 0
+    assert _lines_end_crlf(meta)
+    assert _source_ids(proj_dir) == ["paper", "notes"]
+
+
+def test_source_refreshed_in_a_crlf_project_yaml_keeps_it_crlf(proj_dir):
+    meta = proj_dir / "project.yaml"
+    _to_crlf(meta)
+    assert _refresh_paper(proj_dir) == 0
+    assert _lines_end_crlf(meta)
+    (entry,) = _loaded_sources(proj_dir)
+    assert entry["sha256"] == sha256(proj_dir / "sources" / "paper.txt")
+
+
+def test_redistributable_source_registered_with_a_crlf_gitignore_keeps_it_crlf(proj_dir):
+    gitignore = proj_dir / ".gitignore"
+    _to_crlf(gitignore)
+    assert _register_notes(proj_dir, "--license", "CC-BY-4.0") == 0
+    assert _lines_end_crlf(gitignore)
+    assert "!sources/notes.txt" in gitignore.read_text().splitlines()
+
+
+def test_source_into_a_project_yaml_of_mixed_endings_writes_its_first_lines_ending(proj_dir):
+    meta = proj_dir / "project.yaml"
+    first, rest = meta.read_bytes().split(b"\n", 1)
+    meta.write_bytes(first + b"\r\n" + rest)
+    assert _register_notes(proj_dir) == 0
+    assert _lines_end_crlf(meta)
+    assert _source_ids(proj_dir) == ["paper", "notes"]
+
+
+def test_guard_source_into_a_project_yaml_of_mixed_endings_lf_first_writes_lf(proj_dir):
+    meta = proj_dir / "project.yaml"
+    first, rest = meta.read_bytes().split(b"\n", 1)
+    meta.write_bytes(first + b"\n" + rest.replace(b"\n", b"\r\n"))
+    assert _register_notes(proj_dir) == 0
+    assert b"\r" not in meta.read_bytes()
+    assert _source_ids(proj_dir) == ["paper", "notes"]
+
+
+def test_source_joins_an_empty_sources_list_with_a_comment_keeping_it(tmp_path):
+    root = tmp_path / "demo"
+    assert cli.main(["init", str(root)]) == 0
+    meta = root / "project.yaml"
+    meta.write_text(meta.read_text().replace("sources: []", "sources: []  # none yet"))
+    assert "sources: []  # none yet" in meta.read_text().splitlines()
+    assert _register_notes(root) == 0
+    assert _source_ids(root) == ["notes"]
+    assert "sources:  # none yet" in meta.read_text().splitlines()
+
+
+def test_source_joins_a_sources_list_whose_head_has_a_comment_after_its_entries(proj_dir):
+    meta = proj_dir / "project.yaml"
+    meta.write_text(re.sub(r"^sources:$", "sources:  # papers", meta.read_text(), flags=re.M))
+    assert "sources:  # papers" in meta.read_text().splitlines()
+    assert _register_notes(proj_dir) == 0
+    assert _source_ids(proj_dir) == ["paper", "notes"]
+
+
+def _set_paper_id_line(root: Path, id_line: str) -> None:
+    meta = root / "project.yaml"
+    meta.write_text(re.sub(r"^(\s*)- id: paper$", rf"\g<1>{id_line}", meta.read_text(), flags=re.M))
+    assert id_line in [line.strip() for line in meta.read_text().splitlines()]
+
+
+@pytest.mark.parametrize("id_line", ["- id: paper  # main", '- id: "paper"  # main'])
+def test_source_whose_id_line_has_a_comment_is_refreshed_in_place_keeping_it(proj_dir, id_line):
+    _set_paper_id_line(proj_dir, id_line)
+    assert _refresh_paper(proj_dir) == 0
+    (entry,) = _loaded_sources(proj_dir)
+    assert entry["sha256"] == sha256(proj_dir / "sources" / "paper.txt")
+    meta = proj_dir / "project.yaml"
+    assert id_line in [line.strip() for line in meta.read_text().splitlines()]
+
+
+# Look-alikes of `- id: paper  # main`: ids that only begin with paper, so refreshing paper leaves
+# their entries alone.
+@pytest.mark.parametrize("id_line", ['- id: "paper  # main"', "- id: paper#main"])
+def test_guard_refreshing_a_source_leaves_an_entry_whose_id_only_begins_with_its_id(
+    proj_dir, id_line
+):
+    _set_paper_id_line(proj_dir, id_line)
+    paper = proj_dir / "sources" / "paper.txt"
+    code, _ = run(
+        "source", str(proj_dir), str(paper), "--id", "paper", "--kind", "paper", "--citation", "D"
+    )
+    assert code == 0
+    look_alike, _ = before = _loaded_sources(proj_dir)
+    assert _refresh_paper(proj_dir) == 0
+    after = _loaded_sources(proj_dir)
+    assert after[0] == look_alike and after[0]["id"] != "paper"
+    assert after[1] == {**before[1], "sha256": sha256(paper), "citation": "Doe 2026"}
+
+
+def test_guard_source_registered_into_an_lf_project_appends_only_its_lines(proj_dir):
+    meta, gitignore = proj_dir / "project.yaml", proj_dir / ".gitignore"
+    meta_before, gitignore_before = meta.read_bytes(), gitignore.read_bytes()
+    assert _register_notes(proj_dir, "--license", "CC-BY-4.0") == 0
+    digest = sha256(proj_dir / "sources" / "notes.txt")
+    assert (
+        meta.read_bytes()
+        == meta_before
+        + (
+            "  - id: notes\n    kind: other\n    path: sources/notes.txt\n"
+            f'    sha256: {digest}\n    citation: "N"\n    license: CC-BY-4.0\n'
+        ).encode()
+    )
+    assert gitignore.read_bytes() == gitignore_before + b"!sources/notes.txt\n"
+
+
+def test_guard_source_refreshed_in_an_lf_project_changes_only_its_hash(proj_dir):
+    meta = proj_dir / "project.yaml"
+    old = sha256(proj_dir / "sources" / "paper.txt")
+    before = meta.read_bytes()
+    assert _refresh_paper(proj_dir) == 0
+    new = sha256(proj_dir / "sources" / "paper.txt")
+    assert meta.read_bytes() == before.replace(old.encode(), new.encode())
+
+
+def test_guard_source_into_a_project_yaml_with_a_second_document_is_refused_leaving_it_intact(
+    proj_dir, capsys
+):
+    meta = proj_dir / "project.yaml"
+    meta.write_text(meta.read_text() + "---\nnotes: later\n")
+    before = meta.read_bytes()
+    assert _register_notes(proj_dir) == 1
+    assert meta.read_bytes() == before
+    assert "[yaml-syntax]" in capsys.readouterr().err
+
+
+def test_guard_source_into_a_project_yaml_ending_in_a_document_end_marker_lands_before_it(
+    proj_dir,
+):
+    meta = proj_dir / "project.yaml"
+    meta.write_text(meta.read_text() + "...\n")
+    assert _register_notes(proj_dir) == 0
+    assert meta.read_text().endswith('citation: "N"\n...\n')
+    assert _source_ids(proj_dir) == ["paper", "notes"]
+
+
 def _overlay(root: Path, **changes) -> None:
     from PIL import Image
 
