@@ -1,3 +1,4 @@
+import ast
 import contextlib
 import hashlib
 import io
@@ -190,6 +191,26 @@ def test_guard_report_json_has_the_keys_project_format_documents(proj_dir):
     _, report = verify(proj_dir)
     assert set(report) == set(rows), "report.json and project-format.md list different keys"
     assert set(report["counts"]) == set(re.findall(r"`(\w+)`", rows["counts"]))
+
+
+def test_guard_project_format_examples_name_only_gaps_and_params_they_define():
+    doc = (Path(__file__).parents[2] / "references" / "project-format.md").read_text()
+
+    def example(heading: str) -> dict:
+        section = doc.split(f"\n## {heading}\n")[1]
+        return yaml.safe_load(section.split("```yaml\n")[1].split("```")[0])
+
+    params, gaps = example("params.yaml")["params"], example("gaps.yaml")["gaps"]
+    named = {s["gap"] for s in params.values() if "gap" in s}
+    assert named <= {g["id"] for g in gaps}, "a param example names a gap the gaps.yaml lacks"
+    read = {
+        n.id
+        for s in params.values()
+        if "expr" in s
+        for n in ast.walk(ast.parse(s["expr"]))
+        if isinstance(n, ast.Name)
+    }
+    assert read <= params.keys(), "an expr example reads a param the params.yaml lacks"
 
 
 def test_every_status_cadrev_check_reports_is_defined_in_project_format(proj_dir):

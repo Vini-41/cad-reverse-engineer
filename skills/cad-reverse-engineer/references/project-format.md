@@ -207,6 +207,9 @@ gaps:
   - id: G-pin-x
     question: Where along the finger link does the pin sit?
     ask: authors
+  - id: G-pins
+    question: What diameter are the link pins?
+    ask: datasheet
 ```
 
 The report lists every gap with the params that rest on it: this is the list of questions to send the authors.
