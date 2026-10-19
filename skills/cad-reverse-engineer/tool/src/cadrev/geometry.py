@@ -8,8 +8,9 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections.abc import Callable
+from typing import Protocol
 
+from . import units
 from .project import (
     Project,
     check_params,
@@ -57,6 +58,9 @@ class CheckResult:
     pairs: int | None = None
     # The joint values a posed check was evaluated at: joint -> {from, value}; None when unposed.
     pose: dict | None = None
+    # A swept interference check's joint, the range params it is swept between, their values and
+    # how many poses it evaluated; None for a check not swept.
+    sweep: dict | None = None
 
 
 @dataclass
@@ -90,9 +94,13 @@ class Mass:
     inertia: tuple[float, ...]
 
 
-# What poses a check: the assembly placed at the joint values the check's pose names, with the
-# pose as report.json shows it; None after a finding saying why it cannot be posed.
-Poser = Callable[[dict], "tuple[Built, dict] | None"]
+class Poser(Protocol):
+    """What poses a check: the assembly placed at the joint values the check's pose names, and at
+    those at gives (joint -> (value in the project's angle unit, what it is from)), with the pose
+    as report.json shows it; None after a finding saying why it cannot be posed."""
+
+    def __call__(self, c: dict, at: dict | None = None) -> tuple[Built, dict] | None: ...
+
 
 DRIVES = ("actuated", "passive")
 # The physics values (ADR-0008) a joint, tendon or part's contact may name, each as a param.
@@ -672,6 +680,122 @@ def _angle(p: Project, c: dict, points: list) -> float | None:
     return math.degrees(math.atan2(math.hypot(*cross), sum(x * y for x, y in zip(u, w))))
 
 
+def _turned(built: Built, view: Built, name: str, near: float) -> float:
+    """How far joint name has turned its child about its axis, in degrees, from the assembly as
+    built to view; of the readings a whole turn apart, the one nearest near."""
+    from build123d import Location, Vector
+
+    joint = built.joints[name]
+
+    def relative(b: Built):
+        return b.assembly[joint["parent"]][1].inverse() * b.assembly[joint["child"]][1]
+
+    turn = relative(built).inverse() * relative(view)
+    a, b = (Vector(*built.datums[_axis_datum(built, d)]) for d in joint["axis"])
+    n = (b - a).normalized()
+    u = n.cross(Vector(1, 0, 0))
+    if u.length < 0.5:
+        u = n.cross(Vector(0, 1, 0))
+    v = (turn * Location((u.X, u.Y, u.Z))).position - turn.position
+    angle = math.degrees(math.atan2(n.dot(u.cross(v)), u.dot(v)))
+    return angle + 360 * round((near - angle) / 360)
+
+
+def _axis_datum(built: Built, name: str) -> str:
+    named = instance_datum(built, name)
+    assert named is not None  # build drops joints whose axis names no datum
+    return named[1]
+
+
+def _joint(p: Project, built: Built, c: dict, pose: Poser | None, ranged: bool) -> dict | None:
+    """The joint a range or sweep check names, with a range where ranged; None, after a
+    [check-config] finding, when the model has no such joint or it has no range."""
+    cid, name = c.get("id", "?"), _joint_name(c)
+    if name is None:
+        raise KeyError("joint")
+    if pose is None:
+        p.error(
+            "check-config", f"check {cid}: names joint {name}, but model.build returns no joints"
+        )
+        return None
+    joint = built.joints.get(name)
+    if joint is None:
+        p.error("check-config", f"check {cid}: {name} is not a joint")
+        return None
+    if ranged and "range" not in joint:
+        p.error("check-config", f"check {cid}: joint {name} has no range")
+        return None
+    return {"name": name, **joint}
+
+
+def _joint_name(c: dict) -> str | None:
+    """The joint a range check names, or the one an interference check is swept over."""
+    if c.get("kind") == "range":
+        return c.get("joint")
+    return (c.get("sweep") or {}).get("joint")
+
+
+def _sweep(p: Project, built: Built, c: dict, pose: Poser | None) -> tuple[dict, list] | None:
+    """The sweep of an interference check: its joint at steps evenly spaced values from one end
+    of its range to the other, each pose as (view, its pose); None, after a finding, when the
+    joint, its range or steps cannot be swept, or a loop stays open at one of its poses."""
+    joint = _joint(p, built, c, pose, ranged=True)
+    if joint is None or pose is None:
+        return None
+    cid, name, steps_name = c.get("id", "?"), joint["name"], c["sweep"]["steps"]
+    steps = p.values[steps_name]
+    if steps < 2 or steps != int(steps):
+        p.error(
+            "check-config",
+            f"check {cid}: sweep steps {steps_name} is {steps:g}; sweep at least 2 poses, "
+            "a whole number",
+        )
+        return None
+    low_name, high_name = joint["range"]
+    low, high = p.values[low_name], p.values[high_name]
+    label, count, poses = f"{low_name}..{high_name}", int(steps), []
+    for i in range(count):
+        at = pose(c, {name: (low + (high - low) * i / (count - 1), label)})
+        if at is None:
+            return None
+        poses.append(at)
+    shown = {"joint": name, "from": [low_name, high_name], "range": [low, high], "poses": count}
+    return shown, poses
+
+
+def _range(p: Project, built: Built, c: dict, pose: Poser | None) -> list[CheckResult]:
+    """A range check: the model posed at each end of its joint's range, the joint's turn, or the
+    angle between datums, compared with the ledger value for that end."""
+    joint = _joint(p, built, c, pose, ranged=True)
+    if joint is None or pose is None:
+        return []
+    cid, name, ends = c.get("id", "?"), joint["name"], c["ends"]
+    if len(ends) != 2:
+        p.error("check-config", f"check {cid}: ends names {len(ends)} values, not [low, high]")
+        return []
+    degrees = units.size("angle", p.units) / units.UNITS["deg"].si
+    results = []
+    for param, ref in zip(joint["range"], ends):
+        at = pose({**c, "pose": {**(c.get("pose") or {}), name: param}})
+        if at is None:
+            continue
+        view, posed = at
+        if "between" in c:
+            points = _datums(p, view, c)
+            measured = None if points is None else _angle(p, c, points)
+            if measured is None:
+                return results
+            a, vertex, b = c["between"]
+            shown = f"° at {vertex} between {a} and {b}"
+        else:
+            measured = _turned(built, view, name, posed[name]["value"] * degrees)
+            shown = f"° {name} turned"
+        result = _compared(p, c, f"{cid}.{param}", ref, measured, shown)
+        result.pose = posed
+        results.append(result)
+    return results
+
+
 def _count(p: Project, counts: dict, part: str) -> float:
     """How many of part a mass check weighs: the param its counts entry names, else 1."""
     return p.values[counts[part]] if part in counts else 1
@@ -757,19 +881,32 @@ def run_checks(p: Project, built: Built, pose: Poser | None = None) -> list[Chec
                 measured = sum(each[n] * _count(p, counts, n) for n in names)
                 measured += sum(p.values[n] for n in c.get("add", []))
                 results.append(_compared(p, c, cid, f"{c['evidence']}.{c['key']}", measured))
+            elif kind == "range":
+                results += _range(p, built, c, pose)
             elif kind == "interference":
                 limit = overlap_limit(p, c)
                 pairs = [tuple(pair) for pair in c.get("pairs", [])]
-                shapes = dict(_instances(view))
+                sweep, poses = None, [(view, None)]
+                if "sweep" in c:
+                    swept = _sweep(p, built, c, pose)
+                    if swept is None:
+                        continue
+                    sweep, poses = swept
                 pair_set = "listed" if pairs else "all"
                 if not pairs:
-                    names = sorted(shapes)
+                    names = sorted(view.assembly)
                     pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1 :]]
-                worst = (0.0, "")
-                for a, b in pairs:
-                    volume = _volume(shapes[a].intersect(shapes[b]))
-                    if volume > worst[0]:  # name a pair only where instances overlap
-                        worst = (volume, f"{a} ∩ {b}")
+                worst, worst_pose, at, across = (0.0, ""), None, "", ""
+                for placed, shown in poses:
+                    shapes = dict(_instances(placed))
+                    for a, b in pairs:
+                        volume = _volume(shapes[a].intersect(shapes[b]))
+                        if volume > worst[0]:  # name a pair only where instances overlap
+                            worst, worst_pose = (volume, f"{a} ∩ {b}"), shown
+                if sweep is not None:
+                    across = f" across {sweep['poses']} poses of {sweep['joint']}"
+                    if worst_pose is not None:
+                        at = f" at {sweep['joint']} {worst_pose[sweep['joint']]['value']:g}"
                 results.append(
                     CheckResult(
                         cid,
@@ -777,9 +914,13 @@ def run_checks(p: Project, built: Built, pose: Poser | None = None) -> list[Chec
                         worst[0] <= limit,
                         f"overlap ≤ {limit:g}",
                         f"{worst[0]:.4g} {worst[1]}".strip()
-                        + f" over {len(pairs)} pair{'s' * (len(pairs) != 1)} ({pair_set})",
+                        + at
+                        + f" over {len(pairs)} pair{'s' * (len(pairs) != 1)} ({pair_set})"
+                        + across,
                         c.get("interpretation", ""),
                         pairs=len(pairs),
+                        pose=worst_pose,
+                        sweep=sweep,
                     )
                 )
             else:
@@ -788,9 +929,11 @@ def run_checks(p: Project, built: Built, pose: Poser | None = None) -> list[Chec
         except (KeyError, TypeError, ValueError) as exc:
             p.error("check-config", f"check {cid}: missing or unknown {exc}")
             continue
-        basis, params = rests_on(p, c)
+        joint = built.joints.get(_joint_name(c) or "", {})
+        basis, params = rests_on(p, c, tuple(joint.get("range", ())))
         for r in results[start:]:
-            r.rests_on, r.rests_on_params, r.pose = basis, params, posed
+            r.rests_on, r.rests_on_params = basis, params
+            r.pose = r.pose or posed
     for r in results:
         if not r.ok:
             p.error("check-failed", f"{r.id}: expected {r.expected}, measured {r.measured}")

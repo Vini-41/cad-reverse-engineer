@@ -4547,6 +4547,204 @@ def test_physics_slot_naming_a_param_without_physics_true_is_param_physics(proj_
     ]
 
 
+# Ranges and sweeps: a joint posed at the ends of its stated range, interference across it.
+
+RANGE = "The crank turns from 0° to 60° and back."
+
+
+def ranged(root: Path, tmp_path: Path, checked: bool = True) -> None:
+    """The four-bar posed at 30°, its input's range ledgered as N1 (lo 0°, hi 60°) and read by
+    the source params input_min and input_max; checked, a range check reach confirms it."""
+    four_bar(root, tmp_path, (30,))
+    add_quote(root, tmp_path, RANGE + "\n", RANGE.rstrip("."), {"lo": 0, "hi": 60})
+    for name, end in (("input_min", "lo"), ("input_max", "hi")):
+        spec = {"from": f"N1.{end}", "value": None, "rationale": None, "gap": None}
+        _param(name, basis="source", **spec)(root, tmp_path)
+    if checked:
+        reach = {"id": "reach", "kind": "range", "joint": "input", "ends": ["N1.lo", "N1.hi"]}
+        _append("checks.yaml", "checks", reach)(root, tmp_path)
+
+
+def test_range_check_passes_when_the_joint_reaches_both_ledgered_ends(proj_dir, tmp_path):
+    ranged(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    checks = _by_id(report)
+    low, high = checks["reach.input_min"], checks["reach.input_max"]
+    assert low["ok"] and high["ok"]
+    assert low["expected"].endswith("(N1.lo)") and high["expected"].endswith("(N1.hi)")
+    assert low["pose"] == {"input": {"from": "input_min", "value": 0}}
+    assert high["pose"] == {"input": {"from": "input_max", "value": 60}}
+    assert high["measured"].startswith("60°")
+
+
+def _unchecked(root: Path) -> list[str]:
+    return [m.split(":")[0] for m in findings(root, "unchecked-source")]
+
+
+def test_source_range_param_a_range_check_covers_is_not_unchecked_source(proj_dir, tmp_path):
+    ranged(proj_dir, tmp_path)
+    assert {"param input_min", "param input_max"}.isdisjoint(_unchecked(proj_dir))
+
+
+def test_guard_source_range_param_no_check_covers_is_unchecked_source(proj_dir, tmp_path):
+    ranged(proj_dir, tmp_path, checked=False)
+    assert {"param input_min", "param input_max"} <= set(_unchecked(proj_dir))
+
+
+def test_range_end_the_model_stops_short_of_is_check_failed(proj_dir, tmp_path):
+    ranged(proj_dir, tmp_path)
+    _param("input_max", basis="proposed", value=50, rationale="x", gap="G1", **{"from": None})(
+        proj_dir, tmp_path
+    )
+    code, report = verify(proj_dir)
+    failed = [f["message"] for f in report["findings"] if f["rule"] == "check-failed"]
+    assert code == 1 and failed == [
+        "reach.input_max: expected 60 (N1.hi), measured 50° input turned"
+    ]
+
+
+def test_range_end_the_loop_cannot_close_at_is_loop_open(proj_dir, tmp_path):
+    ranged(proj_dir, tmp_path)
+    _param("coupler", basis="proposed", value=20, rationale="x", **{"from": None})(
+        proj_dir, tmp_path
+    )
+    code, report = verify(proj_dir)
+    opened = [f["message"] for f in report["findings"] if f["rule"] == "loop-open"]
+    assert code == 1 and len(opened) == 1 and "with input at 60 (input_max)" in opened[0]
+    assert "reach.input_max" not in _by_id(report) and _by_id(report)["reach.input_min"]["ok"]
+
+
+def test_range_check_between_datums_compares_their_angle_at_each_end(proj_dir, tmp_path):
+    four_bar(proj_dir, tmp_path, (0, 60))
+    for name, end in (("input_min", "P0"), ("input_max", "P60")):
+        spec = {"from": f"{end}.turn", "value": None, "rationale": None, "gap": None}
+        _param(name, basis="source", **spec)(proj_dir, tmp_path)
+    rock = {
+        "id": "rock",
+        "kind": "range",
+        "joint": "input",
+        "ends": ["P0.rock", "P60.rock"],
+        "instances": ["ground_1", "rocker_1"],
+        "between": ["ground_1.a", "ground_1.d", "rocker_1.a"],
+    }
+    _append("checks.yaml", "checks", rock)(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    checks = _by_id(report)
+    # The rocker swings from one stated angle to the other as the crank turns 60°.
+    assert checks["rock.input_min"]["expected"] != checks["rock.input_max"]["expected"]
+    assert checks["rock.input_max"]["measured"].endswith(
+        "° at ground_1.d between ground_1.a and rocker_1.a"
+    )
+
+
+@pytest.mark.parametrize(
+    "change, says",
+    [
+        ({"joint": "hip"}, "hip is not a joint"),
+        ({"joint": "knee"}, "joint knee has no range"),
+        ({"ends": ["N1.hi"]}, "ends names 1 values, not [low, high]"),
+    ],
+)
+def test_range_check_naming_no_ranged_joint_or_not_two_ends_is_check_config(
+    proj_dir, tmp_path, change, says
+):
+    ranged(proj_dir, tmp_path)
+    _check("reach", **change)(proj_dir, tmp_path)
+    assert findings(proj_dir, "check-config") == [f"check reach: {says}"]
+
+
+def test_range_check_on_a_static_model_is_check_config(proj_dir):
+    reach = {"id": "reach", "kind": "range", "joint": "input", "ends": ["pitch.pitch"] * 2}
+    _append("checks.yaml", "checks", reach)(proj_dir, None)
+    assert "check reach: names joint input, but model.build returns no joints" in findings(
+        proj_dir, "check-config"
+    )
+
+
+def post_beside(root: Path, tmp_path: Path, post_x: float, steps: int = 5) -> None:
+    """The four-bar beside a post fixed at (post_x, 0), and an interference check of the post with
+    the crank and coupler swept at steps poses across the input's range, -180° to 180°. Turned
+    90°, the crank points at (-15, 0); turned -180°, 0 or 180°, it points along y, clear of x < -12."""
+    four_bar(root, tmp_path, (30,))
+    model = swap(
+        FOUR_BAR,
+        '"parts": {name: bar(p, length) for name, length in lengths.items()},',
+        '"parts": {**{name: bar(p, length) for name, length in lengths.items()}, '
+        '"post": Box(p.link_W, p.link_W, p.link_H)},',
+    )
+    model = swap(
+        model,
+        '"ground_1": ("ground", Location()),',
+        '"ground_1": ("ground", Location()), "post_1": ("post", Location((p.post_x, 0, 0))),',
+    )
+    write(root, "model.py", model)
+    _parts(post={"density": "density"})(root, tmp_path)
+    for name, value in (("post_x", post_x), ("sweep_steps", steps)):
+        _param(name, basis="proposed", value=value, rationale="a test post", gap="G1")(
+            root, tmp_path
+        )
+    sweep = {
+        "id": "clear",
+        "kind": "interference",
+        "pairs": [["crank_1", "post_1"], ["coupler_1", "post_1"]],
+        "sweep": {"joint": "input", "steps": "sweep_steps"},
+    }
+    _append("checks.yaml", "checks", sweep)(root, tmp_path)
+
+
+def test_swept_interference_catches_a_collision_only_mid_range_naming_pair_and_pose(
+    proj_dir, tmp_path
+):
+    post_beside(proj_dir, tmp_path, -15)
+    code, report = verify(proj_dir)
+    clear = _by_id(report)["clear"]
+    assert code == 1 and not clear["ok"]
+    assert "post_1" in clear["measured"] and "at input 90" in clear["measured"]
+    assert clear["pose"] == {"input": {"from": "input_min..input_max", "value": 90}}
+    assert clear["sweep"] == {
+        "joint": "input",
+        "from": ["input_min", "input_max"],
+        "range": [-180, 180],
+        "poses": 5,
+    }
+
+
+def test_guard_interference_with_no_sweep_misses_a_collision_only_mid_range(proj_dir, tmp_path):
+    post_beside(proj_dir, tmp_path, -15)
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"][-1].pop("sweep"))
+    _param("sweep_steps", value=None, basis=None, rationale=None, gap=None)(proj_dir, tmp_path)
+    assert _by_id(verify(proj_dir)[1])["clear"]["ok"]
+
+
+def test_clear_sweep_passes_and_says_how_many_poses_it_evaluated(proj_dir, tmp_path):
+    post_beside(proj_dir, tmp_path, -30, steps=9)
+    code, report = verify(proj_dir)
+    clear = _by_id(report)["clear"]
+    assert code == 0, report["findings"]
+    assert clear["ok"] and "pose" not in clear
+    assert clear["measured"].endswith("across 9 poses of input")
+    md = (proj_dir / "build" / "report.md").read_text()
+    assert "swept: input -180 to 180 (input_min to input_max), 9 poses" in md
+
+
+def test_sweep_steps_as_a_bare_number_is_a_schema_finding(proj_dir, tmp_path):
+    post_beside(proj_dir, tmp_path, -30)
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"][-1]["sweep"].update(steps=5))
+    assert findings(proj_dir, "schema") == [
+        "checks.yaml checks[2].sweep.steps: must be text, not 5"
+    ]
+
+
+@pytest.mark.parametrize("steps", [1, 2.5])
+def test_sweep_steps_not_a_whole_number_of_two_or_more_is_check_config(proj_dir, tmp_path, steps):
+    post_beside(proj_dir, tmp_path, -30, steps=steps)
+    assert findings(proj_dir, "check-config") == [
+        f"check clear: sweep steps sweep_steps is {steps:g}; sweep at least 2 poses, a whole number"
+    ]
+
+
 # Every rule beside its near miss. scripts/rule-coverage fails CI unless each rule the tool emits is
 # asserted present by one test and absent by another; a rule no other test covers both ways gets a
 # row here: the change to the fixture that raises it, and the closest changes it must accept.

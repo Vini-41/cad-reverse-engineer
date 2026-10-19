@@ -196,8 +196,8 @@ def write(p: Project, linkage: Linkage) -> list[Path]:
 def poser(p: Project, built: Built, linkage: Linkage) -> Poser:
     """What poses a check of this model: see geometry.Poser."""
 
-    def pose(c: dict) -> tuple[Built, dict] | None:
-        cid, joints = c.get("id", "?"), c["pose"]
+    def pose(c: dict, at: dict | None = None) -> tuple[Built, dict] | None:
+        cid, joints = c.get("id", "?"), c.get("pose") or {}
         if linkage.model is None:
             return None  # the [mjcf-load] finding says no posed check is evaluated
         values, shown = {}, {}
@@ -215,11 +215,14 @@ def poser(p: Project, built: Built, linkage: Linkage) -> Poser:
             values[joint] = value * units.size("angle", p.units)
             # In the project's angle unit, rounded clear of the unit conversion's last bits.
             shown[joint] = {"from": ref, "value": float(f"{value:.12g}")}
+        for joint, (value, label) in (at or {}).items():
+            values[joint] = value * units.size("angle", p.units)
+            shown[joint] = {"from": label, "value": float(f"{value:.12g}")}
         key = tuple(sorted(values.items()))
         if key not in linkage.posed:
             linkage.posed[key] = _solve(p, built, linkage, values, shown)
-        at = linkage.posed[key]
-        return None if at is None else (at, shown)
+        placed = linkage.posed[key]
+        return None if placed is None else (placed, shown)
 
     return pose
 
