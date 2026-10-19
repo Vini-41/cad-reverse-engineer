@@ -6,7 +6,7 @@ import importlib.util
 import math
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .project import (
@@ -16,6 +16,7 @@ from .project import (
     expect_param_quantity,
     expr_names,
     overlap_limit,
+    rests_on,
 )
 
 AXES = {"x": 0, "y": 1, "z": 2}
@@ -47,6 +48,9 @@ class CheckResult:
     expected: str
     measured: str
     note: str = ""
+    # What the check rests on, and the params it reads that rest on that basis.
+    rests_on: str = "source"
+    resting: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -302,6 +306,7 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
     results = []
     for c in p.checks:
         cid, kind = c.get("id", "?"), c.get("kind")
+        start = len(results)
         try:
             if kind == "bbox":
                 part = built.parts[c["part"]]
@@ -367,6 +372,9 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
         except (KeyError, TypeError, ValueError) as exc:
             p.error("check-config", f"check {cid}: missing or unknown {exc}")
             continue
+        basis, resting = rests_on(p, c)
+        for r in results[start:]:
+            r.rests_on, r.resting = basis, resting
     for r in results:
         if not r.ok:
             p.error("check-failed", f"{r.id}: expected {r.expected}, measured {r.measured}")

@@ -70,6 +70,8 @@ Done when the tracer part's checks went green before a second part was modelled,
 
 Add a check for every source value the geometry should realise: `bbox` for envelopes, `distance` between datums for pitches and spacings, `angle` at a datum for stated angles, `mass` where a mass is stated, `interference` across the assembly. Where a figure shows a modelled part in a near-orthographic view, add an overlay and look at the rendered PNG; record in the param's interpretation what the overlay showed.
 
+A mass check whose density, `add` or `counts` param is proposed rests on proposed, and the report names those params beside it: it confirms the stated mass only given that choice. Add it all the same, and keep the proposed value at its rationale rather than tuning it to turn the check green; the gap is what closes it.
+
 Turn a red check green by changing the model or its params, and record a changed proposed param as `params.yaml` in [`references/project-format.md`](references/project-format.md#paramsyaml) describes. Evidence changes only to correct a transcription, re-copied from `cadrev text`.
 
 Format, including when a check is red and how far its tolerance may loosen: `checks.yaml` and `overlays.yaml` in [`references/project-format.md`](references/project-format.md).
