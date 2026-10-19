@@ -357,6 +357,15 @@ def check_evidence(p: Project) -> None:
             )
 
 
+def _starts(text: str, needle: str) -> list[int]:
+    """Every offset where needle occurs in text, none for an empty needle."""
+    starts, start = [], text.find(needle) if needle else -1
+    while start != -1:
+        starts.append(start)
+        start = text.find(needle, start + 1)
+    return starts
+
+
 def check_coverage(p: Project) -> list[tuple[str, int, str]]:
     """The stated quantities in each source that no evidence or skip entry covers."""
     uncovered = []
@@ -383,18 +392,26 @@ def check_coverage(p: Project) -> list[tuple[str, int, str]]:
         for n, raw in enumerate(texts, 1):
             if n in skipped_pages:
                 continue
-            text = sources.normalize(raw)
+            # Line-break hyphens marked, so a quote keeping one (dual-axis) is found too.
+            marked = sources.normalize(raw, hyphen="\0")
+            text, kept = marked.replace("\0", ""), marked.replace("\0", "-")
             spans = []
             for a in anchors + [k for k in skips if "quote" in k]:
                 if a.get("page") not in (None, n):
                     continue
-                needle = sources.normalize(a["quote"])
-                start = text.find(needle)
-                if needle and start != -1 and any(a is k for k in skips):
+                found = [
+                    (s, s + len(needle))
+                    for needle in sources.needles(a["quote"])
+                    for s in _starts(text, needle)
+                ] or [
+                    (s - marked.count("\0", 0, s), e - marked.count("\0", 0, e))
+                    for needle in sources.needles(a["quote"])
+                    for s in _starts(kept, needle)
+                    for e in [s + len(needle)]
+                ]
+                if found and any(a is k for k in skips):
                     matched.add(next(i for i, k in enumerate(skips) if k is a))
-                while needle and start != -1:
-                    spans.append((start, start + len(needle)))
-                    start = text.find(needle, start + 1)
+                spans += found
             for i, k in enumerate(skips):
                 if "from" not in k or k.get("page") not in (None, n):
                     continue

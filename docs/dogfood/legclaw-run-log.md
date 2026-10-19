@@ -1,6 +1,6 @@
 # Dogfood run log: a fresh agent reconstructs the full LegClaw
 
-Spec #1, stories 56–57; issue #15. Each run is a fresh general-purpose subagent given only the path to `skills/cad-reverse-engineer/SKILL.md` (and its `references/`), the `uv run … cadrev` invocation, the CC-BY paper and supplement from `examples/legclaw-links/sources/`, a scratch project directory outside the repo, and the goal "reconstruct the full LegClaw". It was told not to read `examples/`, the tool source, its tests or `docs/`. Each trip it reported, or that its project showed, is listed with the fix made before the next run. A trip of kind *environment* comes from the harness the run used, not from the skill: file it only once it reproduces in a default Claude Code session (#30 did not).
+Spec #1, stories 56–57; issue #15 (runs 1–4). Spec #2, story 41; issue #37 (run 5). Each run is a fresh general-purpose subagent given only the path to `skills/cad-reverse-engineer/SKILL.md` (and its `references/`), the `uv run … cadrev` invocation, the CC-BY paper and supplement from `examples/legclaw-links/sources/`, a scratch project directory outside the repo, and the goal "reconstruct the full LegClaw". It was told not to read `examples/`, the tool source, its tests or `docs/`. Each trip it reported, or that its project showed, is listed with the fix made before the next run. A trip of kind *environment* comes from the harness the run used, not from the skill: file it only once it reproduces in a default Claude Code session (#30 did not).
 
 ## Run 1
 
@@ -105,3 +105,41 @@ From spec #1's Out of Scope:
 - **`cadrev fetch`:** did not fire. Both sources are CC-BY and committed.
 - **A `standard` basis:** did not fire. The proposed values are clearances, layouts and pin sizes, and the purchased parts are datasheet gaps, not catalogue stock sizes.
 - **Publishing:** not a dogfood trigger.
+
+## Run 5: spec #2's rules
+
+Spec #2, issue #37. Skill and tool at `308d9ee` (spec-2-integration with #32–#36). Same brief as runs 1–4.
+
+**End state:** VERIFIED PENDING REVIEW, not exact: 0 errors, 0 warnings, 35/35 checks pass (27 Table S2 bbox axes, 3 Fig. S1B pin pitches, one of them over instances, the Fig. 2A sole envelope over instances on 3 axes, 1 mass check and 1 interference check over all pairs). 63 params, resting on 40 source (33 declared source, 7 derived), 1 measured (`ph_margin`, scaled off Fig. 2B) and 22 proposed (clearances and frame sizes, two pose angles, the density, the servo body, and the six counts). One leg was built, 13 parts in 44 instances: thigh, tendon and hip servos, steering wheels, compression rhombus, pedestal, bent linkages (straight), end and middle foot frames, eight X-linkages and four toes. Conflicts K1 (430 g against 420 g), K2 (L14) and K3 (which servo variant drives what) each have a resolution. Eight readings were awaiting confirmation. It hit no tool trip of runs 1–4.
+
+| # | Trip | Kind | Fix |
+|---|---|---|---|
+| 1 | `cadrev text` prints "two dual-" and "axis servos" on two lines. The matcher re-joins such a break as "dualaxis", so the P12-servos quote copied across it as printed ("dual- axis") was `[quote-not-found]`. "intertoe" matched only with the hyphen deleted by hand. The agent split the quote into two context items. | tool bug | A quote is matched against the line-break hyphen read both ways (split word and compound), and a quote copied across the break as printed ("dual- axis", "inter- toe") matches too; the coverage sweep counts its quantities as covered. Test: `test_quote_copied_across_a_hyphenated_line_break_matches`. |
+| 2 | Unquoted commas in interpretations gave 8 `[schema]` errors in params.yaml and 1 in skips, although project-format.md warns about it. | doc | Run 3 trip 2's rule caught each one. project-format.md now says to quote every free-text value (`interpretation`, `rationale`, `reason`) in a `{…}` entry, and its examples do. |
+| 3 | The paper states its counts in words ("four linkages", "Eight tension springs"), so all six counts are proposed, and the mass check rests on proposed for counts the paper gives. | filed | #27. |
+| 4 | The skill asks for purchased-part datasheets, but the brief allowed only the two sources. The servo bodies are proposed boxes with a datasheet gap; their stated 63 g enters the mass check through `add`. | inherent | Gap G-servo-env (close by: datasheet). |
+| 5 | Checks that are partly circular. Each Table S2 bbox checks a box built from the same three numbers. `env-sole` passes because `fr_mx` is derived as (70 − 60)/2. The pin pitches derived from envelopes (`cl_pitch = cl_L - cl_H`, pins at the centres of the rounded ends) rest on source, and the choice shows only in the interpretation. | inherent; filed | A bbox confirms that the transcription reached the geometry, which is the design. A derived param that makes a placement choice resting on source is filed as #40. |
+| 6 | `foot_px / 4` was `[model-literal]`, so the agent added the derived param `xl_x`. `3 * rz / 2` was `[model-literal]` for the 3, and the agent rewrote it as `rz + rz / 2`, which it flagged as edging toward gaming the rule. | works as designed; filed | The first is the rule followed. The second is a number's spelling, not a constant built from params, so `[model-constant]` does not see it; filed as #39. |
+| 7 | Every image item awaits review, the context ones too: the servo part-number crops and the Dmin, βmax and mass labels add five readings that drive no geometry. | no change | project-format.md says so (run 4 trip 1); a reading a reviewer has not seen should not count as confirmed. |
+| 8 | Crops landed short even after the 1.03 scale factor Read reported; three labels took 2–4 re-crops each. | works as revised | Run 2 trip 4's rule: the agent confirmed each whole label inside its crop. |
+| 9 | The overlay PNG is 1599 px wide where the source figure is 2051 px, which threw off the agent's first calibration by about 40 px. | filed | #26. |
+| 10 | The interference check over all pairs ran in about 2.5 s. The agent set the clearance to −1 in a copy and got 644 mm³ between the hip servo and the thigh. | works | The check reads the whole assembly. |
+| 11 | Guesses: one leg rather than the landing gear, the Fig. S1B wireframe as pin-centre lines inside the Fig. 2A envelope, the X-linkage planes, Dmin and Dmax as context, the bent-link angle the geometry forces (about 10°), and the 1.15 g/cm³ density. | inherent | Each is a proposed param with a gap, or an interpretation. |
+| 12 | (Implementers of #33.) `[model-constant]` judged only the largest param expression, so `p.y * atan2(p.h, p.h)` got through because it changes with `p.y`. | tool hole | Each part of a param expression that changes is judged too, and the outermost constant part is reported. Test: `test_model_constant_inside_a_relation_that_varies_is_a_finding`. modeling.md names the case. Run 5's project still ends VERIFIED PENDING REVIEW under it. |
+| 13 | (Implementers of #32 and #33.) `scripts/red-on-main -k <rule>` names a new rule's row of `test_guard_change_raises_its_rule` a red guard and exits 1, so each ticket that adds a rule trips it. | filed | #41, related to #38. |
+
+### Spec #2's issues
+
+- **#22 (envelopes and spacings over several parts):** gone. `env-sole` is a bbox over the 11 foot instances (both end frames, the middle frame and the eight X-linkages, toes excluded), and `foot-pitch-x` is a distance over `[frame_l, frame_r]`. It needed `along: x`, since `frame_l` is turned 180° about Z. No part was invented to make the foot one part.
+- **#23 (constants built from params):** behaves as decided. `[model-constant]` never fired, and model.py holds no constant built from params: the angles it computes (`atan2(rise, half_span)` for the bent links) change with their params. The literal-spelling move of trip 6 is #39. The sub-expression hole of trip 12 is fixed.
+- **#24 (mass check on a proposed density):** behaves as decided. `leg-mass` shows "rests on proposed: density, n_cl, n_bl, n_lk, n_frame, n_toe, n_wheel". It passed at 202.7 g against 200 g on the first run, with nothing tuned.
+- **#28 (stated angles):** behaves as decided, as context. No source states an angle of the one static configuration. The 0–40° toe range, βmax = 40°, the 180° hip flip and the 385° servo rotation are ranges or motions, kept as context as project-format.md says. The 45° spring preset is not modelled. The rhombus half-angle and the X-linkage angle are proposed, with gaps. No angle check was needed.
+- **#29 (datums tied to the solid):** gone. Every datum sits on a pin bore's axis at mid-thickness, or on the steering wheel disc's axis. `[datum-off-solid]` never fired, so the pin-pitch checks measure the bores.
+
+### Spec #2's Out-of-scope triggers
+
+- **Named or nested subassemblies:** did not fire. Two checks name instances, and their lists neither repeat nor nest.
+- **Ranges of motion:** did not fire. The stated ranges stayed context, and nothing asked for a range to be checked.
+- **Datums found from named features:** did not fire. No datum passed `[datum-off-solid]` on the wrong face; the readings still await a human review.
+- **Whole-model runtime trace:** did not fire. No number got past `[model-constant]` through a build123d call or a loop variable. `rz + rz / 2` is a spelling (#39), and `p.y * atan2(p.h, p.h)` was a hole in the perturbation, now closed.
+- **Counting checks by what they rest on, and angles between two datum directions:** did not come up.

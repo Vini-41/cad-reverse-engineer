@@ -277,8 +277,9 @@ class _ParamExpressions:
 
 
 def _lint_constants(p: Project, tree: ast.Module, is_allowed) -> None:
-    """A param expression in build(p) whose value stays put when its params are scaled is a
-    constant built from params (atan2(p.h, p.h)): its number belongs in params.yaml."""
+    """A param expression in build(p), or one inside it, whose value stays put when its params
+    are scaled is a constant built from params (atan2(p.h, p.h)): its number belongs in
+    params.yaml."""
     build = next(
         (n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "build"), None
     )
@@ -315,7 +316,10 @@ def _lint_constants(p: Project, tree: ast.Module, is_allowed) -> None:
             except (ArithmeticError, ValueError, TypeError, RecursionError):
                 return  # a domain error, an overflow or a complex root: skipped, not judged
             values.append(float(value))
-        if math.isclose(values[0], values[1], rel_tol=1e-9, abs_tol=1e-12):
+        if not math.isclose(values[0], values[1], rel_tol=1e-9, abs_tol=1e-12):
+            for child in ast.iter_child_nodes(node):  # p.y * atan2(p.h, p.h) varies; its atan2 not
+                visit(child)
+        else:
             p.error(
                 "model-constant",
                 f"model.py:{node.lineno}: {text} is {values[0]:g} whatever its params; "

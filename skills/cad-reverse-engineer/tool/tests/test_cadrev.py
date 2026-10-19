@@ -259,6 +259,20 @@ def test_guard_quote_matches_across_a_hyphenated_line_break_and_spaced_times(pro
     assert "quote-not-found" not in rules and "value-not-in-quote" not in rules
 
 
+@pytest.mark.parametrize(
+    "text, quote",
+    [
+        ("and two dual-\naxis servos of 12 mm serve", "two dual-axis servos of 12 mm"),
+        ("and two dual-\naxis servos of 12 mm serve", "two dual- axis servos of 12 mm"),
+        ("with an inter-\ntoe gap of 12 mm", "with an inter- toe gap of 12 mm"),
+    ],
+)
+def test_quote_copied_across_a_hyphenated_line_break_matches(proj_dir, tmp_path, text, quote):
+    add_quote(proj_dir, tmp_path, text, quote, {"L": 12})
+    rules = errors(proj_dir)
+    assert "quote-not-found" not in rules and "coverage" not in rules
+
+
 def test_complete_project_verifies(proj_dir):
     assert cli.main(["check", str(proj_dir)]) == 0
     assert (proj_dir / "build" / "parts" / "link.step").exists()
@@ -528,6 +542,21 @@ def test_model_constant_built_from_params_is_a_finding_on_its_line(proj_dir, exp
     messages = findings(proj_dir, "model-constant")
     assert errors(proj_dir) == ["model-constant"] and len(messages) == 1
     assert messages[0].startswith(f"model.py:7: {expr}")
+
+
+@pytest.mark.parametrize(
+    "expr, constant",
+    [
+        ("p.pitch * atan2(p.link_H, p.link_H)", "atan2(p.link_H, p.link_H)"),
+        ("p.pitch + (p.link_W - p.link_W)", "p.link_W - p.link_W"),
+        ("max(p.pitch, p.link_W / p.link_W)", "p.link_W / p.link_W"),
+    ],
+)
+def test_model_constant_inside_a_relation_that_varies_is_a_finding(proj_dir, expr, constant):
+    _model_with(proj_dir, header="import math\nfrom math import atan2", line=f"extra = {expr}")
+    messages = findings(proj_dir, "model-constant")
+    assert errors(proj_dir) == ["model-constant"] and len(messages) == 1
+    assert messages[0].startswith(f"model.py:7: {constant} is")
 
 
 def test_model_constant_through_a_local_alias_is_a_finding(proj_dir):

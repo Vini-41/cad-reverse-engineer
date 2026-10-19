@@ -2,7 +2,7 @@
 
 A reconstruction project is a directory of YAML files plus `model.py`. `cadrev init` creates it; `cadrev check` enforces every rule below and names the rule it applies (`[rule-name]`) in each finding.
 
-Before any rule runs, every file is read against the shapes shown here. A file that is not valid YAML is `[yaml-syntax]` (file and line); an entry of the wrong shape (a missing `id`, a param that is a bare number, a non-numeric value, a key not shown here) is `[schema]`, names the file and the entry, and is left out of the run. Quote every value that holds a comma inside a `{…}` entry: unquoted, `reason: a test load, not the object` ends at the comma and leaves `not the object` as an unknown key. A directory without `project.yaml` is `[project-missing]`, and no report is written.
+Before any rule runs, every file is read against the shapes shown here. A file that is not valid YAML is `[yaml-syntax]` (file and line); an entry of the wrong shape (a missing `id`, a param that is a bare number, a non-numeric value, a key not shown here) is `[schema]`, names the file and the entry, and is left out of the run. Quote every free-text value inside a `{…}` entry (an `interpretation`, `rationale` or `reason`), since such notes soon gain a comma: unquoted, `reason: a test load, not the object` ends at the comma and leaves `not the object` as an unknown key. A directory without `project.yaml` is `[project-missing]`, and no report is written.
 
 ```
 project.yaml    format, sources, units, tolerance, target
@@ -114,9 +114,9 @@ The coverage sweep lists every number printed with a unit from the table under `
 
 ```yaml
 skipped:
-  - {source: paper, page: 12, quote: "servo output torque fixed at 1.2 kg ·cm", reason: test setting}
-  - {source: supp, from: "Table S4.", to: "Movie S1.", reason: grasp-test objects}
-  - {source: paper, pages: [12, 13], reason: experimental methods and test rig}
+  - {source: paper, page: 12, quote: "servo output torque fixed at 1.2 kg ·cm", reason: "test setting"}
+  - {source: supp, from: "Table S4.", to: "Movie S1.", reason: "grasp-test objects"}
+  - {source: paper, pages: [12, 13], reason: "experimental methods and test rig"}
 ```
 
 Skip by quote for single lines, by `from`/`to` for tables and blocks, by `pages` only for pages that carry nothing about the object. Every skip needs a `reason` (`[skip-reason]`) and one of `quote`, `pages` or `from` + `to` (`[skip-anchor]`). A skip's quote, or its `from` and `to`, must be found together on one page (its `page`, when given), copied from `cadrev text` like a quote; a skip that matches nothing is `[skip-not-found]`. Split a block that runs onto the next page into one skip per page.
@@ -139,8 +139,8 @@ The only door numbers have into the model.
 
 ```yaml
 params:
-  link_L:   {basis: source,   from: T1-finger-link.L, interpretation: overall length along part X}
-  pin_d:    {basis: proposed, value: 2, rationale: common 2 mm pin, gap: G-pins}
+  link_L:   {basis: source,   from: T1-finger-link.L, interpretation: "overall length along part X"}
+  pin_d:    {basis: proposed, value: 2, rationale: "common 2 mm pin", gap: G-pins}
   pitch:    {basis: derived,  expr: link_L - 2 * end_margin, value: 34}
   palm_w:   {basis: measured, from: v1-frame-316, value: 30.4, method: "mat grid scale, 10 px/mm", uncertainty: "±1.5 mm"}
 ```
@@ -167,7 +167,7 @@ Expected values always come from evidence, so a check compares the geometry with
 ```yaml
 checks:
   - {id: env-link, kind: bbox, part: finger_link, evidence: T1-finger-link,
-     axes: {L: x, H: z, W: y}, interpretation: L×H×W read as part X×Z×Y}
+     axes: {L: x, H: z, W: y}, interpretation: "L×H×W read as part X×Z×Y"}
   - {id: pitch-link, kind: distance, between: [finger_link.pin_a, finger_link.pin_b],
      evidence: L3-design, key: L3, along: x}          # along is optional
   - {id: tilt-link, kind: angle, between: [finger_link.pin_a, finger_link.pin_b, finger_link.tip],

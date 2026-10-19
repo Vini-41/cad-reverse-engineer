@@ -47,18 +47,27 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def normalize(text: str) -> str:
+def normalize(text: str, hyphen: str = "") -> str:
     """Canonical form for matching: NFKC, unified dashes and multiplication signs,
-    re-joined hyphenated line breaks, single spaces, lower case."""
+    hyphenated line breaks re-joined with hyphen between the halves, single spaces, lower case."""
     text = unicodedata.normalize("NFKC", text).translate(_DASHES).translate(_TIMES)
     text = text.replace("­", "")
-    text = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", text)
+    text = re.sub(r"(\w)-\s*\n\s*(\w)", rf"\1{hyphen}\2", text)
     text = re.sub(r"\s+", " ", text).strip().lower()
     return re.sub(r"(\d)\s*x\s*(?=\d)", r"\1x", text)
 
 
-def squash(text: str) -> str:
-    return re.sub(r"\s+", "", normalize(text))
+def needles(quote: str) -> list[str]:
+    """The normalized forms of quote to look for: as written, and, where it was copied across a
+    hyphenated line break as printed (dual- axis), with the break re-joined both ways."""
+    needle = normalize(quote)
+    broken = re.compile(r"(\w)- (?=\w)")
+    forms = [needle, broken.sub(r"\1", needle), broken.sub(r"\1-", needle)]
+    return [f for i, f in enumerate(forms) if f and f not in forms[:i]]
+
+
+def squash(text: str, hyphen: str = "") -> str:
+    return re.sub(r"\s+", "", normalize(text, hyphen))
 
 
 class _Token(NamedTuple):
@@ -169,15 +178,18 @@ def _pages(path: Path, digest: str) -> tuple[str, ...]:
 
 
 def find_quote(path: Path, quote: str, page: int | None = None) -> Match | None:
-    """Locate a verbatim quote, on the cited page when one is given."""
+    """Locate a verbatim quote, on the cited page when one is given. A line-break hyphen ends a
+    split word (inter-|toe) or belongs to a compound (dual-|axis), so both readings are tried."""
     texts = pages(path)
-    candidates = [page] if page else range(1, len(texts) + 1)
-    for mode, fn in (("exact", normalize), ("squashed", squash)):
-        needle = fn(quote)
-        pattern = _whole(needle)
+    candidates = [n for n in ([page] if page else range(1, len(texts) + 1)) if 1 <= n <= len(texts)]
+    for mode, squashed in (("exact", False), ("squashed", True)):
+        forms = needles(quote)
+        patterns = [_whole(re.sub(r"\s+", "", f) if squashed else f) for f in forms]
         for n in candidates:
-            if 1 <= n <= len(texts) and needle and pattern.search(fn(texts[n - 1])):
-                return Match(n, mode)
+            for hyphen in ("", "-"):
+                text = (squash if squashed else normalize)(texts[n - 1], hyphen)
+                if any(pattern.search(text) for pattern in patterns):
+                    return Match(n, mode)
     return None
 
 
