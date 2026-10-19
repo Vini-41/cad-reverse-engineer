@@ -33,7 +33,7 @@ def build(p):
 - **Every datum lies on its part's solid**, within `tolerance.length`: on the axis of one of the part's cylindrical faces, between that face's ends, or on one of its faces. Place a hole's, pin's or pivot's datum on its axis (the centre of the bore at mid-thickness is safe); place a length a source gives to an end or a tip on that face. cadrev confirms each datum `build` returns, whether or not a check reads it; any other is `[datum-off-solid]`, naming the datum, its part and how far it lies from the nearest axis or face. A datum off the solid usually means the feature was built somewhere other than where its datum says, so move the feature, not the datum.
 - **The assembly** places part instances with `Location`. Instances are what `interference` checks, checks over `instances` (an envelope or spacing across parts) and overlays of `assembly` use. An instance of a part `parts` does not hold is `[assembly-part]`.
 - A project without model.py is `[model-missing]`. `p.<name>` for an undefined param fails the build, as does any exception model.py raises: `[model-build]`. Params neither the model nor a mass check reads raise the warning `[param-unused]`.
-- `build` returns exactly this mapping (`joints` and `loops` optional): parts are build123d shapes, datums `(x, y, z)` tuples, assembly entries `(part name, Location)` pairs, joints and loops as in *Joints and loops*. Any other shape is `[model-return]`; a model.py that does not parse is `[model-syntax]`.
+- `build` returns exactly this mapping (`joints`, `loops`, `tendons` and `contacts` optional): parts are build123d shapes, datums `(x, y, z)` tuples, assembly entries `(part name, Location)` pairs, the rest as in *Joints and loops*. Any other shape is `[model-return]`; a model.py that does not parse is `[model-syntax]`.
 
 ## Joints and loops
 
@@ -43,7 +43,8 @@ A mechanism names how its instances move; a static model leaves both keys out. c
 - **Joints form a tree**: an instance is the child of at most one joint, and no instance moves itself. Instances no joint moves are fixed where `assembly` places them.
 - **A loop** closes a ring the tree leaves open: two `<instance>.<feature>` datums that must coincide, such as a four-bar's rocker tip and its ground pivot. Cut each ring at one pivot: joints for the others, a loop for that one.
 - **Build the assembly closed, at its joints' zero**: the configuration the sources measure angles from, with every loop's datums together. A pose value turns a joint from there.
-- An unknown instance, datum or param, an axis datum of another instance, or an instance two joints move is `[model-return]`. Range params, and the param `density` the MJCF export weighs parts by, need no read in model.py.
+- **Physics values** go where the MJCF applies them, each as a param name ([`project-format.md`](project-format.md#physics-values)): a joint's `damping`, `stiffness` (a torsion spring, at rest as built) and `friction`; a tendon, `"tendons": {"cord": {"path": ["crank_1.tip", "rocker_1.pin"], "stiffness": "cord_k", "damping": "cord_c"}}`, an elastic cord through two or more `<instance>.<feature>` datums, at rest at its as-built length; and a part's contact friction, `"contacts": {"toe_pad": {"friction": "pad_mu"}}`, on every instance of that part.
+- An unknown instance, datum, part or param, an axis datum of another instance, or an instance two joints move is `[model-return]`. Range params, physics params, and the param `density` the MJCF export weighs parts by, need no read in model.py.
 
 ## Building geometry that checks can see
 

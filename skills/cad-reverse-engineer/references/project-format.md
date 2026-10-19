@@ -160,7 +160,20 @@ A proposed param whose value was changed to turn a check green says so in its `r
 
 Write `interpretation` on every `source` or `derived` param whose mapping onto geometry is a choice (which axis, envelope versus pitch, which feature). A derived param whose `expr` makes a placement choice (pins at the centres of the rounded ends, a frame centred in its sole, toes flush with the foot ends) also names the `gap` whose answer would settle it, so the choice rests on proposed rather than on its inputs. A choice that several params share can instead be one proposed param they all read (`end_margin` above).
 
-A derived param naming a gap rests on proposed; any other derived param rests on the weakest basis among the params its `expr` references (proposed < measured < source); an `expr` that references no param (`2.2`, `2 * pi`) is `[param-constant]`. The report's headline counts params by what they rest on.
+A derived param naming a gap rests on proposed; any other derived param rests on the weakest basis among the params its `expr` references (proposed < measured < source); an `expr` that references no param (`2.2`, `2 * pi`) is `[param-constant]`. The report's headline counts params by what they rest on, proposed physics values apart.
+
+### Physics values
+
+A value only the simulation reads (a joint's damping, stiffness or friction, a tendon's stiffness or damping, a part's contact friction) is a param like any other, with a basis, marked `physics: true`:
+
+```yaml
+  knee_c:   {basis: proposed, value: 50, rationale: "light damping", gap: G-damping, physics: true}
+```
+
+- model.py names it where it applies ([`modeling.md`](modeling.md#joints-and-loops)), and the MJCF export writes its value there unconverted, in the MJCF's units: the project's length, mass and time, so g·mm²/s per radian for a joint's damping by default (1 N·mm = 10⁶ g·mm²/s²). Where a source states the value in other units, ledger it and derive the param from it.
+- A param a joint, tendon or contact names without `physics: true`, or one marked `physics: true` that model.py's geometry, a joint `range` or a check reads, is `[param-physics]`: a physics value shapes no geometry.
+- No check compares a physics value, so a source one raises no `[unchecked-source]`.
+- Exact is judged over geometry and kinematics: a proposed physics value leaves a project exact, and the headline counts it apart from the proposed params (`physics_proposed`).
 
 ## checks.yaml
 
@@ -212,7 +225,7 @@ A model whose `build` returns `joints` and `loops` ([`modeling.md`](modeling.md)
 - A `pose` naming no joint, or a value that is neither a param nor a ledger value, is `[check-config]`; so is a `pose` on a model with no joints. A pose value is read by its check: a param it names needs no read in model.py, the check rests on it, and a ledger value it names counts as used. A pose value printed in a unit other than an angle's is `[unit-quantity]`.
 - Name `instances` on a posed check: a check in one part's own frame reads the same at every pose.
 
-A verification run of a model with joints writes `build/model.mjcf` and one `build/meshes/<part>.stl` per part, and loads the MJCF in MuJoCo; MuJoCo rejecting it is `[mjcf-load]` with MuJoCo's reason, and then no posed check is evaluated. Each instance is a body framed as its part, each joint a hinge, each loop a `connect` between two sites named after its datums, and each `actuated` joint has a motor. The MJCF is in the project's units (mm and g by default, not SI) without gravity: a kinematic model, its lengths the report's lengths. A part weighs its volume times the param `density` where params.yaml defines one; otherwise MuJoCo infers each moving body's mass from its mesh. Per-part masses belong in params.yaml, the one door numbers have into the model, never in project.yaml. A model with no joints is static: it writes no MJCF, and report.md says so under the headline.
+A verification run of a model with joints writes `build/model.mjcf` and one `build/meshes/<part>.stl` per part, and loads the MJCF in MuJoCo; MuJoCo rejecting it is `[mjcf-load]` with MuJoCo's reason, and then no posed check is evaluated. Each instance is a body framed as its part, each joint a hinge, each loop a `connect` between two sites named after its datums, each tendon a spatial tendon through such sites, and each `actuated` joint has a motor; [physics values](#physics-values) sit on the joint, tendon or geom they apply to. The MJCF is in the project's units (mm and g by default, not SI) without gravity: a kinematic model, its lengths the report's lengths. A part weighs its volume times the param `density` where params.yaml defines one; otherwise MuJoCo infers each moving body's mass from its mesh. Per-part masses belong in params.yaml, the one door numbers have into the model, never in project.yaml. A model with no joints is static: it writes no MJCF, and report.md says so under the headline.
 
 ## gaps.yaml
 
@@ -259,7 +272,7 @@ Every verification run ends on one status: `cadrev check` prints it last, and re
 | **NOT VERIFIED** | at least one error finding, including a project cadrev refuses (`[project-missing]`, `[format-missing]`, `[format-unknown]`) | 1 |
 | **PARTIAL** | `--no-build` or `--no-coverage` skipped part of the run, so it makes no claim and writes no report | 1 |
 
-**Exact** is not a status: it qualifies VERIFIED when no param rests on a proposed value. report.md then prints **Exact** under the status, and report.json sets `exact` to true.
+**Exact** is not a status: it qualifies VERIFIED when no param rests on a proposed value, [physics values](#physics-values) aside. report.md then prints **Exact** under the status, with the number of proposed physics values if any, and report.json sets `exact` to true.
 
 ## build/report.json
 
@@ -269,7 +282,7 @@ The machine-readable report `cadrev check` writes beside `report.md`, which rend
 |---|---|
 | `status` | the run's status (see [Statuses](#statuses)) |
 | `exact` | whether the project is exact (see [Statuses](#statuses)) |
-| `counts` | `errors`, `warnings`, `checks`, `checks_passed`, `params`, and the params resting on each basis: `source`, `measured`, `proposed` |
+| `counts` | `errors`, `warnings`, `checks`, `checks_passed`, `params`, the params resting on each basis: `source`, `measured`, `proposed`, and the proposed physics values counted apart from `proposed`: `physics_proposed` |
 | `findings` | every finding as `level`, `rule`, `message` |
 | `checks` | every geometry check with its result, expected and evaluated values, the basis it `rests_on`, and the params it reads resting on that basis (`rests_on_params`); for an interference check, also the number of pairs it evaluated (`pairs`); for a posed check, its `pose`: each joint with the param or ledger value it is set `from` and that `value` |
 | `tolerances` | each check with a non-default tolerance: its `check` id, `kind`, and `tol` or `tol_rel` |
