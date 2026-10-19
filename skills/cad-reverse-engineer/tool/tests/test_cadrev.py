@@ -408,7 +408,8 @@ def test_model_literal_is_rejected(proj_dir):
 
 
 def _model_with(root: Path, header: str = "", line: str = "") -> None:
-    """model.py with header above it and line as the first statement of build()."""
+    """model.py with header above it and line as the first statement of build(), on model.py
+    line 5 + header's line count (an empty header counts as one blank line)."""
     body = MODEL.replace("def build(p):\n", f"def build(p):\n    {line}\n") if line else MODEL
     write(root, "model.py", header + "\n" + body)
 
@@ -661,6 +662,7 @@ def test_guard_model_number_already_flagged_gets_no_factor_finding(proj_dir, exp
     assert errors(proj_dir) == [rule] and len(findings(proj_dir, rule)) == 1
 
 
+# 0 if p.link_H else keeps build() from running the expression, so only the lint evaluates it.
 @pytest.mark.parametrize(
     "line",
     [
