@@ -434,6 +434,32 @@ def test_quote_yields_its_values_and_refuses_near_misses(proj_dir, tmp_path, quo
     assert missing == {f"r{i}" for i in range(len(refused))}
 
 
+@pytest.mark.parametrize(
+    "quote, word, found",
+    [
+        ("Eight tension springs", "Eight", True),
+        ("Eight tension springs", "eight", True),
+        ("twenty-four bolts", "twenty-four", True),
+        ("twenty-four bolts", "twenty four", True),
+        ("Eight tension springs", "seven", False),
+    ],
+)
+def test_number_word_value_is_read_as_the_number_it_names(proj_dir, tmp_path, quote, word, found):
+    # A value written as printed, in words, is that number: it is matched against the quote like
+    # digits, so "seven" is not in "Eight tension springs".
+    add_quote(proj_dir, tmp_path, quote, quote, {"n": word})
+    assert findings(proj_dir, "schema") == []
+    assert ("N1.n" in " ".join(findings(proj_dir, "value-not-in-quote"))) is not found
+
+
+@pytest.mark.parametrize("word", ["eighth", "twenty-first", "a pair", "dozen", "eight mm"])
+def test_guard_value_in_words_that_is_no_cardinal_is_schema(proj_dir, tmp_path, word):
+    add_quote(proj_dir, tmp_path, "Eight tension springs", "Eight tension springs", {"n": word})
+    assert findings(proj_dir, "schema") == [
+        f"evidence.yaml evidence[2].values.n: must be a number, not {word!r}"
+    ]
+
+
 def test_source_tampering_is_caught(proj_dir):
     (proj_dir / "sources" / "paper.txt").write_text(swap(PAPER, "40", "45"))
     assert "source-hash" in errors(proj_dir)
@@ -1225,7 +1251,7 @@ def test_evidence_item_without_id_is_a_finding(proj_dir):
         ("params.yaml", lambda d: d["params"].update(link_L=40), "params.yaml params.link_L:"),
         (
             "evidence.yaml",
-            lambda d: d["evidence"][0]["values"].update(L="forty"),
+            lambda d: d["evidence"][0]["values"].update(L="40 mm"),
             "evidence.yaml evidence[0].values.L:",
         ),
         ("project.yaml", lambda d: d.update(sources=3), "project.yaml sources:"),
@@ -4655,6 +4681,45 @@ def test_source_physics_param_needs_no_check_and_its_quoted_value_is_exported(pr
     assert m.tendon_stiffness[0] == pytest.approx(0.25 * MJCF_PER_N)
 
 
+CORD = "The cord is 0.5 mm thick and 4 mm wide."
+
+
+def _cord_from_its_size(root: Path, tmp_path: Path) -> None:
+    """The physical four-bar with the cord's stiffness derived from its stated size: source params
+    cord_t and cord_w (N1.t, N1.w) feed only cord_k, a physics value, through cord_area."""
+    physical(root, tmp_path)
+    add_quote(root, tmp_path, CORD, CORD.rstrip("."), {"t": 0.5, "w": 4})
+    for name, key in (("cord_t", "t"), ("cord_w", "w")):
+        _param(name, basis="source", **{"from": f"N1.{key}"})(root, tmp_path)
+    _param("cord_area", basis="derived", expr="cord_t * cord_w")(root, tmp_path)
+    spec = {"value": None, "rationale": None, "gap": None, "expr": "cord_area / 10"}
+    _param("cord_k", basis="derived", **spec)(root, tmp_path)
+
+
+def test_source_params_that_feed_only_a_physics_value_are_not_unchecked_source(proj_dir, tmp_path):
+    _cord_from_its_size(proj_dir, tmp_path)
+    assert {"param cord_t", "param cord_w"}.isdisjoint(_unchecked(proj_dir))
+
+
+def test_guard_source_param_feeding_physics_and_the_geometry_through_a_param_is_unchecked(
+    proj_dir, tmp_path
+):
+    _cord_from_its_size(proj_dir, tmp_path)
+    _param("hole_d", basis="derived", expr="cord_t * 4", value=None, rationale=None, gap=None)(
+        proj_dir, tmp_path
+    )
+    assert "param cord_t" in _unchecked(proj_dir)
+
+
+def test_guard_source_param_feeding_physics_that_model_py_also_reads_is_unchecked_source(
+    proj_dir, tmp_path
+):
+    _cord_from_its_size(proj_dir, tmp_path)
+    model = (proj_dir / "model.py").read_text()
+    write(proj_dir, "model.py", swap(model, "Cylinder(p.hole_d / 2,", "Cylinder(p.cord_w / 2,"))
+    assert "param cord_w" in _unchecked(proj_dir)
+
+
 KNEE = "The knee spring is 0.25 N·m/rad and its damper 0.002 N·m·s/rad."
 
 
@@ -5384,6 +5449,56 @@ def test_range_check_on_a_slide_joint_compares_its_length_range_with_the_stated_
     assert findings(proj_dir, "check-failed") == [
         "stroke.slide_max: expected 15 (N1.hi), measured 15 slide's range end (slide_max)"
     ]
+
+
+WIDTH = "The slider pin sits from 25 mm to 45 mm from the crank pivot."
+
+
+def width_ranged(root: Path, tmp_path: Path) -> None:
+    """The slider-crank driven by its slider, with a stated range of a distance the slide changes,
+    not of its travel: the slider pin 25 to 45 mm from the crank pivot (N1 lo, hi), read by source
+    params D_lo and D_hi, from which the slide's range params are derived. One check, width, a
+    range check of slide between the crank pivot and the slider pin along x."""
+    slider_crank(root, tmp_path, turns=())
+    model = swap(SLIDER_CRANK, '"drive": "actuated"', '"drive": "passive"')
+    ranged = '"range": ["slide_min", "slide_max"],\n                "drive": '
+    write(root, "model.py", swap(model, ranged + '"passive"', ranged + '"actuated"'))
+    add_quote(root, tmp_path, WIDTH + "\n", WIDTH.rstrip("."), {"lo": 25, "hi": 45})
+    for end in ("lo", "hi"):
+        _param(f"D_{end}", basis="source", **{"from": f"N1.{end}"})(root, tmp_path)
+    for name, end in (("slide_min", "lo"), ("slide_max", "hi")):
+        spec = {"value": None, "rationale": None, "gap": None}
+        expr = f"D_{end} - sqrt(rod ** 2 - crank ** 2)"
+        _param(name, basis="derived", expr=expr, **spec)(root, tmp_path)
+    width = {
+        "id": "width",
+        "kind": "range",
+        "joint": "slide",
+        "instances": ["ground_1", "slider_1"],
+        "between": ["ground_1.a", "slider_1.a"],
+        "along": "x",
+        "ends": ["N1.lo", "N1.hi"],
+    }
+    _append("checks.yaml", "checks", width)(root, tmp_path)
+
+
+def test_range_check_between_two_datums_compares_the_distance_at_each_end_of_the_range(
+    proj_dir, tmp_path
+):
+    width_ranged(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    checks = _by_id(report)
+    low, high = checks["width.slide_min"], checks["width.slide_max"]
+    assert low["ok"] and high["ok"]
+    assert low["expected"] == "25 (N1.lo)" and high["expected"] == "45 (N1.hi)"
+    assert high["measured"].endswith(" ground_1.a - slider_1.a")
+    assert high["pose"]["slide"]["from"] == "slide_max"
+    assert {"param D_lo", "param D_hi"}.isdisjoint(_unchecked(proj_dir))
+    # The slide stopping short of the stated end leaves the distance there short of it.
+    short = {"basis": "proposed", "value": 12, "rationale": "x", "gap": "G1", "expr": None}
+    _param("slide_max", **short)(proj_dir, tmp_path)
+    assert [m.split(":")[0] for m in findings(proj_dir, "check-failed")] == ["width.slide_max"]
 
 
 def test_swept_interference_on_a_slide_joint_catches_a_collision_mid_stroke(proj_dir, tmp_path):

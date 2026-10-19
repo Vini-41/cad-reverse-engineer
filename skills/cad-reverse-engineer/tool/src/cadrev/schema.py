@@ -10,7 +10,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .sources import word_number
+
 NUMBER = "number"
+# A number, or a cardinal in words read as the number it names: a ledger value written as printed
+# (ADR-0005).
+NUMBER_OR_WORD = "number or word"
 
 
 @dataclass(frozen=True)
@@ -52,7 +57,7 @@ EVIDENCE = Record(
         "page": int,
         "locator": str,
         "quote": str,
-        "values": Table(NUMBER),
+        "values": Table(NUMBER_OR_WORD),
         "scope": str,
         "reason": str,
         "image": str,
@@ -158,6 +163,7 @@ _NAMES = {
     bool: "true or false",
     dict: "a mapping",
     NUMBER: "a number",
+    NUMBER_OR_WORD: "a number",
     list: "a list",
 }
 
@@ -180,7 +186,7 @@ def _given(value) -> str:
 
 
 def _is(value, spec) -> bool:
-    if spec == NUMBER:
+    if spec in (NUMBER, NUMBER_OR_WORD):
         return isinstance(value, (int, float)) and not isinstance(value, bool)
     if spec is int:
         return isinstance(value, int) and not isinstance(value, bool)
@@ -223,6 +229,8 @@ def conform(value, spec, where: str, problems: list[str]):
             }
     elif _is(value, spec):
         return value
+    elif spec == NUMBER_OR_WORD and isinstance(value, str) and word_number(value) is not None:
+        return word_number(value)
     problems.append(f"{where}: must be {_expected(spec)}, not {_given(value)}")
     return value
 

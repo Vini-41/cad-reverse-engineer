@@ -97,7 +97,7 @@ def tolerances(p: Project) -> list[dict]:
     out = []
     for c in p.checks:
         tolerance = check_tolerance(p, c)
-        if tolerance is not None and tolerance != default_tolerance(c.get("kind")):
+        if tolerance is not None and tolerance != default_tolerance(c):
             out.append({"check": c.get("id"), "kind": c.get("kind"), tolerance[0]: tolerance[1]})
     return out
 

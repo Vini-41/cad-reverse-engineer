@@ -46,13 +46,15 @@ class CheckKind:
     the kind reads itself; span_capped caps its tol against the span between the two values it
     compares, rather than against each. A joint_valued check without between compares its
     joint's own value, so quantity and tolerance are its joint's: an angle for a revolute joint,
-    a length for a slide."""
+    a length for a slide. between_two, where set, is the quantity and tolerance of a check whose
+    between names two datums rather than three: a distance."""
 
     quantity: str
     tolerance: str | None
     reads: Callable[[Project, dict], list[str]] | None = None
     span_capped: bool = False
     joint_valued: bool = False
+    between_two: str | None = None
 
 
 # The quantities a joint's value is in: a revolute joint's angle, a slide's length. Before the
@@ -68,7 +70,8 @@ CHECK_KINDS = {
     "mass": CheckKind("mass", None, reads=_mass_reads),
     # A joint's range: an angle at each end, or a slide's length, compared with a stated end that
     # is often 0.
-    "range": CheckKind("angle", "angle", span_capped=True, joint_valued=True),
+    # Between two datums, a distance at each end, as a slide that sets a leg's width reaches it.
+    "range": CheckKind("angle", "angle", span_capped=True, joint_valued=True, between_two="length"),
 }
 SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "other")
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}
@@ -732,16 +735,27 @@ def check_tolerance(p: Project, c: dict, quantity: str | None = None) -> tuple[s
         return None
     if kind.tolerance is None:
         return ("tol_rel", float(c["tol_rel"])) if "tol_rel" in c else None
-    return "tol", float(c.get("tol", p.tolerance(quantity or kind.tolerance)))
+    return "tol", float(c.get("tol", p.tolerance(quantity or str(compared_quantity(c)))))
 
 
-def default_tolerance(kind: str | None) -> tuple[str, float] | None:
-    """cadrev's own tolerance for a check of kind, where project.yaml and the check set none;
-    None for a kind with no default."""
-    check = CHECK_KINDS.get(str(kind))
+def compared_quantity(c: dict) -> str | None:
+    """The quantity check c compares with the ledger: its kind's, or for between two datums its
+    kind's between_two; None for an unknown kind."""
+    kind = CHECK_KINDS.get(str(c.get("kind")))
+    if kind is None:
+        return None
+    between = c.get("between")
+    two = isinstance(between, list) and len(between) == 2
+    return kind.between_two if kind.between_two and two else kind.quantity
+
+
+def default_tolerance(c: dict) -> tuple[str, float] | None:
+    """cadrev's own tolerance for check c, where project.yaml and the check set none; None for a
+    kind with no default."""
+    check = CHECK_KINDS.get(str(c.get("kind")))
     if check is None or check.tolerance is None:
         return None
-    return "tol", DEFAULT_TOL[check.tolerance]
+    return "tol", DEFAULT_TOL[str(compared_quantity(c))]
 
 
 def default_overlap_limit(length_tol: float = LENGTH_TOL) -> float:
@@ -758,13 +772,12 @@ def overlap_limit(p: Project, c: dict) -> float:
 def _tolerance_bases(p: Project, c: dict) -> list[tuple[str, float | None]]:
     """The values check c's tolerance is capped against, each with how it is named: each value it
     compares, or the span between its two for a span_capped kind."""
-    kind = str(c.get("kind"))
-    refs = check_refs(c)
-    if CHECK_KINDS[kind].span_capped and len(refs) == 2:
-        low, high = (p.compared_value(ref, kind) for ref in refs)
+    refs, quantity = check_refs(c), compared_quantity(c)
+    if CHECK_KINDS[str(c.get("kind"))].span_capped and len(refs) == 2:
+        low, high = (p.value_as(ref, quantity) for ref in refs)
         span = None if low is None or high is None else high - low
         return [(f"the range {refs[0]} to {refs[1]}", span)]
-    return [(ref, p.compared_value(ref, kind)) for ref in refs]
+    return [(ref, p.value_as(ref, quantity)) for ref in refs]
 
 
 def check_tolerances(p: Project) -> None:
@@ -834,10 +847,31 @@ def check_accounting(p: Project) -> None:
                     f"{eid}.{key} is neither used by a param nor checked "
                     "(or mark the item scope: not-modeled with a reason)",
                 )
-    read_by_a_check = _feeding(p, check_params(p))
-    for name, spec in p.params.items():
-        if name in read_by_a_check or name in p.physics:
-            continue  # its check compares the result with the ledger; no check sees physics
+    # A check compares what its params feed with the ledger; no check sees a physics value, nor
+    # the params that feed only physics values, unless model.py reads them (check_physics_sources).
+    _unchecked_sources(
+        p, p.params.keys() - _feeding(p, check_params(p)) - p.physics - physics_only(p)
+    )
+
+
+def physics_only(p: Project) -> set[str]:
+    """The params read only on the way to a physics value: every param whose expr reads one is a
+    physics value or read only on the way to one."""
+    feeding = _feeding(p, p.physics) - p.physics
+    return feeding - _feeding(p, p.params.keys() - p.physics - feeding)
+
+
+def check_physics_sources(p: Project, model_reads: set[str]) -> None:
+    """[unchecked-source] for the params read only on the way to a physics value that model.py
+    reads too, directly or through a param, since they feed the geometry after all."""
+    feeding = physics_only(p) & _feeding(p, model_reads)
+    _unchecked_sources(p, feeding - _feeding(p, check_params(p)))
+
+
+def _unchecked_sources(p: Project, names: set[str]) -> None:
+    checked = {ref for c in p.checks for ref in check_refs(c)}
+    for name in [n for n in p.params if n in names]:
+        spec = p.params[name]
         if spec.get("basis") == "source" and spec.get("from") not in checked:
             p.warn(
                 "unchecked-source",
@@ -943,7 +977,7 @@ def check_units(p: Project) -> None:
         cid, kind = c.get("id", "?"), c.get("kind")
         if kind in CHECK_KINDS:
             check = CHECK_KINDS[kind]
-            expected = (check.quantity,)
+            expected = (str(compared_quantity(c)),)
             if check.joint_valued and "between" not in c:
                 expected = JOINT_QUANTITIES  # the build holds each to its joint's
             for ref in check_refs(c):

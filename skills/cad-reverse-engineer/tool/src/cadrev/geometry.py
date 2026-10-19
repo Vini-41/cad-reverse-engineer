@@ -15,7 +15,9 @@ from .project import (
     CHECK_KINDS,
     Project,
     check_params,
+    check_physics_sources,
     check_tolerance,
+    compared_quantity,
     expect_joint_value,
     expect_param_quantity,
     expr_names,
@@ -345,6 +347,7 @@ def build(p: Project) -> Built | None:
         for place, slot in where:
             expect_param_quantity(p, name, (slot.quantity,), f"as {place}")
     _check_physics(p, built, slots, ranges | ratios)
+    check_physics_sources(p, built.used)
     exported = ranges | ratios | slots.keys() | set(mass_params(p))
     derived = _used_by_derived(p)
     p.resolution = resolution_params(p) - built.used - derived - exported
@@ -816,6 +819,15 @@ def _instance_datums(p: Project, built: Built, c: dict) -> list[tuple[float, flo
     return points
 
 
+def _distance(c: dict, points: list) -> float:
+    """The distance between a check's two datums, along its axis where it names one."""
+    a, b = points
+    if c.get("along"):
+        i = AXES[c["along"]]
+        return abs(a[i] - b[i])
+    return math.dist(a, b)
+
+
 def _angle(p: Project, c: dict, points: list) -> float | None:
     """The angle in degrees at between[1] from the direction to between[0] to that to between[2];
     None, after a [check-config] finding, when there are not three datums or one coincides with
@@ -897,7 +909,8 @@ def _sweep(p: Project, built: Built, c: dict, poser: Poser | None) -> tuple[dict
 
 def _range(p: Project, built: Built, c: dict, poser: Poser | None) -> list[CheckResult]:
     """A range check, one result per end. With between, the model posed at that end of its
-    joint's range, the angle there compared with the end's ledger value. Without, the model posed
+    joint's range, the angle there, or between two datums the distance, compared with the end's
+    ledger value. Without, the model posed
     at the ledger value itself, so a loop that cannot close or a joint pushed past its own range
     there is a finding, and the range param for that end compared with it."""
     joint = _joint(p, built, c, poser)
@@ -919,11 +932,14 @@ def _range(p: Project, built: Built, c: dict, poser: Poser | None) -> list[Check
                 continue
             placed, pose = reached
             points = _datums(p, placed, c)
-            measured = None if points is None else _angle(p, c, points)
-            if measured is None:
-                return results
-            a, vertex, b = c["between"]
-            shown = f"° at {vertex} between {a} and {b}"
+            if points is not None and len(points) == 2:
+                measured, shown = _distance(c, points), f" {' - '.join(c['between'])}"
+            else:
+                measured = None if points is None else _angle(p, c, points)
+                if measured is None:
+                    return results
+                a, vertex, b = c["between"]
+                shown = f"° at {vertex} between {a} and {b}"
         else:
             stated = p.evidence_value(ref)
             if stated is None or math.isnan(stated):
@@ -934,7 +950,7 @@ def _range(p: Project, built: Built, c: dict, poser: Poser | None) -> list[Check
             pose = reached[1]
             measured = p.values[param] * scale
             shown = f"{unit} {name}'s range end ({param})"
-        compared_in = None if "between" in c else quantity
+        compared_in = compared_quantity(c) if "between" in c else quantity
         result = _compared(p, c, f"{cid}.{param}", ref, measured, shown, compared_in)
         result.pose = pose
         results.append(result)
@@ -1067,12 +1083,7 @@ def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[Che
                 points = _datums(p, placed, c)
                 if points is None:
                     continue
-                a, b = points
-                if c.get("along"):
-                    i = AXES[c["along"]]
-                    measured = abs(a[i] - b[i])
-                else:
-                    measured = math.dist(a, b)
+                measured = _distance(c, points)
                 ref, between = f"{c['evidence']}.{c['key']}", " - ".join(c["between"])
                 results.append(_compared(p, c, cid, ref, measured, f" {between}"))
             elif kind == "angle":

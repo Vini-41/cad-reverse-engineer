@@ -110,6 +110,12 @@ class _Token(NamedTuple):
     labelled: bool  # numbers a figure, table, equation or section
 
 
+def word_number(text: str) -> int | None:
+    """The cardinal text is in words, whole ("Eight", "twenty-four"), or None (ADR-0005)."""
+    m = _WORD_NUMBER.fullmatch(text.strip().lower())
+    return int(_word_value(m)) if m else None
+
+
 def _word_value(m: re.Match[str]) -> float:
     tens, ones, alone = m.groups()
     return float(_WORD_VALUES[alone] if alone else _WORD_VALUES[tens] + _WORD_VALUES[ones])
