@@ -2395,6 +2395,115 @@ def test_mass_check_count_given_as_a_bare_number_is_a_finding(proj_dir, tmp_path
     assert len(messages) == 1 and "counts" in messages[0]
 
 
+# What a check rests on: the weakest basis among the params it reads.
+
+
+def _check_row(root: Path, check: str) -> str:
+    """The row of check in report.md's checks table."""
+    md = (root / "build" / "report.md").read_text()
+    return next(line for line in md.splitlines() if line.startswith(f"| {check} |"))
+
+
+_RESIN = {"basis": "proposed", "value": 0.0012, "rationale": "a typical resin", "gap": "G1"}
+
+
+def _weighed(root: Path, tmp_path: Path, text: str, values: dict, check=(), **params) -> dict:
+    """Ledger text as N1, add params, and check the link's mass N1.m with the density param rho,
+    its check entry updated by check; report.json."""
+    add_quote(root, tmp_path, text, text, values)
+    add_params(root, **params)
+    mass = {
+        "id": "m",
+        "kind": "mass",
+        "parts": ["link"],
+        "density": "rho",
+        "evidence": "N1",
+        "key": "m",
+        "tol_rel": 0.05,
+    }
+    edit(root, "checks.yaml", lambda d: d["checks"].append(mass | dict(check)))
+    return verify(root)[1]
+
+
+def _mass_result(report: dict) -> dict:
+    assert report["status"] == "VERIFIED", report["findings"]
+    return next(r for r in report["checks"] if r["id"] == "m")
+
+
+_MEASURED = {
+    "basis": "measured",
+    "from": "F2",
+    "value": 0.0012,
+    "method": "weighed offcut",
+    "uncertainty": "±5%",
+}
+
+
+@pytest.mark.parametrize(
+    "rho, rests_on",
+    [
+        (_RESIN, "proposed"),
+        (_MEASURED, "measured"),
+        ({"basis": "derived", "expr": "foot_w * 0.0012 / 5.5"}, "measured"),
+        ({"basis": "derived", "expr": "hole_d * 0.0004"}, "proposed"),
+    ],
+    ids=["proposed", "measured", "derived-from-measured", "derived-from-proposed"],
+)
+def test_mass_check_rests_on_the_basis_its_density_rests_on(proj_dir, tmp_path, rho, rests_on):
+    add_measured(proj_dir)
+    m = _mass_result(_weighed(proj_dir, tmp_path, "The link weighs 1.8 g.", {"m": 1.8}, rho=rho))
+    assert m["ok"] and m["rests_on"] == rests_on
+    assert f"rests on {rests_on}: rho" in _check_row(proj_dir, "m")
+
+
+def test_guard_failing_mass_check_on_a_proposed_density_still_fails(proj_dir, tmp_path):
+    rho = _RESIN | {"value": 0.002}
+    report = _weighed(proj_dir, tmp_path, "The link weighs 1.8 g.", {"m": 1.8}, rho=rho)
+    assert report["status"] == "NOT VERIFIED"
+    assert [f["rule"] for f in report["findings"] if f["level"] == "error"] == ["check-failed"]
+
+
+def test_mass_check_on_source_density_add_and_counts_rests_on_source(proj_dir, tmp_path):
+    text = "3 links weigh 6.4 g with 1 g of screws, printed in resin of 1.2 g/cm3."
+    report = _weighed(
+        proj_dir,
+        tmp_path,
+        text,
+        {"n": 3, "m": 6.4, "screws": 1, "rho": 1.2},
+        check={"add": ["hardware"], "counts": {"link": "n_links"}},
+        rho={"basis": "source", "from": "N1.rho"},
+        hardware={"basis": "source", "from": "N1.screws"},
+        n_links={"basis": "source", "from": "N1.n"},
+    )
+    assert _mass_result(report)["rests_on"] == "source"
+    assert "rests on" not in _check_row(proj_dir, "m")
+
+
+def test_mass_check_names_each_param_it_reads_resting_on_less_than_source(proj_dir, tmp_path):
+    report = _weighed(
+        proj_dir,
+        tmp_path,
+        "The link weighs 2.8 g, printed in resin of 1.2 g/cm3.",
+        {"m": 2.8, "rho": 1.2},
+        check={"add": ["hardware"]},
+        rho={"basis": "source", "from": "N1.rho"},
+        hardware=_RESIN | {"value": 1, "rationale": "screws by count"},
+    )
+    assert _mass_result(report)["rests_on"] == "proposed"
+    row = _check_row(proj_dir, "m")
+    assert "rests on proposed: hardware" in row and "rho" not in row
+
+
+def test_bbox_distance_and_interference_checks_rest_on_source(proj_dir):
+    _, report = verify(proj_dir)
+    assert {r["kind"]: r["rests_on"] for r in report["checks"]} == {
+        "bbox": "source",
+        "distance": "source",
+        "interference": "source",
+    }
+    assert all("rests on" not in _check_row(proj_dir, c) for c in ("env.L", "pitch", "clear"))
+
+
 def test_report_md_labels_the_declared_bases_apart_from_what_params_rest_on(proj_dir):
     add_params(proj_dir, half={"basis": "derived", "expr": "hole_d / 2"})
     write(proj_dir, "model.py", MODEL.replace("p.hole_d / 2", "p.half"))

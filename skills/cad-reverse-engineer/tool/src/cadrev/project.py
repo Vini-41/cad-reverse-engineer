@@ -541,14 +541,26 @@ def check_refs(c: dict) -> list[str]:
     )
 
 
+def reads(p: Project, c: dict) -> list[str]:
+    """The params check c reads itself, in order: a mass check's density, add and counts params."""
+    if c.get("kind") != "mass":
+        return []
+    names = [str(c.get("density"))] + [str(n) for n in c.get("add") or []]
+    names += [str(n) for n in (c.get("counts") or {}).values()]
+    return [n for n in dict.fromkeys(names) if n in p.params]
+
+
 def check_params(p: Project) -> set[str]:
-    """The params a check reads itself: each mass check's density, add and counts params."""
-    names: set[str] = set()
-    for c in p.checks:
-        if c.get("kind") == "mass":
-            names |= {str(c.get("density"))} | {str(n) for n in c.get("add") or []}
-            names |= {str(n) for n in (c.get("counts") or {}).values()}
-    return names & p.params.keys()
+    """The params the checks read themselves."""
+    return {name for c in p.checks for name in reads(p, c)}
+
+
+def rests_on(p: Project, c: dict) -> tuple[str, list[str]]:
+    """What check c rests on: the weakest basis among the params it reads, or source when it reads
+    none, with the params it reads that rest on that basis."""
+    bases = {name: p.rests_on.get(name, "proposed") for name in reads(p, c)}
+    weakest = max(bases.values(), key=RESTS_ON.index, default="source")
+    return weakest, [name for name, basis in bases.items() if basis == weakest]
 
 
 def check_tolerance(p: Project, c: dict) -> tuple[str, float] | None:
