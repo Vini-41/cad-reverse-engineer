@@ -141,24 +141,26 @@ The only door numbers have into the model: a number written in model.py is `[mod
 params:
   link_L:   {basis: source,   from: T1-finger-link.L, interpretation: "overall length along part X"}
   pin_d:    {basis: proposed, value: 2, rationale: "common 2 mm pin", gap: G-pins}
+  end_margin: {basis: proposed, value: 3, rationale: "pin centres 3 mm in from each end", gap: G-pitch}
   pitch:    {basis: derived,  expr: link_L - 2 * end_margin, value: 34}
+  pin_x:    {basis: derived,  expr: link_L / 2, gap: G-pin-x, interpretation: "pin centred along the link"}
   palm_w:   {basis: measured, from: v1-frame-316, value: 30.4, method: "mat grid scale, 10 px/mm", uncertainty: "±1.5 mm"}
 ```
 
 | basis | required | meaning |
 |---|---|---|
 | `source` | `from` (an evidence value); `value` optional and must match | stated by a source |
-| `derived` | `expr`; `value` optional and must match | computed from other params; `pi sqrt sin cos tan asin acos atan atan2 radians degrees hypot min max abs` are available |
+| `derived` | `expr`; `value` optional and must match; `gap` optional, and with it the param rests on proposed and needs `interpretation` | computed from other params; `pi sqrt sin cos tan asin acos atan atan2 radians degrees hypot min max abs` are available |
 | `measured` | `from` (an image evidence id), `value`, `method`, `uncertainty` | scaled off an image or video frame against a known reference |
 | `proposed` | `value`, `rationale`; `gap` expected | a reconstruction choice the sources do not make |
 
-A basis outside these four is `[param-basis]`. A missing requirement is `[param-from]` (`from` names no evidence value, or for `measured` no image evidence), `[param-measured]` or `[param-proposed]`; an `expr` that does not parse, names an undefined param, fails to evaluate or depends on itself is `[param-derived]`. A `value` that differs from its evidence value or `expr` is `[param-mismatch]`. A proposed param that names no `gap` raises the warning `[param-gap]`, and one naming a gap gaps.yaml lacks is the error `[param-gap]`.
+A basis outside these four is `[param-basis]`. A missing requirement is `[param-from]` (`from` names no evidence value, or for `measured` no image evidence), `[param-measured]` or `[param-proposed]`; an `expr` that does not parse, names an undefined param, fails to evaluate or depends on itself is `[param-derived]`, as is a derived param naming a `gap` without an `interpretation`. A `value` that differs from its evidence value or `expr` is `[param-mismatch]`. A proposed param that names no `gap` raises the warning `[param-gap]`, and a proposed or derived param naming a gap gaps.yaml lacks is the error `[param-gap]`.
 
 A proposed param whose value was changed to turn a check green says so in its `rationale`, naming the check: that check now confirms the choice rather than a source.
 
-Write `interpretation` on every `source` or `derived` param whose mapping onto geometry is a choice (which axis, envelope versus pitch, which feature, a placement such as flush or centred): a derived param rests on its inputs' basis, so the interpretation is where the choice its `expr` makes shows.
+Write `interpretation` on every `source` or `derived` param whose mapping onto geometry is a choice (which axis, envelope versus pitch, which feature). A derived param whose `expr` makes a placement choice (pins at the centres of the rounded ends, a frame centred in its sole, toes flush with the foot ends) also names the `gap` whose answer would settle it, so the choice rests on proposed rather than on its inputs. A choice that several params share can instead be one proposed param they all read (`end_margin` above).
 
-A derived param rests on the weakest basis among the params its `expr` references (proposed < measured < source); an `expr` that references no param (`2.2`, `2 * pi`) is `[param-constant]`. The report's headline counts params by what they rest on.
+A derived param naming a gap rests on proposed; any other derived param rests on the weakest basis among the params its `expr` references (proposed < measured < source); an `expr` that references no param (`2.2`, `2 * pi`) is `[param-constant]`. The report's headline counts params by what they rest on.
 
 ## checks.yaml
 
@@ -202,6 +204,9 @@ gaps:
   - id: G-pitch
     question: What is the pin-to-pin pitch of the finger link?
     ask: authors     # authors | measure | datasheet | test
+  - id: G-pin-x
+    question: Where along the finger link does the pin sit?
+    ask: authors
 ```
 
 The report lists every gap with the params that rest on it: this is the list of questions to send the authors.

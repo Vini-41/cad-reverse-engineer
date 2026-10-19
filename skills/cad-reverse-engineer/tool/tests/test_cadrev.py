@@ -893,6 +893,40 @@ def test_derived_param_rests_on_the_weakest_basis_it_depends_on(proj_dir, expr, 
     assert report["params"]["result"]["rests_on"] == rests_on
 
 
+_CENTRED = {
+    "basis": "derived",
+    "expr": "link_L - link_H",
+    "gap": "G1",
+    "interpretation": "pins at the centres of the rounded ends",
+}
+
+
+def test_derived_param_naming_a_gap_rests_on_proposed_and_so_do_params_derived_from_it(proj_dir):
+    _no_proposed(proj_dir)
+    add_params(proj_dir, centres=_CENTRED, half={"basis": "derived", "expr": "centres / 2"})
+    code, report = verify(proj_dir)
+    assert (code, report["status"], report["exact"]) == (0, "VERIFIED", False)
+    assert report["counts"]["proposed"] == 2
+    assert report["params"]["centres"]["rests_on"] == "proposed"
+    assert report["params"]["half"]["rests_on"] == "proposed"
+    assert report["rests_on_proposed"] == ["centres", "half"]
+    md = (proj_dir / "build" / "report.md").read_text()
+    assert "| centres | 32 | derived (rests on proposed) |" in md
+    gaps = md.split("## Open gaps")[1].split("\n## ")[0]
+    assert re.search(r"^\| G1 \|.*\| centres \|$", gaps, re.M)
+
+
+@pytest.mark.parametrize(
+    "change, rule",
+    [({"gap": "G9"}, "param-gap"), ({"interpretation": None}, "param-derived")],
+    ids=["unknown-gap", "no-interpretation"],
+)
+def test_derived_param_naming_a_gap_needs_a_known_gap_and_an_interpretation(proj_dir, change, rule):
+    spec = {k: v for k, v in (_CENTRED | change).items() if v is not None}
+    add_params(proj_dir, centres=spec)
+    assert errors(proj_dir) == [rule]
+
+
 def test_report_headline_counts_parameters_by_what_they_rest_on(proj_dir):
     add_measured(proj_dir)
     add_params(
@@ -2931,8 +2965,23 @@ _MEASURED = {
         (_MEASURED, "measured"),
         ({"basis": "derived", "expr": "foot_w * 0.0012 / 5.5"}, "measured"),
         ({"basis": "derived", "expr": "hole_d * 0.0004"}, "proposed"),
+        (
+            {
+                "basis": "derived",
+                "expr": "foot_w * 0.0012 / 5.5",
+                "gap": "G1",
+                "interpretation": "density scales with the foot width",
+            },
+            "proposed",
+        ),
     ],
-    ids=["proposed", "measured", "derived-from-measured", "derived-from-proposed"],
+    ids=[
+        "proposed",
+        "measured",
+        "derived-from-measured",
+        "derived-from-proposed",
+        "derived-naming-a-gap",
+    ],
 )
 def test_mass_check_rests_on_the_basis_its_density_rests_on(proj_dir, tmp_path, rho, rests_on):
     add_measured(proj_dir)

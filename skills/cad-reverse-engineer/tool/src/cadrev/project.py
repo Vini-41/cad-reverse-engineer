@@ -537,6 +537,16 @@ def resolve_params(p: Project) -> None:
             p.values[name] = float(spec.get("value", math.nan))
             p.rests_on[name] = "proposed"
             pending.pop(name)
+        elif basis == "derived" and spec.get("gap"):
+            # Its expr is itself a reconstruction choice, so it rests on proposed below.
+            if not spec.get("interpretation"):
+                p.error(
+                    "param-derived",
+                    f"param {name}: derived naming a gap needs interpretation, "
+                    "the choice its expr makes",
+                )
+            if spec["gap"] not in p.gaps:
+                p.error("param-gap", f"param {name}: unknown gap {spec['gap']!r}")
     # Derived parameters may depend on each other; resolve until no progress.
     while pending:
         progressed = False
@@ -577,9 +587,12 @@ def resolve_params(p: Project) -> None:
                         "param-mismatch", f"param {name}: value {spec['value']} != expr = {value:g}"
                     )
                 p.values[name] = value
-                # A constant expr rests on nothing, so it counts as the weakest basis.
-                p.rests_on[name] = max(
-                    (p.rests_on[n] for n in needs), key=RESTS_ON.index, default="proposed"
+                # A derived param naming a gap rests on proposed; a constant expr rests on
+                # nothing, so it counts as the weakest basis.
+                p.rests_on[name] = (
+                    "proposed"
+                    if spec.get("gap")
+                    else max((p.rests_on[n] for n in needs), key=RESTS_ON.index, default="proposed")
                 )
                 pending.pop(name)
                 progressed = True

@@ -52,7 +52,7 @@ Done when every figure has been viewed with its labels ledgered, and `cadrev che
 
 ### 4. Parameterise
 
-Write params.yaml. Each modelled dimension takes the strongest basis available: `source`, then `derived`, then `measured`, then `proposed`. Give every source param an `interpretation` (axis, envelope or pitch, configuration). Give every proposed param a `rationale` and a `gap` in gaps.yaml phrased as the question that would settle it.
+Write params.yaml. Each modelled dimension takes the strongest basis available: `source`, then `derived`, then `measured`, then `proposed`. Give every source param an `interpretation` (axis, envelope or pitch, configuration). Give every proposed param a `rationale` and a `gap` in gaps.yaml phrased as the question that would settle it, and every derived param whose `expr` makes a placement choice (centred, flush, pins at the rounded ends) names a gap and says the choice in its `interpretation`.
 
 Format: `params.yaml` and `gaps.yaml` in [`references/project-format.md`](references/project-format.md).
 
