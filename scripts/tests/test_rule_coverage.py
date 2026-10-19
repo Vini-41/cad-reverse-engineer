@@ -156,8 +156,8 @@ import pytest
 
 UNITS = {"a 4 mm pin": (4, 4)}
 FINDINGS = {
-    "too-long": (lambda r: None, [lambda r: None]),
     "open-end": (lambda r: None, NEAR_MISSES),
+    "too-long": (lambda r: None, [lambda r: None]),
 }
 
 
@@ -178,6 +178,15 @@ def test_guard_near_miss_raises_no_rule(tmp_path, rule, miss):
     FINDINGS[rule][1][miss](tmp_path)
     assert rule not in rules(tmp_path)
 """
+
+
+def test_findings_rows_out_of_order_fail(tmp_path):
+    tests = FINDINGS_TESTS.replace("NEAR_MISSES", "[lambda r: None]")
+    rows = tests.split("FINDINGS = {\n")[1].split("}\n")[0]
+    first, second = rows.splitlines(keepends=True)
+    result = check(repo(tmp_path, tests=tests.replace(rows, second + first)))
+    assert result.returncode == 1
+    assert result.stdout.splitlines()[1:] == ["FINDINGS row [too-long] comes before [open-end]"]
 
 
 def test_table_key_the_case_comprehension_makes_no_case_of_fails(tmp_path):

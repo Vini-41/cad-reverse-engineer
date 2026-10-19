@@ -6,6 +6,7 @@
   skills/cad-reverse-engineer/references/*.md;
 - every error rule is named by a completion criterion of SKILL.md (a "Done when" line, or the line
   of criteria every step shares), as `[rule-name]` or `[prefix-*]`;
+- the rows of the test suite's FINDINGS table are in alphabetical order of their rule;
 - every unit in cadrev.units.UNITS is read by a row of the test suite's UNITS table: a quote whose
   value the quote reader assigns that unit;
 - the tests import no cadrev module but the CLI entry point, cadrev.cli.
@@ -342,6 +343,22 @@ def unread_units() -> list[str]:
     return [u for u in units.UNITS if u not in read]
 
 
+def unsorted_findings() -> list[str]:
+    """The first FINDINGS row whose rule sorts before the row above it."""
+    for path in sorted(TESTS.glob("test_*.py")):
+        for node in ast.parse(path.read_text(encoding="utf8")).body:
+            if (
+                isinstance(node, ast.Assign)
+                and any(isinstance(t, ast.Name) and t.id == "FINDINGS" for t in node.targets)
+                and isinstance(node.value, ast.Dict)
+            ):
+                keys = [k.value for k in node.value.keys if isinstance(k, ast.Constant)]
+                for above, row in zip(keys, keys[1:]):
+                    if row < above:
+                        return [f"FINDINGS row [{above}] comes before [{row}]"]
+    return []
+
+
 def stray_imports() -> list[str]:
     """Each import in the tests of a cadrev module other than cadrev.cli."""
     out = []
@@ -390,6 +407,7 @@ def main() -> int:
         f"[{rule}] is an error no completion criterion of SKILL.md names, as [{rule}] or a [prefix-*]"
         for rule in unheld_errors()
     ]
+    problems += unsorted_findings()
     problems += [f"unit {u} is read by no row of the tests' UNITS table" for u in unread_units()]
     problems += [f"{where}; tests import only cadrev.cli" for where in stray_imports()]
     print(

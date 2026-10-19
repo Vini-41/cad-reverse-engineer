@@ -544,7 +544,7 @@ def resolve_params(p: Project) -> None:
                     "the choice its expr makes",
                 )
         if spec.get("gap") and basis == "source":
-            p.error("param-gap", f"param {name}: source has no value for a gap to replace")
+            p.error("param-gap", f"param {name}: a source param has no value for a gap to replace")
         elif spec.get("gap") and spec["gap"] not in p.gaps:
             p.error("param-gap", f"param {name}: unknown gap {spec['gap']!r}")
     # Derived parameters may depend on each other; resolve until no progress.
