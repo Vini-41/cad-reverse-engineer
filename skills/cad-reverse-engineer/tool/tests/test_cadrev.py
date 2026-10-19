@@ -2322,6 +2322,66 @@ def test_guard_distance_between_datums_of_one_part_beside_another_part(proj_dir)
     assert findings(proj_dir, "check-config") == []
 
 
+# Datums are confirmed on their part's solid (ADR-0006). The fixture's link is 40 x 5 x 8, centred
+# on the origin, with its holes 3 across on the Z axis at x = ±15.
+
+
+def _datum(at: str, model: str = MODEL):
+    """The fixture's model returning one more datum, link.extra at the point expression at."""
+    return model.replace(
+        '"link.b": (p.pitch / 2, 0, 0)}', f'"link.b": (p.pitch / 2, 0, 0), "link.extra": {at}}}'
+    )
+
+
+def _datum_at(root: Path, at: str, model: str = MODEL) -> list[str]:
+    """The datum-off-solid messages of a run whose model also returns link.extra at at."""
+    write(root, "model.py", _datum(at, model))
+    return findings(root, "datum-off-solid")
+
+
+_SLOT = MODEL.replace(
+    "    return {",
+    "    link -= extrude(SlotCenterToCenter(p.pitch / 2, p.hole_d), p.link_H, both=True)\n"
+    "    return {",
+)
+
+
+def test_guard_datum_at_a_hole_centre_on_its_axis_raises_no_finding(proj_dir):
+    assert findings(proj_dir, "datum-off-solid") == []
+
+
+def test_guard_datum_on_a_slot_end_axis_raises_no_finding(proj_dir):
+    assert _datum_at(proj_dir, "(p.pitch / 2 / 2, 0, 0)", _SLOT) == []
+
+
+def test_guard_datum_on_an_end_face_raises_no_finding(proj_dir):
+    assert _datum_at(proj_dir, "(p.link_L / 2, 0, 0)") == []
+
+
+def test_datum_inside_the_solid_where_no_hole_is_is_off_solid(proj_dir):
+    messages = _datum_at(proj_dir, "(0, 0, 0)")
+    assert len(messages) == 1
+    assert "link.extra" in messages[0] and "part link" in messages[0] and "2.5" in messages[0]
+
+
+def test_datum_in_mid_air_is_off_solid(proj_dir):
+    messages = _datum_at(proj_dir, "(0, 0, p.link_L)")
+    assert len(messages) == 1 and "link.extra" in messages[0] and "36" in messages[0]
+
+
+def test_datum_on_a_hole_axis_beyond_the_hole_is_off_solid(proj_dir):
+    messages = _datum_at(proj_dir, "(p.pitch / 2, 0, p.link_L)")
+    assert len(messages) == 1 and "link.extra" in messages[0] and "36" in messages[0]
+
+
+def test_datum_a_check_reads_is_off_solid_too(proj_dir):
+    write(
+        proj_dir, "model.py", MODEL.replace('"link.b": (p.pitch / 2, 0, 0)', '"link.b": (0, 0, 0)')
+    )
+    messages = findings(proj_dir, "datum-off-solid")
+    assert len(messages) == 1 and "link.b" in messages[0]
+
+
 def test_part_of_two_disjoint_solids_is_invalid(proj_dir):
     split = "link += Pos(p.link_L, 0, 0) * Box(p.link_W, p.link_W, p.link_H)\n    return {"
     write(proj_dir, "model.py", MODEL.replace("return {", split))
@@ -2630,6 +2690,13 @@ FINDINGS = {
         [
             _skip(pages=[1], reason="test conditions only"),
             _skip(**{"from": "Tests used", "to": "diameter."}, reason="test condition"),
+        ],
+    ),
+    "datum-off-solid": (
+        lambda r, t: write(r, "model.py", _datum("(0, 0, p.link_L)")),
+        [
+            lambda r, t: write(r, "model.py", _datum("(p.link_L / 2, 0, 0)")),
+            lambda r, t: write(r, "model.py", _datum("(p.pitch / 2, 0, p.link_H / 2)")),
         ],
     ),
     "evidence-anchor": (_evidence("pitch", quote=None), [_reading()]),

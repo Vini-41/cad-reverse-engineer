@@ -123,11 +123,46 @@ def build(p: Project) -> Built | None:
                 f"part {name}: is {solids} solids, not one; fuse its bodies, "
                 "or make each its own part placed in the assembly",
             )
+    for name, point in built.datums.items():
+        part = _owner(built, name)
+        if part is not None:
+            gap = _off_solid(built.parts[part], point, p.length_tol)
+            if gap is not None:
+                p.error(
+                    "datum-off-solid",
+                    f"datum {name} of part {part}: is {gap:.4g} from the nearest axis or face; "
+                    "place it on a hole's, pin's or pivot's axis, or on a face",
+                )
     for inst, (part, _) in list(built.assembly.items()):
         if part not in built.parts:
             p.error("assembly-part", f"assembly instance {inst}: unknown part {part!r}")
             del built.assembly[inst]
     return built
+
+
+def _off_solid(part, point: tuple[float, float, float], tol: float) -> float | None:
+    """How far point is from part's solid, or None if it lies on it within tol: on the axis of a
+    cylindrical face between that face's axial bounds, or on a face. The distance to an axis is
+    to the segment the face spans along it."""
+    from build123d import GeomType, Vector
+
+    at = Vector(*point)
+    nearest = math.inf
+    for face in part.faces():
+        nearest = min(nearest, face.distance_to(at))
+        if face.geom_type == GeomType.CYLINDER:
+            axis = face.axis_of_rotation
+            origin, direction = axis.position, axis.direction.normalized()
+            spans = [  # the face's extent along its axis, from points along its edges
+                (edge.position_at(i / 16) - origin).dot(direction)
+                for edge in face.edges()
+                for i in range(17)
+            ]
+            if not spans:
+                continue
+            along = min(max((at - origin).dot(direction), min(spans)), max(spans))
+            nearest = min(nearest, (at - (origin + direction * along)).length)
+    return None if nearest <= tol else nearest
 
 
 def _used_by_derived(p: Project) -> set[str]:
