@@ -386,7 +386,6 @@ QUOTES = {
     "a 1 1/2 inch shaft": ([1.5], [0.5, 2]),
     "gear ratio 1/50": ([1, 50], [0.02]),
     "widths 1,5,10 mm": ([1, 5, 10], [1.5]),
-    "a 1,250 mm rail": ([1, 250], [1.25]),
     "a 1/4-in. bolt": ([0.25], [1, 4]),
 }
 
@@ -2135,6 +2134,36 @@ def test_value_printed_in_two_units_in_its_quote_is_a_finding(proj_dir, tmp_path
 @pytest.mark.parametrize("quote", ["4 mm pins in 4 mm holes", "4 mm pins in 4 millimetre holes"])
 def test_guard_value_printed_twice_in_one_unit(proj_dir, tmp_path, quote):
     assert _ambiguous(proj_dir, tmp_path, quote) == []
+
+
+@pytest.mark.parametrize("value", [1250, 1.25, 250, 1])
+def test_value_from_a_thousands_comma_is_a_finding(proj_dir, tmp_path, value):
+    add_quote(proj_dir, tmp_path, "a 1,250 mm rail", "a 1,250 mm rail", {"v": value})
+    (message,) = findings(proj_dir, "number-ambiguous")
+    assert message.startswith("N1.v = ") and "1,250" in message
+    assert "value-not-in-quote" not in errors(proj_dir)
+
+
+def test_reading_with_a_thousands_comma_is_a_finding(proj_dir):
+    add_reading(proj_dir, reading="1,250 mm", values={"v": 1250})
+    (message,) = findings(proj_dir, "number-ambiguous")
+    assert message.startswith("F2.v = ") and "1,250" in message
+
+
+@pytest.mark.parametrize(
+    "quote", ["Walls 3,5 mm", "widths 1,5,10 mm", "a 1,2500 mm rail", "a 1,250.5 mm rail"]
+)
+def test_guard_comma_that_is_not_a_thousands_comma(proj_dir, tmp_path, quote):
+    add_quote(proj_dir, tmp_path, quote, quote, {"v": 5})
+    assert findings(proj_dir, "number-ambiguous") == []
+
+
+@pytest.mark.parametrize(("value", "rule"), [(5, None), (7, "value-not-in-quote")])
+def test_guard_value_beside_a_thousands_comma_is_checked_as_usual(proj_dir, tmp_path, value, rule):
+    quote = "a 1,250 rpm motor on a 5 mm shaft"
+    add_quote(proj_dir, tmp_path, quote, quote, {"v": value})
+    assert findings(proj_dir, "number-ambiguous") == []
+    assert ("value-not-in-quote" in errors(proj_dir)) == (rule is not None)
 
 
 def test_project_units_govern_the_conversion(proj_dir, tmp_path):

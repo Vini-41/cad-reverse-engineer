@@ -48,7 +48,7 @@ Read every page with `cadrev text <dir> <source>` and every figure with `cadrev 
 
 Format: `evidence.yaml` in [`references/project-format.md`](references/project-format.md).
 
-Done when every figure has been viewed with its labels ledgered, and `cadrev check <dir> --no-build` reports no `[coverage]`, `[quote-not-found]`, `[value-not-in-*]`, `[image-*]`, `[unit-ambiguous]`, `[skip-*]`, `[conflict-ref]` or `[evidence-*]` other than `[evidence-unused]`. The coverage sweep lists only numbers printed with a unit, so the figure pass and the unitless cells of tables are yours.
+Done when every figure has been viewed with its labels ledgered, and `cadrev check <dir> --no-build` reports no `[coverage]`, `[quote-not-found]`, `[value-not-in-*]`, `[image-*]`, `[unit-ambiguous]`, `[number-ambiguous]`, `[skip-*]`, `[conflict-ref]` or `[evidence-*]` other than `[evidence-unused]`. The coverage sweep lists only numbers printed with a unit, so the figure pass and the unitless cells of tables are yours.
 
 ### 4. Parameterise
 

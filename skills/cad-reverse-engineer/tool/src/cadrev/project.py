@@ -307,6 +307,32 @@ def _available(p: Project, sid: str) -> bool:
     )
 
 
+# What to do with a value read from a number such as 1,250, by the kind of text it is read from.
+_DISAMBIGUATE = {
+    "quote": "quote the value where it is printed in another form, or skip it",
+    "reading": "ledger the value from another statement of it, or leave it out",
+}
+
+
+def check_values(p: Project, eid: str, text: str, kind: str, values: dict) -> None:
+    """[value-not-in-quote] or [value-not-in-reading] for each value text does not state, and
+    [number-ambiguous] for each read from a number that a thousands comma and a decimal comma
+    read differently."""
+    stated = sources.numbers_in(text)
+    ambiguous = sources.ambiguous_numbers(text)
+    for key, value in values.items():
+        value = float(value)
+        if a := next((a for a in ambiguous if a.reads(value)), None):
+            p.error(
+                "number-ambiguous",
+                f"{eid}.{key} = {value:g} is read from {a.printed} in its {kind}, which is "
+                f"{a.thousands:g} with a thousands comma or {a.decimal:g} with a decimal comma; "
+                + _DISAMBIGUATE[kind],
+            )
+        elif not any(math.isclose(value, q, rel_tol=1e-9) for q in stated):
+            p.error(f"value-not-in-{kind}", f"{eid}.{key} = {value:g} is not in its {kind}")
+
+
 def check_evidence(p: Project) -> None:
     for eid, e in p.evidence.items():
         sid = e.get("source")
@@ -334,12 +360,7 @@ def check_evidence(p: Project) -> None:
                 continue
             if not e.get("page") and len(sources.pages(p.source_path(sid))) > 1:
                 p.warn("quote-page", f"{eid}: add page: {match.page}")
-            quoted = sources.numbers_in(e["quote"])
-            for key, value in values.items():
-                if not any(math.isclose(float(value), q, rel_tol=1e-9) for q in quoted):
-                    p.error(
-                        "value-not-in-quote", f"{eid}.{key} = {value} does not appear in its quote"
-                    )
+            check_values(p, eid, e["quote"], "quote", values)
         elif "image" in e:
             image = p.root / e["image"]
             if not image.is_file():
@@ -351,10 +372,7 @@ def check_evidence(p: Project) -> None:
                     "image-reading", f"{eid}: image evidence needs reading: the text as printed"
                 )
             else:
-                read = sources.numbers_in(str(e["reading"]))
-                for key, value in values.items():
-                    if not any(math.isclose(float(value), q, rel_tol=1e-9) for q in read):
-                        p.error("value-not-in-reading", f"{eid}.{key} = {value} not in its reading")
+                check_values(p, eid, str(e["reading"]), "reading", values)
         else:
             p.error(
                 "evidence-anchor",
