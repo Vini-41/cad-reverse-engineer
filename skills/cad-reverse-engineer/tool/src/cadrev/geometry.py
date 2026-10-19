@@ -205,6 +205,36 @@ def _instances(built: Built):
         yield inst, built.parts[part].moved(location)
 
 
+def _placed(p: Project, built: Built, c: dict) -> dict | None:
+    """The instances a check names in instances, each as its (part, Location) in the assembly;
+    None, after a [check-config] finding, when the list is empty or names an unknown instance."""
+    cid, names = c.get("id", "?"), c["instances"]
+    if not names:
+        p.error("check-config", f"check {cid}: instances is empty; name the instances it reads")
+        return None
+    unknown = [n for n in names if n not in built.assembly]
+    if unknown:
+        p.error(
+            "check-config",
+            f"check {cid}: {', '.join(unknown)} is not an instance of the assembly",
+        )
+        return None
+    return {n: built.assembly[n] for n in names}
+
+
+def _envelope(p: Project, built: Built, c: dict):
+    """The shape a bbox check measures: its part in the part's frame, or the union of its
+    instances where the assembly places them; None after a [check-config] finding."""
+    from build123d import Compound
+
+    if "instances" not in c:
+        return built.parts[c["part"]]
+    placed = _placed(p, built, c)
+    if placed is None:
+        return None
+    return Compound(children=[built.parts[part].moved(loc) for part, loc in placed.values()])
+
+
 def _owner(built: Built, datum: str) -> str | None:
     """The part a datum named <part>.<feature> belongs to, or None if its prefix names no part."""
     named = [part for part in built.parts if str(datum).startswith(f"{part}.")]
@@ -212,17 +242,53 @@ def _owner(built: Built, datum: str) -> str | None:
 
 
 def _datums(p: Project, built: Built, c: dict) -> list[tuple[float, float, float]] | None:
-    """The points of the datums a distance or angle check names in between, in one part's frame;
-    None, after a [check-config] finding, when they belong to different parts."""
+    """The points of the datums a distance or angle check names in between: in one part's frame,
+    or, under instances, each <instance>.<feature> as the assembly places it. None, after a
+    [check-config] finding, when they belong to different parts without instances, or under
+    instances name an unknown instance or feature."""
+    if "instances" in c:
+        return _instance_datums(p, built, c)
     owners = {_owner(built, d) for d in c["between"]} - {None}
     if len(owners) > 1:
         p.error(
             "check-config",
             f"check {c.get('id', '?')}: {' and '.join(c['between'])} are datums of different "
-            f"parts, each in its own frame; a {c['kind']} compares datums of one part",
+            f"parts, each in its own frame; a {c['kind']} compares datums of one part, or of "
+            "several where it names them as <instance>.<feature> under instances: [...]",
         )
         return None
     return [built.datums[d] for d in c["between"]]
+
+
+def _instance_datums(p: Project, built: Built, c: dict) -> list[tuple[float, float, float]] | None:
+    """Each <instance>.<feature> in between: its part's datum <part>.<feature>, moved by the
+    instance's Location. Names resolve against the check's instances only."""
+    from build123d import Location
+
+    placed = _placed(p, built, c)
+    if placed is None:
+        return None
+    cid, points = c.get("id", "?"), []
+    for name in c["between"]:
+        inst = max((i for i in placed if str(name).startswith(f"{i}.")), key=len, default=None)
+        if inst is None:
+            p.error(
+                "check-config",
+                f"check {cid}: {name} names none of its instances {', '.join(placed)}; "
+                "name it <instance>.<feature>",
+            )
+            return None
+        part, location = placed[inst]
+        datum = f"{part}.{str(name)[len(inst) + 1 :]}"
+        if datum not in built.datums:
+            p.error(
+                "check-config",
+                f"check {cid}: {name}: instance {inst}'s part {part} has no datum {datum}",
+            )
+            return None
+        at = (location * Location(built.datums[datum])).position
+        points.append((at.X, at.Y, at.Z))
+    return points
 
 
 def _angle(p: Project, c: dict, points: list) -> float | None:
@@ -269,8 +335,10 @@ def run_checks(p: Project, built: Built) -> list[CheckResult]:
         cid, kind = c.get("id", "?"), c.get("kind")
         try:
             if kind == "bbox":
-                part = built.parts[c["part"]]
-                s = part.bounding_box().size
+                shape = _envelope(p, built, c)
+                if shape is None:
+                    continue
+                s = shape.bounding_box().size
                 size = (s.X, s.Y, s.Z)
                 for key, axis in c["axes"].items():
                     ref, measured = f"{c['evidence']}.{key}", size[AXES[axis]]

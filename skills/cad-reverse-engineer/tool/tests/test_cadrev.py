@@ -2315,6 +2315,7 @@ def test_distance_between_datums_of_two_parts_is_a_finding(proj_dir):
     edit(proj_dir, "checks.yaml", lambda d: d["checks"][1].update(between=["link.a", "pin.c"]))
     messages = findings(proj_dir, "check-config")
     assert len(messages) == 1 and "link.a" in messages[0] and "pin.c" in messages[0]
+    assert "instances: [" in messages[0]
 
 
 def test_guard_distance_between_datums_of_one_part_beside_another_part(proj_dir):
@@ -2495,6 +2496,89 @@ def test_angle_check_between_datums_of_two_parts_is_a_finding(proj_dir, tmp_path
     write(proj_dir, "model.py", _TWO_PARTS)
     messages = findings(proj_dir, "check-config")
     assert len(messages) == 1 and "link.a" in messages[0] and "pin.c" in messages[0]
+
+
+# Checks over instances: read in the assembly frame, where the assembly places each instance.
+
+
+def _over_instances(root: Path, tmp_path: Path, text: str, values: dict, check: dict) -> None:
+    """Two links, link_1 at the origin and link_2 20 above it; text ledgered as N1, and check,
+    over link_1 and link_2, comparing with it."""
+    add_quote(root, tmp_path, text, text, values)
+    write(root, "model.py", _placed("Location()", "Location((0, 0, p.link_L / 2))"))
+    full = {"id": "inst", "instances": ["link_1", "link_2"], "evidence": "N1", **check}
+    edit(root, "checks.yaml", lambda d: d["checks"].append(full))
+
+
+def _inst(report: dict) -> list[dict]:
+    return [c for c in report["checks"] if c["id"].startswith("inst")]
+
+
+def test_bbox_over_two_instances_reads_their_union_in_the_assembly_frame(proj_dir, tmp_path):
+    # link_1 spans z -4..4 and link_2 z 16..24, so their union is 28 high.
+    text = "The two links stack 28 mm high."
+    _over_instances(proj_dir, tmp_path, text, {"h": 28}, {"kind": "bbox", "axes": {"h": "z"}})
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert [c["ok"] for c in _inst(report)] == [True]
+    assert _inst(report)[0]["measured"].startswith("28 ")
+
+
+def test_distance_between_datums_of_two_instances_reads_their_placed_distance(proj_dir, tmp_path):
+    # link.a is the same point of each link's part, so only link_2's Location sets them apart.
+    check = {"kind": "distance", "between": ["link_1.a", "link_2.a"], "key": "gap"}
+    _over_instances(proj_dir, tmp_path, "The links sit 20 mm apart.", {"gap": 20}, check)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert [c["ok"] for c in _inst(report)] == [True]
+    assert _inst(report)[0]["measured"].startswith("20 link_1.a - link_2.a")
+
+
+def test_angle_over_three_instance_datums_reads_their_placed_angle(proj_dir, tmp_path):
+    # link_2.b sits 20 above link_1.b, so the angle at link_1.b from link_1.a to it is square.
+    check = {"kind": "angle", "between": ["link_1.a", "link_1.b", "link_2.b"], "key": "a"}
+    _over_instances(proj_dir, tmp_path, "The links meet at 90° at the pivot.", {"a": 90}, check)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert [c["ok"] for c in _inst(report)] == [True]
+    assert _inst(report)[0]["measured"].startswith("90° at link_1.b")
+
+
+def test_instance_sharing_its_part_name_resolves_as_the_instance(proj_dir, tmp_path):
+    check = {"kind": "distance", "between": ["link_1.a", "link.a"], "key": "gap"}
+    _over_instances(proj_dir, tmp_path, "The links sit 20 mm apart.", {"gap": 20}, check)
+    placed = '{"link_1": ("link", Location()), "link": ("link", Location((0, 0, p.link_L / 2)))}'
+    write(proj_dir, "model.py", MODEL.replace('{"link_1": ("link", Location())}', placed))
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"][-1].update(instances=["link_1", "link"]))
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert [c["ok"] for c in _inst(report)] == [True]
+
+
+@pytest.mark.parametrize(
+    "change, named",
+    [
+        ({"instances": ["link_1", "link_9"]}, "link_9"),
+        ({"between": ["link_1.a", "link_2.z"]}, "link_2.z"),
+        ({"instances": []}, "empty"),
+    ],
+    ids=["unknown-instance", "unknown-feature", "empty"],
+)
+def test_check_over_an_unknown_instance_or_feature_or_no_instances_is_a_finding(
+    proj_dir, tmp_path, change, named
+):
+    check = {"kind": "distance", "between": ["link_1.a", "link_2.a"], "key": "gap", **change}
+    _over_instances(proj_dir, tmp_path, "The links sit 20 mm apart.", {"gap": 20}, check)
+    code, report = verify(proj_dir)
+    messages = findings(proj_dir, "check-config")
+    assert code == 1 and len(messages) == 1 and named in messages[0]
+
+
+def test_check_naming_both_part_and_instances_is_a_schema_finding(proj_dir, tmp_path):
+    check = {"kind": "bbox", "part": "link", "axes": {"h": "z"}}
+    _over_instances(proj_dir, tmp_path, "The two links stack 28 mm high.", {"h": 28}, check)
+    messages = findings(proj_dir, "schema")
+    assert len(messages) == 1 and "part" in messages[0] and "instances" in messages[0]
 
 
 def test_part_of_two_disjoint_solids_is_invalid(proj_dir):

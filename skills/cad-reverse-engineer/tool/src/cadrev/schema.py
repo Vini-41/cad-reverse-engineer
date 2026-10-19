@@ -27,6 +27,7 @@ class Table:
 class Record:
     fields: dict = field(default_factory=dict)
     required: tuple[str, ...] = ()
+    exclusive: tuple[tuple[str, ...], ...] = ()  # groups of keys of which an entry gives one
 
 
 TEXT_OR_NUMBER = (str, NUMBER)
@@ -91,6 +92,7 @@ CHECK = Record(
         "id": TEXT_OR_NUMBER,
         "kind": str,
         "part": str,
+        "instances": Items(str),
         "parts": Items(str),
         "evidence": str,
         "key": str,
@@ -105,7 +107,8 @@ CHECK = Record(
         "max_volume": NUMBER,
         "pairs": Items(Items(str)),
         "interpretation": str,
-    }
+    },
+    exclusive=(("part", "instances"),),
 )
 GAP = Record({"id": str, "question": str, "ask": str}, required=("id",))
 OVERLAY = Record(
@@ -203,6 +206,10 @@ def conform(value, spec, where: str, problems: list[str]):
             for key in spec.required:
                 if key not in value:
                     problems.append(f"{where}: {key} is required")
+            for group in spec.exclusive:
+                given = [key for key in group if key in value]
+                if len(given) > 1:
+                    problems.append(f"{where}: give {' or '.join(given)}, not both")
             return {
                 k: conform(v, spec.fields[k], f"{where}.{k}", problems) if k in spec.fields else v
                 for k, v in value.items()

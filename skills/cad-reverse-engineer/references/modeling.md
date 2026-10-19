@@ -25,7 +25,7 @@ def build(p):
 - **Widening `model_literals` is shown.** A project.yaml `model_literals` other than the default is listed in the report under *Model literal override*, and in report.json's `model_literals`.
 - **Parts live in their own frame**, placed where their checks expect: an envelope check with `axes: {L: x}` measures the part's X extent. Put the part's natural datum (a pivot, a mounting face) at the origin when the source defines one.
 - **Datums** are the named points that `distance` checks measure: pin centres, pivot axes, mounting holes. Name them `<part>.<feature>` and compute them from the same params that place the feature, never as a second copy of the arithmetic.
-- **The assembly** places part instances with `Location`. Instances are what `interference` checks and overlays of `assembly` use. An instance of a part `parts` does not hold is `[assembly-part]`.
+- **The assembly** places part instances with `Location`. Instances are what `interference` checks, checks over `instances` (an envelope or spacing across parts) and overlays of `assembly` use. An instance of a part `parts` does not hold is `[assembly-part]`.
 - A project without model.py is `[model-missing]`. `p.<name>` for an undefined param fails the build, as does any exception model.py raises: `[model-build]`. Params neither the model nor a mass check reads raise the warning `[param-unused]`.
 - `build` returns exactly this mapping: parts are build123d shapes, datums `(x, y, z)` tuples, assembly entries `(part name, Location)` pairs. Any other shape is `[model-return]`; a model.py that does not parse is `[model-syntax]`.
 
