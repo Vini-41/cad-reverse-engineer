@@ -85,6 +85,8 @@ class Project:
     checks: list[dict]
     gaps: dict[str, dict]
     overlays: list[dict]
+    # The mass model: part -> {mass: param} or {density: param}, from params.yaml's parts.
+    parts: dict[str, dict] = field(default_factory=dict)
     values: dict[str, float] = field(default_factory=dict)
     # Text sources whose file exists but cannot be read as text.
     unreadable: set[str] = field(default_factory=set)
@@ -264,6 +266,7 @@ def load(root: Path) -> Project:
         checks=files["checks.yaml"].get("checks", []),
         gaps={g["id"]: g for g in files["gaps.yaml"].get("gaps", [])},
         overlays=files["overlays.yaml"].get("overlays", []),
+        parts=files["params.yaml"].get("parts", {}),
         findings=findings,
     )
     if len(project.evidence) != len(evidence_list):
@@ -633,11 +636,20 @@ def pose_refs(c: dict) -> list[str]:
     return [str(v) for v in (c.get("pose") or {}).values()]
 
 
+def mass_params(p: Project, parts=None) -> list[str]:
+    """The params the mass model weighs parts by: every part's, or only those of parts."""
+    entries = [p.parts.get(n) or {} for n in parts] if parts is not None else p.parts.values()
+    return [str(v) for entry in entries for v in entry.values()]
+
+
 def params_read_by(p: Project, c: dict) -> list[str]:
     """The params check c reads itself, in order: the params its pose names, then a mass check's
-    density, add and counts params."""
+    density, or without one the mass model's params for the parts it weighs, then its add and
+    counts params."""
     names = pose_refs(c)
     if c.get("kind") == "mass":
+        if c.get("density") is None:
+            names += mass_params(p, c.get("parts"))
         names += [str(c.get("density"))] + [str(n) for n in c.get("add") or []]
         names += [str(n) for n in (c.get("counts") or {}).values()]
     return [n for n in dict.fromkeys(names) if n in p.params]
@@ -842,6 +854,9 @@ def check_units(p: Project) -> None:
             expect_param_quantity(p, c.get("density") or "", ("density",), f"in check {cid}")
             for name in c.get("add", []):
                 expect_param_quantity(p, name, ("mass",), f"in check {cid}")
+    for part, entry in p.parts.items():
+        for by, name in entry.items():
+            expect_param_quantity(p, name, (by,), f"in params.yaml parts.{part}")
     for o in p.overlays:
         ref = (o.get("calibration") or {}).get("evidence")
         if ref:

@@ -291,6 +291,7 @@ def cmd_check(args) -> int:
     # A partial run makes no claim, so it writes nothing to build/.
     partial = args.no_build or args.no_coverage
     results, images, motion = [], [], None
+    weighed = None
     if not args.no_build and not any(
         f.rule in ("model-missing", "model-syntax") for f in p.findings
     ):
@@ -303,6 +304,7 @@ def cmd_check(args) -> int:
             pose = None if linkage is None else kinematics.poser(p, built, linkage)
             results = geometry.run_checks(p, built, pose)
             motion = report.motion(built)
+            weighed = report.masses(built)
             if not partial:
                 written = geometry.export(p, built)
                 if linkage is not None:
@@ -324,7 +326,7 @@ def cmd_check(args) -> int:
             "so no claim is made and no report was written."
         )
         return 1
-    path = report.write(p, status, results, images, motion)
+    path = report.write(p, status, results, images, motion, weighed)
     print(
         f"\n{status}: {headline['errors']} errors, {headline['warnings']} warnings, "
         f"{headline['checks_passed']}/{headline['checks']} checks pass. Report: {path.relative_to(p.root)}"

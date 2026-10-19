@@ -142,6 +142,20 @@ def motion(built: Built) -> dict:
     }
 
 
+def masses(built: Built) -> dict:
+    """The mass model as the MJCF exports it: each weighed part's mass, the param it comes from,
+    and its centre of mass and inertia (ixx iyy izz ixy ixz iyz) in the part's frame."""
+    return {
+        name: {
+            "mass": m.mass,
+            "from": {m.by: m.param},
+            "center": list(m.center),
+            "inertia": list(m.inertia),
+        }
+        for name, m in built.masses.items()
+    }
+
+
 def _motion_line(moves: dict | None) -> list[str]:
     if moves is None:
         return []
@@ -185,9 +199,10 @@ def write(
     results: list[CheckResult],
     images: list[Path],
     moves: dict | None = None,
+    weighed: dict | None = None,
 ) -> Path:
-    """Write build/report.md and build/report.json. moves: how the model moves, None when no
-    model was built."""
+    """Write build/report.md and build/report.json. moves: how the model moves, and weighed: its
+    masses; each None when no model was built."""
     out = p.root / "build"
     out.mkdir(exist_ok=True)
     errors = [f for f in p.findings if f.level == "error"]
@@ -381,6 +396,7 @@ def write(
                 "model_literals": override,
                 "exact": exact(p, status),
                 "motion": moves,
+                "masses": weighed,
                 "params": {
                     n: {"value": p.values.get(n), "rests_on": p.rests_on.get(n), **s}
                     for n, s in p.params.items()

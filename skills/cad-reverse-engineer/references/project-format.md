@@ -45,7 +45,7 @@ sources:
 
 **Units come from the quote.** A ledger value is written as printed (`values: {L: 4}` for "4 cm"), and cadrev reads the unit printed right after it, or after a hyphen (`2-in. plate`, `5-mm pin`), and converts the value to the project's units (40 mm) wherever a param `from:`, a check or an overlay uses it; a `value` written on that param is in project units (40). The numbers of a range or product share its last unit ("3–5 mm", "40×8×5 mm"). A value with no unit printed after it, such as a table cell (`37×6.5×5`), is already in project units. `in` and `"` read as inches, except `in` before a determiner ("4 in total", "2 in each leg").
 
-Each use expects one quantity: a `bbox` or `distance` check, an overlay calibration and a param `model.py` reads expect a length (the model may also read an angle); an `angle` check's value expects an angle, in degrees or radians, and is compared in degrees; a mass check's `key` and `add` params expect a mass, its `density` a density. A value printed in a unit of another quantity is `[unit-quantity]`; a param traces to its quote through basis `source`, or through a `derived` expr that only scales one param by constants (`rho * 1000`). A value printed in two different units in one quote, or once with a unit and once without ("4 mm pins in 4 cm links"), is `[unit-ambiguous]`: quote only the part that states it.
+Each use expects one quantity: a `bbox` or `distance` check, an overlay calibration and a param `model.py` reads expect a length (the model may also read an angle); an `angle` check's value expects an angle, in degrees or radians, and is compared in degrees; a mass check's `key` and `add` params expect a mass, its `density` a density, and so do a [mass model](#mass-model) entry's `mass` and `density`. A value printed in a unit of another quantity is `[unit-quantity]`; a param traces to its quote through basis `source`, or through a `derived` expr that only scales one param by constants (`rho * 1000`). A value printed in two different units in one quote, or once with a unit and once without ("4 mm pins in 4 cm links"), is `[unit-ambiguous]`: quote only the part that states it.
 
 Recognised units, spelled-out names included (millimetre, inches, degrees, grams, seconds…):
 
@@ -162,6 +162,18 @@ Write `interpretation` on every `source` or `derived` param whose mapping onto g
 
 A derived param naming a gap rests on proposed; any other derived param rests on the weakest basis among the params its `expr` references (proposed < measured < source); an `expr` that references no param (`2.2`, `2 * pi`) is `[param-constant]`. The report's headline counts params by what they rest on.
 
+### Mass model
+
+params.yaml's `parts` weighs each part by one param: `mass`, a datasheet mass, for a purchased part, or `density`, which its volume is multiplied by, for a printed one.
+
+```yaml
+parts:
+  palm:  {density: resin_density}
+  servo: {mass: servo_mass}
+```
+
+cadrev computes each weighed part's centre of mass and inertia from its solid at that mass. The MJCF export writes these as each body's `<inertial>`, report.json lists them under `masses`, and a mass check without `density` sums the same masses, so export, report and check never disagree. The params need no read in model.py. In a model with joints every part needs an entry: a part without one, an entry naming a param params.yaml does not define, or an entry naming no part `build` returns is `[part-mass]`; an entry giving both `mass` and `density` is `[schema]`. A static model may leave `parts` out.
+
 ## checks.yaml
 
 Expected values always come from evidence, so a check compares the geometry with the source, never with params.
@@ -186,7 +198,7 @@ checks:
 - `bbox`: the part's axis-aligned bounding-box size in its own frame; under `instances`, that of their union in the assembly frame.
 - `distance`: between two datums of one part, in that part's frame. Datums of two different parts (`<part>.<feature>` naming different parts) sit in unrelated frames, so without `instances` such a check is `[check-config]`.
 - `angle`: `between: [a, vertex, b]`, three datums of one part (the same rule as `distance`); the angle at `vertex` between the directions to `a` and to `b`, in degrees (0 to 180). A datum that coincides with the vertex (within `tolerance.length`) leaves the angle undefined and is `[check-config]`. An angle a source states at another configuration than the one `target` names is checked posed (see [Poses](#poses-and-the-mjcf-export)); a stated joint range (a range of motion) is ledgered `scope: context` with a reason.
-- `mass`: Σ volume × count × density, plus any `add` params; `tol_rel` is required. Each `counts` entry names the param that counts that part (parts it leaves out count once), so a stated count is ledgered like any other number; a bare number there is `[schema]`. Its `density` and `add` params take their units from the quote (see `units` above). The check reads its `density`, `add` and `counts` params, so they need no read in model.py and no other check.
+- `mass`: Σ volume × count × density, plus any `add` params; `tol_rel` is required. Each `counts` entry names the param that counts that part (parts it leaves out count once), so a stated count is ledgered like any other number; a bare number there is `[schema]`. Its `density` and `add` params take their units from the quote (see `units` above). The check reads its `density`, `add` and `counts` params, so they need no read in model.py and no other check. Without `density`, each part weighs what the [mass model](#mass-model) gives it, and the check reads those params: it confirms the mass model, as exported, against a stated total. A part it weighs that the mass model leaves unweighed is then `[check-config]`.
 - `interference`: overlap volume between assembly instances; all pairs when `pairs` is omitted. Needs no evidence. Its result gives the worst overlap, the pair that produced it, and how many pairs it evaluated: `0 over 2145 pairs (all)` when `pairs` is omitted, `0.31 palm_1 ∩ finger_link_1 over 2 pairs (listed)` from a `pairs` list. It passes when the overlap is at most `max_volume`, which defaults to `tolerance.length`³. This overlap limit compares with no ledger value, so it is not a tolerance and has no cap, but the report lists beside its check each limit other than cadrev's default: the default `tolerance.length`, 0.001, cubed. A project-wide `tolerance.length` therefore lists every interference check that sets no `max_volume`.
 
 A dimension that spans several parts (an envelope of a subassembly, a spacing between parts) is checked over instances: a `bbox`, `distance` or `angle` check names `instances: [<instance>, ...]` in place of `part`, and is evaluated in the assembly frame, where the instances' `Location`s place them. Its datums are named `<instance>.<feature>`: the instance's part datum `<part>.<feature>`, moved by its `Location`. Under `instances` every name resolves against the assembly, so an instance named like its part is the instance. List each instance the check reads; there are no globs. An unknown instance, a feature its part has no datum for, or an empty list is `[check-config]`; a check naming both `part` and `instances` is `[schema]`. A check of another `kind` is `[check-kind]`; one naming a part, datum, axis or evidence value that does not exist is `[check-config]`. A check whose evaluated value strays from its ledger value by more than its tolerance is `[check-failed]`.
@@ -212,7 +224,7 @@ A model whose `build` returns `joints` and `loops` ([`modeling.md`](modeling.md)
 - A `pose` naming no joint, or a value that is neither a param nor a ledger value, is `[check-config]`; so is a `pose` on a model with no joints. A pose value is read by its check: a param it names needs no read in model.py, the check rests on it, and a ledger value it names counts as used. A pose value printed in a unit other than an angle's is `[unit-quantity]`.
 - Name `instances` on a posed check: a check in one part's own frame reads the same at every pose.
 
-A verification run of a model with joints writes `build/model.mjcf` and one `build/meshes/<part>.stl` per part, and loads the MJCF in MuJoCo; MuJoCo rejecting it is `[mjcf-load]` with MuJoCo's reason, and then no posed check is evaluated. Each instance is a body framed as its part, each joint a hinge, each loop a `connect` between two sites named after its datums, and each `actuated` joint has a motor. The MJCF is in the project's units (mm and g by default, not SI) without gravity: a kinematic model, its lengths the report's lengths. A part weighs its volume times the param `density` where params.yaml defines one; otherwise MuJoCo infers each moving body's mass from its mesh. Per-part masses belong in params.yaml, the one door numbers have into the model, never in project.yaml. A model with no joints is static: it writes no MJCF, and report.md says so under the headline.
+A verification run of a model with joints writes `build/model.mjcf` and one `build/meshes/<part>.stl` per part, and loads the MJCF in MuJoCo; MuJoCo rejecting it is `[mjcf-load]` with MuJoCo's reason, and then no posed check is evaluated. Each instance is a body framed as its part, each joint a hinge, each loop a `connect` between two sites named after its datums, and each `actuated` joint has a motor. The MJCF is in the project's units (mm and g by default, not SI) without gravity: a kinematic model, its lengths the report's lengths. Each body's mass and inertia are its part's in the [mass model](#mass-model). A model with no joints is static: it writes no MJCF, and report.md says so under the headline.
 
 ## gaps.yaml
 
@@ -275,6 +287,7 @@ The machine-readable report `cadrev check` writes beside `report.md`, which rend
 | `tolerances` | each check with a non-default tolerance: its `check` id, `kind`, and `tol` or `tol_rel` |
 | `overlap_limits` | each interference check with a non-default overlap limit: its `check` id and `max_volume` |
 | `motion` | the model's `joints`, each with its `parent`, `child` and `drive`, and its `loops`, each as its two datums; no joints means static; null when no model was built |
+| `masses` | each part the [mass model](#mass-model) weighs: its `mass`, the param it is weighed `from` (`{mass: <param>}` or `{density: <param>}`), and its `center` of mass and `inertia` about it (ixx iyy izz ixy ixz iyz) in the part's frame and the project's units: the numbers `build/model.mjcf` exports; null when no model was built |
 | `model_literals` | project.yaml's `model_literals` when it differs from the default, else null |
 | `params` | each param's spec, its resolved `value` and the basis it `rests_on` |
 | `bases` | how many params declare each basis |

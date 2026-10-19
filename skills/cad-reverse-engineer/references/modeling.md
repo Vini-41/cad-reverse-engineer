@@ -43,7 +43,7 @@ A mechanism names how its instances move; a static model leaves both keys out. c
 - **Joints form a tree**: an instance is the child of at most one joint, and no instance moves itself. Instances no joint moves are fixed where `assembly` places them.
 - **A loop** closes a ring the tree leaves open: two `<instance>.<feature>` datums that must coincide, such as a four-bar's rocker tip and its ground pivot. Cut each ring at one pivot: joints for the others, a loop for that one.
 - **Build the assembly closed, at its joints' zero**: the configuration the sources measure angles from, with every loop's datums together. A pose value turns a joint from there.
-- An unknown instance, datum or param, an axis datum of another instance, or an instance two joints move is `[model-return]`. Range params, and the param `density` the MJCF export weighs parts by, need no read in model.py.
+- An unknown instance, datum or param, an axis datum of another instance, or an instance two joints move is `[model-return]`. Range params need no read in model.py. Weigh every part in params.yaml's `parts` ([mass model](project-format.md#mass-model)).
 
 ## Building geometry that checks can see
 

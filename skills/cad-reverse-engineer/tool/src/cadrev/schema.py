@@ -111,6 +111,8 @@ CHECK = Record(
     },
     exclusive=(("part", "instances"),),
 )
+# A part's mass: its datasheet mass, or a density its volume is weighed by; one param either way.
+PART = Record({"mass": str, "density": str}, exclusive=(("mass", "density"),))
 GAP = Record({"id": str, "question": str, "ask": str}, required=("id",))
 OVERLAY = Record(
     {
@@ -140,7 +142,7 @@ FILES = {
         "skipped": (SKIP, list),
         "conflicts": (CONFLICT, list),
     },
-    "params.yaml": {"params": (PARAM, dict)},
+    "params.yaml": {"params": (PARAM, dict), "parts": (PART, dict)},
     "checks.yaml": {"checks": (CHECK, list)},
     "gaps.yaml": {"gaps": (GAP, list)},
     "overlays.yaml": {"overlays": (OVERLAY, list)},

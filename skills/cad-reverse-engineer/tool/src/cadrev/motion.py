@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from . import units
-from .geometry import EXPORT_DENSITY, Built, Poser, instance_datum
+from .geometry import Built, Poser, instance_datum
 from .project import Project
 
 # Steps from the as-built pose to the one a check names: each step starts from the last, so the
@@ -73,7 +73,7 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
     rejects it; None for a model with no joints, which is static."""
     if not built.joints:
         return None
-    from build123d import CenterOf, export_stl
+    from build123d import export_stl
 
     meshes = {}
     with tempfile.TemporaryDirectory() as tmp:
@@ -97,7 +97,6 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
             on = sites.setdefault(_located(built, datum)[0], [])
             if datum not in on:  # a datum two loops name is one site
                 on.append(datum)
-    density = p.values.get(EXPORT_DENSITY)
 
     def body(parent: ET.Element, inst: str, parent_location) -> None:
         part, location = built.assembly[inst]
@@ -114,20 +113,14 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
                 attrs["range"] = _num(*(p.values[n] * radian for n in joint["range"]))
             ET.SubElement(element, "joint", **attrs)
         ET.SubElement(element, "geom", type="mesh", mesh=part, contype="0", conaffinity="0")
-        if density is not None:
-            solid = built.parts[part]
-            inertia = solid.matrix_of_inertia
+        weighed = built.masses.get(part)
+        if weighed is not None:
             ET.SubElement(
                 element,
                 "inertial",
-                pos=_num(*solid.center(CenterOf.MASS)),
-                mass=_num(solid.volume * density),
-                fullinertia=_num(
-                    *(
-                        density * inertia[i][j]
-                        for i, j in ((0, 0), (1, 1), (2, 2), (0, 1), (0, 2), (1, 2))
-                    )
-                ),
+                pos=_num(*weighed.center),
+                mass=_num(weighed.mass),
+                fullinertia=_num(*weighed.inertia),
             )
         for datum in sites.get(inst, []):
             ET.SubElement(element, "site", name=datum, pos=_num(*_point(built, datum)))

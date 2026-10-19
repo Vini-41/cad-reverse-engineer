@@ -62,9 +62,9 @@ Done when every feature the model will need has a param, and `cadrev check <dir>
 
 Take one part all the way through before modelling any other: the tracer part. Choose a part with a stated envelope or pitch, model it alone, give it its checks (step 6), and run `cadrev check <dir>` until `build/report.md` shows those checks green. The tracer part proves the whole path, ledger to params to model to checks to report, while a mistake in it costs one part.
 
-Then write the rest of model.py per [`references/modeling.md`](references/modeling.md): parts in their own frames, datums at every checked feature, the assembly as placed instances, and for a mechanism its joints and loops.
+Then write the rest of model.py per [`references/modeling.md`](references/modeling.md): parts in their own frames, datums at every checked feature, the assembly as placed instances, and for a mechanism its joints and loops, with each part weighed in params.yaml's [mass model](references/project-format.md#mass-model).
 
-Done when the tracer part's checks went green before a second part was modelled, and `cadrev check <dir>` builds every part with no `[model-*]`, `[part-invalid]`, `[datum-off-solid]`, `[assembly-part]`, `[mjcf-load]` or `[param-unused]`. Red checks on the other parts are step 6's job.
+Done when the tracer part's checks went green before a second part was modelled, and `cadrev check <dir>` builds every part with no `[model-*]`, `[part-invalid]`, `[part-mass]`, `[datum-off-solid]`, `[assembly-part]`, `[mjcf-load]` or `[param-unused]`. Red checks on the other parts are step 6's job.
 
 ### 6. Check against the sources
 

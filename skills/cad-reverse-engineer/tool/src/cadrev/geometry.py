@@ -16,6 +16,7 @@ from .project import (
     check_tolerance,
     expect_param_quantity,
     expr_names,
+    mass_params,
     overlap_limit,
     rests_on,
 )
@@ -68,6 +69,21 @@ class Built:
     joints: dict = field(default_factory=dict)
     # loop name -> [<instance>.<feature>, <instance>.<feature>], two datums that must coincide
     loops: dict = field(default_factory=dict)
+    # part name -> its Mass, for each part params.yaml's parts weighs
+    masses: dict = field(default_factory=dict)
+
+
+@dataclass
+class Mass:
+    """A part's mass, from the param params.yaml's parts names `by` (mass or density), and its
+    centre of mass and inertia about that centre in the part's frame (ixx iyy izz ixy ixz iyz).
+    Each number is rounded to the 12 digits the MJCF prints, so the export and report.json agree."""
+
+    mass: float
+    by: str
+    param: str
+    center: tuple[float, ...]
+    inertia: tuple[float, ...]
 
 
 # What poses a check: the assembly placed at the joint values the check's pose names, with the
@@ -76,9 +92,6 @@ Poser = Callable[[dict], "tuple[Built, dict] | None"]
 
 DRIVES = ("actuated", "passive")
 JOINT_KEYS = ("type", "parent", "child", "axis", "range", "drive")
-# The param the MJCF export weighs every part by, as its volume times this density, where
-# params.yaml defines it; without it MuJoCo infers each moving body's mass from its mesh.
-EXPORT_DENSITY = "density"
 
 
 def _names(value, count: int) -> bool:
@@ -180,7 +193,7 @@ def build(p: Project) -> Built | None:
     ranges = {n for joint in built.joints.values() for n in joint.get("range", [])}
     for name in sorted(ranges & p.values.keys()):
         expect_param_quantity(p, name, ("angle",), "in a joint's range")
-    exported = ranges | ({EXPORT_DENSITY} if built.joints else set())
+    exported = ranges | set(mass_params(p))
     unread = p.values.keys() - built.used - _used_by_derived(p) - check_params(p) - exported
     for name in sorted(unread):
         p.warn("param-unused", f"param {name} is defined but the model never reads it")
@@ -212,7 +225,60 @@ def build(p: Project) -> Built | None:
     if problem:
         p.error("model-return", f"model.build {problem}")
         built.joints, built.loops = {}, {}
+    built.masses = _mass_model(p, built)
     return built
+
+
+def _digits(*values: float) -> tuple[float, ...]:
+    return tuple(float(f"{v:.12g}") for v in values)
+
+
+def _mass_model(p: Project, built: Built) -> dict[str, Mass]:
+    """Each part's Mass from params.yaml's parts: its datasheet mass, or its volume times its
+    density; the inertia is the solid's, scaled to that mass. A part of a model with joints that
+    the entries leave unweighed, an entry naming an undefined param, or one naming no part is
+    [part-mass]."""
+    from build123d import CenterOf
+
+    for name in p.parts.keys() - built.parts.keys():
+        p.error("part-mass", f"params.yaml parts {name}: model.build returns no part {name}")
+    masses = {}
+    for name, part in built.parts.items():
+        entry = p.parts.get(name) or {}
+        by = next(iter(entry), None)
+        if by is None:
+            if built.joints:
+                p.error(
+                    "part-mass",
+                    f"part {name}: params.yaml parts gives it no mass or density, so the MJCF "
+                    "export cannot weigh it",
+                )
+            continue
+        if entry[by] not in p.values:
+            if entry[by] not in p.params:
+                p.error(
+                    "part-mass",
+                    f"part {name}: params.yaml parts names {by} {entry[by]}, which params.yaml "
+                    "does not define",
+                )
+            continue
+        volume = part.volume
+        value = p.values[entry[by]]
+        mass = value if by == "mass" else volume * value
+        inertia = part.matrix_of_inertia
+        masses[name] = Mass(
+            mass=_digits(mass)[0],
+            by=by,
+            param=entry[by],
+            center=_digits(*part.center(CenterOf.MASS)),
+            inertia=_digits(
+                *(
+                    mass / volume * inertia[i][j]
+                    for i, j in ((0, 0), (1, 1), (2, 2), (0, 1), (0, 2), (1, 2))
+                )
+            ),
+        )
+    return masses
 
 
 def instance_datum(built: Built, name: str) -> tuple[str, str] | None:
@@ -539,10 +605,20 @@ def run_checks(p: Project, built: Built, pose: Poser | None = None) -> list[Chec
             elif kind == "mass":
                 names = c.get("parts") or list(built.parts)
                 counts = c.get("counts", {})
-                density = p.values[c["density"]]
-                measured = (
-                    sum(built.parts[n].volume * _count(p, counts, n) for n in names) * density
-                )
+                if "density" in c:
+                    density = p.values[c["density"]]
+                    each = {n: built.parts[n].volume * density for n in names}
+                else:  # the mass model, as the MJCF export weighs each part
+                    unweighed = [n for n in names if n not in built.masses]
+                    if unweighed:
+                        p.error(
+                            "check-config",
+                            f"check {cid}: names no density, and the mass model in params.yaml "
+                            f"parts weighs no {', '.join(unweighed)}",
+                        )
+                        continue
+                    each = {n: built.masses[n].mass for n in names}
+                measured = sum(each[n] * _count(p, counts, n) for n in names)
                 measured += sum(p.values[n] for n in c.get("add", []))
                 results.append(_compared(p, c, cid, f"{c['evidence']}.{c['key']}", measured))
             elif kind == "interference":

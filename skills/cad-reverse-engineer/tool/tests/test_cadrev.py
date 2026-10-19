@@ -8,6 +8,7 @@ import math
 import re
 import shutil
 import subprocess
+import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
@@ -3796,7 +3797,7 @@ def bar_text(turns: tuple[int, ...]) -> str:
 
 def four_bar(root: Path, tmp_path: Path, turns: tuple[int, ...] = (30, 60)) -> None:
     """Replace the project with the four-bar, built upright with one actuated joint, input, and one
-    loop, closure. For each turn, ledger P<turn> and check C's distance from the crank pivot and the
+    loop, closure; each bar weighs its volume times the param density. For each turn, ledger P<turn> and check C's distance from the crank pivot and the
     rocker's angle, posed at that turn: by the ledger key for the first turn, by a param for the
     rest."""
     edit(root, "project.yaml", lambda d: d.update(sources=[]))
@@ -3817,7 +3818,14 @@ def four_bar(root: Path, tmp_path: Path, turns: tuple[int, ...] = (30, 60)) -> N
         }
     ]
     params = {name: {"basis": "source", "from": f"L.{key}"} for key, name in lengths.items()}
-    chosen = {"link_W": 5, "link_H": 4, "hole_d": 2, "input_min": -180, "input_max": 180}
+    chosen: dict[str, float] = {
+        "link_W": 5,
+        "link_H": 4,
+        "hole_d": 2,
+        "input_min": -180,
+        "input_max": 180,
+    }
+    chosen["density"] = 0.0012  # g/mm³, a printing resin
     params |= {
         name: {"basis": "proposed", "value": value, "rationale": "a printable bar", "gap": "G1"}
         for name, value in chosen.items()
@@ -3857,7 +3865,8 @@ def four_bar(root: Path, tmp_path: Path, turns: tuple[int, ...] = (30, 60)) -> N
             },
         ]
     write(root, "evidence.yaml", {"evidence": evidence, "skipped": [], "conflicts": []})
-    write(root, "params.yaml", {"params": params})
+    parts = {name: {"density": "density"} for name in lengths.values()}
+    write(root, "params.yaml", {"params": params, "parts": parts})
     write(root, "gaps.yaml", {"gaps": [{"id": "G1", "question": "bar section?", "ask": "authors"}]})
     write(root, "checks.yaml", {"checks": checks})
     write(root, "model.py", FOUR_BAR)
@@ -3953,6 +3962,202 @@ def _density(value: float):
         _param("density", basis="proposed", value=value, rationale="resin", gap="G1")(r, t)
 
     return change
+
+
+def _parts(**entries):
+    """Set params.yaml's mass model entries: part -> {mass or density: param}, None removing one."""
+
+    def apply(d):
+        d.setdefault("parts", {}).update(entries)
+        d["parts"] = {k: v for k, v in d["parts"].items() if v is not None}
+
+    return lambda r, t: edit(r, "params.yaml", apply)
+
+
+def _servo_crank(r: Path, t: Path) -> None:
+    """The four-bar with its crank a purchased part: 7.5 g from its datasheet."""
+    four_bar(r, t)
+    _param("crank_mass", basis="proposed", value=7.5, rationale="datasheet", gap="G1")(r, t)
+    _parts(crank={"mass": "crank_mass"})(r, t)
+
+
+def _inertials(root: Path) -> dict[str, dict[str, list[float]]]:
+    """Each body's <inertial> in build/model.mjcf: attribute -> its numbers."""
+    tree = ET.parse(root / "build" / "model.mjcf")
+    return {
+        body.get("name", ""): {k: [float(v) for v in x.split()] for k, x in inertial.items()}
+        for body in tree.iter("body")
+        for inertial in body.iter("inertial")
+        if inertial in list(body)
+    }
+
+
+def test_export_weighs_a_part_by_its_datasheet_mass_or_its_volume_times_density(proj_dir, tmp_path):
+    _servo_crank(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    inertials = _inertials(proj_dir)
+    assert inertials["crank_1"]["mass"] == [7.5]
+    # The ground bar is 45 × 5 × 4 less two 2 mm holes: 874.867 mm³, at 0.0012 g/mm³.
+    assert inertials["ground_1"]["mass"][0] == pytest.approx(1.049841, rel=1e-6)
+
+
+def test_guard_exported_inertia_is_the_solids_at_its_mass(proj_dir, tmp_path):
+    """MuJoCo, given each mesh and its body's mass but no <inertial>, computes the inertia the
+    export should state: the two agree to 0.1%, the error of the meshes' tessellated holes."""
+    mujoco = importlib.import_module("mujoco")
+
+    _servo_crank(proj_dir, tmp_path)
+    assert verify(proj_dir)[0] == 0
+    build = proj_dir / "build"
+    exported = mujoco.MjModel.from_xml_path(str(build / "model.mjcf"))
+    tree = ET.parse(build / "model.mjcf")
+    for mesh in tree.iter("mesh"):
+        mesh.set("inertia", "exact")
+    for body in tree.iter("body"):
+        inertial = body.find("inertial")
+        assert inertial is not None
+        body.remove(inertial)
+        geom = body.find("geom")
+        assert geom is not None
+        geom.set("mass", inertial.get("mass", ""))
+    tree.write(build / "from-meshes.mjcf")
+    meshed = mujoco.MjModel.from_xml_path(str(build / "from-meshes.mjcf"))
+    assert exported.nbody == 5
+    for body in range(1, exported.nbody):
+        assert exported.body_mass[body] == pytest.approx(meshed.body_mass[body], rel=1e-9)
+        assert exported.body_ipos[body] == pytest.approx(meshed.body_ipos[body], abs=1e-3)
+        assert sorted(exported.body_inertia[body]) == pytest.approx(
+            sorted(meshed.body_inertia[body]), rel=1e-3
+        )
+
+
+def test_report_json_gives_the_masses_and_inertias_the_mjcf_exports(proj_dir, tmp_path):
+    _servo_crank(proj_dir, tmp_path)
+    report = verify(proj_dir)[1]
+    masses = report["masses"]
+    assert masses["crank"]["from"] == {"mass": "crank_mass"}
+    assert masses["ground"]["from"] == {"density": "density"}
+    for inst, inertial in _inertials(proj_dir).items():
+        weighed = masses[inst.removesuffix("_1")]  # each bar's one instance
+        assert inertial["mass"] == [weighed["mass"]]
+        assert inertial["pos"] == weighed["center"]
+        assert inertial["fullinertia"] == weighed["inertia"]
+
+
+def _unweighed_rocker(r: Path, t: Path) -> None:
+    """The four-bar with its rocker left out of the mass model."""
+    four_bar(r, t)
+    _parts(rocker=None)(r, t)
+
+
+def test_part_of_a_model_with_joints_weighed_by_nothing_is_part_mass_naming_it(proj_dir, tmp_path):
+    _unweighed_rocker(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 1
+    assert findings(proj_dir, "part-mass") == [
+        "part rocker: params.yaml parts gives it no mass or density, so the MJCF export "
+        "cannot weigh it"
+    ]
+    assert "rocker" not in report["masses"]
+
+
+def test_part_mass_names_the_param_a_parts_entry_names_but_params_lacks(proj_dir, tmp_path):
+    four_bar(proj_dir, tmp_path)
+    _parts(rocker={"density": "resin"})(proj_dir, tmp_path)
+    assert findings(proj_dir, "part-mass") == [
+        "part rocker: params.yaml parts names density resin, which params.yaml does not define"
+    ]
+
+
+def test_parts_entry_naming_no_part_of_the_model_is_part_mass(proj_dir, tmp_path):
+    four_bar(proj_dir, tmp_path)
+    _parts(servo={"mass": "density"})(proj_dir, tmp_path)
+    assert findings(proj_dir, "part-mass") == [
+        "params.yaml parts servo: model.build returns no part servo"
+    ]
+
+
+def test_parts_entry_giving_both_mass_and_density_is_a_schema_finding(proj_dir, tmp_path):
+    four_bar(proj_dir, tmp_path)
+    _parts(rocker={"mass": "density", "density": "density"})(proj_dir, tmp_path)
+    assert findings(proj_dir, "schema") == [
+        "params.yaml parts.rocker: give mass or density, not both"
+    ]
+
+
+def _total_mass(stated: str):
+    """The four-bar with its servo crank, and a mass check with no density, which weighs every part
+    by the mass model, against a stated total. The bars weigh 1.0498, 0.9298 and 0.8098 g by
+    volume × density, the crank 7.5 g: 10.2895 g."""
+
+    def change(r, t):
+        _servo_crank(r, t)
+        text = f"The four-bar weighs {stated} g."
+        add_quote(r, t, text, text.rstrip("."), {"m": float(stated)})
+        total = {"id": "total", "kind": "mass", "evidence": "N1", "key": "m", "tol_rel": 0.01}
+        edit(r, "checks.yaml", lambda d: d["checks"].append(total))
+
+    return change
+
+
+def test_mass_check_without_a_density_weighs_the_parts_by_the_mass_model(proj_dir, tmp_path):
+    _total_mass("10.3")(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    total = _by_id(report)["total"]
+    assert total["ok"] and total["measured"].startswith("10.29")
+    assert total["rests_on"] == "proposed"
+    assert sorted(total["rests_on_params"]) == ["crank_mass", "density"]
+
+
+def test_mass_check_over_the_mass_model_off_its_stated_total_fails(proj_dir, tmp_path):
+    _total_mass("12")(proj_dir, tmp_path)
+    assert findings(proj_dir, "check-failed") == ["total: expected 12 ±1% (N1.m), measured 10.29"]
+
+
+def test_mass_check_without_a_density_on_a_part_the_mass_model_lacks_is_check_config(proj_dir):
+    total = {"id": "total", "kind": "mass", "evidence": "T1-link", "key": "L", "tol_rel": 0.1}
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].append(total))
+    assert findings(proj_dir, "check-config") == [
+        "check total: names no density, and the mass model in params.yaml parts weighs no link"
+    ]
+
+
+def _rocker_weighed_by(by: str, text: str):
+    """The four-bar, its rocker weighed by the param rho, by mass or density, ledgered from text."""
+
+    def change(r, t):
+        four_bar(r, t)
+        add_quote(r, t, text, text.rstrip("."), {"rho": 1.2})
+        _param("rho", basis="source", **{"from": "N1.rho"})(r, t)
+        _parts(rocker={by: "rho"})(r, t)
+
+    return change
+
+
+@pytest.mark.parametrize(
+    "by, text",
+    [("density", "The resin is 1.2 g."), ("mass", "The rocker is 1.2 mm.")],
+)
+def test_mass_model_param_of_another_quantity_is_unit_quantity(proj_dir, tmp_path, by, text):
+    _rocker_weighed_by(by, text)(proj_dir, tmp_path)
+    messages = findings(proj_dir, "unit-quantity")
+    assert len(messages) == 1 and messages[0].startswith("N1.rho")
+    assert "in params.yaml parts.rocker" in messages[0]
+
+
+@pytest.mark.parametrize(
+    "by, text",
+    [("density", "The resin is 1.2 g/cm3."), ("mass", "The rocker is 1.2 g.")],
+)
+def test_guard_mass_model_param_of_its_quantity_is_no_unit_finding(proj_dir, tmp_path, by, text):
+    _rocker_weighed_by(by, text)(proj_dir, tmp_path)
+    assert findings(proj_dir, "unit-quantity") == []
+
+
+def test_static_project_reports_no_masses_without_a_mass_model(proj_dir):
+    assert verify(proj_dir)[1]["masses"] == {}
 
 
 def test_export_mujoco_rejects_is_mjcf_load_naming_why(proj_dir, tmp_path):
@@ -4281,6 +4486,8 @@ FINDINGS = {
         ],
     ),
     "part-invalid": (_shell("[1:]"), [_shell("")]),
+    # The static project, its part weighed by nothing, is no finding.
+    "part-mass": (_unweighed_rocker, [lambda r, t: None, four_bar, _servo_crank]),
     "quote-not-found": (
         _quote_from("paper.pdf", "spaced 30 mm apart", page=1),
         [_quote_from("paper.docx", "pivot holes of the link are spaced 30 mm")],
