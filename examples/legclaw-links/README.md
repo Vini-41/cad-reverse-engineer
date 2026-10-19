@@ -10,9 +10,9 @@ The example is deliberately small. It models the compression, bent and plain lin
 - Conflicts K1 (is L14 the bent-linkage length?) and K2 (420 g or 430 g?).
 - Proposed pin pitches, each tied to a question for the authors.
 
-Expected status: `VERIFIED PENDING REVIEW: 0 errors, 2 warnings, 10/10 checks pass`
+Expected status: `VERIFIED: 0 errors, 2 warnings, 10/10 checks pass`
 
-The status stays VERIFIED PENDING REVIEW until a named reviewer checks the Fig. 2A reading against `figures/crops/fig2a-foot-sole.png` and writes `confirmed_by` on `fig2a-foot-sole` in `evidence.yaml`; it then becomes VERIFIED.
+The Fig. 2A reading was checked against `figures/crops/fig2a-foot-sole.png` by a named reviewer, recorded as `confirmed_by` on `fig2a-foot-sole` in `evidence.yaml`. Without that field the status would be VERIFIED PENDING REVIEW.
 
 CI runs `cadrev check` on this directory on every push and fails if it prints anything else. A change that moves the status updates this line.
 
