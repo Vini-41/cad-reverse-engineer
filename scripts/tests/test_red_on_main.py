@@ -12,7 +12,11 @@ BASE_TESTS = (
 
 
 def git(root: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t", *args],
+        check=True,
+        capture_output=True,
+    )
 
 
 def write(root: Path, files: dict[str, str]) -> None:
@@ -36,7 +40,7 @@ def repo(tmp_path: Path, dependencies: str) -> Path:
     )
     git(root, "init", "-q")
     git(root, "add", ".")
-    git(root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base")
+    git(root, "commit", "-qm", "base")
     write(
         root,
         {
@@ -46,14 +50,14 @@ def repo(tmp_path: Path, dependencies: str) -> Path:
             ),
         },
     )
-    git(root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "fix")
+    git(root, "commit", "-qam", "fix")
     return root
 
 
 def red_on_main(
-    root: Path, *args: str, base: str | None = "HEAD~1"
+    root: Path, *args: str, base: str | None = "HEAD~1", **env_vars: str
 ) -> subprocess.CompletedProcess[str]:
-    env = {k: v for k, v in os.environ.items() if k != "BASE"}
+    env = {k: v for k, v in os.environ.items() if k != "BASE"} | env_vars
     return subprocess.run(
         ["bash", str(SCRIPT), *args],
         cwd=root,
@@ -63,27 +67,78 @@ def red_on_main(
     )
 
 
-def test_pytest_that_cannot_run_fails(tmp_path):
+def commit(root: Path, files: dict[str, str]) -> None:
+    write(root, files)
+    git(root, "commit", "-qam", "change")
+
+
+def test_guard_pytest_that_cannot_run_exits_2(tmp_path):
     result = red_on_main(repo(tmp_path, dependencies=""))
-    assert result.returncode != 0
+    assert result.returncode == 2
     assert "pytest" in result.stderr
 
 
-def test_pytest_that_selects_no_test_fails(tmp_path):
+def test_guard_pytest_that_selects_no_test_exits_2(tmp_path):
     result = red_on_main(repo(tmp_path, dependencies='"pytest"'), "-k", "no_such_test")
-    assert result.returncode != 0
+    assert result.returncode == 2
     assert "pytest" in result.stderr
+
+
+def test_base_at_head_with_the_tool_source_unchanged_exits_3(tmp_path):
+    result = red_on_main(repo(tmp_path, dependencies='"pytest"'), base="HEAD")
+    assert result.returncode == 3
+    assert "no fix to compare" in result.stderr
+
+
+def test_a_fix_with_no_new_or_changed_test_exits_3(tmp_path):
+    root = repo(tmp_path, dependencies='"pytest"')
+    commit(root, {f"{TOOL}/src/double.py": "def double(x):\n    return x + x\n"})
+    result = red_on_main(root)
+    assert result.returncode == 3
+    assert "no test function is new or changed" in result.stderr
+
+
+def test_the_null_commit_as_base_exits_3(tmp_path):
+    result = red_on_main(repo(tmp_path, dependencies='"pytest"'), base="0" * 40)
+    assert result.returncode == 3
+    assert "null commit" in result.stderr
+
+
+def test_a_base_the_clone_lacks_exits_3(tmp_path):
+    result = red_on_main(repo(tmp_path, dependencies='"pytest"'), base="1" * 40)
+    assert result.returncode == 3
+    assert "not in this clone" in result.stderr
+
+
+def test_guard_a_new_green_test_without_the_guard_name_exits_1(tmp_path):
+    root = repo(tmp_path, dependencies='"pytest"')
+    commit(
+        root,
+        {
+            f"{TOOL}/tests/test_double.py": (
+                f"{BASE_TESTS}\n\ndef test_double_of_one():\n    assert double(1) != 0\n"
+            )
+        },
+    )
+    result = red_on_main(root)
+    assert result.returncode == 1
+    assert "green, not a guard (name it test_guard_): " in result.stdout
+    assert "test_double_of_one" in result.stdout
+
+
+def test_guard_list_prints_each_test_red_or_green(tmp_path):
+    root = repo(tmp_path, dependencies='"pytest"')
+    result = red_on_main(root, "-k", "double", LIST="1")
+    assert result.returncode == 0, result.stderr
+    assert "red    tests/test_double.py::test_double_doubles" in result.stdout
+    assert "green  tests/test_double.py::test_double_of_zero" in result.stdout
+    assert "1 red (holes), 1 green" in result.stdout
 
 
 def test_guard_hole_test_counts_red(tmp_path):
     result = red_on_main(repo(tmp_path, dependencies='"pytest"'))
     assert result.returncode == 0, result.stderr
     assert "1 red (holes), 0 green" in result.stdout
-
-
-def test_guard_collect_only_passes(tmp_path):
-    result = red_on_main(repo(tmp_path, dependencies='"pytest"'), "--co", "-q")
-    assert result.returncode == 0, result.stderr
 
 
 def test_branch_with_no_upstream_compares_against_its_merge_base_with_main(tmp_path):

@@ -28,6 +28,21 @@ example_status() {
   rm -f "$log"
 }
 
+# Runs red-on-main for real against BASE (CI sets it from the event; locally it defaults to the
+# upstream). Its exit 3, nothing to compare, passes with a notice that GitHub shows.
+red_on_main_or_notice() {
+  local log code=0
+  log=$(mktemp)
+  ../../../scripts/red-on-main 2>"$log" || code=$?
+  cat "$log" >&2
+  if [ "$code" -eq 3 ]; then
+    echo "::notice title=red-on-main compared nothing::$(tail -n 1 "$log")"
+    code=0
+  fi
+  rm -f "$log"
+  return "$code"
+}
+
 plugin_validate() {
   if command -v claude >/dev/null; then
     (cd "$repo" && claude plugin validate .)
@@ -45,7 +60,7 @@ step "agent-facing docs point only at files that exist" ../../../scripts/check-d
 step "every rule is tested raised and not raised, documented and held by a step; tests use only the CLI" \
   uv run python ../../../scripts/rule-coverage
 step "plugin manifests validate" plugin_validate
-step "red-on-main runs" env BASE=HEAD~1 ../../../scripts/red-on-main --co -q
+step "red-on-main: new tests are red holes or green guards" red_on_main_or_notice
 step "example reaches its documented status" example_status
 
 if [ ${#failed[@]} -gt 0 ]; then
