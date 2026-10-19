@@ -37,7 +37,7 @@ sources:
     coverage: false        # optional: exclude from the coverage sweep (e.g. a 200-page catalogue; see `skipped`)
 ```
 
-`format` is the version of these file formats. A project without it is `[format-missing]`; one with a version this cadrev does not read is `[format-unknown]`. Either way cadrev reads no other project file, every command refuses the project, and no report is written. Joints, loops and `pose` are additions to format 1: a project without them reads as before, so neither needs a new version.
+`format` is the version of these file formats. A project without it is `[format-missing]`; one with a version this cadrev does not read is `[format-unknown]`. Either way cadrev reads no other project file, every command refuses the project, and no report is written.
 
 `target` names the object, version and configuration reconstructed; one missing or still starting with `TODO` is `[target]`.
 
@@ -63,6 +63,8 @@ Recognised units, spelled-out names included (millimetre, inches, degrees, grams
 | area | mm², cm², m² (also mm2, mm^2) |
 | volume | mm³, cm³ (cc, ml), m³ (also cm3, cm^3) |
 | angular speed | rpm (r/min), rad/s |
+| torsional stiffness, torsional damping | N·m/rad, N·mm/rad; N·m·s/rad (also Nms/rad), N·mm·s/rad |
+| linear stiffness, linear damping | N/m, N/mm; N·s/m, N·s/mm |
 | fraction, count, charge | % (percent), turns, mAh; kept in SI, so 40% is 0.4 |
 
 Any other word after a number (`12 links`) leaves it in project units.
@@ -164,14 +166,14 @@ A derived param naming a gap rests on proposed; any other derived param rests on
 
 ### Physics values
 
-A value only the simulation reads (a joint's damping, stiffness or friction, a tendon's stiffness or damping, a part's contact friction) is a param like any other, with a basis, marked `physics: true`:
+A value only the simulation reads (a joint's damping, stiffness or friction, a tendon's stiffness or damping) is a param like any other, with a basis, marked `physics: true`:
 
 ```yaml
   knee_c:   {basis: proposed, value: 50, rationale: "light damping", gap: G-damping, physics: true}
 ```
 
-- model.py names it where it applies ([`modeling.md`](modeling.md#joints-and-loops)), and the MJCF export writes its value there unconverted, in the MJCF's units: the project's length, mass and time, so g·mm²/s per radian for a joint's damping by default (1 N·mm = 10⁶ g·mm²/s²). Where a source states the value in other units, ledger it and derive the param from it.
-- A param a joint, tendon or contact names without `physics: true`, or one marked `physics: true` that model.py's geometry, a joint `range` or a check reads, is `[param-physics]`: a physics value shapes no geometry.
+- model.py names it where it applies ([`modeling.md`](modeling.md#joints-and-loops)). It is in the project's units of its quantity, per radian for a joint: a joint's `stiffness` in N·mm/rad by default, its `damping` in N·mm·s/rad, its `friction` a torque in N·mm, a tendon's `stiffness` in N/mm and its `damping` in N·s/mm. A value quoted in another unit of that quantity (`0.25 N·m/rad`) converts like any ledger value; one printed in a unit of another quantity is `[unit-quantity]`. The MJCF export converts each to the MJCF's units (the project's length, mass and time: g·mm²/s² per radian for a joint's stiffness by default).
+- A param a joint or tendon names without `physics: true`, or one marked `physics: true` that model.py's geometry, a joint `range` or a check reads, is `[param-physics]`: a physics value shapes no geometry.
 - No check compares a physics value, so a source one raises no `[unchecked-source]`.
 - Exact is judged over geometry and kinematics: a proposed physics value leaves a project exact, and the headline counts it apart from the proposed params (`physics_proposed`).
 
@@ -232,12 +234,14 @@ A model whose `build` returns `joints` and `loops` ([`modeling.md`](modeling.md)
 ```
 
 - **A pose value is a rotation from the assembly as built**, in the project's angle unit: `input: 30` turns that joint 30° from where `assembly` places its child. Build the assembly at the configuration the source measures its angles from (the zero of its joints), so a stated angle is the pose value itself.
-- cadrev exports the assembly as MJCF, sets each joint the pose names, holds every other `actuated` joint as built, and lets MuJoCo move the `passive` joints until every loop's two datums coincide. It then places each instance where MuJoCo puts its body and evaluates the check on its own geometry, with the same rules as an unposed check. A check without `pose` is evaluated on the assembly as built.
+- cadrev exports the assembly as MJCF, sets each joint the pose names, holds every other `actuated` joint as built (an input stays where its motor holds it, so a pose names only the inputs it moves), and lets MuJoCo move the `passive` joints until every loop's two datums coincide. It then places each instance where MuJoCo puts its body and evaluates the check on its own geometry, with the same rules as an unposed check. A check without `pose` is evaluated on the assembly as built.
 - A loop whose datums stay more than `tolerance.length` apart after solving is `[loop-open]`, naming the loop and the pose: the links cannot close there (too short, or past a toggle), and the checks at that pose are not evaluated.
+- **The mechanism stays within its ranges.** A joint with a `range` that ends a pose outside it by more than `tolerance.angle` is `[joint-range]`, naming the joint, how far it turned and the pose; the checks at that pose are not evaluated. The joint a `range` check or a sweep sets is where its check puts it, so only the others are held to their ranges there.
+- **The assembly is built closed.** A loop whose two datums lie more than `tolerance.length` apart where `assembly` places their instances is `[loop-open]`, saying "as built".
 - A `pose` naming no joint, or a value that is neither a param nor a ledger value, is `[check-config]`; so is a `pose` on a model with no joints. After `[model-joint]` or `[model-loop]` ([`modeling.md`](modeling.md#joints-and-loops)) no posed check is evaluated. A pose value is read by its check: a param it names needs no read in model.py, the check rests on it, and a ledger value it names counts as used. A pose value printed in a unit other than an angle's is `[unit-quantity]`.
 - Name `instances` on a posed check: a check in one part's own frame reads the same at every pose.
 
-A verification run of a model with joints writes `build/model.mjcf` and one `build/meshes/<part>.stl` per part, and loads the MJCF in MuJoCo; MuJoCo rejecting it is `[mjcf-load]` with MuJoCo's reason, and then no posed check is evaluated. Each instance is a body framed as its part, each joint a hinge, each loop a `connect` between two sites named after its datums, each tendon a spatial tendon through such sites, and each `actuated` joint has a motor; [physics values](#physics-values) sit on the joint, tendon or geom they apply to. The MJCF is in the project's units (mm and g by default, not SI) without gravity: a kinematic model, its lengths the report's lengths. Each body's mass and inertia are its part's in the [mass model](#mass-model). A model with no joints is static: it writes no MJCF, and report.md says so under the headline.
+A verification run of a model with joints writes `build/model.mjcf` and one `build/meshes/<part>.stl` per part, and loads the MJCF in MuJoCo; MuJoCo rejecting it is `[mjcf-load]` with MuJoCo's reason, and then no posed check is evaluated. Each instance is a body framed as its part, each joint a hinge, each loop a `connect` between two sites named after its datums, each tendon a spatial tendon through such sites, and each `actuated` joint has a motor; [physics values](#physics-values) sit on the joint or tendon they apply to, in the MJCF's units. The MJCF is in the project's units (mm and g by default, not SI) without gravity: a kinematic model, its lengths the report's lengths. Each body's mass and inertia are its part's in the [mass model](#mass-model). A model with no joints is static: it writes no MJCF, and report.md says so under the headline, or says the motion was dropped after a finding that dropped it.
 
 ### Ranges and sweeps
 
@@ -250,8 +254,8 @@ A joint's `range` is two params in the project's angle unit, each a rotation fro
   - {id: toe-clear, kind: interference, pairs: [[palm_1, toe_1]], sweep: {joint: toe, steps: sweep_steps}}
 ```
 
-- **`range`** names a `joint` and, in `ends`, the two ledger values `<evidence>.<key>` its range's two params must reach, in that order. cadrev poses the model at each end of the joint's range (each range param as a pose value) and compares, at each, the joint's own turn from as built or, with `between` (and `instances`), the angle there, as an `angle` check reads it, with that end's ledger value. It gives one result per end, `<id>.<range param>`, each with its pose. An end the model's range param stops short of is `[check-failed]`; an end where a loop cannot close is `[loop-open]`, and that end is not evaluated. A source range param whose `from` a range check's `ends` compares is covered; one no check covers is `[unchecked-source]`, like any source param. Compare the input's own range with `ends` alone; compare a stated output angle (a toe that opens 0–40°) with `between`.
-- **`sweep: {joint, steps}`** on an interference check evaluates it at `steps` poses evenly spaced from one end of the joint's range to the other, ends included, and reports the worst overlap with the pair and the pose it occurred at (`0.82 crank_1 ∩ post_1 at input 90 over 2 pairs (listed) across 5 poses of input`); a clear sweep says how many poses it evaluated. `steps` is a param, read by the check (proposed, usually: the sweep's resolution is a choice), never a bare number (`[schema]`); one that is not a whole number of at least 2 is `[check-config]`. A loop that stays open at any pose is `[loop-open]`, and the check is not evaluated.
+- **`range`** names a `joint` and, in `ends`, the two ledger values `<evidence>.<key>` its range's two params must equal, in that order. It gives one result per end, `<id>.<range param>`, each with its pose. Without `between`, cadrev poses the model at each stated end itself and compares the joint's range param for that end with it: a range param that stops short of or overshoots its end is `[check-failed]`, and the pose confirms the mechanism reaches the end, so a loop that cannot close there is `[loop-open]` and another joint pushed past its range is `[joint-range]` (that end then has no result). With `between` (and `instances`), cadrev poses the model at each end of the joint's range (each range param as a pose value) and compares the angle there, as an `angle` check reads it, with that end's ledger value. A source range param whose `from` a range check's `ends` compares is covered; one no check covers is `[unchecked-source]`, like any source param. Compare the input's own range with `ends` alone; compare a stated output angle (a toe that opens 0–40°) with `between`.
+- **`sweep: {joint, steps}`** on an interference check evaluates it at `steps` poses evenly spaced from one end of the joint's range to the other, ends included, and reports the worst overlap with the pair and the pose it occurred at (`0.82 crank_1 ∩ post_1 at input 90 over 2 pairs (listed) across 5 poses of input`); a clear sweep says how many poses it evaluated. `steps` is a param, read by the check, never a bare number (`[schema]`). It is the sweep's resolution, a choice that states nothing about the object: one read only as `steps` is left out of what the check rests on and out of exact, and report.md names it beside **Exact** when it is proposed; one that is not a whole number of at least 2 is `[check-config]`. A pose the mechanism cannot reach (`[loop-open]`, `[joint-range]`) leaves the check unevaluated.
 - Both check kinds rest on their joint's range params as well as the params they read. A `range` or `sweep` naming no joint of the model, a joint with no `range`, or `ends` that are not two values is `[check-config]`, as is either on a model with no joints. report.md shows each end's pose, and each sweep's joint, range and pose count, beside its interpretation.
 
 ## gaps.yaml
@@ -299,7 +303,7 @@ Every verification run ends on one status: `cadrev check` prints it last, and re
 | **NOT VERIFIED** | at least one error finding, including a project cadrev refuses (`[project-missing]`, `[format-missing]`, `[format-unknown]`) | 1 |
 | **PARTIAL** | `--no-build` or `--no-coverage` skipped part of the run, so it makes no claim and writes no report | 1 |
 
-**Exact** is not a status: it qualifies VERIFIED when no param rests on a proposed value, [physics values](#physics-values) aside. report.md then prints **Exact** under the status, with the number of proposed physics values if any, and report.json sets `exact` to true.
+**Exact** is not a status: it qualifies VERIFIED when no param rests on a proposed value, [physics values](#physics-values) and a sweep's `steps` ([Ranges and sweeps](#ranges-and-sweeps)) aside. report.md then prints **Exact** under the status, naming the proposed physics values and sweep resolutions it set aside, and report.json sets `exact` to true.
 
 ## build/report.json
 
@@ -314,7 +318,7 @@ The machine-readable report `cadrev check` writes beside `report.md`, which rend
 | `checks` | every geometry check with its result, expected and evaluated values, the basis it `rests_on`, and the params it reads resting on that basis (`rests_on_params`); for an interference check, also the number of pairs it evaluated (`pairs`); for a posed check, its `pose`: each joint with the param or ledger value it is set `from` and that `value`; for a swept interference check, its `sweep` (`joint`, the range params it is swept `from`, their values as `range`, and the number of `poses`), and as `pose` the one with the worst overlap |
 | `tolerances` | each check with a non-default tolerance: its `check` id, `kind`, and `tol` or `tol_rel` |
 | `overlap_limits` | each interference check with a non-default overlap limit: its `check` id and `max_volume` |
-| `motion` | the model's `joints`, each with its `parent`, `child` and `drive`, and its `loops`, each as its two datums; no joints means static; null when no model was built |
+| `motion` | how the model moves, as `build/model.mjcf` exports it: its `joints`, each with its `parent`, `child` and `drive`, its `range` as the params it is `from` and their `value`s in the project's angle unit, and each physics value it names (`damping`, `stiffness`, `friction`) as `{from, value}` in the project's units; its `loops`, each as its two datums; its `tendons`, each with its `path` and physics values; and `dropped`, true when a `[model-joint]`, `[model-loop]` or `[model-return]` dropped them. No joints and not dropped means static; null when no model was built |
 | `masses` | each part the [mass model](#mass-model) weighs: its `mass`, the param it is weighed `from` (`{mass: <param>}` or `{density: <param>}`), and its `center` of mass and `inertia` about it (ixx iyy izz ixy ixz iyz) in the part's frame and the project's units: the numbers `build/model.mjcf` exports; null when no model was built |
 | `model_literals` | project.yaml's `model_literals` when it differs from the default, else null |
 | `params` | each param's spec, its resolved `value` and the basis it `rests_on` |

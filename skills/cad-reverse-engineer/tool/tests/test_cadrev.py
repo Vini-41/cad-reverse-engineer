@@ -2141,6 +2141,14 @@ UNITS = {
     "turning at 2 rad/s": (2, 114.59155902616465),
     "wound 3 turns": (3, 3),
     "a 3300 mAh battery": (3300, 11880),
+    "a spring of 0.25 N·m/rad": (0.25, 250),
+    "a spring of 4 N·mm/rad": (4, 4),
+    "a damper of 0.002 Nms/rad": (0.002, 2),
+    "a damper of 2 N·mm·s/rad": (2, 2),
+    "a cord of 300 N/m": (300, 0.3),
+    "a cord of 3 N/mm": (3, 3),
+    "a damper of 2 N·s/m": (2, 0.002),
+    "a damper of 2 N·s/mm": (2, 2),
 }
 
 
@@ -3900,7 +3908,7 @@ def test_report_json_gives_each_posed_check_its_pose(proj_dir, tmp_path):
     assert checks["ac30"]["pose"] == {"input": {"from": "P30.turn", "value": 30}}
     assert checks["rock60"]["pose"] == {"input": {"from": "turn_60", "value": 60}}
     md = (proj_dir / "build" / "report.md").read_text()
-    assert "| posed: input 60 (turn_60) |" in md
+    assert "| posed: input at 60 (turn_60) |" in md
 
 
 def _coupler(length: float):
@@ -3926,6 +3934,18 @@ def test_loop_that_cannot_close_at_a_pose_is_loop_open_naming_loop_and_pose(proj
     assert set(_by_id(report)) == {"ac30", "rock30"}
 
 
+def test_loop_open_in_the_assembly_as_built_is_loop_open_saying_so(proj_dir, tmp_path):
+    _bar(
+        '"rocker_1": ("rocker", Location((cx, cy, 0)',
+        '"rocker_1": ("rocker", Location((cx + 1, cy, 0)',
+    )(proj_dir, tmp_path)
+    as_built = [m for m in findings(proj_dir, "loop-open") if "as built" in m]
+    assert as_built == [
+        "loop closure: rocker_1.d and ground_1.d stay 1 apart as built; build the assembly "
+        "closed, with every loop's datums together"
+    ]
+
+
 def test_model_with_joints_exports_mjcf_and_a_mesh_per_part_that_mujoco_loads(proj_dir, tmp_path):
     mujoco = importlib.import_module("mujoco")
 
@@ -3945,15 +3965,37 @@ def test_model_with_joints_exports_mjcf_and_a_mesh_per_part_that_mujoco_loads(pr
         "parent": "ground_1",
         "child": "crank_1",
         "drive": "actuated",
+        "range": {"from": ["input_min", "input_max"], "value": [-180, 180]},
     }
     assert "**Kinematic**: 3 joints and 1 loop" in (build / "report.md").read_text()
+
+
+def test_report_json_gives_the_joint_ranges_and_physics_values_the_mjcf_exports(proj_dir, tmp_path):
+    mujoco = importlib.import_module("mujoco")
+
+    physical(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    joints, cord = report["motion"]["joints"], report["motion"]["tendons"]["cord"]
+    joint = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "input")
+    assert joints["input"]["range"] == {"from": ["input_min", "input_max"], "value": [-180, 180]}
+    assert list(m.jnt_range[joint]) == pytest.approx([-math.pi, math.pi])
+    knee = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "knee")
+    assert joints["knee"]["damping"] == {"from": "knee_damping", "value": PHYSICS["knee_damping"]}
+    assert m.dof_damping[m.jnt_dofadr[knee]] == pytest.approx(
+        joints["knee"]["damping"]["value"] * MJCF_PER_N
+    )
+    assert m.jnt_stiffness[knee] == pytest.approx(joints["knee"]["stiffness"]["value"] * MJCF_PER_N)
+    assert cord["path"] == ["crank_1.d", "rocker_1.a"]
+    assert m.tendon_stiffness[0] == pytest.approx(cord["stiffness"]["value"] * MJCF_PER_N)
 
 
 def test_model_with_no_joints_writes_no_mjcf_and_its_report_says_it_is_static(proj_dir):
     code, report = verify(proj_dir)
     assert code == 0
     assert not (proj_dir / "build" / "model.mjcf").exists()
-    assert report["motion"] == {"joints": {}, "loops": {}}
+    assert report["motion"] == {"joints": {}, "loops": {}, "tendons": {}, "dropped": False}
     assert (
         "**Static**: model.py returns no joints" in (proj_dir / "build" / "report.md").read_text()
     )
@@ -4008,7 +4050,7 @@ def test_export_weighs_a_part_by_its_datasheet_mass_or_its_volume_times_density(
     assert inertials["ground_1"]["mass"][0] == pytest.approx(1.049841, rel=1e-6)
 
 
-def test_guard_exported_inertia_is_the_solids_at_its_mass(proj_dir, tmp_path):
+def test_exported_inertia_is_the_solids_at_its_mass(proj_dir, tmp_path):
     """MuJoCo, given each mesh and its body's mass but no <inertial>, computes the inertia the
     export should state: the two agree to 0.1%, the error of the meshes' tessellated holes."""
     mujoco = importlib.import_module("mujoco")
@@ -4294,6 +4336,14 @@ def test_joint_the_model_cannot_hinge_is_model_joint_naming_it(proj_dir, tmp_pat
     assert report["checks"] == [] and not (proj_dir / "build" / "model.mjcf").exists()
 
 
+def test_report_of_a_model_whose_joints_were_dropped_says_so_and_not_static(proj_dir, tmp_path):
+    _bar('"parent": "ground_1"', '"parent": "base_1"')(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    md = (proj_dir / "build" / "report.md").read_text()
+    assert report["motion"]["dropped"] and "**Static**" not in md
+    assert "**Motion dropped**: model.py returns joints or loops the assembly cannot hold" in md
+
+
 @pytest.mark.parametrize("datum", ["base_1.d", "ground_1.e"], ids=["instance", "feature"])
 def test_loop_naming_an_unknown_datum_is_model_loop_naming_it(proj_dir, tmp_path, datum):
     _bar('"ground_1.d"]}', f'"{datum}"]}}')(proj_dir, tmp_path)
@@ -4352,9 +4402,7 @@ def test_every_bad_joint_and_loop_is_its_own_finding(proj_dir, tmp_path):
         "loop-text",
     ],
 )
-def test_guard_joints_or_loops_of_the_wrong_shape_are_model_return(
-    proj_dir, tmp_path, old, new, says
-):
+def test_joints_or_loops_of_the_wrong_shape_are_model_return(proj_dir, tmp_path, old, new, says):
     _bar(old, new, 1)(proj_dir, tmp_path)
     messages = findings(proj_dir, "model-return")
     assert len(messages) == 1 and messages[0].startswith(f"model.build {says}"), messages
@@ -4383,14 +4431,15 @@ PHYSICS = {
     "knee_friction": 0.01,
     "cord_k": 0.2,
     "cord_damping": 0.03,
-    "pad_mu": 0.8,
 }
+# One N in the project's units is 10⁶ of the MJCF's g·mm/s², so with mm each value is 10⁶ MJCF units.
+MJCF_PER_N = 1e6
 
 
 def physical(root: Path, tmp_path: Path) -> None:
-    """The four-bar with a damped, sprung and rubbing knee, an elastic cord from the crank tip to
-    the rocker pivot, and a coupler whose contact friction is pad_mu: every physics param
-    proposed."""
+    """The four-bar with a damped, sprung and rubbing knee, and an elastic cord from the crank tip
+    to the rocker pivot: every physics param proposed, in the project's units (N·mm/rad, N·mm·s/rad,
+    N·mm, N/mm and N·s/mm)."""
     four_bar(root, tmp_path)
     model = swap(
         FOUR_BAR,
@@ -4405,8 +4454,7 @@ def physical(root: Path, tmp_path: Path) -> None:
         '        "loops": {"closure": ["rocker_1.d", "ground_1.d"]},\n',
         '        "loops": {"closure": ["rocker_1.d", "ground_1.d"]},\n'
         '        "tendons": {"cord": {"path": ["crank_1.d", "rocker_1.a"],\n'
-        '                             "stiffness": "cord_k", "damping": "cord_damping"}},\n'
-        '        "contacts": {"coupler": {"friction": "pad_mu"}},\n',
+        '                             "stiffness": "cord_k", "damping": "cord_damping"}},\n',
     )
     write(root, "model.py", model)
     add_params(
@@ -4440,7 +4488,7 @@ def _exact_bar(root: Path) -> None:
     edit(root, "params.yaml", apply)
 
 
-def test_physics_params_are_written_into_the_mjcf_on_the_joint_tendon_and_geom_they_apply_to(
+def test_physics_params_are_written_into_the_mjcf_on_the_joint_and_tendon_they_apply_to(
     proj_dir, tmp_path
 ):
     mujoco = importlib.import_module("mujoco")
@@ -4451,19 +4499,13 @@ def test_physics_params_are_written_into_the_mjcf_on_the_joint_tendon_and_geom_t
     m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
     knee = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "knee")
     dof = m.jnt_dofadr[knee]
-    assert m.dof_damping[dof] == pytest.approx(PHYSICS["knee_damping"])
-    assert m.jnt_stiffness[knee] == pytest.approx(PHYSICS["knee_spring"])
-    assert m.dof_frictionloss[dof] == pytest.approx(PHYSICS["knee_friction"])
+    assert m.dof_damping[dof] == pytest.approx(PHYSICS["knee_damping"] * MJCF_PER_N)
+    assert m.jnt_stiffness[knee] == pytest.approx(PHYSICS["knee_spring"] * MJCF_PER_N)
+    assert m.dof_frictionloss[dof] == pytest.approx(PHYSICS["knee_friction"] * MJCF_PER_N)
     cord = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_TENDON, "cord")
-    assert m.tendon_stiffness[cord] == pytest.approx(PHYSICS["cord_k"])
-    assert m.tendon_damping[cord] == pytest.approx(PHYSICS["cord_damping"])
-    friction = {
-        mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, m.geom_bodyid[g]): m.geom_friction[g][0]
-        for g in range(m.ngeom)
-    }
-    assert friction["coupler_1"] == pytest.approx(PHYSICS["pad_mu"])
-    # A joint, tendon or geom no physics param names keeps MuJoCo's default.
-    assert friction["crank_1"] == 1
+    assert m.tendon_stiffness[cord] == pytest.approx(PHYSICS["cord_k"] * MJCF_PER_N)
+    assert m.tendon_damping[cord] == pytest.approx(PHYSICS["cord_damping"] * MJCF_PER_N)
+    # A joint no physics param names keeps MuJoCo's default.
     assert (
         m.dof_damping[m.jnt_dofadr[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "elbow")]] == 0
     )
@@ -4492,7 +4534,7 @@ def test_report_counts_proposed_physics_params_apart_from_the_headline(proj_dir,
         == (counts["params"])
     )
     md = (proj_dir / "build" / "report.md").read_text()
-    assert "and 5 on proposed values; 6 more are proposed physics values." in md
+    assert "and 5 on proposed values; 5 more are proposed physics values." in md
 
 
 def test_verified_project_whose_only_proposed_params_are_physics_params_is_exact(
@@ -4506,7 +4548,7 @@ def test_verified_project_whose_only_proposed_params_are_physics_params_is_exact
     md = (proj_dir / "build" / "report.md").read_text()
     assert (
         "**Exact**: no geometry or kinematic parameter rests on a proposed value; "
-        "6 physics values are proposed." in md
+        "5 physics values are proposed." in md
     )
 
 
@@ -4535,7 +4577,87 @@ def test_source_physics_param_needs_no_check_and_its_quoted_value_is_exported(pr
     unchecked = [f["message"] for f in report["findings"] if f["rule"] == "unchecked-source"]
     assert unchecked and not [m for m in unchecked if "cord_k" in m]
     m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
-    assert m.tendon_stiffness[0] == pytest.approx(0.25)
+    assert m.tendon_stiffness[0] == pytest.approx(0.25 * MJCF_PER_N)
+
+
+KNEE = "The knee spring is 0.25 N·m/rad and its damper 0.002 N·m·s/rad."
+
+
+def _quoted_knee(text: str):
+    """The physical four-bar, its knee's spring and damper source params from text (N1.k, N1.c)."""
+
+    def change(r, t):
+        physical(r, t)
+        add_quote(r, t, text, text.rstrip("."), {"k": 0.25, "c": 0.002})
+        for name, key in (("knee_spring", "k"), ("knee_damping", "c")):
+            spec = {"from": f"N1.{key}", "value": None, "rationale": None, "gap": None}
+            _param(name, basis="source", **spec)(r, t)
+
+    return change
+
+
+def test_physics_value_quoted_in_si_reaches_the_mjcf_in_its_units(proj_dir, tmp_path):
+    mujoco = importlib.import_module("mujoco")
+
+    _quoted_knee(KNEE)(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    knee = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "knee")
+    # 0.25 N·m/rad is 0.25 kg·m²/s² per rad: 0.25 × 10³ g × 10⁶ mm² = 2.5 × 10⁸ g·mm²/s².
+    assert m.jnt_stiffness[knee] == pytest.approx(2.5e8)
+    assert m.dof_damping[m.jnt_dofadr[knee]] == pytest.approx(2e6)
+
+
+def test_physics_value_quoted_in_a_unit_of_another_quantity_is_unit_quantity(proj_dir, tmp_path):
+    _quoted_knee(swap(KNEE, "0.25 N·m/rad", "0.25 N·m"))(proj_dir, tmp_path)
+    messages = findings(proj_dir, "unit-quantity")
+    assert len(messages) == 1 and messages[0].startswith("N1.k is printed in N·m, a unit of torque")
+    assert "as joint knee's stiffness" in messages[0]
+
+
+def _physical_model(old: str, new: str):
+    """The physical four-bar with old replaced by new in its model.py."""
+
+    def change(r, t):
+        physical(r, t)
+        write(r, "model.py", swap((r / "model.py").read_text(), old, new))
+
+    return change
+
+
+_CORD = '"cord": {"path": ["crank_1.d", "rocker_1.a"],'
+
+
+@pytest.mark.parametrize(
+    "old, new, says",
+    [
+        ('"cord": {', '"cord": 3, "_": {', "tendon cord must be a mapping, not int"),
+        (_CORD, '"cord": {"path": ["crank_1.d"],', "tendon cord: path must be two or more datums"),
+        (_CORD, _CORD + ' "length": "cord_k",', "tendon cord: unknown key 'length'"),
+        ('"stiffness": "cord_k"', '"stiffness": ["cord_k"]', "tendon cord: stiffness must be a"),
+        (
+            '"rocker_1.a"],',
+            '"rocker_1.e"],',
+            "tendon cord: rocker_1.e names no <instance>.<feature>",
+        ),
+        ('"stiffness": "cord_k"', '"stiffness": "cord_q"', "tendon cord's stiffness names cord_q,"),
+    ],
+    ids=[
+        "not-mapping",
+        "short-path",
+        "unknown-key",
+        "not-a-name",
+        "unknown-datum",
+        "unknown-param",
+    ],
+)
+def test_tendon_of_the_wrong_shape_or_naming_nothing_is_model_return(
+    proj_dir, tmp_path, old, new, says
+):
+    _physical_model(old, new)(proj_dir, tmp_path)
+    messages = findings(proj_dir, "model-return")
+    assert len(messages) == 1 and messages[0].startswith(f"model.build {says}"), messages
 
 
 def test_physics_slot_naming_a_param_without_physics_true_is_param_physics(proj_dir, tmp_path):
@@ -4573,9 +4695,10 @@ def test_range_check_passes_when_the_joint_reaches_both_ledgered_ends(proj_dir, 
     low, high = checks["reach.input_min"], checks["reach.input_max"]
     assert low["ok"] and high["ok"]
     assert low["expected"].endswith("(N1.lo)") and high["expected"].endswith("(N1.hi)")
-    assert low["pose"] == {"input": {"from": "input_min", "value": 0}}
-    assert high["pose"] == {"input": {"from": "input_max", "value": 60}}
-    assert high["measured"].startswith("60°")
+    # Posed at the stated ends, where the loop closes, and each range param compared with its end.
+    assert low["pose"] == {"input": {"from": "N1.lo", "value": 0}}
+    assert high["pose"] == {"input": {"from": "N1.hi", "value": 60}}
+    assert high["measured"] == "60° input's range end (input_max)"
 
 
 def _unchecked(root: Path) -> list[str]:
@@ -4600,8 +4723,10 @@ def test_range_end_the_model_stops_short_of_is_check_failed(proj_dir, tmp_path):
     code, report = verify(proj_dir)
     failed = [f["message"] for f in report["findings"] if f["rule"] == "check-failed"]
     assert code == 1 and failed == [
-        "reach.input_max: expected 60 (N1.hi), measured 50° input turned"
+        "reach.input_max: expected 60 (N1.hi), measured 50° input's range end (input_max)"
     ]
+    # The mechanism is still posed at the stated end, where its range param stops short.
+    assert _by_id(report)["reach.input_max"]["pose"] == {"input": {"from": "N1.hi", "value": 60}}
 
 
 def test_range_end_the_loop_cannot_close_at_is_loop_open(proj_dir, tmp_path):
@@ -4611,8 +4736,42 @@ def test_range_end_the_loop_cannot_close_at_is_loop_open(proj_dir, tmp_path):
     )
     code, report = verify(proj_dir)
     opened = [f["message"] for f in report["findings"] if f["rule"] == "loop-open"]
-    assert code == 1 and len(opened) == 1 and "with input at 60 (input_max)" in opened[0]
+    assert code == 1 and len(opened) == 1 and "with input at 60 (N1.hi)" in opened[0]
     assert "reach.input_max" not in _by_id(report) and _by_id(report)["reach.input_min"]["ok"]
+
+
+def _knee_range(low: float, high: float, base=four_bar):
+    """The four-bar, as base sets it up, with its passive knee ranged from low to high, proposed:
+    the crank turned 30° swings the knee by about 30°."""
+
+    def change(r, t):
+        base(r, t)
+        knee = '"axis": ["coupler_1.a", "coupler_1.a_up"],\n'
+        write(r, "model.py", swap(FOUR_BAR, knee, knee + '"range": ["knee_min", "knee_max"],\n'))
+        for name, value in (("knee_min", low), ("knee_max", high)):
+            _param(name, basis="proposed", value=value, rationale="x", gap="G1")(r, t)
+
+    return change
+
+
+def test_joint_pushed_past_its_range_at_a_pose_is_joint_range_naming_joint_and_pose(
+    proj_dir, tmp_path
+):
+    _knee_range(-1, 1)(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    messages = findings(proj_dir, "joint-range")
+    assert code == 1 and len(messages) == 2, messages
+    assert messages[0].startswith("joint knee: turns ")
+    assert "with input at 30 (P30.turn), outside its range knee_min -1 to knee_max 1" in messages[0]
+    # No check is evaluated at a pose the mechanism cannot reach.
+    assert report["checks"] == []
+
+
+def test_range_end_a_passive_joint_cannot_reach_within_its_range_is_joint_range(proj_dir, tmp_path):
+    _knee_range(-1, 1, base=ranged)(proj_dir, tmp_path)
+    edit(proj_dir, "checks.yaml", lambda d: d.update(checks=d["checks"][-1:]))  # reach alone
+    assert any("with input at 60 (N1.hi)" in m for m in findings(proj_dir, "joint-range"))
+    assert "reach.input_max" not in _by_id(verify(proj_dir)[1])
 
 
 def test_range_check_between_datums_compares_their_angle_at_each_end(proj_dir, tmp_path):
@@ -4663,11 +4822,17 @@ def test_range_check_on_a_static_model_is_check_config(proj_dir):
     )
 
 
-def post_beside(root: Path, tmp_path: Path, post_x: float, steps: int = 5) -> None:
+def post_beside(
+    root: Path, tmp_path: Path, post_x: float, steps: int = 5, ranged_by_source: bool = False
+) -> None:
     """The four-bar beside a post fixed at (post_x, 0), and an interference check of the post with
-    the crank and coupler swept at steps poses across the input's range, -180° to 180°. Turned
-    90°, the crank points at (-15, 0); turned -180°, 0 or 180°, it points along y, clear of x < -12."""
-    four_bar(root, tmp_path, (30,))
+    the crank and coupler swept at steps poses across the input's range, -180° to 180°, or with
+    ranged_by_source the stated 0° to 60° a range check covers. Turned 90°, the crank points at
+    (-15, 0); turned -180°, 0 or 180°, it points along y, clear of x < -12."""
+    if ranged_by_source:
+        ranged(root, tmp_path)
+    else:
+        four_bar(root, tmp_path, (30,))
     model = swap(
         FOUR_BAR,
         '"parts": {name: bar(p, length) for name, length in lengths.items()},',
@@ -4727,6 +4892,28 @@ def test_clear_sweep_passes_and_says_how_many_poses_it_evaluated(proj_dir, tmp_p
     assert clear["measured"].endswith("across 9 poses of input")
     md = (proj_dir / "build" / "report.md").read_text()
     assert "swept: input -180 to 180 (input_min to input_max), 9 poses" in md
+
+
+def test_proposed_sweep_steps_leave_a_project_exact_and_are_named_beside_it(proj_dir, tmp_path):
+    post_beside(proj_dir, tmp_path, -30, ranged_by_source=True)
+    exprs = {
+        "link_W": "crank / 3",
+        "link_H": "crank * 4 / 15",
+        "hole_d": "crank * 2 / 15",
+        "post_x": "-ground * 3 / 4",
+    }
+    for name, expr in exprs.items():
+        spec = {"value": None, "rationale": None, "gap": None}
+        _param(name, basis="derived", expr=expr, **spec)(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert (code, report["status"], report["exact"]) == (0, "VERIFIED", True), report["findings"]
+    assert report["counts"]["proposed"] == 1  # sweep_steps, still counted
+    assert _by_id(report)["clear"]["rests_on"] == "source"
+    md = (proj_dir / "build" / "report.md").read_text()
+    assert (
+        "**Exact**: no geometry or kinematic parameter rests on a proposed value; "
+        "the sweep resolution sweep_steps is proposed." in md
+    )
 
 
 def test_sweep_steps_as_a_bare_number_is_a_schema_finding(proj_dir, tmp_path):
@@ -4968,6 +5155,7 @@ FINDINGS = {
     "image-hash": (_reading(image_sha256="0" * 64), [_reading()]),
     "image-missing": (_unpinned_reading, [_reading()]),
     "image-reading": (_reading(reading=""), [_reading(reading="70")]),
+    "joint-range": (_knee_range(-1, 1), [_knee_range(-180, 180)]),
     "loop-open": (_coupler(20), [_coupler(25)]),
     "mjcf-load": (_density(0), [_density(0.0012)]),
     "model-arithmetic": (

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -29,14 +30,26 @@ DEFAULT_TOL = {"length": LENGTH_TOL, "angle": ANGLE_TOL}
 TOL_CAP, TOL_REL_CAP = 0.05, 0.25
 
 
+def _mass_reads(p: Project, c: dict) -> list[str]:
+    """The params a mass check reads: its density, or without one the mass model's params for
+    the parts it weighs, then its add and counts params."""
+    names = mass_params(p, c.get("parts")) if c.get("density") is None else []
+    names += [str(c.get("density"))] + [str(n) for n in c.get("add") or []]
+    return names + [str(n) for n in (c.get("counts") or {}).values()]
+
+
 @dataclass(frozen=True)
 class CheckKind:
     """What a kind of check compares with the geometry: evidence values of quantity, within tol,
     which defaults to project.yaml's tolerance.<tolerance>; or, where tolerance is None, within
-    tol_rel, a fraction of the value, which has no default."""
+    tol_rel, a fraction of the value, which has no default. reads gives the params a check of
+    the kind reads itself; span_capped caps its tol against the span between the two values it
+    compares, rather than against each."""
 
     quantity: str
     tolerance: str | None
+    reads: Callable[[Project, dict], list[str]] | None = None
+    span_capped: bool = False
 
 
 # The kinds of check that compare with a ledger value; interference compares with none.
@@ -44,9 +57,9 @@ CHECK_KINDS = {
     "bbox": CheckKind("length", "length"),
     "distance": CheckKind("length", "length"),
     "angle": CheckKind("angle", "angle"),
-    "mass": CheckKind("mass", None),
-    # A joint's range: an angle at each end, the joint's own or one between datums.
-    "range": CheckKind("angle", "angle"),
+    "mass": CheckKind("mass", None, reads=_mass_reads),
+    # A joint's range: an angle at each end, compared with a stated end that is often 0.
+    "range": CheckKind("angle", "angle", span_capped=True),
 }
 SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "other")
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}
@@ -89,6 +102,9 @@ class Project:
     overlays: list[dict]
     # The mass model: part -> {mass: param} or {density: param}, from params.yaml's parts.
     parts: dict[str, dict] = field(default_factory=dict)
+    # Params read only as a sweep's steps: a resolution the reconstruction chooses, which states
+    # nothing about the object, so exact leaves them out. Set by the build.
+    resolution: set[str] = field(default_factory=set)
     values: dict[str, float] = field(default_factory=dict)
     # Text sources whose file exists but cannot be read as text.
     unreadable: set[str] = field(default_factory=set)
@@ -652,18 +668,17 @@ def mass_params(p: Project, parts=None) -> list[str]:
     return [str(v) for entry in entries for v in entry.values()]
 
 
-def params_read_by(p: Project, c: dict) -> list[str]:
-    """The params check c reads itself, in order: the params its pose names, its sweep's steps,
-    then a mass check's density, or without one the mass model's params for the parts it
-    weighs, then its add and counts params."""
-    names = pose_refs(c)
-    if isinstance(c.get("sweep"), dict):
-        names.append(str(c["sweep"].get("steps")))
-    if c.get("kind") == "mass":
-        if c.get("density") is None:
-            names += mass_params(p, c.get("parts"))
-        names += [str(c.get("density"))] + [str(n) for n in c.get("add") or []]
-        names += [str(n) for n in (c.get("counts") or {}).values()]
+def _sweep_steps(c: dict) -> list[str]:
+    """The param naming how many poses check c's sweep evaluates, if it is swept."""
+    return [str(c["sweep"].get("steps"))] if isinstance(c.get("sweep"), dict) else []
+
+
+def params_read_by(p: Project, c: dict, steps: bool = True) -> list[str]:
+    """The params check c reads itself, in order: the params its pose names, its sweep's steps
+    (unless steps is False), then those its kind reads (CheckKind.reads)."""
+    kind = CHECK_KINDS.get(str(c.get("kind")))
+    names = pose_refs(c) + (_sweep_steps(c) if steps else [])
+    names += kind.reads(p, c) if kind is not None and kind.reads is not None else []
     return [n for n in dict.fromkeys(names) if n in p.params]
 
 
@@ -672,11 +687,19 @@ def check_params(p: Project) -> set[str]:
     return {name for c in p.checks for name in params_read_by(p, c)}
 
 
+def resolution_params(p: Project) -> set[str]:
+    """The params the checks read only as a sweep's steps; the build leaves out those the model
+    reads too, and sets the rest as Project.resolution."""
+    steps = {n for c in p.checks for n in _sweep_steps(c) if n in p.params}
+    return steps - {n for c in p.checks for n in params_read_by(p, c, steps=False)}
+
+
 def rests_on(p: Project, c: dict, also: tuple[str, ...] = ()) -> tuple[str, list[str]]:
     """What check c rests on: the weakest basis among the params it reads, and also those of
     the params the model gives it (a joint's range), or source when it reads none, with the
-    params it reads that rest on that basis."""
-    names = dict.fromkeys([*params_read_by(p, c), *also])
+    params it reads that rest on that basis. A sweep's resolution (Project.resolution) states
+    nothing about the object, so no check rests on it."""
+    names = dict.fromkeys(n for n in [*params_read_by(p, c), *also] if n not in p.resolution)
     bases = {name: p.rests_on.get(name, "proposed") for name in names}
     weakest = max(bases.values(), key=RESTS_ON.index, default="source")
     return weakest, [name for name, basis in bases.items() if basis == weakest]
@@ -714,12 +737,12 @@ def overlap_limit(p: Project, c: dict) -> float:
     return float(c.get("max_volume", default_overlap_limit(p.length_tol)))
 
 
-def _capped(p: Project, c: dict) -> list[tuple[str, float | None]]:
+def _tolerance_bases(p: Project, c: dict) -> list[tuple[str, float | None]]:
     """The values check c's tolerance is capped against, each with how it is named: each value it
-    compares, but for a range check the span between its ends, since an end may be 0."""
+    compares, or the span between its two for a span_capped kind."""
     kind = str(c.get("kind"))
     refs = check_refs(c)
-    if kind == "range" and len(refs) == 2:
+    if CHECK_KINDS[kind].span_capped and len(refs) == 2:
         low, high = (p.compared_value(ref, kind) for ref in refs)
         span = None if low is None or high is None else high - low
         return [(f"the range {refs[0]} to {refs[1]}", span)]
@@ -741,7 +764,7 @@ def check_tolerances(p: Project) -> None:
                 )
             continue
         where = "" if "tol" in c else f" (tolerance.{CHECK_KINDS[c['kind']].tolerance})"
-        for ref, expected in _capped(p, c):
+        for ref, expected in _tolerance_bases(p, c):
             if expected is not None and value > TOL_CAP * abs(expected) * (1 + 1e-9):
                 p.error(
                     "tolerance-cap",

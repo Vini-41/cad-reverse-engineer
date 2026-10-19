@@ -51,7 +51,7 @@ _Avoid_: assumed, guessed
 A question that, once answered, would replace a proposed or measured value, or the choice a derived parameter's computation makes, with a stated one.
 
 **Physics value**:
-A parameter only the simulation reads, such as a joint's damping, a spring's stiffness, a tendon's elasticity or a contact's friction; it has a basis like any other but shapes no geometry.
+A parameter only the simulation reads, such as a joint's damping or friction, a spring's stiffness or a tendon's elasticity; it has a basis like any other but shapes no geometry.
 _Avoid_: simulation parameter, tuning value
 
 ## Verification
@@ -106,7 +106,7 @@ The status of a project that would be VERIFIED except that some readings await h
 The status of a verification run that skipped the build or the coverage sweep, and so makes no claim.
 
 **Exact**:
-VERIFIED with no parameter resting on a proposed value, physics values aside: exactness is judged over geometry and kinematics.
+VERIFIED with no parameter resting on a proposed value, physics values and a sweep's resolution (how many poses it evaluates) aside: exactness is judged over what the sources state about geometry and kinematics.
 _Avoid_: verified (for this stronger state)
 
 ## Workflow

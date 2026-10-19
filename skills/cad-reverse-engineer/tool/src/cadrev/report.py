@@ -8,7 +8,7 @@ from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 
-from .geometry import Built, CheckResult
+from .geometry import PHYSICS, Built, CheckResult, pose_text, printed
 from .lint import MODEL_LITERALS
 from .project import (
     BASES,
@@ -70,9 +70,9 @@ def status(p: Project, partial: bool = False) -> str:
 
 
 def exact(p: Project, status: str) -> bool:
-    """Exact: VERIFIED with no parameter resting on a proposed value but physics values, which
-    exact leaves out (ADR-0008)."""
-    return status == VERIFIED and not p.proposed - p.physics
+    """Exact: VERIFIED with no parameter resting on a proposed value but physics values and a
+    sweep's resolution, which exact leaves out (ADR-0008)."""
+    return status == VERIFIED and not p.proposed - p.physics - p.resolution
 
 
 def measured_params(p: Project) -> list[dict]:
@@ -131,15 +131,36 @@ def interpretation(r: CheckResult) -> str:
     )
 
 
-def motion(built: Built) -> dict:
-    """How the model moves: each joint with what it joins and its drive, and each loop; no
-    joints means the model is static."""
+def _valued(p: Project, entry: dict, keys) -> dict:
+    """Each of keys entry names a param for, as {from: the param, value: its value}, rounded as
+    the MJCF prints it."""
     return {
-        "joints": {
-            name: {k: j[k] for k in ("parent", "child", "drive")}
-            for name, j in built.joints.items()
-        },
+        k: {"from": entry[k], "value": printed(p.values[entry[k]])[0]} for k in keys if k in entry
+    }
+
+
+def motion(p: Project, built: Built) -> dict:
+    """How the model moves, as the MJCF exports it: each joint with what it joins, its drive, its
+    range and its physics values, each loop, and each tendon with its path and physics values;
+    no joints means the model is static, unless a finding dropped them."""
+    joints = {}
+    for name, j in built.joints.items():
+        joints[name] = {k: j[k] for k in ("parent", "child", "drive")}
+        if "range" in j:
+            low, high = j["range"]
+            joints[name]["range"] = {
+                "from": [low, high],
+                "value": list(printed(p.values[low], p.values[high])),
+            }
+        joints[name] |= _valued(p, j, PHYSICS["joint"])
+    return {
+        "joints": joints,
         "loops": {name: list(pair) for name, pair in built.loops.items()},
+        "tendons": {
+            name: {"path": list(t["path"])} | _valued(p, t, PHYSICS["tendon"])
+            for name, t in built.tendons.items()
+        },
+        "dropped": built.dropped,
     }
 
 
@@ -157,9 +178,31 @@ def masses(built: Built) -> dict:
     }
 
 
+def _exact_line(p: Project, physics: int) -> str:
+    """The Exact line, naming the proposed values exact leaves out: physics values and sweep
+    resolutions."""
+    aside = [f"{physics} physics value{'s' * (physics != 1)}"] if physics else []
+    resolution = sorted(p.proposed & p.resolution)
+    if resolution:
+        aside.append(f"the sweep resolution{'s' * (len(resolution) != 1)} {', '.join(resolution)}")
+    if not aside:
+        return "**Exact**: no parameter rests on a proposed value."
+    many = len(aside) > 1 or physics > 1 or len(resolution) > 1
+    return (
+        "**Exact**: no geometry or kinematic parameter rests on a proposed value; "
+        f"{' and '.join(aside)} {'are' if many else 'is'} proposed."
+    )
+
+
 def _motion_line(moves: dict | None) -> list[str]:
     if moves is None:
         return []
+    if moves["dropped"]:
+        return [
+            "**Motion dropped**: model.py returns joints or loops the assembly cannot hold (see "
+            "the findings), so nothing is posed or exported as MJCF.",
+            "",
+        ]
     if not moves["joints"]:
         return [
             "**Static**: model.py returns no joints, so nothing is posed or exported as MJCF.",
@@ -178,8 +221,7 @@ def _posed(r: CheckResult) -> str:
     """A check's interpretation, after the pose it was evaluated at, if any."""
     posed = swept = ""
     if r.pose is not None:
-        at = ", ".join(f"{j} {s['value']:g} ({s['from']})" for j, s in r.pose.items())
-        posed = f"posed: {at}"
+        posed = f"posed: {pose_text(r.pose)}"
     if r.sweep is not None:
         (low, high), (low_from, high_from) = r.sweep["range"], r.sweep["from"]
         swept = (
@@ -243,14 +285,8 @@ def write(
         ),
         "",
     ]
-    if exact(p, status) and headline["physics_proposed"]:
-        md += [
-            "**Exact**: no geometry or kinematic parameter rests on a proposed value; "
-            f"{headline['physics_proposed']} physics values are proposed.",
-            "",
-        ]
-    elif exact(p, status):
-        md += ["**Exact**: no parameter rests on a proposed value.", ""]
+    if exact(p, status):
+        md += [_exact_line(p, headline["physics_proposed"]), ""]
     md += _motion_line(moves)
     md += [
         "VERIFIED means every number in the model is accounted for and the geometry matches "

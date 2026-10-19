@@ -8,7 +8,7 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import NamedTuple, Protocol
 
 from . import units
 from .project import (
@@ -19,6 +19,7 @@ from .project import (
     expr_names,
     mass_params,
     overlap_limit,
+    resolution_params,
     rests_on,
 )
 
@@ -75,10 +76,11 @@ class Built:
     loops: dict = field(default_factory=dict)
     # tendon name -> {path: [<instance>.<feature>, ...], stiffness: param, damping: param}
     tendons: dict = field(default_factory=dict)
-    # part name -> {friction: param}, the contact values of every instance of that part
-    contacts: dict = field(default_factory=dict)
     # part name -> its Mass, for each part params.yaml's parts weighs
     masses: dict = field(default_factory=dict)
+    # True when a [model-joint], [model-loop] or [model-return] finding dropped the joints, loops
+    # and tendons build() returned
+    dropped: bool = False
 
 
 @dataclass
@@ -96,18 +98,42 @@ class Mass:
 
 class Poser(Protocol):
     """What poses a check: the assembly placed at the joint values the check's pose names, and at
-    those at gives (joint -> (value in the project's angle unit, what it is from)), with the pose
-    as report.json shows it; None after a finding saying why it cannot be posed."""
+    those set_to gives (joint -> (value in the project's angle unit, what it is from)), with the
+    pose as report.json shows it; None after a finding saying why it cannot be posed. A joint
+    set_to names is where its check puts it, so its own range is not held against it."""
 
-    def __call__(self, c: dict, at: dict | None = None) -> tuple[Built, dict] | None: ...
+    def __call__(self, c: dict, set_to: dict | None = None) -> tuple[Built, dict] | None: ...
+
+
+def pose_text(pose: dict) -> str:
+    """A pose as findings and report.md name it: `input at 60 (turn_60)`."""
+    return ", ".join(f"{j} at {s['value']:g} ({s['from']})" for j, s in pose.items())
 
 
 DRIVES = ("actuated", "passive")
-# The physics values (ADR-0008) a joint, tendon or part's contact may name, each as a param.
-JOINT_PHYSICS = ("damping", "stiffness", "friction")
-TENDON_PHYSICS = ("stiffness", "damping")
-CONTACT_PHYSICS = ("friction",)
-JOINT_KEYS = ("type", "parent", "child", "axis", "range", "drive", *JOINT_PHYSICS)
+
+
+class Slot(NamedTuple):
+    """Where a physics value goes in the MJCF: the attribute it is written to, and the quantity
+    it is in, which the export converts from the project's units to the MJCF's."""
+
+    attr: str
+    quantity: str
+
+
+# The physics values (ADR-0008) a joint or tendon may name, each as a param.
+PHYSICS = {
+    "joint": {
+        "damping": Slot("damping", "torsional damping"),
+        "stiffness": Slot("stiffness", "torsional stiffness"),
+        "friction": Slot("frictionloss", "torque"),
+    },
+    "tendon": {
+        "stiffness": Slot("stiffness", "linear stiffness"),
+        "damping": Slot("damping", "linear damping"),
+    },
+}
+JOINT_KEYS = ("type", "parent", "child", "axis", "range", "drive", *PHYSICS["joint"])
 
 
 def _names(value, count: int) -> bool:
@@ -141,7 +167,7 @@ def _motion_breach(result) -> str | None:
             return f"joint {name}: range must be two param names, not {joint['range']!r}"
         if joint.get("drive") not in DRIVES:
             return f"joint {name}: drive must be actuated or passive, not {joint.get('drive')!r}"
-        problem = _physics_breach(f"joint {name}", joint, JOINT_PHYSICS, JOINT_KEYS)
+        problem = _physics_breach(f"joint {name}", joint, PHYSICS["joint"], JOINT_KEYS)
         if problem:
             return problem
     for name, pair in result.get("loops", {}).items():
@@ -153,19 +179,13 @@ def _motion_breach(result) -> str | None:
         path = tendon.get("path")
         if not (isinstance(path, (list, tuple)) and len(path) >= 2 and _names(path, len(path))):
             return f"tendon {name}: path must be two or more datums, not {path!r}"
-        problem = _physics_breach(f"tendon {name}", tendon, TENDON_PHYSICS, ("path",))
-        if problem:
-            return problem
-    for part, contact in result.get("contacts", {}).items():
-        if not isinstance(contact, dict):
-            return f"contact {part} must be a mapping, not {type(contact).__name__}"
-        problem = _physics_breach(f"contact {part}", contact, CONTACT_PHYSICS, ())
+        problem = _physics_breach(f"tendon {name}", tendon, PHYSICS["tendon"], ("path",))
         if problem:
             return problem
     return None
 
 
-def _physics_breach(what: str, entry: dict, physics: tuple, other: tuple) -> str | None:
+def _physics_breach(what: str, entry: dict, physics: dict, other: tuple) -> str | None:
     """Why entry has a key neither physics nor other names, or a physics value that is not a param
     name."""
     unknown = sorted(set(entry) - {*physics, *other})
@@ -177,18 +197,15 @@ def _physics_breach(what: str, entry: dict, physics: tuple, other: tuple) -> str
     return None
 
 
-def physics_slots(built: Built) -> dict[str, list[str]]:
-    """Each param a joint, tendon or contact names as a physics value, with where it applies."""
-    slots: dict[str, list[str]] = {}
-    for kind, entries, keys in (
-        ("joint", built.joints, JOINT_PHYSICS),
-        ("tendon", built.tendons, TENDON_PHYSICS),
-        ("contact", built.contacts, CONTACT_PHYSICS),
-    ):
+def physics_slots(built: Built) -> dict[str, list[tuple[str, Slot]]]:
+    """Each param a joint or tendon names as a physics value, with each place it applies and its
+    Slot there."""
+    slots: dict[str, list[tuple[str, Slot]]] = {}
+    for kind, entries in (("joint", built.joints), ("tendon", built.tendons)):
         for name, entry in entries.items():
-            for key in keys:
+            for key, slot in PHYSICS[kind].items():
                 if key in entry:
-                    slots.setdefault(entry[key], []).append(f"{kind} {name}'s {key}")
+                    slots.setdefault(entry[key], []).append((f"{kind} {name}'s {key}", slot))
     return slots
 
 
@@ -199,7 +216,7 @@ def _contract_breach(result) -> str | None:
 
     if not isinstance(result, dict):
         return f"must return a mapping of parts, datums and assembly, not {type(result).__name__}"
-    for key in ("parts", "datums", "assembly", "joints", "loops", "tendons", "contacts"):
+    for key in ("parts", "datums", "assembly", "joints", "loops", "tendons"):
         if not isinstance(result.get(key, {}), dict):
             return f"{key} must be a mapping of names, not {type(result[key]).__name__}"
     for name, part in result.get("parts", {}).items():
@@ -253,7 +270,6 @@ def build(p: Project) -> Built | None:
         joints=result.get("joints", {}),
         loops=result.get("loops", {}),
         tendons=result.get("tendons", {}),
-        contacts=result.get("contacts", {}),
     )
     for name in sorted(built.used):
         expect_param_quantity(p, name, ("length", "angle"), "in model.py")
@@ -261,9 +277,14 @@ def build(p: Project) -> Built | None:
     for name in sorted(ranges & p.values.keys()):
         expect_param_quantity(p, name, ("angle",), "in a joint's range")
     slots = physics_slots(built)
+    for name, where in sorted(slots.items()):
+        for place, slot in where:
+            expect_param_quantity(p, name, (slot.quantity,), f"as {place}")
     _check_physics(p, built, slots, ranges)
     exported = ranges | slots.keys() | set(mass_params(p))
-    unread = p.values.keys() - built.used - _used_by_derived(p) - check_params(p) - exported
+    derived = _used_by_derived(p)
+    p.resolution = resolution_params(p) - built.used - derived - exported
+    unread = p.values.keys() - built.used - derived - check_params(p) - exported
     for name in sorted(unread):
         p.warn("param-unused", f"param {name} is defined but the model never reads it")
     for name, part in built.parts.items():
@@ -295,12 +316,14 @@ def build(p: Project) -> Built | None:
     if problem:
         p.error("model-return", f"model.build {problem}")
     if flawed or problem:
-        built.joints, built.loops, built.tendons, built.contacts = {}, {}, {}, {}
+        built.joints, built.loops, built.tendons, built.dropped = {}, {}, {}, True
     built.masses = _mass_model(p, built)
     return built
 
 
-def _digits(*values: float) -> tuple[float, ...]:
+def printed(*values: float) -> tuple[float, ...]:
+    """values rounded to the 12 digits the MJCF prints, clear of a unit conversion's last bits, so
+    the export and report.json show the same numbers."""
     return tuple(float(f"{v:.12g}") for v in values)
 
 
@@ -338,11 +361,11 @@ def _mass_model(p: Project, built: Built) -> dict[str, Mass]:
         mass = value if by == "mass" else volume * value
         inertia = part.matrix_of_inertia
         masses[name] = Mass(
-            mass=_digits(mass)[0],
+            mass=printed(mass)[0],
             by=by,
             param=entry[by],
-            center=_digits(*part.center(CenterOf.MASS)),
-            inertia=_digits(
+            center=printed(*part.center(CenterOf.MASS)),
+            inertia=printed(
                 *(
                     mass / volume * inertia[i][j]
                     for i, j in ((0, 0), (1, 1), (2, 2), (0, 1), (0, 2), (1, 2))
@@ -352,21 +375,21 @@ def _mass_model(p: Project, built: Built) -> dict[str, Mass]:
     return masses
 
 
-def _check_physics(p: Project, built: Built, slots: dict[str, list[str]], ranges: set) -> None:
+def _check_physics(p: Project, built: Built, slots: dict, ranges: set) -> None:
     """[param-physics]: a param a physics slot names must be marked physics: true, and one so
     marked must not be read as geometry or kinematics, since exact leaves it out (ADR-0008)."""
     for name, where in sorted(slots.items()):
         if name in p.params and name not in p.physics:
             p.error(
                 "param-physics",
-                f"param {name}: {where[0]} is a physics value, so mark the param physics: true",
+                f"param {name}: {where[0][0]} is a physics value, so mark the param physics: true",
             )
     read = built.used | check_params(p) | ranges
     for name in sorted(p.physics & read):
         p.error(
             "param-physics",
             f"param {name}: is marked physics: true, but the model's geometry, a joint range or a "
-            "check reads it; a physics value only goes to a joint, tendon or contact",
+            "check reads it; a physics value only goes to a joint or tendon",
         )
 
 
@@ -378,6 +401,14 @@ def instance_datum(built: Built, name: str) -> tuple[str, str] | None:
         return None
     datum = f"{built.assembly[inst][0]}.{name[len(inst) + 1 :]}"
     return (inst, datum) if datum in built.datums else None
+
+
+def located(built: Built, name: str) -> tuple[str, tuple[float, float, float]]:
+    """The instance a joint's, loop's or tendon's <instance>.<feature> names, and the datum's point
+    in its part's frame, which is also its point in the instance's body frame."""
+    named = instance_datum(built, name)
+    assert named is not None  # build drops joints, loops and tendons naming no datum
+    return named[0], built.datums[named[1]]
 
 
 def _joint_flaw(p: Project, built: Built, joint: dict, moved_by: dict) -> str | None:
@@ -450,18 +481,15 @@ def _linkage_flaws(p: Project, built: Built) -> bool:
 
 
 def _physics_unfit(p: Project, built: Built) -> str | None:
-    """Why the tendons, contacts or physics slots build() returns do not fit its assembly: an
-    unknown datum, part or param."""
+    """Why the tendons or physics slots build() returns do not fit its assembly: an unknown datum
+    or param."""
     for name, tendon in built.tendons.items():
         for datum in tendon["path"]:
             if instance_datum(built, datum) is None:
                 return f"tendon {name}: {datum} names no <instance>.<feature> datum of the assembly"
-    for part in built.contacts:
-        if part not in built.parts:
-            return f"contact {part}: {part} is not a part"
     for param, where in physics_slots(built).items():
         if param not in p.values:
-            return f"{where[0]} names {param}, which params.yaml does not define"
+            return f"{where[0][0]} names {param}, which params.yaml does not define"
     return None
 
 
@@ -680,40 +708,18 @@ def _angle(p: Project, c: dict, points: list) -> float | None:
     return math.degrees(math.atan2(math.hypot(*cross), sum(x * y for x, y in zip(u, w))))
 
 
-def _turned(built: Built, view: Built, name: str, near: float) -> float:
-    """How far joint name has turned its child about its axis, in degrees, from the assembly as
-    built to view; of the readings a whole turn apart, the one nearest near."""
-    from build123d import Location, Vector
-
-    joint = built.joints[name]
-
-    def relative(b: Built):
-        return b.assembly[joint["parent"]][1].inverse() * b.assembly[joint["child"]][1]
-
-    turn = relative(built).inverse() * relative(view)
-    a, b = (Vector(*built.datums[_axis_datum(built, d)]) for d in joint["axis"])
-    n = (b - a).normalized()
-    u = n.cross(Vector(1, 0, 0))
-    if u.length < 0.5:
-        u = n.cross(Vector(0, 1, 0))
-    v = (turn * Location((u.X, u.Y, u.Z))).position - turn.position
-    angle = math.degrees(math.atan2(n.dot(u.cross(v)), u.dot(v)))
-    return angle + 360 * round((near - angle) / 360)
+def _joint_name(c: dict) -> str | None:
+    """The joint a check names: a range check's joint, or the one a sweep is across."""
+    return c.get("joint") or (c.get("sweep") or {}).get("joint")
 
 
-def _axis_datum(built: Built, name: str) -> str:
-    named = instance_datum(built, name)
-    assert named is not None  # build drops joints whose axis names no datum
-    return named[1]
-
-
-def _joint(p: Project, built: Built, c: dict, pose: Poser | None, ranged: bool) -> dict | None:
-    """The joint a range or sweep check names, with a range where ranged; None, after a
-    [check-config] finding, when the model has no such joint or it has no range."""
+def _joint(p: Project, built: Built, c: dict, poser: Poser | None) -> dict | None:
+    """The ranged joint a range check names or an interference check is swept over; None, after
+    a [check-config] finding, when the model has no such joint or it has no range."""
     cid, name = c.get("id", "?"), _joint_name(c)
     if name is None:
         raise KeyError("joint")
-    if pose is None:
+    if poser is None:
         p.error(
             "check-config", f"check {cid}: names joint {name}, but model.build returns no joints"
         )
@@ -722,25 +728,18 @@ def _joint(p: Project, built: Built, c: dict, pose: Poser | None, ranged: bool) 
     if joint is None:
         p.error("check-config", f"check {cid}: {name} is not a joint")
         return None
-    if ranged and "range" not in joint:
+    if "range" not in joint:
         p.error("check-config", f"check {cid}: joint {name} has no range")
         return None
     return {"name": name, **joint}
 
 
-def _joint_name(c: dict) -> str | None:
-    """The joint a range check names, or the one an interference check is swept over."""
-    if c.get("kind") == "range":
-        return c.get("joint")
-    return (c.get("sweep") or {}).get("joint")
-
-
-def _sweep(p: Project, built: Built, c: dict, pose: Poser | None) -> tuple[dict, list] | None:
+def _sweep(p: Project, built: Built, c: dict, poser: Poser | None) -> tuple[dict, list] | None:
     """The sweep of an interference check: its joint at steps evenly spaced values from one end
-    of its range to the other, each pose as (view, its pose); None, after a finding, when the
-    joint, its range or steps cannot be swept, or a loop stays open at one of its poses."""
-    joint = _joint(p, built, c, pose, ranged=True)
-    if joint is None or pose is None:
+    of its range to the other, each pose as (placed assembly, its pose); None, after a finding,
+    when the joint, its range or steps cannot be swept, or a pose cannot be reached."""
+    joint = _joint(p, built, c, poser)
+    if joint is None or poser is None:
         return None
     cid, name, steps_name = c.get("id", "?"), joint["name"], c["sweep"]["steps"]
     steps = p.values[steps_name]
@@ -755,19 +754,21 @@ def _sweep(p: Project, built: Built, c: dict, pose: Poser | None) -> tuple[dict,
     low, high = p.values[low_name], p.values[high_name]
     label, count, poses = f"{low_name}..{high_name}", int(steps), []
     for i in range(count):
-        at = pose(c, {name: (low + (high - low) * i / (count - 1), label)})
-        if at is None:
+        posed = poser(c, {name: (low + (high - low) * i / (count - 1), label)})
+        if posed is None:
             return None
-        poses.append(at)
+        poses.append(posed)
     shown = {"joint": name, "from": [low_name, high_name], "range": [low, high], "poses": count}
     return shown, poses
 
 
-def _range(p: Project, built: Built, c: dict, pose: Poser | None) -> list[CheckResult]:
-    """A range check: the model posed at each end of its joint's range, the joint's turn, or the
-    angle between datums, compared with the ledger value for that end."""
-    joint = _joint(p, built, c, pose, ranged=True)
-    if joint is None or pose is None:
+def _range(p: Project, built: Built, c: dict, poser: Poser | None) -> list[CheckResult]:
+    """A range check, one result per end. With between, the model posed at that end of its
+    joint's range, the angle there compared with the end's ledger value. Without, the model posed
+    at the ledger value itself, so a loop that cannot close or a joint pushed past its own range
+    there is a finding, and the range param for that end compared with it."""
+    joint = _joint(p, built, c, poser)
+    if joint is None or poser is None:
         return []
     cid, name, ends = c.get("id", "?"), joint["name"], c["ends"]
     if len(ends) != 2:
@@ -776,22 +777,29 @@ def _range(p: Project, built: Built, c: dict, pose: Poser | None) -> list[CheckR
     degrees = units.size("angle", p.units) / units.UNITS["deg"].si
     results = []
     for param, ref in zip(joint["range"], ends):
-        at = pose({**c, "pose": {**(c.get("pose") or {}), name: param}})
-        if at is None:
-            continue
-        view, posed = at
         if "between" in c:
-            points = _datums(p, view, c)
+            reached = poser({**c, "pose": {**(c.get("pose") or {}), name: param}})
+            if reached is None:
+                continue
+            placed, pose = reached
+            points = _datums(p, placed, c)
             measured = None if points is None else _angle(p, c, points)
             if measured is None:
                 return results
             a, vertex, b = c["between"]
             shown = f"° at {vertex} between {a} and {b}"
         else:
-            measured = _turned(built, view, name, posed[name]["value"] * degrees)
-            shown = f"° {name} turned"
+            stated = p.evidence_value(ref)
+            if stated is None or math.isnan(stated):
+                raise KeyError(ref)
+            reached = poser(c, {name: (stated, ref)})
+            if reached is None:
+                continue
+            pose = reached[1]
+            measured = p.values[param] * degrees
+            shown = f"° {name}'s range end ({param})"
         result = _compared(p, c, f"{cid}.{param}", ref, measured, shown)
-        result.pose = posed
+        result.pose = pose
         results.append(result)
     return results
 
@@ -810,31 +818,107 @@ def _volume(overlap) -> float:
     return overlap.volume
 
 
-def run_checks(p: Project, built: Built, pose: Poser | None = None) -> list[CheckResult]:
+def _mass(p: Project, built: Built, c: dict) -> CheckResult | None:
+    """A mass check: the parts it names weighed by its density, or without one by the mass model
+    as the MJCF export weighs them, times their counts, plus its add params; None after a
+    [check-config] finding naming a part the mass model leaves unweighed."""
+    names = c.get("parts") or list(built.parts)
+    counts = c.get("counts", {})
+    if "density" in c:
+        density = p.values[c["density"]]
+        each = {n: built.parts[n].volume * density for n in names}
+    else:
+        unweighed = [n for n in names if n not in built.masses]
+        if unweighed:
+            p.error(
+                "check-config",
+                f"check {c.get('id', '?')}: names no density, and the mass model in params.yaml "
+                f"parts weighs no {', '.join(unweighed)}",
+            )
+            return None
+        each = {n: built.masses[n].mass for n in names}
+    measured = sum(each[n] * _count(p, counts, n) for n in names)
+    measured += sum(p.values[n] for n in c.get("add", []))
+    return _compared(p, c, c.get("id", "?"), f"{c['evidence']}.{c['key']}", measured)
+
+
+def _interference(
+    p: Project, built: Built, c: dict, placed: Built, poser: Poser | None
+) -> CheckResult | None:
+    """An interference check: the worst overlap among its pairs, on the placed assembly or, with
+    sweep, across the poses of its joint's range, naming the pose it occurred at; None after a
+    finding saying why it cannot be swept."""
+    cid, limit = c.get("id", "?"), overlap_limit(p, c)
+    pairs = [tuple(pair) for pair in c.get("pairs", [])]
+    sweep, poses = None, [(placed, None)]
+    if "sweep" in c:
+        swept = _sweep(p, built, c, poser)
+        if swept is None:
+            return None
+        sweep, poses = swept
+    pair_set = "listed" if pairs else "all"
+    if not pairs:
+        names = sorted(placed.assembly)
+        pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1 :]]
+    worst, worst_pose, where, across = (0.0, ""), None, "", ""
+    for assembly, pose in poses:
+        shapes = dict(_instances(assembly))
+        for a, b in pairs:
+            volume = _volume(shapes[a].intersect(shapes[b]))
+            if volume > worst[0]:  # name a pair only where instances overlap
+                worst, worst_pose = (volume, f"{a} ∩ {b}"), pose
+    if sweep is not None:
+        across = f" across {sweep['poses']} poses of {sweep['joint']}"
+        if worst_pose is not None:
+            where = f" at {sweep['joint']} {worst_pose[sweep['joint']]['value']:g}"
+    return CheckResult(
+        cid,
+        "interference",
+        worst[0] <= limit,
+        f"overlap ≤ {limit:g}",
+        f"{worst[0]:.4g} {worst[1]}".strip()
+        + where
+        + f" over {len(pairs)} pair{'s' * (len(pairs) != 1)} ({pair_set})"
+        + across,
+        c.get("interpretation", ""),
+        pairs=len(pairs),
+        pose=worst_pose,
+        sweep=sweep,
+    )
+
+
+def _placed_for(
+    p: Project, built: Built, c: dict, poser: Poser | None
+) -> tuple[Built, dict | None] | None:
+    """The assembly check c is evaluated on, with its pose: as built, or placed at the pose it
+    names; None, after a finding, when it names a pose that cannot be placed."""
+    if not c.get("pose"):
+        return built, None
+    if poser is None:
+        if not built.dropped:  # else that finding says the joints were dropped
+            p.error(
+                "check-config",
+                f"check {c.get('id', '?')}: its pose names {', '.join(c['pose'])}, but "
+                "model.build returns no joints",
+            )
+        return None
+    return poser(c)
+
+
+def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[CheckResult]:
     """Evaluate every check: on the assembly as built, or, for a check that names a pose, on the
-    assembly pose(check) places at it, a check that cannot be posed adding a finding instead."""
+    assembly poser places at it, a check that cannot be posed adding a finding instead."""
     results = []
     for c in p.checks:
         cid, kind = c.get("id", "?"), c.get("kind")
         start = len(results)
-        view, posed = built, None
-        if c.get("pose"):
-            if pose is None:
-                if any(f.rule in ("model-joint", "model-loop") for f in p.findings):
-                    continue  # that finding says the joints were dropped, so nothing is posed
-                joints = ", ".join(c["pose"])
-                p.error(
-                    "check-config",
-                    f"check {cid}: its pose names {joints}, but model.build returns no joints",
-                )
-                continue
-            at = pose(c)
-            if at is None:
-                continue
-            view, posed = at
+        reached = _placed_for(p, built, c, poser)
+        if reached is None:
+            continue
+        placed, pose = reached
         try:
             if kind == "bbox":
-                shape = _envelope(p, view, c)
+                shape = _envelope(p, placed, c)
                 if shape is None:
                     continue
                 s = shape.bounding_box().size
@@ -843,7 +927,7 @@ def run_checks(p: Project, built: Built, pose: Poser | None = None) -> list[Chec
                     ref, measured = f"{c['evidence']}.{key}", size[AXES[axis]]
                     results.append(_compared(p, c, f"{cid}.{key}", ref, measured, f" along {axis}"))
             elif kind == "distance":
-                points = _datums(p, view, c)
+                points = _datums(p, placed, c)
                 if points is None:
                     continue
                 a, b = points
@@ -855,7 +939,7 @@ def run_checks(p: Project, built: Built, pose: Poser | None = None) -> list[Chec
                 ref, between = f"{c['evidence']}.{c['key']}", " - ".join(c["between"])
                 results.append(_compared(p, c, cid, ref, measured, f" {between}"))
             elif kind == "angle":
-                points = _datums(p, view, c)
+                points = _datums(p, placed, c)
                 measured = None if points is None else _angle(p, c, points)
                 if measured is None:
                     continue
@@ -863,66 +947,11 @@ def run_checks(p: Project, built: Built, pose: Poser | None = None) -> list[Chec
                 shown = f"° at {vertex} between {a} and {b}"
                 results.append(_compared(p, c, cid, ref, measured, shown))
             elif kind == "mass":
-                names = c.get("parts") or list(built.parts)
-                counts = c.get("counts", {})
-                if "density" in c:
-                    density = p.values[c["density"]]
-                    each = {n: built.parts[n].volume * density for n in names}
-                else:  # the mass model, as the MJCF export weighs each part
-                    unweighed = [n for n in names if n not in built.masses]
-                    if unweighed:
-                        p.error(
-                            "check-config",
-                            f"check {cid}: names no density, and the mass model in params.yaml "
-                            f"parts weighs no {', '.join(unweighed)}",
-                        )
-                        continue
-                    each = {n: built.masses[n].mass for n in names}
-                measured = sum(each[n] * _count(p, counts, n) for n in names)
-                measured += sum(p.values[n] for n in c.get("add", []))
-                results.append(_compared(p, c, cid, f"{c['evidence']}.{c['key']}", measured))
+                results += filter(None, [_mass(p, built, c)])
             elif kind == "range":
-                results += _range(p, built, c, pose)
+                results += _range(p, built, c, poser)
             elif kind == "interference":
-                limit = overlap_limit(p, c)
-                pairs = [tuple(pair) for pair in c.get("pairs", [])]
-                sweep, poses = None, [(view, None)]
-                if "sweep" in c:
-                    swept = _sweep(p, built, c, pose)
-                    if swept is None:
-                        continue
-                    sweep, poses = swept
-                pair_set = "listed" if pairs else "all"
-                if not pairs:
-                    names = sorted(view.assembly)
-                    pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1 :]]
-                worst, worst_pose, at, across = (0.0, ""), None, "", ""
-                for placed, shown in poses:
-                    shapes = dict(_instances(placed))
-                    for a, b in pairs:
-                        volume = _volume(shapes[a].intersect(shapes[b]))
-                        if volume > worst[0]:  # name a pair only where instances overlap
-                            worst, worst_pose = (volume, f"{a} ∩ {b}"), shown
-                if sweep is not None:
-                    across = f" across {sweep['poses']} poses of {sweep['joint']}"
-                    if worst_pose is not None:
-                        at = f" at {sweep['joint']} {worst_pose[sweep['joint']]['value']:g}"
-                results.append(
-                    CheckResult(
-                        cid,
-                        kind,
-                        worst[0] <= limit,
-                        f"overlap ≤ {limit:g}",
-                        f"{worst[0]:.4g} {worst[1]}".strip()
-                        + at
-                        + f" over {len(pairs)} pair{'s' * (len(pairs) != 1)} ({pair_set})"
-                        + across,
-                        c.get("interpretation", ""),
-                        pairs=len(pairs),
-                        pose=worst_pose,
-                        sweep=sweep,
-                    )
-                )
+                results += filter(None, [_interference(p, built, c, placed, poser)])
             else:
                 p.error("check-kind", f"check {cid}: unknown kind {kind!r}")
                 continue
@@ -933,7 +962,7 @@ def run_checks(p: Project, built: Built, pose: Poser | None = None) -> list[Chec
         basis, params = rests_on(p, c, tuple(joint.get("range", ())))
         for r in results[start:]:
             r.rests_on, r.rests_on_params = basis, params
-            r.pose = r.pose or posed
+            r.pose = r.pose or pose
     for r in results:
         if not r.ok:
             p.error("check-failed", f"{r.id}: expected {r.expected}, measured {r.measured}")

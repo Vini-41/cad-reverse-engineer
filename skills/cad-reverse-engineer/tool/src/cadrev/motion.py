@@ -16,13 +16,8 @@ from pathlib import Path
 from typing import Any
 
 from . import units
-from .geometry import Built, Poser, instance_datum
+from .geometry import PHYSICS, Built, Poser, located, pose_text, printed
 from .project import Project
-
-# The MJCF attribute each physics value a joint, tendon or contact names is written to.
-JOINT_ATTRS = {"damping": "damping", "stiffness": "stiffness", "friction": "frictionloss"}
-TENDON_ATTRS = {"stiffness": "stiffness", "damping": "damping"}
-CONTACT_ATTRS = {"friction": "friction"}
 
 # Steps from the as-built pose to the one a check names: each step starts from the last, so the
 # loops close on the branch the model is built on.
@@ -36,7 +31,7 @@ def _mujoco() -> Any:
 
 
 def _num(*values: float) -> str:
-    return " ".join(f"{v:.12g}" for v in values)
+    return " ".join(repr(v) for v in printed(*values))
 
 
 def _frame(location) -> dict[str, str]:
@@ -50,22 +45,30 @@ def _frame(location) -> dict[str, str]:
     }
 
 
-def _located(built: Built, name: str) -> tuple[str, tuple[float, float, float]]:
-    """The instance <instance>.<feature> names, and the datum's point in its part's frame, which
-    is also its point in the instance's body frame."""
-    named = instance_datum(built, name)
-    assert named is not None  # geometry.build drops joints and loops naming no datum
-    return named[0], built.datums[named[1]]
-
-
 def _point(built: Built, name: str) -> tuple[float, float, float]:
-    return _located(built, name)[1]
+    return located(built, name)[1]
 
 
-def _physics(p: Project, entry: dict, attrs: dict[str, str]) -> dict[str, str]:
-    """The MJCF attributes of the physics params entry names, at their values: in the MJCF's
-    units, the project's (mm, g and s by default)."""
-    return {attr: _num(p.values[entry[key]]) for key, attr in attrs.items() if key in entry}
+def mjcf_size(p: Project, quantity: str) -> float:
+    """The SI size of one MJCF unit of quantity: the project's length, mass and time, the force
+    they make (g·mm/s² by default, not N), and radians."""
+    base = {q: units.size(q, p.units) for q in ("length", "mass", "time")}
+    base |= {"force": base["mass"] * base["length"] / base["time"] ** 2, "angle": 1.0}
+    if quantity in base:
+        return base[quantity]
+    return math.prod(base[q] ** power for q, power in units.DERIVED[quantity].items())
+
+
+def _physics(p: Project, entry: dict, kind: str) -> dict[str, str]:
+    """The MJCF attributes of the physics params entry names, at their values converted from
+    the project's units to the MJCF's."""
+    return {
+        slot.attr: _num(
+            p.values[entry[key]] * units.size(slot.quantity, p.units) / mjcf_size(p, slot.quantity)
+        )
+        for key, slot in PHYSICS[kind].items()
+        if key in entry
+    }
 
 
 @dataclass
@@ -75,17 +78,19 @@ class Linkage:
     xml: str
     meshes: dict[str, bytes]
     model: Any = None
-    # pose key -> the posed assembly and its report entry, or None where a loop stays open
+    # pose key -> the posed assembly, or None where it cannot be reached
     posed: dict = field(default_factory=dict)
 
 
 def mjcf(p: Project, built: Built) -> Linkage | None:
     """The MJCF of a model with joints, loaded into MuJoCo, else [mjcf-load] naming why MuJoCo
-    rejects it; None for a model with no joints, which is static."""
+    rejects it; None for a model with no joints, which is static. A loop whose datums lie apart
+    in the assembly as built is [loop-open]."""
     if not built.joints:
         return None
     from build123d import export_stl
 
+    _as_built_loops(p, built)
     meshes = {}
     with tempfile.TemporaryDirectory() as tmp:
         for name, part in built.parts.items():
@@ -105,7 +110,7 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
     sites: dict[str, list[str]] = {}
     for path in [*built.loops.values(), *(t["path"] for t in built.tendons.values())]:
         for datum in path:
-            on = sites.setdefault(_located(built, datum)[0], [])
+            on = sites.setdefault(located(built, datum)[0], [])
             if datum not in on:  # a datum two loops or tendons name is one site
                 on.append(datum)
 
@@ -122,11 +127,8 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
             attrs["axis"] = _num(*(y - x for x, y in zip(a, b)))
             if "range" in joint:
                 attrs["range"] = _num(*(p.values[n] * radian for n in joint["range"]))
-            ET.SubElement(element, "joint", attrs | _physics(p, joint, JOINT_ATTRS))
-        geom = {"type": "mesh", "mesh": part, "contype": "0", "conaffinity": "0"}
-        ET.SubElement(
-            element, "geom", geom | _physics(p, built.contacts.get(part, {}), CONTACT_ATTRS)
-        )
+            ET.SubElement(element, "joint", attrs | _physics(p, joint, "joint"))
+        ET.SubElement(element, "geom", type="mesh", mesh=part, contype="0", conaffinity="0")
         weighed = built.masses.get(part)
         if weighed is not None:
             ET.SubElement(
@@ -153,9 +155,7 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
     if built.tendons:
         tendon = ET.SubElement(root, "tendon")
         for name, t in built.tendons.items():
-            spatial = ET.SubElement(
-                tendon, "spatial", {"name": name} | _physics(p, t, TENDON_ATTRS)
-            )
+            spatial = ET.SubElement(tendon, "spatial", {"name": name} | _physics(p, t, "tendon"))
             for datum in t["path"]:
                 ET.SubElement(spatial, "site", site=datum)
     actuated = [name for name, j in built.joints.items() if j["drive"] == "actuated"]
@@ -179,6 +179,25 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
     return linkage
 
 
+def _as_built_loops(p: Project, built: Built) -> None:
+    """[loop-open] for each loop whose two datums lie more than tolerance.length apart where the
+    assembly places their instances: the model is not built closed."""
+    from build123d import Location
+
+    for name, pair in built.loops.items():
+        a, b = (
+            (built.assembly[inst][1] * Location(point)).position
+            for inst, point in (located(built, d) for d in pair)
+        )
+        gap = (a - b).length
+        if gap > p.length_tol:
+            p.error(
+                "loop-open",
+                f"loop {name}: {pair[0]} and {pair[1]} stay {gap:.4g} apart as built; build the "
+                "assembly closed, with every loop's datums together",
+            )
+
+
 def write(p: Project, linkage: Linkage) -> list[Path]:
     """Write build/model.mjcf and build/meshes/<part>.stl."""
     out = p.root / "build"
@@ -196,12 +215,12 @@ def write(p: Project, linkage: Linkage) -> list[Path]:
 def poser(p: Project, built: Built, linkage: Linkage) -> Poser:
     """What poses a check of this model: see geometry.Poser."""
 
-    def pose(c: dict, at: dict | None = None) -> tuple[Built, dict] | None:
-        cid, joints = c.get("id", "?"), c.get("pose") or {}
+    def place(c: dict, set_to: dict | None = None) -> tuple[Built, dict] | None:
+        cid, named = c.get("id", "?"), c.get("pose") or {}
         if linkage.model is None:
             return None  # the [mjcf-load] finding says no posed check is evaluated
-        values, shown = {}, {}
-        for joint, ref in joints.items():
+        values, pose = {}, {}
+        for joint, ref in named.items():
             if joint not in built.joints:
                 p.error("check-config", f"check {cid}: pose names {joint}, which is not a joint")
                 return None
@@ -212,31 +231,31 @@ def poser(p: Project, built: Built, linkage: Linkage) -> Poser:
                     f"check {cid}: pose {joint}: {ref} names neither a param nor a ledger value",
                 )
                 return None
-            values[joint] = value * units.size("angle", p.units)
-            # In the project's angle unit, rounded clear of the unit conversion's last bits.
-            shown[joint] = {"from": ref, "value": float(f"{value:.12g}")}
-        for joint, (value, label) in (at or {}).items():
-            values[joint] = value * units.size("angle", p.units)
-            shown[joint] = {"from": label, "value": float(f"{value:.12g}")}
-        key = tuple(sorted(values.items()))
+            values[joint], pose[joint] = value, {"from": ref, "value": printed(value)[0]}
+        for joint, (value, label) in (set_to or {}).items():
+            values[joint], pose[joint] = value, {"from": label, "value": printed(value)[0]}
+        key = (tuple(sorted(values.items())), tuple(sorted(set_to or {})))
         if key not in linkage.posed:
-            linkage.posed[key] = _solve(p, built, linkage, values, shown)
+            linkage.posed[key] = _solve(p, built, linkage, values, pose, set(set_to or {}))
         placed = linkage.posed[key]
-        return None if placed is None else (placed, shown)
+        return None if placed is None else (placed, pose)
 
-    return pose
+    return place
 
 
-def _solve(p: Project, built: Built, linkage: Linkage, values: dict, shown: dict) -> Built | None:
-    """The assembly with the named joints at values (radians from as built), every other actuated
-    joint held as built and the passive ones solved to close the loops; None after [loop-open]
-    for each loop that stays open."""
+def _solve(
+    p: Project, built: Built, linkage: Linkage, values: dict, pose: dict, set_by_check: set
+) -> Built | None:
+    """The assembly with the named joints at values (in the project's angle unit, from as built),
+    every other actuated joint held as built and the passive ones solved to close the loops; None
+    after [loop-open] for each loop that stays open, or [joint-range] for each joint, but those
+    set_by_check, that ends outside its range."""
     mujoco = _mujoco()
     import numpy as np
 
     from build123d import Location, Plane
 
-    m, tol = linkage.model, p.length_tol
+    m, tol, radian = linkage.model, p.length_tol, units.size("angle", p.units)
     d = mujoco.MjData(m)
     jid = {name: mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, name) for name in built.joints}
     free = [
@@ -257,7 +276,7 @@ def _solve(p: Project, built: Built, linkage: Linkage, values: dict, shown: dict
 
     for step in range(1, STEPS + 1):
         for name, value in values.items():
-            d.qpos[m.jnt_qposadr[jid[name]]] = value * step / STEPS
+            d.qpos[m.jnt_qposadr[jid[name]]] = value * radian * step / STEPS
         for _ in range(ITERATIONS):
             mujoco.mj_kinematics(m, d)
             if not loops or not dofs:
@@ -273,8 +292,8 @@ def _solve(p: Project, built: Built, linkage: Linkage, values: dict, shown: dict
                 rows.append(jac1 - jac2)
             d.qpos[qpos] += np.linalg.lstsq(np.vstack(rows)[:, dofs], -r, rcond=None)[0]
     mujoco.mj_kinematics(m, d)
-    at = ", ".join(f"{j} at {s['value']:g} ({s['from']})" for j, s in shown.items())
-    open_ = False
+    at = pose_text(pose)
+    reached = True
     for name, (a, b) in loops.items():
         gap = float(np.linalg.norm(d.site_xpos[a] - d.site_xpos[b]))
         if gap > tol:
@@ -284,8 +303,24 @@ def _solve(p: Project, built: Built, linkage: Linkage, values: dict, shown: dict
                 f"loop {name}: {first} and {second} stay {gap:.4g} apart with {at}; the links "
                 "cannot close there, so checks at this pose are not evaluated",
             )
-            open_ = True
-    if open_:
+            reached = False
+    if not reached:
+        return None
+    slack = p.tolerance("angle") * units.UNITS["deg"].si / radian
+    for name, joint in built.joints.items():
+        if "range" not in joint or name in set_by_check:
+            continue
+        turned = float(d.qpos[m.jnt_qposadr[jid[name]]]) / radian
+        (low_name, high_name), (low, high) = joint["range"], (p.values[n] for n in joint["range"])
+        if not low - slack <= turned <= high + slack:
+            p.error(
+                "joint-range",
+                f"joint {name}: turns {turned:.4g} with {at}, outside its range {low_name} "
+                f"{low:g} to {high_name} {high:g}; the mechanism cannot reach this pose, so "
+                "checks at it are not evaluated",
+            )
+            reached = False
+    if not reached:
         return None
     assembly = {}
     for inst, (part, _) in built.assembly.items():

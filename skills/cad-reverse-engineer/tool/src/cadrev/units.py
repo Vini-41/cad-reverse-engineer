@@ -22,6 +22,12 @@ DERIVED = {
     "area": {"length": 2},
     "volume": {"length": 3},
     "angular speed": {"angle": 1, "time": -1},
+    # The physics values a joint or tendon applies: a spring, a damper; per radian, whatever the
+    # project's angle unit, as a simulator reads them.
+    "torsional stiffness": {"force": 1, "length": 1},
+    "torsional damping": {"force": 1, "length": 1, "time": 1},
+    "linear stiffness": {"force": 1, "length": -1},
+    "linear damping": {"force": 1, "time": 1, "length": -1},
     "fraction": {},
     "count": {},
     "charge": {},
@@ -41,8 +47,18 @@ class Unit(NamedTuple):
     spellings: tuple[str, ...]  # regexes over normalized text
 
 
-# Compound units come first, so `n·m` is read as a torque before `n` could be read as a force.
+# Compound units come first, so `n·m` is read as a torque before `n` could be read as a force,
+# and `n·m·s/rad` as a damping before `n·m` could be read as a torque.
+_PER_RAD = r"/\s?rad"
 UNITS: dict[str, Unit] = {
+    "N·m·s/rad": Unit("torsional damping", 1.0, (rf"n{_SEP}m{_SEP}s{_PER_RAD}",)),
+    "N·mm·s/rad": Unit("torsional damping", 1e-3, (rf"n{_SEP}mm{_SEP}s{_PER_RAD}",)),
+    "N·m/rad": Unit("torsional stiffness", 1.0, (rf"n{_SEP}m{_PER_RAD}",)),
+    "N·mm/rad": Unit("torsional stiffness", 1e-3, (rf"n{_SEP}mm{_PER_RAD}",)),
+    "N·s/m": Unit("linear damping", 1.0, (rf"n{_SEP}s/\s?m",)),
+    "N·s/mm": Unit("linear damping", 1e3, (rf"n{_SEP}s/\s?mm",)),
+    "N/m": Unit("linear stiffness", 1.0, (r"n/\s?m",)),
+    "N/mm": Unit("linear stiffness", 1e3, (r"n/\s?mm",)),
     "g/cm³": Unit("density", 1e3, (rf"g{_PER_CC}",)),
     "kg/m³": Unit("density", 1.0, (rf"kg/\s?m{_CUBED}", rf"kg{_SEP}m-3")),
     "g/mm³": Unit("density", 1e6, (rf"g/\s?mm{_CUBED}",)),
