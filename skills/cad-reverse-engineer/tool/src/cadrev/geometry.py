@@ -91,6 +91,10 @@ def _names(value, count: int) -> bool:
 
 def _motion_breach(result) -> str | None:
     """Why build()'s joints or loops break the model contract, or None if they keep it."""
+    for kind in ("joint", "loop"):
+        for name in result.get(f"{kind}s", {}):
+            if not isinstance(name, str):
+                return f"{kind} {name}: its name must be text, not {type(name).__name__}"
     for name, joint in result.get("joints", {}).items():
         if not isinstance(joint, dict):
             return f"joint {name} must be a mapping, not {type(joint).__name__}"
@@ -208,9 +212,7 @@ def build(p: Project) -> Built | None:
         if part not in built.parts:
             p.error("assembly-part", f"assembly instance {inst}: unknown part {part!r}")
             del built.assembly[inst]
-    problem = _linkage_breach(p, built)
-    if problem:
-        p.error("model-return", f"model.build {problem}")
+    if _linkage_flaws(p, built):
         built.joints, built.loops = {}, {}
     return built
 
@@ -225,36 +227,73 @@ def instance_datum(built: Built, name: str) -> tuple[str, str] | None:
     return (inst, datum) if datum in built.datums else None
 
 
-def _linkage_breach(p: Project, built: Built) -> str | None:
-    """Why the joints and loops build() returns do not describe a linkage of its assembly: an
-    unknown instance, datum or param, or an instance two joints move or that moves itself."""
-    parent_of: dict[str, str] = {}
+def _joint_flaw(p: Project, built: Built, joint: dict, moved_by: dict) -> str | None:
+    """What makes this joint no hinge of the assembly, or None."""
+    for key in ("parent", "child"):
+        if joint[key] not in built.assembly:
+            return f"{key} {joint[key]} is not an instance of the assembly"
+    if joint["child"] in moved_by:
+        return f"{joint['child']} is already the child of joint {moved_by[joint['child']]}"
+    points = []
+    for datum in joint["axis"]:
+        named = instance_datum(built, datum)
+        if named is None or named[0] != joint["child"]:
+            return f"axis {datum} is not a datum of its child {joint['child']}"
+        points.append(built.datums[named[1]])
+    if math.dist(*points) <= p.length_tol:
+        return f"axis {joint['axis'][0]} and {joint['axis'][1]} coincide, so they give the hinge no direction"
+    for param in joint.get("range", []):
+        if param not in p.values:
+            return f"range names {param}, which params.yaml does not define"
+    if "range" in joint:
+        (low, lo), (high, hi) = ((n, p.values[n]) for n in joint["range"])
+        if lo > hi:
+            return f"range {low} {lo:g} exceeds {high} {hi:g}"
+    return None
+
+
+def _linkage_flaws(p: Project, built: Built) -> bool:
+    """Add [model-joint] for each joint that is no hinge of the assembly (an unknown instance,
+    datum or param, an axis with no direction, a range low end above its high end, an instance two
+    joints move or that moves itself) and [model-loop] for each loop naming no datum of it; True if
+    there is any."""
+    flawed = False
+    moved_by: dict[str, str] = {}  # child instance -> the joint moving it
     for name, joint in built.joints.items():
-        for key in ("parent", "child"):
-            if joint[key] not in built.assembly:
-                return f"joint {name}: {key} {joint[key]} is not an instance of the assembly"
-        for datum in joint["axis"]:
-            named = instance_datum(built, datum)
-            if named is None or named[0] != joint["child"]:
-                return f"joint {name}: axis {datum} is not a datum of its child {joint['child']}"
-        for param in joint.get("range", []):
-            if param not in p.values:
-                return f"joint {name}: range names {param}, which params.yaml does not define"
-        if joint["child"] in parent_of:
-            return f"joint {name}: {joint['child']} is already the child of another joint"
-        parent_of[joint["child"]] = joint["parent"]
-    for start in parent_of:
-        seen, inst = {start}, start
-        while inst in parent_of:
-            inst = parent_of[inst]
-            if inst in seen:
-                return f"joints: {start} moves itself; close a ring of joints with a loop instead"
-            seen.add(inst)
+        flaw = _joint_flaw(p, built, joint, moved_by)
+        if flaw:
+            p.error("model-joint", f"joint {name}: {flaw}")
+            flawed = True
+        if (
+            joint["child"] not in moved_by
+            and {joint["parent"], joint["child"]} <= built.assembly.keys()
+        ):
+            moved_by[joint["child"]] = name
+    ringed: set[str] = set()
+    for start in moved_by:
+        ring, inst = [moved_by[start]], built.joints[moved_by[start]]["parent"]
+        while inst in moved_by and inst != start and len(ring) <= len(moved_by):
+            ring.append(moved_by[inst])
+            inst = built.joints[moved_by[inst]]["parent"]
+        if inst == start and not ringed & set(ring):
+            ringed |= set(ring)
+            names = f"{', '.join(ring[:-1])} and {ring[-1]}" if len(ring) > 1 else ring[0]
+            p.error(
+                "model-joint",
+                f"joint {ring[0]}: {start} moves itself through joint{'s' * (len(ring) > 1)} "
+                f"{names}; close a ring of joints with a loop instead",
+            )
+            flawed = True
     for name, pair in built.loops.items():
         for datum in pair:
             if instance_datum(built, datum) is None:
-                return f"loop {name}: {datum} names no <instance>.<feature> datum of the assembly"
-    return None
+                p.error(
+                    "model-loop",
+                    f"loop {name}: {datum} names no <instance>.<feature> datum of the assembly",
+                )
+                flawed = True
+                break
+    return flawed
 
 
 # How finely _off_solid samples each edge of a cylindrical face to find the face's axial extent.
@@ -496,6 +535,8 @@ def run_checks(p: Project, built: Built, pose: Poser | None = None) -> list[Chec
         view, posed = built, None
         if c.get("pose"):
             if pose is None:
+                if any(f.rule in ("model-joint", "model-loop") for f in p.findings):
+                    continue  # that finding says the joints were dropped, so nothing is posed
                 joints = ", ".join(c["pose"])
                 p.error(
                     "check-config",
