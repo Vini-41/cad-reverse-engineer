@@ -8,6 +8,7 @@ import re
 import shutil
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 from . import project as proj
 from . import sources
@@ -39,30 +40,81 @@ def _quoted(text: str) -> str:
     return json.dumps(text, ensure_ascii=False)  # a JSON string is a YAML double-quoted scalar
 
 
+class _SourcesBlock(NamedTuple):
+    start: int  # the first line after `sources:`
+    end: int  # just past the last line of its last entry
+    indent: int  # the column of each entry's "- "
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def _sources_block(lines: list[str]) -> _SourcesBlock | None:
+    """Where the block-style `sources:` list sits in project.yaml's lines, or None if absent.
+
+    However project.yaml was last written: entries indented or not (PyYAML writes them flush),
+    and other keys after `sources:` (PyYAML sorts them)."""
+    head = next(
+        (i for i, line in enumerate(lines) if re.match(r"^sources:\s*(\[\])?\s*$", line)), None
+    )
+    if head is None:
+        return None
+    end = start = head + 1
+    for i in range(start, len(lines)):
+        line = lines[i]
+        if line[:1] not in ("", " ", "-", "#"):
+            break  # the next top-level key
+        if line.strip() and not line.lstrip().startswith("#"):
+            end = i + 1
+    items = [line for line in lines[start:end] if line.lstrip().startswith("- ")]
+    return _SourcesBlock(start, end, _indent(items[0]) if items else 2)
+
+
 def _rewrite_source_entry(text: str, source_id: str, fields: dict[str, str]) -> str | None:
     """text with the block-style entry for source_id given these fields, or None if not found."""
     lines = text.splitlines()
-    for i, line in enumerate(lines):
-        m = re.match(rf"^(\s*)- id: ['\"]?{re.escape(source_id)}['\"]?\s*$", line)
-        if not m:
-            continue
-        indent = len(m.group(1)) + 2
-        end = i + 1
-        while end < len(lines) and (
-            not lines[end].strip()
-            or len(lines[end]) - len(lines[end].lstrip()) >= indent
-            and not lines[end].lstrip().startswith("- ")
+    block = _sources_block(lines)
+    if block is None:
+        return None
+    key_col = block.indent + 2  # where an entry's keys start, the first one just after its "- "
+
+    def key_line(entry: list[str], key: str) -> int | None:
+        return next(
+            (
+                j
+                for j, line in enumerate(entry)
+                if (j == 0 or line[:key_col].isspace())
+                and re.match(rf"{key}:(\s|$)", line[key_col:])
+            ),
+            None,
+        )
+
+    heads = [
+        i for i in range(block.start, block.end) if re.match(rf"^ {{{block.indent}}}- ", lines[i])
+    ]
+    for head, next_head in zip(heads, heads[1:] + [block.end]):
+        entry = lines[head:next_head]
+        id_line = key_line(entry, "id")
+        if id_line is None or not re.fullmatch(
+            rf"id: ['\"]?{re.escape(source_id)}['\"]?\s*", entry[id_line][key_col:]
         ):
-            end += 1
-        block = lines[i + 1 : end]
+            continue
         for key, value in fields.items():
-            new = f"{' ' * indent}{key}: {value}"
-            at = [j for j, b in enumerate(block) if re.match(rf"^\s*{key}:", b)]
-            if at:
-                block[at[0]] = new
-            else:
-                block.insert(0, new)
-        return "\n".join(lines[: i + 1] + block + lines[end:]) + "\n"
+            first = key_line(entry, key)
+            if first is None:
+                entry.append(f"{' ' * key_col}{key}: {value}")
+                continue
+            # A value over several lines (wrapped, quoted with a newline, or a block scalar)
+            # continues on more deeply indented lines, blank lines among them.
+            last = first
+            for j in range(first + 1, len(entry)):
+                if entry[j].strip() and _indent(entry[j]) <= key_col:
+                    break
+                if entry[j].strip():
+                    last = j
+            entry[first : last + 1] = [f"{entry[first][:key_col]}{key}: {value}"]
+        return "\n".join(lines[:head] + entry + lines[next_head:]) + "\n"
     return None
 
 
@@ -106,14 +158,14 @@ def cmd_source(args) -> int:
     if src.resolve() != target.resolve():
         shutil.copy2(src, target)
     path, digest = f"sources/{target.name}", sources.sha256(target)
+    fields = {"kind": args.kind, "path": path, "sha256": digest}
+    fields |= {"citation": _quoted(args.citation)}
+    fields |= {"url": args.url} if args.url else {}
+    fields |= {"license": args.license} if args.license else {}
     text = meta.read_text()
     if args.id in registered:
         # Restoring a source into a clone, or a fresh download: keep the entry, refresh the file
         # and whatever the command states about it.
-        fields = {"path": path, "sha256": digest, "kind": args.kind}
-        fields |= {"citation": _quoted(args.citation)}
-        fields |= {"url": args.url} if args.url else {}
-        fields |= {"license": args.license} if args.license else {}
         refreshed = _rewrite_source_entry(text, args.id, fields)
         if refreshed is None:
             print(
@@ -127,17 +179,15 @@ def cmd_source(args) -> int:
         _unignore_if_redistributable(root, path, license_id)
         print(f"refreshed {args.id} -> {target}")
         return 0
-    entry = [
-        f"  - id: {args.id}",
-        f"    kind: {args.kind}",
-        f"    path: {path}",
-        f"    sha256: {digest}",
-        f"    citation: {_quoted(args.citation)}",
-    ]
-    entry += [f"    url: {args.url}"] if args.url else []
-    entry += [f"    license: {args.license}"] if args.license else []
-    text = re.sub(r"^sources: \[\]\s*$", "sources:", text, flags=re.M)
-    meta.write_text(text.rstrip("\n") + "\n" + "\n".join(entry) + "\n")
+    lines = re.sub(r"^sources:\s*\[\]\s*$", "sources:", text, flags=re.M).splitlines()
+    block = _sources_block(lines)
+    if block is None:
+        print(f"project.yaml has no block-style sources list for {args.id}", file=sys.stderr)
+        return 1
+    pad = " " * (block.indent + 2)
+    entry = [f"{' ' * block.indent}- id: {args.id}"]
+    entry += [f"{pad}{key}: {value}" for key, value in fields.items()]
+    meta.write_text("\n".join(lines[: block.end] + entry + lines[block.end :]) + "\n")
     _unignore_if_redistributable(root, path, args.license)
     print(f"registered {args.id} -> {target}")
     return 0

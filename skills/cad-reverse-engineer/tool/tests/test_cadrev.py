@@ -1312,6 +1312,92 @@ def test_reregistering_one_source_leaves_the_others_untouched(proj_dir, tmp_path
     assert after[0] == {**before[0], "sha256": sha256(proj_dir / "sources" / "paper.txt")}
 
 
+def _redump(root: Path, sort_keys: bool) -> None:
+    """Write project.yaml back as PyYAML would: lists unindented, keys sorted if asked."""
+    meta = root / "project.yaml"
+    meta.write_text(yaml.safe_dump(yaml.safe_load(meta.read_text()), sort_keys=sort_keys))
+
+
+@pytest.mark.parametrize("sort_keys", [False, True], ids=["in-order", "sorted"])
+def test_source_registered_after_a_pyyaml_redump_joins_the_sources_list(
+    proj_dir, tmp_path, sort_keys
+):
+    _redump(proj_dir, sort_keys)
+    before = yaml.safe_load((proj_dir / "project.yaml").read_text())
+    notes = tmp_path / "notes.txt"
+    notes.write_text("No dimensions.\n")
+    code, _ = run(
+        "source", str(proj_dir), str(notes), "--id", "notes", "--kind", "other", "--citation", "N"
+    )
+    after = yaml.safe_load((proj_dir / "project.yaml").read_text())
+    assert code == 0
+    assert [s["id"] for s in after.pop("sources")] == ["paper", "notes"]
+    assert after == {k: v for k, v in before.items() if k != "sources"}
+    assert verify(proj_dir)[0] == 0
+
+
+def _reregister_after_redump(root: Path, sort_keys: bool, citation: str) -> None:
+    _redump(root, sort_keys)
+    paper = root / "sources" / "paper.txt"
+    paper.write_text(PAPER + "Received 1 March.\n")
+    code, _ = run(
+        "source", str(root), str(paper), "--id", "paper", "--kind", "paper", "--citation", citation
+    )
+    (entry,) = yaml.safe_load((root / "project.yaml").read_text())["sources"]
+    assert code == 0 and (entry["sha256"], entry["citation"]) == (sha256(paper), citation)
+
+
+def test_guard_source_reregistered_after_an_in_order_pyyaml_redump_is_refreshed(proj_dir):
+    _reregister_after_redump(proj_dir, sort_keys=False, citation="D")
+
+
+def test_source_reregistered_after_a_sorted_pyyaml_redump_is_refreshed(proj_dir):
+    # Sorted keys put citation before id, so the entry no longer opens with "- id:".
+    _reregister_after_redump(proj_dir, sort_keys=True, citation="D")
+
+
+def _block_citation(root: Path) -> None:
+    meta = root / "project.yaml"
+    text = re.sub(
+        r"citation: .*", "citation: |\n      Doe 2026\n\n      Adv. Sci.", meta.read_text()
+    )
+    meta.write_text(text)
+
+
+# A citation written over several lines, and how it got that way. Re-registering replaces it whole.
+MULTILINE_CITATIONS = {
+    "PyYAML wrapped a long one": lambda r: edit(
+        r, "project.yaml", lambda d: d["sources"][0].update(citation="word " * 30)
+    ),
+    "PyYAML quoted one holding a newline": lambda r: edit(
+        r, "project.yaml", lambda d: d["sources"][0].update(citation="Doe 2026\nAdv. Sci.")
+    ),
+    "block scalar with a blank line": _block_citation,
+}
+
+
+@pytest.mark.parametrize("written", sorted(MULTILINE_CITATIONS))
+def test_reregistering_replaces_a_citation_written_over_several_lines(proj_dir, written):
+    MULTILINE_CITATIONS[written](proj_dir)
+    _reregister_after_redump(proj_dir, sort_keys=False, citation="D")
+
+
+def test_source_into_a_flow_style_sources_list_is_refused_leaving_it_intact(
+    proj_dir, tmp_path, capsys
+):
+    meta = proj_dir / "project.yaml"
+    data = yaml.safe_load(meta.read_text())
+    meta.write_text(yaml.safe_dump(data, default_flow_style=True))
+    before = meta.read_text()
+    notes = tmp_path / "notes.txt"
+    notes.write_text("No dimensions.\n")
+    code, _ = run(
+        "source", str(proj_dir), str(notes), "--id", "notes", "--kind", "other", "--citation", "N"
+    )
+    assert code == 1 and meta.read_text() == before
+    assert "sources" in capsys.readouterr().err
+
+
 def _overlay(root: Path, **changes) -> None:
     from PIL import Image
 
