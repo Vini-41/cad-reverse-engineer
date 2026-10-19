@@ -50,6 +50,10 @@ _Avoid_: assumed, guessed
 **Gap**:
 A question that, once answered, would replace a proposed or measured value, or the choice a derived parameter's computation makes, with a stated one.
 
+**Physics value**:
+A parameter only the simulation reads, such as a joint's damping, a spring's stiffness, a tendon's elasticity or a contact's friction; it has a basis like any other but shapes no geometry.
+_Avoid_: simulation parameter, tuning value
+
 ## Verification
 
 **Instance**:
@@ -59,6 +63,18 @@ _Avoid_: copy, occurrence
 **Datum**:
 A named point on a part's solid that distance and angle checks measure: on the axis of a cylindrical face (a pin, a hole, a pivot) or on a face.
 _Avoid_: reference point, marker
+
+**Joint**:
+A hinge between two instances about an axis through two datums of the moving one, either actuated (an input) or passive (moved by the rest of the mechanism).
+_Avoid_: pivot (for the joint itself; a pivot is its datum), DOF
+
+**Loop**:
+A pair of datums on two instances that must coincide, closing a ring of joints such as a four-bar.
+_Avoid_: closure constraint, cut joint
+
+**Pose**:
+A configuration of the assembly given by joint values measured from the assembly as built; a check evaluated at one is posed.
+_Avoid_: state, configuration (for the values themselves)
 
 **Check**:
 One comparison between the built geometry and a ledger value: an envelope, a distance or an angle between datums, a mass or an interference.
@@ -90,7 +106,7 @@ The status of a project that would be VERIFIED except that some readings await h
 The status of a verification run that skipped the build or the coverage sweep, and so makes no claim.
 
 **Exact**:
-VERIFIED with no parameter resting on a proposed value.
+VERIFIED with no parameter resting on a proposed value, physics values aside: exactness is judged over geometry and kinematics.
 _Avoid_: verified (for this stronger state)
 
 ## Workflow

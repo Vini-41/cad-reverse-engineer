@@ -111,6 +111,12 @@ class Project:
         return {name for name, basis in self.rests_on.items() if basis == "proposed"}
 
     @property
+    def physics(self) -> set[str]:
+        """Parameters marked physics: true: values the MJCF export applies and no geometry reads,
+        left out of exact (ADR-0008)."""
+        return {name for name, spec in self.params.items() if spec.get("physics") is True}
+
+    @property
     def sources(self) -> dict[str, dict]:
         return {s["id"]: s for s in self.meta.get("sources", [])}
 
@@ -759,8 +765,8 @@ def check_accounting(p: Project) -> None:
                 )
     read_by_a_check = check_params(p)
     for name, spec in p.params.items():
-        if name in read_by_a_check:
-            continue  # the check that reads it compares its result with the ledger
+        if name in read_by_a_check or name in p.physics:
+            continue  # its check compares the result with the ledger; no check sees physics
         if spec.get("basis") == "source" and spec.get("from") not in checked:
             p.warn(
                 "unchecked-source",
