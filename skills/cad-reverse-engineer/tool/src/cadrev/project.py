@@ -511,7 +511,8 @@ def check_coverage(p: Project) -> list[tuple[str, int, str]]:
                 if start != -1 and stop != -1:
                     spans.append((start, stop + len(sources.normalize(k.get("to", "")))))
                     matched.add(i)
-            for start, end, snippet in sources.stated_quantities(text):
+            cased = sources.normalize(raw, hyphen="\0", cased=True).replace("\0", "")
+            for start, end, snippet in sources.stated_quantities(text, cased):
                 if not any(a <= start and end <= b for a, b in spans):
                     context = text[max(0, start - 60) : end + 40]
                     uncovered.append((sid, n, f"{snippet}  …{context}…"))
@@ -557,6 +558,7 @@ def expr_names(expr: str) -> set[str]:
 def resolve_params(p: Project) -> None:
     """Fill p.values, enforcing each basis's obligations."""
     pending = dict(p.params)
+    resolution = resolution_params(p)
     for name, spec in p.params.items():
         basis = spec.get("basis")
         if basis not in BASES:
@@ -589,7 +591,8 @@ def resolve_params(p: Project) -> None:
         elif basis == "proposed":
             if "value" not in spec or not spec.get("rationale"):
                 p.error("param-proposed", f"param {name}: proposed needs value and rationale")
-            if not spec.get("gap"):
+            # A sweep's resolution asks the sources nothing, so it has no gap to name.
+            if not spec.get("gap") and name not in resolution:
                 p.warn("param-gap", f"param {name}: proposed value names no gap to close it")
             p.values[name] = float(spec.get("value", math.nan))
             p.rests_on[name] = "proposed"
@@ -789,6 +792,24 @@ def check_tolerances(p: Project) -> None:
                 break
 
 
+def _feeding(p: Project, names: set[str]) -> set[str]:
+    """names, and every param their derived exprs read, however deep: a check reading a derived
+    count reads the stated counts it multiplies."""
+    found, pending = set(), list(names)
+    while pending:
+        name = pending.pop()
+        if name in found:
+            continue
+        found.add(name)
+        spec = p.params.get(name) or {}
+        if spec.get("basis") == "derived":
+            try:
+                pending += expr_names(str(spec.get("expr", ""))) & p.params.keys()
+            except (SyntaxError, ValueError):
+                pass  # [param-derived] says why
+    return found
+
+
 def check_accounting(p: Project) -> None:
     """Every evidence value is used by a parameter, checked against geometry, or set aside."""
     used = {spec.get("from") for spec in p.params.values()}
@@ -813,7 +834,7 @@ def check_accounting(p: Project) -> None:
                     f"{eid}.{key} is neither used by a param nor checked "
                     "(or mark the item scope: not-modeled with a reason)",
                 )
-    read_by_a_check = check_params(p)
+    read_by_a_check = _feeding(p, check_params(p))
     for name, spec in p.params.items():
         if name in read_by_a_check or name in p.physics:
             continue  # its check compares the result with the ledger; no check sees physics

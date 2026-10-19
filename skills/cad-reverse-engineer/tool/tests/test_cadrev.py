@@ -2648,6 +2648,40 @@ def test_coverage_lists_nothing_where_no_quantity_is_stated(proj_dir, tmp_path, 
     )
 
 
+# Look-alikes of a quantity: a number before a unit's spelling that names something else.
+NOT_SWEPT = {
+    "four-bar": "The shin is a four-bar linkage.",
+    "4-bar": "The shin is a 4-bar linkage.",
+    "8G": "An onboard computer (8G; NVIDIA) runs it.",
+    "2S": "A lithium-ion battery (2S, HUAYPG) powers it.",
+    "4S": "A lithium polymer battery (4S, ACE) powers it.",
+    "T=0s": "(A) T=0s, BLCM in the initial state.",
+    "t = 2 s": "At t = 2 s the toes close.",
+}
+
+
+@pytest.mark.parametrize("form", sorted(NOT_SWEPT))
+def test_coverage_lists_no_look_alike_of_a_quantity(proj_dir, tmp_path, capsys, form):
+    assert swept(proj_dir, tmp_path, capsys, NOT_SWEPT[form]) == []
+
+
+# Each look-alike's near miss: the same unit stating a quantity.
+STILL_SWEPT = {
+    "rated at 2 bar": "2 bar",
+    "rated at 2bar": "2bar",
+    "weighs 8g": "8g",
+    "weighs 8 g": "8 g",
+    "closes in 2s": "2s",
+    "a Δt = 2 s step": "2 s",
+    "a wall of t = 2 mm": "2 mm",
+}
+
+
+@pytest.mark.parametrize("form", sorted(STILL_SWEPT))
+def test_guard_coverage_lists_the_near_miss_of_each_look_alike(proj_dir, tmp_path, capsys, form):
+    assert swept(proj_dir, tmp_path, capsys, f"The part is {form} here.") == [STILL_SWEPT[form]]
+
+
 def test_guard_coverage_lists_no_number_word_without_a_unit(proj_dir, tmp_path, capsys):
     assert swept(proj_dir, tmp_path, capsys, "Eight tension springs hold one of the links.") == []
 
@@ -3583,6 +3617,40 @@ def test_mass_check_counts_a_part_by_a_count_its_source_states_in_words(proj_dir
     )
     assert report["params"]["n_links"]["rests_on"] == "source"
     assert _mass_result(report)["rests_on"] == "source"
+
+
+def _counted_through(root: Path, tmp_path: Path, counted: bool) -> dict:
+    """The link counted, where counted, by n_links, derived from two stated counts; report.json."""
+    return _weighed(
+        root,
+        tmp_path,
+        "The 2 legs carry 3 links each, together 10.8 g, printed in resin of 1.2 g/cm3.",
+        {"legs": 2, "n": 3, "m": 10.8, "rho": 1.2},
+        check={"counts": {"link": "n_links"}} if counted else {},
+        rho={"basis": "source", "from": "N1.rho"},
+        legs={"basis": "source", "from": "N1.legs"},
+        n_each={"basis": "source", "from": "N1.n"},
+        n_links={"basis": "derived", "expr": "legs * n_each"},
+    )
+
+
+def _unchecked_in(report: dict) -> list[str]:
+    return [
+        f["message"].split(":")[0] for f in report["findings"] if f["rule"] == "unchecked-source"
+    ]
+
+
+def test_stated_counts_a_mass_check_reads_through_a_derived_param_are_covered(proj_dir, tmp_path):
+    report = _counted_through(proj_dir, tmp_path, counted=True)
+    assert _mass_result(report)["ok"]
+    assert {"param legs", "param n_each"}.isdisjoint(_unchecked_in(report))
+
+
+def test_guard_stated_counts_feeding_a_param_no_check_reads_are_unchecked_source(
+    proj_dir, tmp_path
+):
+    report = _counted_through(proj_dir, tmp_path, counted=False)
+    assert {"param legs", "param n_each"} <= set(_unchecked_in(report))
 
 
 def test_mass_check_names_each_param_it_reads_resting_on_less_than_source(proj_dir, tmp_path):
@@ -4829,6 +4897,72 @@ def test_range_check_on_a_static_model_is_check_config(proj_dir):
     )
 
 
+TURN = "The crank turns through 385° from upright."
+
+
+def one_ended(root: Path, tmp_path: Path, checked: bool = True) -> None:
+    """The four-bar posed at 30°, its input ranged by one param, input_max, from the source's
+    one-ended turn N1.turn (385°, past a full turn); checked, a range check reach confirms it."""
+    four_bar(root, tmp_path, (30,))
+    write(root, "model.py", swap(FOUR_BAR, '["input_min", "input_max"]', '["input_max"]'))
+    edit(root, "params.yaml", lambda d: d["params"].pop("input_min"))
+    add_quote(root, tmp_path, TURN + "\n", TURN.rstrip("."), {"turn": 385})
+    spec = {"from": "N1.turn", "value": None, "rationale": None, "gap": None}
+    _param("input_max", basis="source", **spec)(root, tmp_path)
+    if checked:
+        reach = {"id": "reach", "kind": "range", "joint": "input", "ends": ["N1.turn"]}
+        _append("checks.yaml", "checks", reach)(root, tmp_path)
+
+
+def test_one_ended_range_check_passes_at_its_one_stated_end_past_a_full_turn(proj_dir, tmp_path):
+    one_ended(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert "param input_max" not in _unchecked(proj_dir)
+    reach = _by_id(report)["reach.input_max"]
+    assert reach["ok"] and reach["expected"].endswith("(N1.turn)")
+    assert reach["pose"] == {"input": {"from": "N1.turn", "value": 385}}
+    assert reach["measured"] == "385° input's range end (input_max)"
+    # The other end is the assembly as built, a turn of 0 that no param needs to state.
+    assert report["motion"]["joints"]["input"]["range"] == {
+        "from": ["as built", "input_max"],
+        "value": [0, 385],
+    }
+
+
+def test_one_ended_range_param_short_of_its_stated_end_is_check_failed(proj_dir, tmp_path):
+    one_ended(proj_dir, tmp_path)
+    _param("input_max", basis="proposed", value=380, rationale="x", gap="G1", **{"from": None})(
+        proj_dir, tmp_path
+    )
+    assert findings(proj_dir, "check-failed") == [
+        "reach.input_max: expected 385 (N1.turn), measured 380° input's range end (input_max)"
+    ]
+
+
+def test_one_ended_range_check_naming_two_ends_is_check_config(proj_dir, tmp_path):
+    one_ended(proj_dir, tmp_path)
+    _check("reach", ends=["N1.turn", "N1.turn"])(proj_dir, tmp_path)
+    assert findings(proj_dir, "check-config") == ["check reach: ends names 2 values, not [end]"]
+
+
+def test_one_ended_range_exports_from_as_built_to_its_end_in_the_mjcf(proj_dir, tmp_path):
+    one_ended(proj_dir, tmp_path)
+    _param("input_max", basis="proposed", value=-90, rationale="x", gap="G1", **{"from": None})(
+        proj_dir, tmp_path
+    )
+    edit(proj_dir, "checks.yaml", lambda d: d.update(checks=d["checks"][:-1]))
+    mujoco = importlib.import_module("mujoco")
+    code, report = verify(proj_dir)
+    assert report["motion"]["joints"]["input"]["range"] == {
+        "from": ["input_max", "as built"],
+        "value": [-90, 0],
+    }
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    joint = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "input")
+    assert list(m.jnt_range[joint]) == pytest.approx([-math.pi / 2, 0])
+
+
 def post_beside(
     root: Path, tmp_path: Path, post_x: float, steps: int = 5, ranged_by_source: bool = False
 ) -> None:
@@ -4921,6 +5055,20 @@ def test_proposed_sweep_steps_leave_a_project_exact_and_are_named_beside_it(proj
         "**Exact**: no geometry or kinematic parameter rests on a proposed value; "
         "the sweep resolution sweep_steps is proposed." in md
     )
+
+
+def test_proposed_sweep_steps_naming_no_gap_raise_no_param_gap(proj_dir, tmp_path):
+    post_beside(proj_dir, tmp_path, -30)
+    _param("sweep_steps", gap=None)(proj_dir, tmp_path)
+    assert findings(proj_dir, "param-gap") == []
+
+
+def test_guard_proposed_param_the_model_reads_beside_a_sweep_still_names_a_gap(proj_dir, tmp_path):
+    post_beside(proj_dir, tmp_path, -30)
+    _param("post_x", gap=None)(proj_dir, tmp_path)
+    assert findings(proj_dir, "param-gap") == [
+        "param post_x: proposed value names no gap to close it"
+    ]
 
 
 def test_sweep_steps_as_a_bare_number_is_a_schema_finding(proj_dir, tmp_path):

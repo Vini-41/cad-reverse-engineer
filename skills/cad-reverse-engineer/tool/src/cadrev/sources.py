@@ -71,14 +71,15 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def normalize(text: str, hyphen: str = "") -> str:
+def normalize(text: str, hyphen: str = "", cased: bool = False) -> str:
     """Canonical form for matching: NFKC, unified dashes and multiplication signs,
-    hyphenated line breaks re-joined with hyphen between the halves, single spaces, lower case."""
+    hyphenated line breaks re-joined with hyphen between the halves, single spaces, lower case
+    unless cased."""
     text = unicodedata.normalize("NFKC", text).translate(_DASHES).translate(_TIMES)
     text = text.replace("­", "")
     text = re.sub(r"(\w)-\s*\n\s*(\w)", rf"\1{hyphen}\2", text)
-    text = re.sub(r"\s+", " ", text).strip().lower()
-    return re.sub(r"(\d)\s*x\s*(?=\d)", r"\1x", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return re.sub(r"(\d)\s*[xX]\s*(?=\d)", r"\1x", text if cased else text.lower())
 
 
 def needles(quote: str) -> list[str]:
@@ -290,16 +291,34 @@ def _write_viewable(target: Path, data: bytes) -> Path:
 
 # Thread and fastener sizes (M3, M2.5x0.45): stated sizes the unit table cannot read.
 _THREAD = re.compile(r"(?<![a-z0-9.])m\d+(?:\.\d+)?(?:x\d+(?:\.\d+)?)?(?![a-z0-9])")
+# A moment, when something happens (t = 2 s, a video frame's T=0s), not how long it lasts (Δt).
+_MOMENT = re.compile(r"(?<!\w)t ?= ?$")
 
 
-def stated_quantities(text: str) -> list[tuple[int, int, str]]:
+def _other_symbol(t: _Token, cased: str) -> bool:
+    """Whether t's unit is a one-letter symbol SI writes in lower case (g, s, m, h) printed as a
+    capital, which names something else: 8G of memory, a 2S battery."""
+    unit = t.unit or ""
+    return (
+        len(unit) == 1
+        and unit.islower()
+        and cased[t.end - 1].isupper()
+        and not cased[t.end - 2].isalpha()
+    )
+
+
+def stated_quantities(text: str, cased: str | None = None) -> list[tuple[int, int, str]]:
     """Spans in normalized text that state a quantity: a number the quote reader would read with
     a unit (a whole range such as 3-5 mm), an a×b×c product, or a thread size; never digits
-    inside a name or a figure, table, equation or section number.
+    inside a name or a figure, table, equation or section number, a moment (t = 2 s), or, where
+    cased gives text as printed (normalized but for case), a one-letter unit printed as another
+    symbol's capital (8G, 2S).
 
     It errs towards listing: a unit glued to a number is a candidate even where it is part of a
-    name (1990s, 4G), because extracted text glues real ones too (t=0s, 20g), and a false
+    name (1990s, 4g), because extracted text glues real ones too (0.5s, 20g), and a false
     candidate costs one skip where a missed one leaves a quantity unledgered."""
+    if cased is None or len(cased) != len(text):
+        cased = text
     spans, group = [], []
     for t in _tokens(text):
         group.append(t)
@@ -309,7 +328,13 @@ def stated_quantities(text: str) -> list[tuple[int, int, str]]:
             text[a.end : b.start] == "x" for a, b in zip(group, group[1:])
         )
         glued = group[0].start > 0 and text[group[0].start - 1].isalnum()  # in a name: ada2cc, L14
-        if (t.unit or product) and not glued and not any(g.labelled for g in group):
+        moment = (
+            t.unit is not None
+            and units.quantity(t.unit) == "time"
+            and _MOMENT.search(text, max(0, group[0].start - 4), group[0].start) is not None
+        )
+        other = moment or (len(group) == 1 and _other_symbol(t, cased))
+        if (t.unit or product) and not glued and not other and not any(g.labelled for g in group):
             spans.append((group[0].start, t.end))
         group = []
     spans += [m.span() for m in _THREAD.finditer(text)]
