@@ -57,7 +57,7 @@ Outputs:
 
 - `build/parts/*.step`: one STEP file per part.
 - `build/assembly.step`: the assembly, with labelled instances.
-- `build/overlays/*.png`: model edges drawn over source figures.
+- `build/overlays/*.png`: model edges drawn over figures.
 - `build/report.md` and `build/report.json`: the verification report.
 
 ## Example

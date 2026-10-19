@@ -8,6 +8,10 @@ Rebuilding a published object as CAD in which every number is either traced to a
 A registered, hash-pinned document that states things about the object: a paper, supplement, datasheet, video or drawing.
 _Avoid_: reference, input
 
+**Figure**:
+An image in a source: a plot, photo, drawing or video frame. Figure crops and overlays are taken from it.
+_Avoid_: source figure, source image, source pixel
+
 **Ledger**:
 The record of every statement the sources make about the object, each a verbatim quote or a hashed figure crop.
 _Avoid_: evidence list, extraction

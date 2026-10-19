@@ -305,7 +305,7 @@ def write(p: Project, status: str, results: list[CheckResult], images: list[Path
         md += [
             "## Figure overlays",
             "",
-            "Model edges (magenta) over the source figure, scaled by the cited dimension "
+            "Model edges (magenta) over the figure, scaled by the cited dimension "
             "(blue). Visual comparison only.",
             "",
         ]

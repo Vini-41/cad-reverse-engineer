@@ -1,4 +1,4 @@
-"""Draw model edges over a source figure, scaled by a published dimension."""
+"""Draw model edges over a figure, scaled by a published dimension."""
 
 from __future__ import annotations
 

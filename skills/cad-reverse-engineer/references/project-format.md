@@ -10,7 +10,7 @@ evidence.yaml   the ledger: evidence, skipped, conflicts
 params.yaml     every number the model uses, with its basis
 checks.yaml     geometry checks against evidence
 gaps.yaml       what the sources leave undefined
-overlays.yaml   optional: model edges drawn over source figures
+overlays.yaml   optional: model edges drawn over figures
 model.py        build123d model; see modeling.md
 sources/        registered source files (pinned by sha256)
 figures/        extracted images; figures/crops/ holds pinned evidence crops
