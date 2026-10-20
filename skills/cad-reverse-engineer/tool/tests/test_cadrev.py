@@ -4434,6 +4434,107 @@ def test_guard_mass_model_param_of_its_quantity_is_no_unit_finding(proj_dir, tmp
     assert findings(proj_dir, "unit-quantity") == []
 
 
+# A mass check covers the mass model's params for the parts it weighs, however it names them.
+
+SERVO = "The crank servo weighs 7.5 g and the ground bar 1.05 g."
+
+
+def _ground_weighed(root: Path, tmp_path: Path, over: dict) -> None:
+    """The four-bar with its crank weighed by crank_mass, a source param from
+    N1.servo, and one mass check, ground-mass, of what over names against the ground bar's 1.05 g."""
+    four_bar(root, tmp_path)
+    add_quote(root, tmp_path, SERVO, SERVO.rstrip("."), {"servo": 7.5, "g": 1.05})
+    _param("crank_mass", basis="source", **{"from": "N1.servo"})(root, tmp_path)
+    _parts(crank={"mass": "crank_mass"})(root, tmp_path)
+    check = {"id": "ground-mass", "kind": "mass", "evidence": "N1", "key": "g", "tol_rel": 0.01}
+    _append("checks.yaml", "checks", check | over)(root, tmp_path)
+
+
+def _found(root: Path, *flags: str) -> tuple[int, list[str]]:
+    """A check run's exit code and its findings as printed, one per line."""
+    code, out = run("check", str(root), *flags)
+    return code, [line for line in out.splitlines() if line.startswith(("error:", "warning:"))]
+
+
+UNCHECKED_CRANK_MASS = (
+    "warning: [unchecked-source] param crank_mass: N1.servo feeds the model but no check "
+    "confirms the geometry realises it"
+)
+
+
+def test_mass_check_over_instances_covers_only_the_parts_it_weighs(proj_dir, tmp_path):
+    _ground_weighed(proj_dir, tmp_path, {"instances": ["ground_1"]})
+    runs = {"instances": _found(proj_dir)}
+
+    def by_part(d):
+        d["checks"][-1].pop("instances")
+        d["checks"][-1]["parts"] = ["ground"]
+
+    edit(proj_dir, "checks.yaml", by_part)
+    runs["parts"] = _found(proj_dir)
+    assert all(code == 0 for code, _ in runs.values()), runs
+    printed = {key: lines for key, (_, lines) in runs.items()}
+    assert UNCHECKED_CRANK_MASS in printed["instances"]
+    assert sorted(printed["instances"]) == sorted(printed["parts"])
+    assert len(set(printed["instances"])) == len(printed["instances"])
+
+
+@pytest.mark.parametrize(
+    "over", [{"instances": ["crank_1"]}, {}], ids=["crank-instance", "every-instance"]
+)
+def test_guard_mass_check_weighing_the_crank_covers_its_mass_param(proj_dir, tmp_path, over):
+    _ground_weighed(proj_dir, tmp_path, over)
+    _, printed = _found(proj_dir)
+    assert UNCHECKED_CRANK_MASS not in printed
+
+
+@pytest.mark.parametrize("flag", ["--no-build", "--no-coverage"])
+def test_guard_partial_run_leaves_a_mass_check_over_instances_covering_every_part(
+    proj_dir, tmp_path, flag
+):
+    _ground_weighed(proj_dir, tmp_path, {"instances": ["ground_1"]})
+    code, printed = _found(proj_dir, flag)
+    assert code == 1 and UNCHECKED_CRANK_MASS not in printed
+    assert not any((proj_dir / "build" / name).exists() for name in ("report.md", "report.json"))
+
+
+def test_source_param_feeding_only_an_unweighed_parts_mass_through_a_derived_one_is_unchecked(
+    proj_dir, tmp_path
+):
+    _ground_weighed(proj_dir, tmp_path, {"instances": ["ground_1"]})
+    _param("servo", basis="source", **{"from": "N1.servo"})(proj_dir, tmp_path)
+    _param("crank_mass", basis="derived", expr="servo", **{"from": None})(proj_dir, tmp_path)
+    assert "param servo" in _unchecked(proj_dir)
+
+
+def test_param_feeding_physics_and_model_py_but_only_an_unweighed_parts_mass_is_unchecked(
+    proj_dir, tmp_path
+):
+    """hole_d, from N1.d, sets the crank's mass and through it the knee's damping, and model.py
+    reads it: it feeds only a physics value and the geometry, and only the crank's mass is checked
+    against a source it rests on."""
+    physical(proj_dir, tmp_path)
+    text = "The holes are 2 mm across and the ground bar weighs 1.05 g."
+    add_quote(proj_dir, tmp_path, text, text.rstrip("."), {"d": 2, "g": 1.05})
+    unproposed = {"value": None, "rationale": None, "gap": None}
+    _param("hole_d", basis="source", **{"from": "N1.d"}, **unproposed)(proj_dir, tmp_path)
+    guess = {"basis": "proposed", "rationale": "a guess", "gap": "G1"}
+    _param("mass_per_mm", value=3.75, **guess)(proj_dir, tmp_path)
+    _param("damping_per_g", value=0.007, **guess)(proj_dir, tmp_path)
+    _param("crank_mass", basis="derived", expr="hole_d * mass_per_mm")(proj_dir, tmp_path)
+    spec = {"expr": "crank_mass * damping_per_g", **unproposed}
+    _param("knee_damping", basis="derived", **spec)(proj_dir, tmp_path)
+    _parts(crank={"mass": "crank_mass"})(proj_dir, tmp_path)
+    check = {"id": "ground-mass", "kind": "mass", "evidence": "N1", "key": "g", "tol_rel": 0.01}
+    _append("checks.yaml", "checks", check | {"instances": ["ground_1"]})(proj_dir, tmp_path)
+    code, printed = _found(proj_dir)
+    assert code == 0, printed
+    assert [line for line in printed if "param hole_d" in line] == [
+        "warning: [unchecked-source] param hole_d: N1.d feeds the model but no check confirms "
+        "the geometry realises it"
+    ]
+
+
 def test_static_project_reports_no_masses_without_a_mass_model(proj_dir):
     assert verify(proj_dir)[1]["masses"] == {}
 

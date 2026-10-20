@@ -1323,7 +1323,6 @@ def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[Che
         if reached is None:
             continue
         placed, pose = reached
-        basis_of = c  # the check as rests_on reads it
         moved: tuple[str, ...] = ()  # the params a stroke's pose moves its cable's joints by
         try:
             if kind == "bbox":
@@ -1354,7 +1353,7 @@ def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[Che
                 tally = _weighed(p, built, c)
                 if tally is None:
                     continue
-                basis_of = c | {"parts": list(tally)}  # the mass model's params for parts weighed
+                p.weighed[cid] = list(tally)
                 results += filter(None, [_mass(p, built, c, tally)])
             elif kind == "stroke":
                 stroke = _stroke(p, built, c, reached, poser)
@@ -1373,7 +1372,7 @@ def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[Che
             p.error("check-config", f"check {cid}: missing or unknown {exc}")
             continue
         joint = built.joints.get(_joint_name(c) or "", {})
-        basis, params = rests_on(p, basis_of, (*joint.get("range", ()), *moved))
+        basis, params = rests_on(p, c, (*joint.get("range", ()), *moved))
         for r in results[start:]:
             r.rests_on, r.rests_on_params = basis, params
             if r.uncounted and basis != "proposed":  # how many there are is the model's choice
