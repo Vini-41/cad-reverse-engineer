@@ -6,6 +6,7 @@ import importlib.util
 import math
 import re
 import sys
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple, Protocol
@@ -66,6 +67,9 @@ class CheckResult:
     # A swept interference check's joint, the range params it is swept between, their values and
     # how many poses it evaluated; None for a check not swept.
     sweep: dict | None = None
+    # A mass check's parts weighed in several instances with no counts entry: part -> how many,
+    # which make it rest on proposed; None for other kinds.
+    uncounted: dict | None = None
 
 
 @dataclass
@@ -968,11 +972,6 @@ def _range(p: Project, built: Built, c: dict, poser: Poser | None) -> list[Check
     return results
 
 
-def _count(p: Project, counts: dict, part: str) -> float:
-    """How many of part a mass check weighs: the param its counts entry names, else 1."""
-    return p.values[counts[part]] if part in counts else 1
-
-
 def _volume(overlap) -> float:
     """The volume of an intersect() result: nothing, one shape, or a list of shapes."""
     if overlap is None:
@@ -982,12 +981,39 @@ def _volume(overlap) -> float:
     return overlap.volume
 
 
-def _mass(p: Project, built: Built, c: dict) -> CheckResult | None:
-    """A mass check: the parts it names weighed by its density, or without one by the mass model
-    as the MJCF export weighs them, times their counts, plus its add params; None after a
-    [check-config] finding naming a part the mass model leaves unweighed."""
-    names = c.get("parts") or list(built.parts)
-    counts = c.get("counts", {})
+def _weighed(p: Project, built: Built, c: dict) -> Counter | None:
+    """How many instances of each part a mass check weighs: those it names in instances, else
+    every instance of the assembly, narrowed by parts to those parts' instances; None, after a
+    [check-config] finding, when it names an unknown instance or a part it weighs no instance of."""
+    placed = _placed(p, built, c) if "instances" in c else built.assembly
+    if placed is None:
+        return None
+    named = c.get("parts") or None
+    tally = Counter(part for part, _ in placed.values() if named is None or part in named)
+    missing = [name for name in named or [] if name not in tally]
+    for name in missing:
+        p.error(
+            "check-config",
+            f"check {c.get('id', '?')}: parts names {name}, but it weighs no instance of it",
+        )
+    return None if missing else tally
+
+
+def _mass(p: Project, built: Built, c: dict, tally: Counter) -> CheckResult | None:
+    """A mass check: each instance in tally weighed by its part's volume times the check's density,
+    or without one by the mass model as the MJCF export weighs it, plus its add params. None after
+    a [check-config] finding: a counts param other than its part's instances in tally, or a part
+    the mass model leaves unweighed."""
+    cid, names, counts = c.get("id", "?"), list(tally), c.get("counts", {})
+    wrong = [(part, param) for part, param in counts.items() if p.values[param] != tally[part]]
+    for part, param in wrong:
+        p.error(
+            "check-config",
+            f"check {cid}: counts {part} as {param} ({p.values[param]:g}), but it weighs "
+            f"{tally[part]} instances of it",
+        )
+    if wrong:
+        return None
     if "density" in c:
         density = p.values[c["density"]]
         each = {n: built.parts[n].volume * density for n in names}
@@ -996,14 +1022,15 @@ def _mass(p: Project, built: Built, c: dict) -> CheckResult | None:
         if unweighed:
             p.error(
                 "check-config",
-                f"check {c.get('id', '?')}: names no density, and the mass model in params.yaml "
+                f"check {cid}: names no density, and the mass model in params.yaml "
                 f"parts weighs no {', '.join(unweighed)}",
             )
             return None
         each = {n: built.masses[n].mass for n in names}
-    measured = sum(each[n] * _count(p, counts, n) for n in names)
-    measured += sum(p.values[n] for n in c.get("add", []))
-    return _compared(p, c, c.get("id", "?"), f"{c['evidence']}.{c['key']}", measured)
+    measured = sum(each[n] * tally[n] for n in names) + sum(p.values[n] for n in c.get("add", []))
+    result = _compared(p, c, cid, f"{c['evidence']}.{c['key']}", measured)
+    result.uncounted = {n: k for n, k in tally.items() if k > 1 and n not in counts}
+    return result
 
 
 def _interference(
@@ -1083,6 +1110,7 @@ def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[Che
         if reached is None:
             continue
         placed, pose = reached
+        basis_of = c  # the check as rests_on reads it
         try:
             if kind == "bbox":
                 shape = _envelope(p, placed, c)
@@ -1109,7 +1137,11 @@ def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[Che
                 shown = f"° at {vertex} between {a} and {b}"
                 results.append(_compared(p, c, cid, ref, measured, shown))
             elif kind == "mass":
-                results += filter(None, [_mass(p, built, c)])
+                tally = _weighed(p, built, c)
+                if tally is None:
+                    continue
+                basis_of = c | {"parts": list(tally)}  # the mass model's params for parts weighed
+                results += filter(None, [_mass(p, built, c, tally)])
             elif kind == "range":
                 results += _range(p, built, c, poser)
             elif kind == "interference":
@@ -1121,9 +1153,11 @@ def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[Che
             p.error("check-config", f"check {cid}: missing or unknown {exc}")
             continue
         joint = built.joints.get(_joint_name(c) or "", {})
-        basis, params = rests_on(p, c, tuple(joint.get("range", ())))
+        basis, params = rests_on(p, basis_of, tuple(joint.get("range", ())))
         for r in results[start:]:
             r.rests_on, r.rests_on_params = basis, params
+            if r.uncounted and basis != "proposed":  # how many there are is the model's choice
+                r.rests_on, r.rests_on_params = "proposed", []
             r.pose = r.pose or pose
     for r in results:
         if not r.ok:

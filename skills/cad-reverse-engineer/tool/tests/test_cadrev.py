@@ -3522,6 +3522,7 @@ def _mass_of_two_links(root: Path, tmp_path: Path, count) -> None:
     """A mass check of two links, 1.78 g each, counting the link by count."""
     text = "Two links weigh 3.6 g, printed in resin of 1.2 g/cm3."
     _mass_check(root, tmp_path, text, {"m": 3.6, "rho": 1.2})
+    write(root, "model.py", _links(2))
     edit(root, "checks.yaml", lambda d: d["checks"][-1].update(counts={"link": count}))
 
 
@@ -3543,6 +3544,92 @@ def test_mass_check_count_given_as_a_bare_number_is_a_finding(proj_dir, tmp_path
     assert len(messages) == 1 and "counts" in messages[0]
 
 
+def _links(n: int) -> str:
+    """The fixture's model with up to six links, link_1 to link_<n>, clear of each other: in two
+    columns a link's length apart, each three links stacked a link's length apart."""
+    xs, zs = ("0", "p.link_L * 2"), ("0", "p.link_L", "-p.link_L")
+    return _placed(*[f"Location(({x}, 0, {z}))" for x in xs for z in zs][:n])
+
+
+def _two_weighed_links(root: Path, tmp_path: Path, check=()) -> dict:
+    """Two links, each 3 g by the mass model from N1.each, and check total, updated by check,
+    against their stated 6 g together; report.json."""
+    text = "Each link weighs 3 g; the two links weigh 6 g together."
+    add_quote(root, tmp_path, text, text.rstrip("."), {"each": 3, "m": 6})
+    write(root, "model.py", _links(2))
+    add_params(root, link_m={"basis": "source", "from": "N1.each"})
+    _parts(link={"mass": "link_m"})(root, tmp_path)
+    total = {"id": "total", "kind": "mass", "evidence": "N1", "key": "m", "tol_rel": 0.01}
+    edit(root, "checks.yaml", lambda d: d["checks"].append(total | dict(check)))
+    return verify(root)[1]
+
+
+def test_mass_check_naming_no_instances_or_parts_weighs_every_instance(proj_dir, tmp_path):
+    report = _two_weighed_links(proj_dir, tmp_path)
+    assert report["status"] == "VERIFIED", report["findings"]
+    total = _by_id(report)["total"]
+    assert total["ok"] and total["measured"] == "6"
+    assert (total["rests_on"], total["uncounted"]) == ("proposed", {"link": 2})
+
+
+def test_report_md_names_a_part_weighed_in_several_uncounted_instances(proj_dir, tmp_path):
+    _two_weighed_links(proj_dir, tmp_path)
+    assert "rests on proposed: link (2 instances uncounted)" in _check_row(proj_dir, "total")
+
+
+def test_mass_check_over_one_instance_weighs_it_alone_and_rests_on_source(proj_dir, tmp_path):
+    _two_weighed_links(proj_dir, tmp_path)
+    one = {"id": "one", "kind": "mass", "instances": ["link_1"], "evidence": "N1", "key": "each"}
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].append(one | {"tol_rel": 0.01}))
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    one = _by_id(report)["one"]
+    assert one["ok"] and one["measured"] == "3"
+    assert (one["rests_on"], one["uncounted"]) == ("source", {})
+
+
+def test_mass_check_count_agreeing_with_the_instances_rests_on_its_basis(proj_dir, tmp_path):
+    add_params(
+        proj_dir,
+        n_links={"basis": "proposed", "value": 2, "rationale": "'two links'", "gap": "G1"},
+    )
+    report = _two_weighed_links(proj_dir, tmp_path, {"counts": {"link": "n_links"}})
+    assert report["status"] == "VERIFIED", report["findings"]
+    total = _by_id(report)["total"]
+    assert total["ok"] and total["uncounted"] == {}
+    assert (total["rests_on"], total["rests_on_params"]) == ("proposed", ["n_links"])
+
+
+def test_mass_check_count_other_than_the_instances_it_weighs_is_check_config(proj_dir, tmp_path):
+    add_params(
+        proj_dir,
+        n_links={"basis": "proposed", "value": 3, "rationale": "'three links'", "gap": "G1"},
+    )
+    report = _two_weighed_links(proj_dir, tmp_path, {"counts": {"link": "n_links"}})
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-config"] == [
+        "check total: counts link as n_links (3), but it weighs 2 instances of it"
+    ]
+    assert "total" not in _by_id(report)
+
+
+@pytest.mark.parametrize(
+    "check, message",
+    [
+        ({"instances": ["link_9"]}, "check total: link_9 is not an instance of the assembly"),
+        (
+            {"instances": ["link_1"], "parts": ["link", "pin"]},
+            "check total: parts names pin, but it weighs no instance of it",
+        ),
+    ],
+    ids=["unknown-instance", "part-with-no-instance-weighed"],
+)
+def test_mass_check_naming_what_it_weighs_none_of_is_check_config(
+    proj_dir, tmp_path, check, message
+):
+    report = _two_weighed_links(proj_dir, tmp_path, check)
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-config"] == [message]
+
+
 # What a check rests on: the weakest basis among the params it reads.
 
 
@@ -3555,10 +3642,14 @@ def _check_row(root: Path, check: str) -> str:
 _RESIN = {"basis": "proposed", "value": 0.0012, "rationale": "a typical resin", "gap": "G1"}
 
 
-def _weighed(root: Path, tmp_path: Path, text: str, values: dict, check=(), **params) -> dict:
-    """Ledger text as N1, add params, and check the link's mass N1.m with the density param rho,
-    its check entry updated by check; report.json."""
+def _weighed(
+    root: Path, tmp_path: Path, text: str, values: dict, check=(), links: int = 1, **params
+) -> dict:
+    """Ledger text as N1, add params, place links links, and check their mass N1.m with the
+    density param rho, its check entry updated by check; report.json."""
     add_quote(root, tmp_path, text, text, values)
+    if links > 1:
+        write(root, "model.py", _links(links))
     add_params(root, **params)
     mass = {
         "id": "m",
@@ -3634,6 +3725,7 @@ def test_mass_check_on_source_density_add_and_counts_rests_on_source(proj_dir, t
         text,
         {"n": 3, "m": 6.4, "screws": 1, "rho": 1.2},
         check={"add": ["hardware"], "counts": {"link": "n_links"}},
+        links=3,
         rho={"basis": "source", "from": "N1.rho"},
         hardware={"basis": "source", "from": "N1.screws"},
         n_links={"basis": "source", "from": "N1.n"},
@@ -3649,6 +3741,7 @@ def test_mass_check_counts_a_part_by_a_count_its_source_states_in_words(proj_dir
         "Three links weigh 6.4 g with 1 g of screws, printed in resin of 1.2 g/cm3.",
         {"n": 3, "m": 6.4, "screws": 1, "rho": 1.2},
         check={"add": ["hardware"], "counts": {"link": "n_links"}},
+        links=3,
         rho={"basis": "source", "from": "N1.rho"},
         hardware={"basis": "source", "from": "N1.screws"},
         n_links={"basis": "source", "from": "N1.n"},
@@ -3665,6 +3758,7 @@ def _counted_through(root: Path, tmp_path: Path, counted: bool) -> dict:
         "The 2 legs carry 3 links each, together 10.8 g, printed in resin of 1.2 g/cm3.",
         {"legs": 2, "n": 3, "m": 10.8, "rho": 1.2},
         check={"counts": {"link": "n_links"}} if counted else {},
+        links=6,
         rho={"basis": "source", "from": "N1.rho"},
         legs={"basis": "source", "from": "N1.legs"},
         n_each={"basis": "source", "from": "N1.n"},
@@ -3713,6 +3807,7 @@ def test_report_json_names_the_params_a_check_rests_on(proj_dir, tmp_path):
         "3 links weigh 6.4 g with 1 g of screws.",
         {"n": 3, "m": 6.4},
         check={"add": ["hardware"], "counts": {"link": "n_links"}},
+        links=3,
         rho=_RESIN,
         hardware=_RESIN | {"value": 1, "rationale": "screws by count"},
         n_links={"basis": "source", "from": "N1.n"},
@@ -4274,6 +4369,28 @@ def test_mass_check_without_a_density_weighs_the_parts_by_the_mass_model(proj_di
 def test_mass_check_over_the_mass_model_off_its_stated_total_fails(proj_dir, tmp_path):
     _total_mass("12")(proj_dir, tmp_path)
     assert findings(proj_dir, "check-failed") == ["total: expected 12 ±1% (N1.m), measured 10.29"]
+
+
+def test_mass_check_naming_nothing_weighs_what_the_mjcf_export_weighs(proj_dir, tmp_path):
+    """The four-bar with a second ground bar fixed a ground bar's length above the first: the check's total is the
+    sum of the exported bodies' masses, the ground bar weighed twice."""
+    mujoco = importlib.import_module("mujoco")
+
+    _total_mass("11.3")(proj_dir, tmp_path)
+    model = swap(
+        FOUR_BAR,
+        '"ground_1": ("ground", Location()),',
+        '"ground_1": ("ground", Location()),\n'
+        '            "ground_2": ("ground", Location((0, 0, p.ground))),',
+    )
+    stack = '"joints": {\n            "stack": {"type": "fixed", "parent": "ground_1", "child": '
+    write(proj_dir, "model.py", swap(model, '"joints": {\n', stack + '"ground_2"},\n'))
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    total = _by_id(report)["total"]
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    assert float(total["measured"]) == pytest.approx(sum(m.body_mass), rel=1e-3)
+    assert total["uncounted"] == {"ground": 2}
 
 
 def test_mass_check_without_a_density_on_a_part_the_mass_model_lacks_is_check_config(proj_dir):

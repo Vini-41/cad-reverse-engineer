@@ -123,12 +123,14 @@ def overlap_limits(p: Project) -> list[dict]:
 
 
 def interpretation(r: CheckResult) -> str:
-    """A check's interpretation, with what it rests on when that is less than source."""
+    """A check's interpretation, with what it rests on when that is less than source: the params,
+    then each part a mass check weighs in several uncounted instances."""
     if r.rests_on == "source":
         return r.note
-    return "; ".join(
-        filter(None, [r.note, f"rests on {r.rests_on}: {', '.join(r.rests_on_params)}"])
-    )
+    named = r.rests_on_params + [
+        f"{part} ({n} instances uncounted)" for part, n in (r.uncounted or {}).items()
+    ]
+    return "; ".join(filter(None, [r.note, f"rests on {r.rests_on}: {', '.join(named)}"]))
 
 
 def _valued(p: Project, entry: dict, keys) -> dict:
@@ -453,7 +455,7 @@ def write(
                     {
                         k: v
                         for k, v in asdict(r).items()
-                        if k not in ("pairs", "pose", "sweep") or v is not None
+                        if k not in ("pairs", "pose", "sweep", "uncounted") or v is not None
                     }
                     for r in results
                 ],

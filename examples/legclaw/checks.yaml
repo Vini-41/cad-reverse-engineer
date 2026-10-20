@@ -374,22 +374,50 @@ checks:
   interpretation: no two instances overlap as built
 - id: mass-leg
   kind: mass
-  parts: &id001
-  - plate
-  - servo_dual
-  - thigh
-  - servo_single
-  - wheel
-  - comp
-  - pedestal
-  - bent
-  - foot_mid
-  - foot_end
-  - linkage
-  - toe_joint
-  - phalanx1
-  - phalanx2
-  - claw
+  instances:
+  - a_plate
+  - a_dual
+  - a_thigh
+  - a_srv1
+  - a_whl1
+  - a_srv2
+  - a_whl2
+  - a_ped
+  - a_up_l
+  - a_lo_l
+  - a_up_r
+  - a_lo_r
+  - a_mid
+  - a_end_L
+  - a_lnk_LAf
+  - a_lnk_LAb
+  - a_lnk_LBf
+  - a_lnk_LBb
+  - a_bent_Lf
+  - a_bent_Lb
+  - a_toe_Lf_j
+  - a_toe_Lf_p1
+  - a_toe_Lf_p2
+  - a_toe_Lf_c
+  - a_toe_Lb_j
+  - a_toe_Lb_p1
+  - a_toe_Lb_p2
+  - a_toe_Lb_c
+  - a_end_R
+  - a_lnk_RAf
+  - a_lnk_RAb
+  - a_lnk_RBf
+  - a_lnk_RBb
+  - a_bent_Rf
+  - a_bent_Rb
+  - a_toe_Rf_j
+  - a_toe_Rf_p1
+  - a_toe_Rf_p2
+  - a_toe_Rf_c
+  - a_toe_Rb_j
+  - a_toe_Rb_p1
+  - a_toe_Rb_p2
+  - a_toe_Rb_c
   counts:
     servo_single: n_single_leg
     wheel: n_single_leg
@@ -408,7 +436,22 @@ checks:
     and 200 g is a round figure
 - id: mass-gear
   kind: mass
-  parts: *id001
+  parts:
+  - plate
+  - servo_dual
+  - thigh
+  - servo_single
+  - wheel
+  - comp
+  - pedestal
+  - bent
+  - foot_mid
+  - foot_end
+  - linkage
+  - toe_joint
+  - phalanx1
+  - phalanx2
+  - claw
   counts:
     comp: n_comp_all
     bent: n_bent_all

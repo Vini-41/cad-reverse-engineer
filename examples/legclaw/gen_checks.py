@@ -66,7 +66,19 @@ leg_counts = {"servo_single": "n_single_leg", "wheel": "n_single_leg", "comp": "
               "phalanx2": "n_toes", "claw": "n_toes"}
 parts = ["plate", "servo_dual", "thigh", "servo_single", "wheel", "comp", "pedestal", "bent", "foot_mid",
          "foot_end", "linkage", "toe_joint", "phalanx1", "phalanx2", "claw"]
-add({"id": "mass-leg", "kind": "mass", "parts": parts, "counts": leg_counts, "evidence": "P3-leg-mass", "key": "m",
+
+
+def leg_instances(leg):
+    """A leg's instances, named as model.py puts them: plate, servos, thigh, four-bar, foot, toes."""
+    names = ["plate", "dual", "thigh", "srv1", "whl1", "srv2", "whl2", "ped", "up_l", "lo_l", "up_r", "lo_r", "mid"]
+    for side in "LR":
+        names += [f"end_{side}"] + [f"lnk_{side}{ab}{row}" for ab in "AB" for row in "fb"]
+        names += [f"bent_{side}{row}" for row in "fb"]
+        names += [f"toe_{side}{row}_{k}" for row in "fb" for k in ("j", "p1", "p2", "c")]
+    return [f"{leg}_{n}" for n in names]
+
+
+add({"id": "mass-leg", "kind": "mass", "instances": leg_instances("a"), "counts": leg_counts, "evidence": "P3-leg-mass", "key": "m",
      "tol_rel": 0.10, "interpretation": "one leg with its connecting plate, as the mass model weighs it; within 10%, as only the servos' 63 g is stated, the printed parts rest on a proposed solid-resin density (gap G-density) and 200 g is a round figure"})
 all_counts = {k: v + "_all" for k, v in leg_counts.items() if v != "n_single_leg"}
 all_counts.update({"servo_single": "n_single_all", "wheel": "n_single_all",
