@@ -43,7 +43,7 @@ The CLI requires [uv](https://docs.astral.sh/uv/).
 
 ```bash
 git clone https://github.com/Vini-41/cad-reverse-engineer
-alias cadrev='uv run --project cad-reverse-engineer/skills/cad-reverse-engineer/tool cadrev'
+alias cadrev="$PWD/cad-reverse-engineer/skills/cad-reverse-engineer/cadrev"
 cadrev init my-project
 cadrev source my-project paper.pdf --id paper --kind paper --citation "Doe et al. 2026"
 cadrev text my-project paper --page 4      # the exact text quotes are matched against

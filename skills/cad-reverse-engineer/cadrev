@@ -1,0 +1,3 @@
+#!/bin/sh
+# Runs the cadrev CLI in tool/ beside this script, from any directory: SKILL.md's Tool section.
+exec uv run -q --project "$(dirname "$0")/tool" cadrev "$@"

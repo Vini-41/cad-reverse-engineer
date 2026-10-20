@@ -11,13 +11,13 @@ The honest product is a model whose report separates what the sources state from
 
 ## Tool
 
-The CLI ships in this skill's `tool/` directory and needs [`uv`](https://docs.astral.sh/uv/). Invoke it in full on every call, since shell functions and aliases do not carry between calls:
+The CLI ships in this skill's `tool/` directory and needs [`uv`](https://docs.astral.sh/uv/). Run it through the `cadrev` script beside this file, by its full path on every call, since shell functions and aliases do not carry between calls:
 
 ```bash
-uv run -q --project <this skill's base directory>/tool cadrev --help
+<this skill's base directory>/cadrev --help
 ```
 
-`cadrev` below stands for that command. The first run installs build123d and MuJoCo (about a minute). Before writing any project YAML, read [`references/project-format.md`](references/project-format.md).
+`cadrev` below stands for that path. The first run installs build123d and MuJoCo (about a minute). Before writing any project YAML, read [`references/project-format.md`](references/project-format.md).
 
 A script that writes project YAML (checks repeated per leg, per toe) lives in the project directory, and the file it writes names it in a comment, so the project alone reproduces how the file was written.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run this working tree's cadrev from anywhere, as SKILL.md's `uv run … cadrev` does:
+# Run this working tree's cadrev from anywhere, through the script the skill ships:
 #
 #   scripts/cadrev check <dir> [--no-build]
-exec uv run -q --project "$(dirname "$0")/../skills/cad-reverse-engineer/tool" cadrev "$@"
+exec "$(dirname "$0")/../skills/cad-reverse-engineer/cadrev" "$@"
