@@ -56,7 +56,7 @@ _Avoid_: simulation parameter, tuning value
 
 **Spring rest**:
 The joint value at which a joint's spring exerts no torque, or no force on a slide, measured from the assembly as built like a pose. A spring preloaded against a stop rests outside its joint's range.
-_Avoid_: preset, preload, springref (for the rest itself)
+_Avoid_: preset, preload, springref
 
 ## Verification
 

@@ -3,6 +3,8 @@
 
 Each glossary entry's `_Avoid_:` list is read; each word is matched whole, case-insensitively and
 with a plural `s` or `es`, in the skill's SKILL.md, its references/ and the tool's src/. A word
+quoted alone in backticks or double quotes (`springref`, "springref") is a name, such as another
+program's attribute, and passes. A word
 with a parenthetical (`check (for the whole run)`) is avoided in one sense only, and the words in
 COMMON are used in another sense throughout, so neither can be found by matching and both are
 left to review. Prints file:line: "word": say <term> for each use and exits 1 if there is one.
@@ -49,6 +51,11 @@ def avoided(glossary: str) -> dict[str, str]:
     return words
 
 
+def _quoted(line: str, start: int, end: int) -> bool:
+    """Whether line[start:end] stands alone between backticks or double quotes: a name."""
+    return start > 0 and end < len(line) and line[start - 1] == line[end] and line[end] in '`"'
+
+
 def main() -> int:
     root = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parents[1])
     words = avoided((root / "GLOSSARY.md").read_text(encoding="utf8"))
@@ -68,6 +75,8 @@ def main() -> int:
             continue
         for number, line in enumerate(text.splitlines(), 1):
             for match in pattern.finditer(line):
+                if _quoted(line, match.start(), match.end()):
+                    continue
                 term = terms[match[1].lower()]
                 found.append(f'{path.relative_to(root)}:{number}: "{match[0]}": say {term}')
     for line in found:

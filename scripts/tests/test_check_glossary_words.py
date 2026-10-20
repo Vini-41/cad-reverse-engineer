@@ -69,3 +69,19 @@ def test_guard_qualified_common_or_partial_words_and_other_files_pass(tmp_path):
     )
     result = check(root)
     assert (result.returncode, result.stdout) == (0, "")
+
+
+def test_avoided_word_written_as_a_quoted_name_passes_while_its_prose_use_is_named(tmp_path):
+    root = repo(
+        tmp_path,
+        {
+            f"{SKILL}/references/format.md": "MuJoCo's `margin` attribute holds the margin.\n",
+            f"{SKILL}/tool/src/cadrev/motion.py": 'attrs = {"margin": 1}  # a margin\n',
+        },
+    )
+    result = check(root)
+    assert result.returncode == 1
+    assert result.stdout.splitlines() == [
+        f'{SKILL}/references/format.md:1: "margin": say Tolerance',
+        f'{SKILL}/tool/src/cadrev/motion.py:1: "margin": say Tolerance',
+    ]

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # CI run locally: every step of .github/workflows/test.yml, which calls this script. Runs each step,
-# prints the ones that failed, and exits 1 if any did.
+# prints the ones that failed, each with the last 20 lines of its output, and exits 1 if any did.
 #
 #   scripts/check
 #
@@ -15,12 +15,19 @@ cd "$repo/skills/cad-reverse-engineer/tool" || exit 2
 # worktree has no environment until this runs.
 uv sync --locked --extra test || { echo "uv sync --locked --extra test failed, so no step ran"; exit 1; }
 failed=()
+failed_logs=() # each failed step's output, whose end the summary reprints under its name
+logs=$(mktemp -d)
+steps=0
+trap 'rm -rf "$logs"' EXIT
 
 step() {
-  local name=$1
+  local name=$1 log
   shift
+  steps=$((steps + 1))
+  log="$logs/$steps"
   echo "== $name"
-  "$@" || failed+=("$name")
+  "$@" 2>&1 | tee "$log"
+  [ "${PIPESTATUS[0]}" -eq 0 ] || { failed+=("$name"); failed_logs+=("$log"); }
 }
 
 # Fails unless cadrev check on example prints the status line its README states.
@@ -76,10 +83,14 @@ if examples=$(../../../scripts/committed-examples); then
   rm -rf "$(dirname "$examples")"
 else
   failed+=("the examples copy as a clone holds them")
+  failed_logs+=(/dev/null)
 fi
 
 if [ ${#failed[@]} -gt 0 ]; then
-  printf 'failed: %s\n' "${failed[@]}"
+  for i in "${!failed[@]}"; do
+    printf 'failed: %s\n' "${failed[$i]}"
+    tail -n 20 "${failed_logs[$i]}" | sed 's/^/  /'
+  done
   exit 1
 fi
 echo "all steps passed"
