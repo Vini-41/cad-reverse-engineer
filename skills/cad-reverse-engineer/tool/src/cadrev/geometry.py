@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple, Protocol
 
+from . import accounting
 from .project import (
     Project,
     between_two,
@@ -25,7 +26,6 @@ from .project import (
     mass_params,
     overlap_limit,
     resolution_params,
-    rests_on,
 )
 
 AXES = {"x": 0, "y": 1, "z": 2}
@@ -1045,6 +1045,11 @@ def _joint_name(c: dict) -> str | None:
     return c.get("joint") or (c.get("sweep") or {}).get("joint")
 
 
+def _range_given(built: Built, c: dict) -> tuple[str, ...]:
+    """The params the model gives a check naming a joint: that joint's range ends."""
+    return tuple(built.joints.get(_joint_name(c) or "", {}).get("range", ()))
+
+
 def _joint(p: Project, built: Built, c: dict, poser: Poser | None) -> dict | None:
     """The ranged joint a range check names or an interference check is swept over; None, after
     a [check-config] finding, when the model has no such joint or it has no range."""
@@ -1169,11 +1174,14 @@ def _weighed(p: Project, built: Built, c: dict) -> Counter | None:
     return None if missing else tally
 
 
-def _mass(p: Project, built: Built, c: dict, tally: Counter) -> CheckResult | None:
+def _mass(
+    p: Project, built: Built, c: dict, tally: Counter
+) -> tuple[CheckResult, accounting.Reads] | None:
     """A mass check: each instance in tally weighed by its part's volume times the check's density,
     or without one by the mass model as the MJCF export weighs it, plus its add params. None after
     a [check-config] finding: a counts param other than its part's instances in tally, or a part
-    the mass model leaves unweighed."""
+    the mass model leaves unweighed. With what it reads: the params of the parts it weighs, and
+    the parts it weighs in several instances with no counts entry."""
     cid, names, counts = c.get("id", "?"), list(tally), c.get("counts", {})
     wrong = [(part, param) for part, param in counts.items() if p.values[param] != tally[part]]
     for part, param in wrong:
@@ -1200,7 +1208,8 @@ def _mass(p: Project, built: Built, c: dict, tally: Counter) -> CheckResult | No
     measured = sum(each[n] * tally[n] for n in names) + sum(p.values[n] for n in c.get("add", []))
     result = _compared(p, c, cid, f"{c['evidence']}.{c['key']}", measured)
     result.uncounted = {n: k for n, k in tally.items() if k > 1 and n not in counts}
-    return result
+    given = _range_given(built, c)
+    return result, accounting.reads(p, c, given, tuple(tally), tuple(result.uncounted))
 
 
 def _interference(
@@ -1253,10 +1262,10 @@ def _interference(
 
 def _stroke(
     p: Project, built: Built, c: dict, reached: tuple[Built, dict | None], poser: Poser | None
-) -> tuple[CheckResult, dict | None, tuple[str, ...]] | None:
+) -> tuple[CheckResult, dict | None, accounting.Reads] | None:
     """A stroke check: how much its cable shortens from as built to the pose the check names
     (reached), or without one to its wheel's full turn, compared with the ledger value; with the
-    pose and the params the model gives it, the wheel's turn and the closed values, where the pose
+    pose and what it reads, given among them the wheel's turn and the closed values where the pose
     moves the wheel, itself or through a gear or cable."""
     cid, name = c.get("id", "?"), c["cable"]
     cable = built.cables.get(name)
@@ -1286,12 +1295,13 @@ def _stroke(
             if {link.driver, link.driven} & moved and not {link.driver, link.driven} <= moved:
                 moved |= {link.driver, link.driven}
                 changed = True
-    also: tuple[str, ...] = ()
+    given = _range_given(built, c)
     if "wheel" in cable and cable["wheel"] in moved:
-        also = (cable_turn(built, cable), *cable["closes"].values())
+        given += (cable_turn(built, cable), *cable["closes"].values())
     shortening = cable_length(built, cable) - cable_length(placed, cable)
     ref = f"{c['evidence']}.{c['key']}"
-    return _compared(p, c, cid, ref, shortening, f" shortening of {name}"), pose, also
+    result = _compared(p, c, cid, ref, shortening, f" shortening of {name}")
+    return result, pose, accounting.reads(p, c, given)
 
 
 def _placed_for(
@@ -1323,7 +1333,7 @@ def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[Che
         if reached is None:
             continue
         placed, pose = reached
-        moved: tuple[str, ...] = ()  # the params a stroke's pose moves its cable's joints by
+        read = accounting.reads(p, c, _range_given(built, c))
         try:
             if kind == "bbox":
                 shape = _envelope(p, placed, c)
@@ -1354,12 +1364,16 @@ def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[Che
                 if tally is None:
                     continue
                 p.weighed[cid] = list(tally)
-                results += filter(None, [_mass(p, built, c, tally)])
+                weighed = _mass(p, built, c, tally)
+                if weighed is None:
+                    continue
+                result, read = weighed
+                results.append(result)
             elif kind == "stroke":
                 stroke = _stroke(p, built, c, reached, poser)
                 if stroke is None:
                     continue
-                result, pose, moved = stroke
+                result, pose, read = stroke
                 results.append(result)
             elif kind == "range":
                 results += _range(p, built, c, poser)
@@ -1371,12 +1385,9 @@ def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[Che
         except (KeyError, TypeError, ValueError) as exc:
             p.error("check-config", f"check {cid}: missing or unknown {exc}")
             continue
-        joint = built.joints.get(_joint_name(c) or "", {})
-        basis, params = rests_on(p, c, (*joint.get("range", ()), *moved))
+        basis, params = accounting.rests_on(p, read)
         for r in results[start:]:
             r.rests_on, r.rests_on_params = basis, params
-            if r.uncounted and basis != "proposed":  # how many there are is the model's choice
-                r.rests_on, r.rests_on_params = "proposed", []
             r.pose = r.pose or pose
     for r in results:
         if not r.ok:

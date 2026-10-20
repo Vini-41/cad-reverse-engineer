@@ -33,11 +33,12 @@ COMPARED_IN = {"angle": "deg"}
 TOL_CAP, TOL_REL_CAP = 0.05, 0.25
 
 
-def _mass_reads(p: Project, c: dict) -> list[str]:
+def _mass_reads(p: Project, c: dict, weighs: tuple[str, ...] | None = None) -> list[str]:
     """The params a mass check reads: its density, or without one the mass model's params for
-    the parts it weighs (its parts, else those the build found it weighs, else every part), then
-    its add and counts params."""
-    parts = c.get("parts") or p.weighed.get(c.get("id", "?"))
+    the parts it weighs (its parts, else weighs, else those the build found it weighs, else every
+    part), then its add and counts params."""
+    found = weighs if weighs is not None else p.weighed.get(c.get("id", "?"))
+    parts = c.get("parts") or found
     names = mass_params(p, parts) if c.get("density") is None else []
     names += [str(c.get("density"))] + [str(n) for n in c.get("add") or []]
     return names + [str(n) for n in (c.get("counts") or {}).values()]
@@ -48,15 +49,15 @@ class CheckKind:
     """What a kind of check compares with the geometry: evidence values of quantity, within tol,
     which defaults to project.yaml's tolerance.<tolerance>; or, where tolerance is None, within
     tol_rel, a fraction of the value, which has no default. reads gives the params a check of
-    the kind reads itself; span_capped caps its tol against the span between the two values it
-    compares, rather than against each. A joint_valued check without between compares its
-    joint's own value, so quantity and tolerance are its joint's: an angle for a revolute joint,
-    a length for a slide. between_two, where set, is the quantity and tolerance of a check whose
+    the kind reads itself, given the parts a mass check weighs where known; span_capped caps its
+    tol against the span between the two values it compares, rather than against each. A
+    joint_valued check without between compares its joint's own value, so quantity and tolerance
+    are its joint's: an angle for a revolute joint, a length for a slide. between_two, where set, is the quantity and tolerance of a check whose
     between names two datums rather than three: a distance."""
 
     quantity: str
     tolerance: str | None
-    reads: Callable[[Project, dict], list[str]] | None = None
+    reads: Callable[[Project, dict, tuple[str, ...] | None], list[str]] | None = None
     span_capped: bool = False
     joint_valued: bool = False
     between_two: str | None = None
@@ -701,12 +702,15 @@ def _sweep_steps(c: dict) -> list[str]:
     return [str(c["sweep"].get("steps"))] if isinstance(c.get("sweep"), dict) else []
 
 
-def params_read_by(p: Project, c: dict, steps: bool = True) -> list[str]:
+def params_read_by(
+    p: Project, c: dict, steps: bool = True, weighs: tuple[str, ...] | None = None
+) -> list[str]:
     """The params check c reads itself, in order: the params its pose names, its sweep's steps
-    (unless steps is False), then those its kind reads (CheckKind.reads)."""
+    (unless steps is False), then those its kind reads (CheckKind.reads), a mass check's for the
+    parts it weighs where weighs gives them."""
     kind = CHECK_KINDS.get(str(c.get("kind")))
     names = pose_refs(c) + (_sweep_steps(c) if steps else [])
-    names += kind.reads(p, c) if kind is not None and kind.reads is not None else []
+    names += kind.reads(p, c, weighs) if kind is not None and kind.reads is not None else []
     return [n for n in dict.fromkeys(names) if n in p.params]
 
 
@@ -720,17 +724,6 @@ def resolution_params(p: Project) -> set[str]:
     reads too, and sets the rest as Project.resolution."""
     steps = {n for c in p.checks for n in _sweep_steps(c) if n in p.params}
     return steps - {n for c in p.checks for n in params_read_by(p, c, steps=False)}
-
-
-def rests_on(p: Project, c: dict, also: tuple[str, ...] = ()) -> tuple[str, list[str]]:
-    """What check c rests on: the weakest basis among the params it reads, and also those of
-    the params the model gives it (a joint's range), or source when it reads none, with the
-    params it reads that rest on that basis. A sweep's resolution (Project.resolution) states
-    nothing about the object, so no check rests on it."""
-    names = dict.fromkeys(n for n in [*params_read_by(p, c), *also] if n not in p.resolution)
-    bases = {name: p.rests_on.get(name, "proposed") for name in names}
-    weakest = max(bases.values(), key=RESTS_ON.index, default="source")
-    return weakest, [name for name, basis in bases.items() if basis == weakest]
 
 
 def check_tolerance(p: Project, c: dict, quantity: str | None = None) -> tuple[str, float] | None:

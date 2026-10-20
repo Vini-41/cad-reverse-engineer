@@ -37,7 +37,7 @@ _Avoid_: exclusion, ignore
 The declared origin of a parameter's value: `source`, `derived`, `measured` or `proposed`. A parameter with basis `source` *traces to a source*.
 
 **Rests on**:
-The basis a parameter's value ultimately depends on: its own; proposed for a derived parameter that names a gap, since its computation is itself a reconstruction choice; or for any other derived parameter the weakest among the parameters it is computed from, proposed being weaker than measured and measured weaker than source. A check rests on the weakest among the parameters it reads, or on source when it reads none; a mass check that weighs a part in several instances with no stated count rests on proposed, since how many there are is then the model's choice.
+The basis a parameter's value ultimately depends on: its own; proposed for a derived parameter that names a gap, since its computation is itself a reconstruction choice; or for any other derived parameter the weakest among the parameters it is computed from, proposed being weaker than measured and measured weaker than source. A check rests on the weakest among the parameters its Reads names, or on source when it names none; a mass check that weighs a part in several instances with no stated count rests on proposed, since how many there are is then the model's choice.
 _Avoid_: traces to (for a derived parameter), effective basis
 
 **Measured**:
@@ -96,8 +96,12 @@ _Avoid_: state, configuration (for the values themselves)
 One comparison between the built geometry and a ledger value: an envelope, a distance or an angle between datums, a mass or an interference.
 _Avoid_: test, assertion
 
+**Reads**:
+What a check's evaluation read, shared by all its results: the params it reads itself (its pose, its sweep's steps, its kind's own, a mass check's only for the parts it weighs), the params the model gives it (its joint's range ends, the wheel's turn and the closed values a pose moves through a cable), the parts it weighs and those it weighs in several instances with no stated count. A check's rests on is judged from its Reads.
+_Avoid_: dependencies, inputs (of a check)
+
 **Checked param**:
-A param some check reads, itself or through a param derived from it, or whose ledger value some check compares. A source param that is not one is unchecked.
+A param some check reads itself (see Reads), directly or through a param derived from it, or whose ledger value some check compares. A source param that is not one is unchecked.
 _Avoid_: covered (by a check), confirmed (by a check)
 
 **Tolerance**:
