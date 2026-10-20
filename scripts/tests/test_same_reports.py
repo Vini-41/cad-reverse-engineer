@@ -10,15 +10,20 @@ CLI = """import json, sys
 from pathlib import Path
 
 REPORT = {report}
+PRINTED = {printed}
 
 
 def main(argv):
+    if "--no-build" in argv:  # a partial run prints its findings and writes no report
+        print("\\n".join(PRINTED))
+        return 1
     if REPORT is not None:
         (Path(argv[1]) / "build").mkdir(exist_ok=True)
         (Path(argv[1]) / "build" / "report.json").write_text(json.dumps(REPORT))
     return 0
 """
 REPORT = {"checks": [{"id": "T1", "ok": True}], "findings": [{"rule": "a"}, {"rule": "b"}]}
+PRINTED = ["error: [a] one", "warning: [b] two", "NOT VERIFIED: skipped the build"]
 
 
 def git(root: Path, *args: str) -> None:
@@ -29,8 +34,9 @@ def git(root: Path, *args: str) -> None:
     )
 
 
-def cli(root: Path, report: dict | None) -> None:
-    (root / TOOL / "src" / "cadrev" / "cli.py").write_text(CLI.format(report=repr(report)))
+def cli(root: Path, report: dict | None, printed: list[str] = PRINTED) -> None:
+    text = CLI.format(report=repr(report), printed=repr(printed))
+    (root / TOOL / "src" / "cadrev" / "cli.py").write_text(text)
 
 
 def repo(tmp_path: Path) -> Path:
@@ -50,9 +56,9 @@ def repo(tmp_path: Path) -> Path:
     return root
 
 
-def same_reports(root: Path, base: str = "HEAD") -> subprocess.CompletedProcess[str]:
+def same_reports(root: Path, *args: str, base: str = "HEAD") -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [str(SCRIPT)],
+        [str(SCRIPT), *args],
         cwd=root,
         env={**os.environ, "BASE": base},
         capture_output=True,
@@ -104,3 +110,19 @@ def test_a_base_the_clone_lacks_exits_3(tmp_path):
     result = same_reports(root, base="1" * 40)
     assert result.returncode == 3
     assert "not in this clone" in result.stderr
+
+
+def test_a_partial_run_that_only_reorders_its_printed_findings_is_same(tmp_path):
+    root = repo(tmp_path)
+    cli(root, REPORT, [PRINTED[1], PRINTED[0], "NOT VERIFIED: skipped the build, now worded anew"])
+    result = same_reports(root, "--no-build")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "examples/ex: same with --no-build (2 findings)" in result.stdout
+
+
+def test_a_partial_run_whose_printed_finding_is_gone_differs_naming_it(tmp_path):
+    root = repo(tmp_path)
+    cli(root, REPORT, PRINTED[1:])
+    result = same_reports(root, "--no-build")
+    assert result.returncode == 1
+    assert "findings only at BASE: ['error: [a] one']; only now: none" in result.stdout

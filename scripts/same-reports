@@ -4,11 +4,14 @@ tool source at BASE and as in the working tree, and compare the build/report.jso
 checks entries exactly and its findings as a sorted list, so findings may only change order.
 
 Both runs use the working tree's examples and its tool environment; only the tool source differs.
+With a partial run's flag (--no-build, --no-coverage), which writes no report, it compares the
+findings each run prints instead, as a sorted list.
 Prints each example as same or as the first difference, and exits 0 when every example is the same,
 1 when one differs, 2 when a run writes no report.json, and 3 when there is nothing to compare: the
 tool source is the same at BASE as in the working tree, or BASE is not in this clone.
 
-    scripts/same-reports [example dir ...]     default: every examples/*/ holding a project.yaml
+    scripts/same-reports [--no-build] [--no-coverage] [example dir ...]
+                                     default: every examples/*/ holding a project.yaml
 
 BASE is the commit before the refactor: by default the upstream branch (origin/main), so unpushed
 commits count as the refactor, else the merge-base with main. Set BASE=<ref> for another commit.
@@ -43,11 +46,12 @@ def base_commit(repo: Path) -> tuple[str, str] | None:
     return (found.stdout.strip(), label) if found.returncode == 0 and ref else None
 
 
-def check(repo: Path, src: Path, example: Path) -> tuple[dict | None, str]:
-    """cadrev check on example with the tool source in src: its report.json, None if it wrote
-    none, and what it printed."""
+def check(repo: Path, src: Path, example: Path, flags: list[str]) -> tuple[dict | None, str]:
+    """cadrev check on example with the tool source in src and flags: its report.json, None if it
+    wrote none, and what it printed."""
+    command = ["uv", "run", "-q", "--project", str(repo / TOOL), "python", "-c", MAIN]
     run = subprocess.run(
-        ["uv", "run", "-q", "--project", str(repo / TOOL), "python", "-c", MAIN, "check", "."],
+        [*command, "check", ".", *flags],
         cwd=example,
         env={**os.environ, "PYTHONPATH": str(src)},
         capture_output=True,
@@ -55,6 +59,20 @@ def check(repo: Path, src: Path, example: Path) -> tuple[dict | None, str]:
     )
     report = example / "build" / "report.json"
     return (json.loads(report.read_text()) if report.exists() else None), run.stdout + run.stderr
+
+
+def printed_findings(printed: str) -> list[str]:
+    """The findings a run printed, one per line."""
+    return [line for line in printed.splitlines() if line.startswith(("error:", "warning:"))]
+
+
+def findings_difference(base: list, head: list) -> str | None:
+    """The findings only one of two runs has, compared as sorted lists; None when none."""
+    old, new = Counter(base), Counter(head)
+    if old == new:
+        return None
+    gone, added = sorted((old - new).elements()), sorted((new - old).elements())
+    return f"findings only at BASE: {gone or 'none'}; only now: {added or 'none'}"
 
 
 def difference(base: dict, head: dict) -> str | None:
@@ -66,11 +84,9 @@ def difference(base: dict, head: dict) -> str | None:
             )
     if len(base["checks"]) != len(head["checks"]):
         return f"{len(base['checks'])} checks at BASE, {len(head['checks'])} now"
-    old, new = (Counter(json.dumps(f, sort_keys=True) for f in r["findings"]) for r in (base, head))
-    if old != new:
-        gone, added = sorted((old - new).elements()), sorted((new - old).elements())
-        return f"findings only at BASE: {gone or 'none'}; only now: {added or 'none'}"
-    return None
+    return findings_difference(
+        *([json.dumps(f, sort_keys=True) for f in r["findings"]] for r in (base, head))
+    )
 
 
 def main() -> int:
@@ -89,7 +105,8 @@ def main() -> int:
             file=sys.stderr,
         )
         return 3
-    named = [Path(a).resolve() for a in sys.argv[1:]]
+    flags = [a for a in sys.argv[1:] if a in ("--no-build", "--no-coverage")]
+    named = [Path(a).resolve() for a in sys.argv[1:] if a not in flags]
     examples = named or sorted(p.parent for p in (repo / "examples").glob("*/project.yaml"))
     print(f"tool source at {label} ({commit[:7]}) and in the working tree")
     with tempfile.TemporaryDirectory() as tmp:
@@ -105,22 +122,29 @@ def main() -> int:
         code = 0
         for example in examples:
             where = example.relative_to(repo / "examples")
-            reports = {}
+            reports, printed = {}, {}
             for name, root in side.items():
-                reports[name], printed = check(repo, src[name], root / "examples" / where)
-                if reports[name] is None:
+                found = check(repo, src[name], root / "examples" / where, flags)
+                reports[name], printed[name] = found
+                if reports[name] is None and not flags:
                     print(f"examples/{where}: no report.json with the tool source at {name}:")
-                    print("\n".join(printed.splitlines()[-20:]))
+                    print("\n".join(printed[name].splitlines()[-20:]))
                     return 2
-            base_report, head_report = reports["base"], reports["head"]
-            assert base_report is not None and head_report is not None
-            differs = difference(base_report, head_report)
+            if flags:  # a partial run writes no report, so compare what each printed
+                lines = {name: printed_findings(text) for name, text in printed.items()}
+                differs = findings_difference(lines["base"], lines["head"])
+                run, summary = f" with {' '.join(flags)}", f"{len(lines['head'])} findings"
+            else:
+                base_report, head_report = reports["base"], reports["head"]
+                assert base_report is not None and head_report is not None
+                differs = difference(base_report, head_report)
+                checks, findings = len(head_report["checks"]), len(head_report["findings"])
+                run, summary = "", f"{checks} checks, {findings} findings"
             if differs:
-                print(f"examples/{where}: differs, {differs}")
+                print(f"examples/{where}: differs{run}, {differs}")
                 code = 1
             else:
-                checks, findings = len(head_report["checks"]), len(head_report["findings"])
-                print(f"examples/{where}: same ({checks} checks, {findings} findings)")
+                print(f"examples/{where}: same{run} ({summary})")
         return code
 
 
