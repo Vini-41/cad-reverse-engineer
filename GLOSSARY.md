@@ -97,11 +97,11 @@ One comparison between the built geometry and a ledger value: an envelope, a dis
 _Avoid_: test, assertion
 
 **Reads**:
-What a check's evaluation read, shared by all its results: the params it reads itself (its pose, its sweep's steps, its kind's own, a mass check's only for the parts it weighs), the params the model gives it (its joint's range ends, the wheel's turn and the closed values a pose moves through a cable), the parts it weighs and those it weighs in several instances with no stated count. A check's rests on is judged from its Reads.
+What a check's evaluation read, shared by all its results: the params it reads itself (its pose, its sweep's steps, its kind's own, a mass check's only for the parts it weighs), the params the model gives it (its joint's range ends, the wheel's turn and the closed values a pose moves through a cable), the parts it weighs and those it weighs in several instances with no stated count. A check reads both its own params and those the model gives it; its rests on is judged from its Reads.
 _Avoid_: dependencies, inputs (of a check)
 
 **Checked param**:
-A param some check reads itself (see Reads), directly or through a param derived from it, or whose ledger value some check compares. A source param that is not one is unchecked.
+A param some check reads (see Reads), directly or through a param derived from it, or whose ledger value some check compares. A source param that is not one is unchecked.
 _Avoid_: covered (by a check), confirmed (by a check)
 
 **Tolerance**:

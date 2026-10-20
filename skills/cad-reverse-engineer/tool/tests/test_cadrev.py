@@ -5505,6 +5505,14 @@ def test_proposed_sweep_steps_leave_a_project_exact_and_are_named_beside_it(proj
     )
 
 
+def test_source_range_ends_only_a_swept_check_reads_are_not_unchecked_source(proj_dir, tmp_path):
+    post_beside(proj_dir, tmp_path, -30, ranged_by_source=True)
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].remove(_by_id(d)["reach"]))
+    _, report = verify(proj_dir)
+    assert _by_id(report)["clear"]["sweep"]["from"] == ["input_min", "input_max"]
+    assert {"param input_min", "param input_max"}.isdisjoint(_unchecked_in(report))
+
+
 def test_proposed_sweep_steps_naming_no_gap_raise_no_param_gap(proj_dir, tmp_path):
     post_beside(proj_dir, tmp_path, -30)
     _param("sweep_steps", gap=None)(proj_dir, tmp_path)
@@ -6431,6 +6439,32 @@ def test_stroke_check_rests_on_the_wheels_turn_and_closed_angles(
     full = _by_id(report)["full"]
     assert code == 0, report["findings"]
     assert (full["rests_on"], full["rests_on_params"]) == (rests_on, params)
+
+
+_TURN_AND_CLOSED = {"param turn", "param c1", "param c2"}
+
+
+def test_source_turn_and_closed_angles_a_stroke_check_rests_on_are_not_unchecked_source(
+    proj_dir, tmp_path
+):
+    cabled(proj_dir, tmp_path, sourced=True)
+    _, report = verify(proj_dir)
+    full = _by_id(report)["full"]
+    assert (full["rests_on"], full["rests_on_params"]) == ("source", ["turn", "c1", "c2"])
+    assert _TURN_AND_CLOSED.isdisjoint(_unchecked_in(report))
+
+
+def test_guard_run_without_the_build_leaves_source_closed_angles_unchecked_source(
+    proj_dir, tmp_path
+):
+    # With nothing built, the model gives no check its wheel's turn or closed angles.
+    cabled(proj_dir, tmp_path, sourced=True)
+    prefix = "warning: [unchecked-source] "
+    printed = _partial(proj_dir, "--no-build")
+    unchecked = {
+        line.removeprefix(prefix).split(":")[0] for line in printed if line.startswith(prefix)
+    }
+    assert _TURN_AND_CLOSED <= unchecked
 
 
 def test_stroke_check_posed_through_a_gear_on_its_wheel_rests_on_the_closed_angles(

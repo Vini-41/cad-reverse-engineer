@@ -14,7 +14,8 @@ class Reads:
     """What a check's evaluation read, shared by all its results: the params it reads itself
     (own), the params the model gives it (given: a joint's range ends, the wheel's turn and the
     closed values a stroke's pose moves), the parts a mass check weighs (weighs, None for other
-    kinds) and the parts it weighs in several instances with no stated count (uncounted)."""
+    kinds) and the parts it weighs in several instances with no stated count (uncounted). The check
+    reads both own and given params: each is checked, and its rests on is judged from both."""
 
     own: tuple[str, ...] = ()
     given: tuple[str, ...] = ()
@@ -59,10 +60,13 @@ def check_source_params(
 ) -> None:
     """[unchecked-source] for each source param no check checks, once per verification run, where
     evaluated is the Reads the checks' evaluations returned and model_reads what model.py reads;
-    when nothing was built, each check's Reads is estimated from the check alone. A check checks
-    what the params it reads itself feed, and the params whose ledger value it compares."""
-    own = {name for r in (estimated(p) if evaluated is None else evaluated) for name in r.own}
-    unchecked = _unchecked_geometry(p, own) | _unchecked_physics(p, own, model_reads)
+    when nothing was built, each check's Reads is estimated from the check alone, which names no
+    params the model gives it. A check checks what the params it reads feed, its own and those the
+    model gives it, and the params whose ledger value it compares."""
+    read = {
+        n for r in (estimated(p) if evaluated is None else evaluated) for n in [*r.own, *r.given]
+    }
+    unchecked = _unchecked_geometry(p, read) | _unchecked_physics(p, read, model_reads)
     compared = {ref for c in p.checks for ref in check_refs(c)}
     for name in [n for n in p.params if n in unchecked]:
         spec = p.params[name]
