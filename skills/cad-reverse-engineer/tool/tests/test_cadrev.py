@@ -4202,6 +4202,7 @@ def test_model_with_no_joints_writes_no_mjcf_and_its_report_says_it_is_static(pr
         "loops": {},
         "gears": {},
         "tendons": {},
+        "cables": {},
         "dropped": False,
     }
     assert (
@@ -5936,6 +5937,444 @@ def test_guard_gear_ratio_typed_into_model_py_is_a_model_literal(proj_dir, tmp_p
     assert "model-literal" in errors(proj_dir)
 
 
+# A cable wound on a wheel closes the joints it names toward their closed pose, in proportion to the
+# wheel's turn, and a stroke check reads how far its path shortens.
+
+_SPOOL = """\
+            "spool": {
+                "type": "revolute",
+                "parent": "ground_1",
+                "child": "spool_1",
+                "axis": ["spool_1.a", "spool_1.a_up"],
+                "range": ["turn"],
+                "drive": "actuated",
+            },
+"""
+_TOE2 = """\
+            "toe2": {
+                "type": "revolute",
+                "parent": "toe_1",
+                "child": "tip_1",
+                "axis": ["tip_1.a", "tip_1.a_up"],
+                "drive": "passive",
+            },
+"""
+_TOES = """\
+            "shift": {
+                "type": "slide",
+                "parent": "ground_1",
+                "child": "base_1",
+                "axis": ["base_1.a", "base_1.d"],
+                "range": ["shift_min", "shift_max"],
+                "drive": "passive",
+            },
+            "toe1": {
+                "type": "revolute",
+                "parent": "base_1",
+                "child": "toe_1",
+                "axis": ["toe_1.a", "toe_1.a_up"],
+                "drive": "passive",
+            },
+"""
+_PULL = '"path": ["ground_1.d", "spool_1.d", "tip_1.d"]'
+_CABLE = (
+    '        "cables": {"pull": {' + _PULL + ', "wheel": "spool",'
+    ' "closes": {"toe1": "c1", "toe2": "c2"}}},\n'
+)
+# The ledger's spool turn and closed toe angles, in degrees.
+CLOSED = {"turn": 120, "c1": 90, "c2": 60}
+
+
+def pull_length(spool: float = 0, toe1: float = 0, toe2: float = 0, shift: float = 0) -> float:
+    """The cabled slider-crank's closed form: the length of cable pull, from the ground link's far
+    end round the spool's tip to the second toe's tip, with the spool, toes and slide at those
+    values (degrees, mm) from as built."""
+    w, c1, c12 = (math.radians(v) for v in (spool, toe1, toe1 + toe2))
+    tip = (
+        10 + shift + 10 * (math.cos(c1) + math.cos(c12)),
+        -30 + 10 * (math.sin(c1) + math.sin(c12)),
+    )
+    points = [(15, 0), (5 * math.cos(w), -15 + 5 * math.sin(w)), tip]
+    return sum(math.dist(a, b) for a, b in zip(points, points[1:]))
+
+
+def pull_stroke(fraction: float = 1, **pose: float) -> float:
+    """How far pull shortens with the spool at fraction of its full turn, the toes following."""
+    turned = {k: fraction * v for k, v in zip(("spool", "toe1", "toe2"), CLOSED.values())}
+    return pull_length() - pull_length(**(turned | pose))
+
+
+def _shortening(check: dict) -> float:
+    """A stroke check's measured shortening, without what it measured."""
+    return float(check["measured"].split()[0])
+
+
+def cabled(root: Path, tmp_path: Path, cable: str = _CABLE, *, sourced: bool = False) -> None:
+    """The slider-crank with a toe pair beside it, each bar toe_L (10 mm) long: a base on slide
+    shift, toe1 hinged on its tip and toe2 on toe1's tip, and cable pull wound on actuated spool (one-ended range turn), closing toe1
+    to c1 and toe2 to c2. Turn, c1 and c2 are proposed at CLOSED, or sourced from N1. Checks full
+    and half read pull's stroke at the spool's full turn and at half_turn."""
+    slider_crank(root, tmp_path, turns=(30,))
+    model = swap(
+        SLIDER_CRANK,
+        '"ground": a, "crank": a,',
+        '"ground": a, "crank": a, "spool": p.link_W, "base": p.toe_L, "toe": p.toe_L, '
+        '"tip": p.toe_L,',
+    )
+    model = swap(
+        model,
+        '"slider_1": ("slider", Location((reach, 0, 0))),',
+        '"slider_1": ("slider", Location((reach, 0, 0))),\n'
+        '            "spool_1": ("spool", Location((0, -a, 0))),\n'
+        '            "base_1": ("base", Location((0, -2 * a, 0))),\n'
+        '            "toe_1": ("toe", Location((p.toe_L, -2 * a, 0))),\n'
+        '            "tip_1": ("tip", Location((2 * p.toe_L, -2 * a, 0))),',
+    )
+    model = swap(model, '        "joints": {\n', '        "joints": {\n' + _SPOOL + _TOES + _TOE2)
+    model = swap(model, '        "loops": {', cable + '        "loops": {')
+    write(root, "model.py", model)
+    _parts(**{n: {"density": "density"} for n in ("spool", "base", "toe", "tip")})(root, tmp_path)
+    text = (
+        f"Turned {CLOSED['turn']}° the spool closes the first toe {CLOSED['c1']}° and the second "
+        f"{CLOSED['c2']}°, shortening the cable {pull_stroke():.4f} mm; turned halfway, "
+        f"{pull_stroke(0.5):.4f} mm."
+    )
+    values = {"full": round(pull_stroke(), 4), "half": round(pull_stroke(0.5), 4)}
+    values |= CLOSED if sourced else {}
+    add_quote(root, tmp_path, text + "\n", text.rstrip("."), values)
+    guess = {"basis": "proposed", "rationale": "a guess", "gap": "G1"}
+    for name, value in CLOSED.items():
+        spec = {"basis": "source", "from": f"N1.{name}"} if sourced else guess | {"value": value}
+        _param(name, **spec)(root, tmp_path)
+    halves = {"half_turn": CLOSED["turn"] / 2, "half_c1": CLOSED["c1"] / 2}
+    for name, value in (halves | {"shift_min": -5, "shift_max": 5, "toe_L": 10}).items():
+        _param(name, **guess, value=value)(root, tmp_path)
+    stroke = {"kind": "stroke", "cable": "pull", "evidence": "N1"}
+    _append("checks.yaml", "checks", stroke | {"id": "full", "key": "full"})(root, tmp_path)
+    half = stroke | {"id": "half", "key": "half", "pose": {"spool": "half_turn"}}
+    _append("checks.yaml", "checks", half)(root, tmp_path)
+
+
+def test_a_cable_wound_on_a_wheel_closes_its_joints_in_proportion_to_its_turn(proj_dir, tmp_path):
+    cabled(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    checks = _by_id(report)
+    # At the full turn the toes reach c1 and c2, at half of it half of each: not as built, nor
+    # each other's closed angle.
+    assert code == 0, report["findings"]
+    assert checks["full"]["ok"] and checks["half"]["ok"]
+    assert checks["full"]["pose"] == {"spool": {"from": "turn", "value": 120}}
+    assert abs(pull_stroke() - pull_stroke(toe1=60, toe2=90)) > 0.01
+    assert abs(pull_stroke(0.5) - pull_stroke(0.5, toe1=0, toe2=0)) > 0.01
+
+
+def test_posing_a_closed_joint_alone_sets_its_wheel_and_the_cables_other_joints(proj_dir, tmp_path):
+    cabled(proj_dir, tmp_path)
+    # toe1 at half its closed angle turns the spool halfway, and the spool turns toe2 halfway.
+    _check("half", pose={"toe1": "half_c1"})(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert _by_id(report)["half"]["ok"]
+    assert abs(pull_stroke(0.5) - pull_stroke(0.5, spool=0)) > 0.01
+    assert abs(pull_stroke(0.5) - pull_stroke(0.5, toe2=0)) > 0.01
+
+
+def test_pose_setting_two_joints_of_a_cable_out_of_proportion_is_check_config(proj_dir, tmp_path):
+    cabled(proj_dir, tmp_path)
+    _check("half", pose={"toe1": "half_c1", "toe2": "c2"})(proj_dir, tmp_path)
+    assert findings(proj_dir, "check-config") == [
+        "check half: pose toe1 at 45 (half_c1), toe2 at 60 (c2): cable pull closes toe2 to 60 as "
+        "spool turns to 120, so set one of them and the cable moves the other"
+    ]
+
+
+def test_pose_setting_alone_a_joint_a_cable_closes_to_0_is_check_config(proj_dir, tmp_path):
+    cabled(proj_dir, tmp_path)
+    _param("c2", value=0)(proj_dir, tmp_path)
+    _check("half", pose={"toe2": "half_c1"})(proj_dir, tmp_path)
+    assert findings(proj_dir, "check-config") == [
+        "check half: pose toe2 at 45 (half_c1): cable pull closes toe2 to 0 as spool turns to "
+        "120, so toe2 cannot set spool; set spool"
+    ]
+
+
+_FIXED_SPOOL = '            "spool": {"type": "fixed", "parent": "ground_1", "child": "spool_1"},\n'
+_FIXED_TOE2 = '            "toe2": {"type": "fixed", "parent": "toe_1", "child": "tip_1"},\n'
+_PULL2 = '"pull2": {"path": ["ground_1.d", "tip_1.d"], "wheel": "spool", "closes": {"toe2": "c2"}}'
+
+
+@pytest.mark.parametrize(
+    "model, cable, says",
+    [
+        (
+            None,
+            ("tip_1.d", "tip_1.zz"),
+            "pull: tip_1.zz names no <instance>.<feature> datum of the assembly",
+        ),
+        (None, ('"wheel": "spool"', '"wheel": "reel"'), "pull: wheel reel is not a joint"),
+        ((_SPOOL, _FIXED_SPOOL), None, "pull: wheel spool is a fixed joint"),
+        (
+            ('                "range": ["turn"],\n', ""),
+            None,
+            "pull: wheel spool needs a one-ended range, its full turn from as built; it has none",
+        ),
+        (
+            ('"range": ["turn"]', '"range": ["c2", "turn"]'),
+            None,
+            "pull: wheel spool needs a one-ended range, its full turn from as built; it has "
+            "['c2', 'turn']",
+        ),
+        (
+            None,
+            ('"ground_1.d", "spool_1.d"', '"spool_1.d", "ground_1.d"'),
+            "pull: its path starts at spool_1.d, on the wheel; start it where the cable leaves "
+            "the wheel, on an instance the wheel does not turn",
+        ),
+        (None, ('"toe2": "c2"', '"toe3": "c2"'), "pull: closes toe3, which is not a joint"),
+        ((_TOE2, _FIXED_TOE2), None, "pull: closes toe2, which is a fixed joint"),
+        (None, ('"toe2": "c2"', '"spool": "c2"'), "pull: closes its own wheel spool"),
+        (
+            None,
+            (
+                '"cables": {',
+                '"gears": {"mesh": {"driver": "input", "driven": "toe2", '
+                '"ratio": "half_c1"}},\n        "cables": {',
+            ),
+            "pull: closes toe2, which a gear couples",
+        ),
+        (
+            None,
+            ('"cables": {', '"cables": {' + _PULL2 + ", "),
+            "pull: closes toe2, which cable pull2 closes too",
+        ),
+        (
+            None,
+            ('"toe2": "c2"', '"toe2": "c9"'),
+            "pull: closes toe2 to c9, which params.yaml does not define",
+        ),
+    ],
+    ids=[
+        "unknown-datum",
+        "wheel-not-a-joint",
+        "wheel-fixed",
+        "wheel-no-range",
+        "wheel-two-ended",
+        "starts-on-wheel",
+        "closes-not-a-joint",
+        "closes-fixed",
+        "closes-wheel",
+        "closes-geared",
+        "closed-twice",
+        "undefined-closed",
+    ],
+)
+def test_cable_that_cannot_be_laid_or_close_its_joints_is_model_cable_naming_it(
+    proj_dir, tmp_path, model, cable, says
+):
+    cabled(proj_dir, tmp_path, swap(_CABLE, *cable) if cable else _CABLE)
+    if model:
+        write(proj_dir, "model.py", swap((proj_dir / "model.py").read_text(), *model))
+    _, report = verify(proj_dir)
+    errors = [(f["rule"], f["message"]) for f in report["findings"] if f["level"] == "error"]
+    assert errors == [("model-cable", f"cable {says}")]
+    # Like a gear that cannot couple, it drops the motion: no MJCF, no stroke or posed check.
+    assert report["checks"] == [] and not (proj_dir / "build" / "model.mjcf").exists()
+    assert report["motion"]["dropped"] and report["motion"]["cables"] == {}
+
+
+def test_two_cables_wound_on_one_wheel_each_close_their_joints(proj_dir, tmp_path):
+    shared = swap(_CABLE, '"toe1": "c1", "toe2": "c2"', '"toe1": "c1"')
+    cabled(proj_dir, tmp_path, swap(shared, '"cables": {', '"cables": {' + _PULL2 + ", "))
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert _by_id(report)["full"]["ok"] and _by_id(report)["half"]["ok"]
+
+
+@pytest.mark.parametrize(
+    "old, new, says",
+    [
+        ('"cables": {"pull": ', '"cables": [', "cables must be a mapping of names, not list"),
+        ('"pull": {', '"pull": 3, "_": {', "cable pull must be a mapping, not int"),
+        ('"pull": {', "1: {", "cable 1: its name must be text, not int"),
+        (
+            '"wheel": "spool",',
+            '"wheel": "spool", "stroke": "full",',
+            "cable pull: unknown key 'stroke'",
+        ),
+        (' "wheel": "spool",', "", "cable pull: wheel and closes go together"),
+        (
+            ', "closes": {"toe1": "c1", "toe2": "c2"}',
+            "",
+            "cable pull: wheel and closes go together",
+        ),
+        (
+            _PULL,
+            '"path": ["ground_1.d"]',
+            "cable pull: path must be two or more datums, not ['ground_1.d']",
+        ),
+        ('"c1"', "90", "cable pull: closes must map joint names to param names"),
+    ],
+    ids=[
+        "cables-not-a-mapping",
+        "not-a-mapping",
+        "name-not-text",
+        "unknown-key",
+        "closes-without-wheel",
+        "wheel-without-closes",
+        "one-datum",
+        "closed-literal",
+    ],
+)
+def test_cable_of_the_wrong_shape_is_model_return(proj_dir, tmp_path, old, new, says):
+    cable = swap(_CABLE, old, new)
+    if new == '"cables": [':
+        cable = swap(cable, "}}},\n", "}}],\n")
+    cabled(proj_dir, tmp_path, cable)
+    messages = findings(proj_dir, "model-return")
+    assert len(messages) == 1 and messages[0].startswith(f"model.build {says}")
+
+
+def test_cable_mjcf_couples_each_closed_joint_and_its_tendon_measures_cadrevs_path(
+    proj_dir, tmp_path
+):
+    mujoco = importlib.import_module("mujoco")
+
+    cabled(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    joint, equality = mujoco.mjtObj.mjOBJ_JOINT, mujoco.mjtObj.mjOBJ_EQUALITY
+    for toe, closed in (("toe1", "c1"), ("toe2", "c2")):
+        eq = mujoco.mj_name2id(m, equality, f"pull_{toe}")
+        assert m.eq_type[eq] == mujoco.mjtEq.mjEQ_JOINT
+        assert (m.eq_obj1id[eq], m.eq_obj2id[eq]) == (
+            mujoco.mj_name2id(m, joint, toe),
+            mujoco.mj_name2id(m, joint, "spool"),
+        )
+        assert m.eq_data[eq][1] == pytest.approx(CLOSED[closed] / CLOSED["turn"])
+    assert m.neq == 3  # the slider-crank's loop and one per closed joint
+    pull = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_TENDON, "pull")
+    assert m.tendon_stiffness[pull] == 0
+    # At cadrev's pose for the full turn, MuJoCo's tendon is as long as cadrev's path.
+    data = mujoco.MjData(m)
+    for name in ("spool", "toe1", "toe2"):
+        value = CLOSED["c1" if name == "toe1" else "c2" if name == "toe2" else "turn"]
+        data.qpos[m.jnt_qposadr[mujoco.mj_name2id(m, joint, name)]] = math.radians(value)
+    mujoco.mj_forward(m, data)
+    full = pull_length(CLOSED["turn"], CLOSED["c1"], CLOSED["c2"])
+    assert data.ten_length[pull] == pytest.approx(full, abs=0.001)
+    assert _by_id(report)["full"]["ok"]  # against pull_length() - full
+
+
+def test_cable_mjcf_names_clear_a_loop_or_tendon_of_the_same_name(proj_dir, tmp_path):
+    mujoco = importlib.import_module("mujoco")
+
+    cord = '        "tendons": {"pull": {"path": ["ground_1.a", "tip_1.d"]}},\n'
+    cabled(proj_dir, tmp_path, cord + _CABLE)
+    model = swap((proj_dir / "model.py").read_text(), '"closure": [', '"pull_toe1": [')
+    write(proj_dir, "model.py", model)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    names = {
+        kind: [mujoco.mj_id2name(m, kind, i) for i in range(count)]
+        for kind, count in (
+            (mujoco.mjtObj.mjOBJ_EQUALITY, m.neq),
+            (mujoco.mjtObj.mjOBJ_TENDON, m.ntendon),
+        )
+    }
+    assert names[mujoco.mjtObj.mjOBJ_EQUALITY] == ["pull_toe1", "pull_toe1_2", "pull_toe2"]
+    assert names[mujoco.mjtObj.mjOBJ_TENDON] == ["pull", "pull_2"]
+
+
+def test_stroke_check_fails_when_the_ledger_is_off_by_more_than_its_tol(proj_dir, tmp_path):
+    cabled(proj_dir, tmp_path)
+    _check("full", tol=0.01)(proj_dir, tmp_path)
+    _check("half", tol=0.01, key="full", pose={"spool": "turn"})(proj_dir, tmp_path)
+    off = round(pull_stroke() + 0.02, 4)
+    _evidence("N1", values={"full": round(pull_stroke(), 4), "half": off})(proj_dir, tmp_path)
+    _check("half", key="half")(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert _by_id(report)["full"]["ok"]
+    assert code == 1 and not _by_id(report)["half"]["ok"]
+
+
+@pytest.mark.parametrize(
+    "sourced, rests_on, params",
+    [(False, "proposed", ["turn", "c1", "c2"]), (True, "source", ["turn", "c1", "c2"])],
+    ids=["proposed", "source"],
+)
+def test_stroke_check_rests_on_the_wheels_turn_and_closed_angles(
+    proj_dir, tmp_path, sourced, rests_on, params
+):
+    cabled(proj_dir, tmp_path, sourced=sourced)
+    code, report = verify(proj_dir)
+    full = _by_id(report)["full"]
+    assert code == 0, report["findings"]
+    assert (full["rests_on"], full["rests_on_params"]) == (rests_on, params)
+
+
+def test_stroke_check_posed_through_a_gear_on_its_wheel_rests_on_the_closed_angles(
+    proj_dir, tmp_path
+):
+    mesh = '        "gears": {"mesh": {"driver": "input", "driven": "spool", "ratio": "spool_ratio"}},\n'
+    cabled(proj_dir, tmp_path, mesh + _CABLE)
+    _param("spool_ratio", basis="proposed", value=1, rationale="a guess", gap="G1")(
+        proj_dir, tmp_path
+    )
+    # The pose names only the crank, which turns the spool through the gear, and the toes with it.
+    _check("half", pose={"input": "S30.turn"}, tol=0.5)(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    half = _by_id(report)["half"]
+    assert (half["rests_on"], half["rests_on_params"]) == ("proposed", ["turn", "c1", "c2"])
+
+
+def test_a_slide_the_cable_crosses_but_the_pose_does_not_set_leaves_its_stroke_unchanged(
+    proj_dir, tmp_path
+):
+    cabled(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    # The toes ride slide shift, which the stroke's pose leaves as built; moved, it would change
+    # the stroke.
+    assert code == 0, report["findings"]
+    assert _by_id(report)["full"]["ok"]  # against pull_stroke(), with shift as built
+    assert abs(pull_stroke() - pull_stroke(shift=5)) > 0.01
+
+
+def test_stroke_check_on_a_cable_with_no_wheel_needs_a_pose(proj_dir, tmp_path):
+    path_only = '        "cables": {"pull": {' + _PULL + "}},\n"
+    cabled(proj_dir, tmp_path, path_only)
+    _check("half", pose={"toe1": "half_c1"})(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    messages = [f["message"] for f in report["findings"] if f["rule"] == "check-config"]
+    assert messages == [
+        "check full: cable pull has no wheel, so name the pose its stroke is taken at"
+    ]
+    # Posed, it evaluates: toe1 alone, the spool and toe2 as built.
+    assert _shortening(_by_id(report)["half"]) == pytest.approx(
+        pull_length() - pull_length(toe1=CLOSED["c1"] / 2), abs=0.01
+    )
+
+
+def test_report_carries_each_cable_with_its_wheel_and_closed_values(proj_dir, tmp_path):
+    cabled(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    assert report["motion"]["cables"] == {
+        "pull": {
+            "path": ["ground_1.d", "spool_1.d", "tip_1.d"],
+            "wheel": "spool",
+            "closes": {
+                "toe1": {"from": "c1", "value": 90},
+                "toe2": {"from": "c2", "value": 60},
+            },
+        }
+    }
+    assert (
+        "- Cable `pull` through ground_1.d → spool_1.d → tip_1.d, wound on spool; "
+        "its full turn closes toe1 to 90 (c1), toe2 to 60 (c2)."
+    ) in (proj_dir / "build" / "report.md").read_text()
+
+
 # Every rule beside its near miss. scripts/rule-coverage fails CI unless each rule the tool emits is
 # asserted present by one test and absent by another; a rule no other test covers both ways gets a
 # row here: the change to the fixture that raises it, and the closest changes it must accept.
@@ -6169,6 +6608,10 @@ FINDINGS = {
     "model-build": (
         lambda r, t: _model_with(r, line="extra = p.pitch_2"),
         [lambda r, t: _model_with(r, line="extra = p.pitch")],
+    ),
+    "model-cable": (
+        lambda r, t: cabled(r, t, swap(_CABLE, '"toe2": "c2"', '"spool": "c2"')),
+        [lambda r, t: cabled(r, t, swap(_CABLE, '"toe2": "c2"', '"toe2": "c1"'))],
     ),
     "model-constant": (
         lambda r, t: _model_with(r, line="extra = p.pitch / p.pitch"),

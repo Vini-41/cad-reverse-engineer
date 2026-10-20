@@ -18,7 +18,9 @@ from typing import Any
 from . import units
 from .geometry import (
     Built,
+    Coupling,
     Poser,
+    couplings,
     joint_type,
     located,
     physics_named,
@@ -123,7 +125,8 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
 
     moved_by = {j["child"]: (name, j) for name, j in built.joints.items()}
     sites: dict[str, list[str]] = {}
-    for path in [*built.loops.values(), *(t["path"] for t in built.tendons.values())]:
+    paths = [*built.loops.values(), *(t["path"] for t in built.tendons.values())]
+    for path in [*paths, *(c["path"] for c in built.cables.values())]:
         for datum in path:
             on = sites.setdefault(located(built, datum)[0], [])
             if datum not in on:  # a datum two loops or tendons name is one site
@@ -166,25 +169,32 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
     for inst in built.assembly:
         if inst not in moved_by:
             body(world, inst, None)
-    if built.loops or built.gears:
+    coupled = couplings(p, built)
+    if built.loops or coupled:
         equality = ET.SubElement(root, "equality")
         for name, (a, b) in built.loops.items():
             ET.SubElement(equality, "connect", name=name, site1=a, site2=b)
-        for name, gear in built.gears.items():
-            ratio = _num(0, p.values[gear["ratio"]], 0, 0, 0)  # driven = ratio × driver
+        taken = {*built.loops, *built.gears}
+        for c in coupled:  # driven = ratio × driver
+            name = c.name if c.kind == "gear" else _unique(f"{c.name}_{c.driven}", taken)
             ET.SubElement(
                 equality,
                 "joint",
                 name=name,
-                joint1=gear["driven"],
-                joint2=gear["driver"],
-                polycoef=ratio,
+                joint1=c.driven,
+                joint2=c.driver,
+                polycoef=_num(0, _mjcf_ratio(p, built, c), 0, 0, 0),
             )
-    if built.tendons:
+    if built.tendons or built.cables:
         tendon = ET.SubElement(root, "tendon")
         for name, t in built.tendons.items():
             spatial = ET.SubElement(tendon, "spatial", {"name": name} | _physics(p, t, "tendon"))
             for datum in t["path"]:
+                ET.SubElement(spatial, "site", site=datum)
+        named = cable_tendons(built)
+        for name, c in built.cables.items():  # no stiffness: its length is only read
+            spatial = ET.SubElement(tendon, "spatial", name=named[name])
+            for datum in c["path"]:
                 ET.SubElement(spatial, "site", site=datum)
     actuated = [name for name, j in built.moving.items() if j["drive"] == "actuated"]
     if actuated:
@@ -205,6 +215,27 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
             f"MuJoCo rejects build/model.mjcf, so no check with a pose is evaluated: {why}",
         )
     return linkage
+
+
+def cable_tendons(built: Built) -> dict[str, str]:
+    """cable name -> the name of its spatial tendon in the MJCF: its own, unless a tendon has it."""
+    taken = set(built.tendons)
+    return {name: _unique(name, taken) for name in built.cables}
+
+
+def _unique(name: str, taken: set[str]) -> str:
+    """name, or name_2, name_3... where taken has it; added to taken."""
+    found, n = name, 1
+    while found in taken:
+        n += 1
+        found = f"{name}_{n}"
+    taken.add(found)
+    return found
+
+
+def _mjcf_ratio(p: Project, built: Built, c: Coupling) -> float:
+    """A coupling's ratio in the MJCF's units of each joint (radians or the project's length)."""
+    return c.ratio * joint_size(p, built.joints[c.driven]) / joint_size(p, built.joints[c.driver])
 
 
 def _as_built_loops(p: Project, built: Built) -> None:
@@ -263,8 +294,8 @@ def poser(p: Project, built: Built, linkage: Linkage) -> Poser:
             values[joint], pose[joint] = value, {"from": ref, "value": printed(value)[0]}
         for joint, (value, label) in (set_to or {}).items():
             values[joint], pose[joint] = value, {"from": label, "value": printed(value)[0]}
-        values = _through_gears(p, built, values)
-        clash = _gear_clash(p, built, values)
+        values = _through_couplings(p, built, values)
+        clash = _coupling_clash(p, built, values)
         if clash:
             p.error("check-config", f"check {cid}: pose {pose_text(pose)}: {clash}")
             return None
@@ -277,32 +308,32 @@ def poser(p: Project, built: Built, linkage: Linkage) -> Poser:
     return place
 
 
-def _through_gears(p: Project, built: Built, values: dict) -> dict:
+def _through_couplings(p: Project, built: Built, values: dict) -> dict:
     """values with each joint a gear couples to one of them set too: a driven joint at ratio
     times its driver, a driver at its driven over ratio."""
     geared, changed = dict(values), True
     while changed:
         changed = False
-        for gear in built.gears.values():
-            ratio, (driver, driven) = p.values[gear["ratio"]], (gear["driver"], gear["driven"])
-            if driver in geared and driven not in geared:
-                geared[driven], changed = ratio * geared[driver], True
-            elif driven in geared and driver not in geared and ratio:
-                geared[driver], changed = geared[driven] / ratio, True
+        for c in couplings(p, built):
+            if c.driver in geared and c.driven not in geared:
+                geared[c.driven], changed = c.ratio * geared[c.driver], True
+            elif c.driven in geared and c.driver not in geared and c.ratio:
+                geared[c.driver], changed = geared[c.driven] / c.ratio, True
     return geared
 
 
-def _gear_clash(p: Project, built: Built, values: dict) -> str | None:
-    """Why values cannot be reached, where it sets a gear's two joints out of its ratio; None
-    where it can."""
-    for name, gear in built.gears.items():
-        ratio, (driver, driven) = p.values[gear["ratio"]], (gear["driver"], gear["driven"])
-        if driver in values and driven in values:
-            if not math.isclose(values[driven], ratio * values[driver], abs_tol=1e-9):
+def _coupling_clash(p: Project, built: Built, values: dict) -> str | None:
+    """Why values cannot be reached, where it sets a gear's or cable's two joints out of its ratio,
+    or sets alone a joint a cable closes to 0, which cannot set its wheel; None where it can."""
+    for c in couplings(p, built):
+        if c.driver in values and c.driven in values:
+            if not math.isclose(values[c.driven], c.ratio * values[c.driver], abs_tol=1e-9):
                 return (
-                    f"gear {name} moves {driven} {ratio:g} times {driver}, so set one of "
-                    "them and the gear moves the other"
+                    f"{c.kind} {c.name} {c.law}, so set one of them and the {c.kind} moves "
+                    "the other"
                 )
+        elif c.kind == "cable" and c.driven in values and not c.ratio:
+            return f"{c.kind} {c.name} {c.law}, so {c.driven} cannot set {c.driver}; set {c.driver}"
     return None
 
 
@@ -334,14 +365,14 @@ def _solve(
         for name, pair in built.loops.items()
     }
     jac1, jac2 = np.zeros((3, m.nv)), np.zeros((3, m.nv))
-    # Each gear whose joints values leaves free to move: (driven, driver, ratio) as MuJoCo ids.
-    gears = [
-        (jid[g["driven"]], jid[g["driver"]], p.values[g["ratio"]])
-        for g in built.gears.values()
-        if not {g["driver"], g["driven"]} <= values.keys()
+    # Each coupling whose joints values leaves free to move: (driven, driver, ratio) as MuJoCo ids.
+    coupled = [
+        (jid[c.driven], jid[c.driver], _mjcf_ratio(p, built, c))
+        for c in couplings(p, built)
+        if not {c.driver, c.driven} <= values.keys()
     ]
-    gear_rows = np.zeros((len(gears), m.nv))
-    for row, (driven, driver, ratio) in zip(gear_rows, gears):
+    coupled_rows = np.zeros((len(coupled), m.nv))
+    for row, (driven, driver, ratio) in zip(coupled_rows, coupled):
         row[m.jnt_dofadr[driven]] += 1
         row[m.jnt_dofadr[driver]] -= ratio
 
@@ -349,7 +380,7 @@ def _solve(
         loop_gaps = [d.site_xpos[a] - d.site_xpos[b] for a, b in loops.values()]
         turns = [
             [d.qpos[m.jnt_qposadr[driven]] - ratio * d.qpos[m.jnt_qposadr[driver]]]
-            for driven, driver, ratio in gears
+            for driven, driver, ratio in coupled
         ]
         return np.concatenate([*loop_gaps, *turns])
 
@@ -358,7 +389,7 @@ def _solve(
             d.qpos[m.jnt_qposadr[jid[name]]] = value * size[name] * step / STEPS
         for _ in range(ITERATIONS):
             mujoco.mj_kinematics(m, d)
-            if not (loops or gears) or not columns:
+            if not (loops or coupled) or not columns:
                 break
             mujoco.mj_comPos(m, d)
             r = residual()
@@ -369,7 +400,7 @@ def _solve(
                 mujoco.mj_jacSite(m, d, jac1, None, a)
                 mujoco.mj_jacSite(m, d, jac2, None, b)
                 rows.append(jac1 - jac2)
-            rows.append(gear_rows)
+            rows.append(coupled_rows)
             d.qpos[qpos] += np.linalg.lstsq(np.vstack(rows)[:, columns], -r, rcond=None)[0]
     mujoco.mj_kinematics(m, d)
     at = pose_text(pose)

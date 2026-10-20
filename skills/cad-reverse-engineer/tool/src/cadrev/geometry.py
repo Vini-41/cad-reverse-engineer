@@ -87,10 +87,13 @@ class Built:
     tendons: dict = field(default_factory=dict)
     # gear name -> {driver: joint, driven: joint, ratio: param}: driven moves ratio times driver
     gears: dict = field(default_factory=dict)
+    # cable name -> {path: [<instance>.<feature>, ...], wheel: joint, closes: {joint: param}}: an
+    # inextensible cord; its wheel's full turn moves each joint it closes to that param's value
+    cables: dict = field(default_factory=dict)
     # part name -> its Mass, for each part params.yaml's parts weighs
     masses: dict = field(default_factory=dict)
-    # True when a [model-joint], [model-loop], [model-gear] or [model-return] finding dropped the
-    # joints, loops, gears and tendons build() returned
+    # True when a [model-joint], [model-loop], [model-gear], [model-cable] or [model-return]
+    # finding dropped the joints, loops, gears, tendons and cables build() returned
     dropped: bool = False
 
     @property
@@ -202,12 +205,13 @@ def _names(value, count: int) -> bool:
 
 
 GEAR_KEYS = ("driver", "driven", "ratio")
+CABLE_KEYS = ("path", "wheel", "closes")
 
 
 def _motion_breach(result) -> str | None:
-    """Why build()'s joints, loops, gears or tendons break the model contract, or None if they
+    """Why build()'s joints, loops, gears, cables or tendons break the model contract, or None if they
     keep it."""
-    for kind in ("joint", "loop", "gear"):
+    for kind in ("joint", "loop", "gear", "cable"):
         for name in result.get(f"{kind}s", {}):
             if not isinstance(name, str):
                 return f"{kind} {name}: its name must be text, not {type(name).__name__}"
@@ -246,6 +250,24 @@ def _motion_breach(result) -> str | None:
             if not isinstance(gear.get(key), str):
                 what = "a param name" if key == "ratio" else "a joint name"
                 return f"gear {name}: {key} must be {what}, not {gear.get(key)!r}"
+    for name, cable in result.get("cables", {}).items():
+        if not isinstance(cable, dict):
+            return f"cable {name} must be a mapping, not {type(cable).__name__}"
+        for key in sorted(set(cable) - set(CABLE_KEYS)):
+            return f"cable {name}: unknown key {key!r}"
+        path = cable.get("path")
+        if not (isinstance(path, (list, tuple)) and len(path) >= 2 and _names(path, len(path))):
+            return f"cable {name}: path must be two or more datums, not {path!r}"
+        if ("wheel" in cable) != ("closes" in cable):
+            return f"cable {name}: wheel and closes go together"
+        if "wheel" in cable and not isinstance(cable["wheel"], str):
+            return f"cable {name}: wheel must be a joint name, not {cable['wheel']!r}"
+        closes = cable.get("closes", {})
+        if not (
+            isinstance(closes, dict)
+            and all(isinstance(k, str) and isinstance(v, str) for k, v in closes.items())
+        ):
+            return f"cable {name}: closes must map joint names to param names, not {closes!r}"
     for name, tendon in result.get("tendons", {}).items():
         if not isinstance(tendon, dict):
             return f"tendon {name} must be a mapping, not {type(tendon).__name__}"
@@ -299,7 +321,7 @@ def _contract_breach(result) -> str | None:
 
     if not isinstance(result, dict):
         return f"must return a mapping of parts, datums and assembly, not {type(result).__name__}"
-    for key in ("parts", "datums", "assembly", "joints", "loops", "gears", "tendons"):
+    for key in ("parts", "datums", "assembly", "joints", "loops", "gears", "tendons", "cables"):
         if not isinstance(result.get(key, {}), dict):
             return f"{key} must be a mapping of names, not {type(result[key]).__name__}"
     for name, part in result.get("parts", {}).items():
@@ -354,6 +376,7 @@ def build(p: Project) -> Built | None:
         loops=result.get("loops", {}),
         tendons=result.get("tendons", {}),
         gears=result.get("gears", {}),
+        cables=result.get("cables", {}),
     )
     for name in sorted(built.used):
         expect_param_quantity(p, name, ("length", "angle"), "in model.py")
@@ -363,10 +386,17 @@ def build(p: Project) -> Built | None:
         for name in joint.get("range", []):
             if name in p.values and quantity is not None:
                 expect_param_quantity(p, name, (quantity,), f"in a {joint['type']} joint's range")
+    # gear ratios and cables' closed poses, which the MJCF exports as joint equalities
     ratios = {gear["ratio"] for gear in built.gears.values()}
     for name, gear in built.gears.items():
         if gear["ratio"] in p.values:
             expect_param_quantity(p, gear["ratio"], ("fraction",), f"as gear {name}'s ratio")
+    for name, cable in built.cables.items():
+        for joint, param in cable.get("closes", {}).items():
+            quantity = joint_type(built.joints[joint]).quantity if joint in built.joints else None
+            if param in p.values and quantity is not None:
+                expect_param_quantity(p, param, (quantity,), f"as cable {name}'s closed {joint}")
+    ratios |= {n for cable in built.cables.values() for n in cable.get("closes", {}).values()}
     slots = physics_slots(built)
     for name, where in sorted(slots.items()):
         for place, slot in where:
@@ -406,11 +436,12 @@ def build(p: Project) -> Built | None:
             del built.assembly[inst]
     flawed = _linkage_flaws(p, built)
     flawed = _gear_flaws(p, built) or flawed
+    flawed = _cable_flaws(p, built) or flawed
     problem = _physics_unfit(p, built)
     if problem:
         p.error("model-return", f"model.build {problem}")
     if flawed or problem:
-        built.joints, built.loops, built.tendons, built.gears = {}, {}, {}, {}
+        built.joints, built.loops, built.tendons, built.gears, built.cables = {}, {}, {}, {}, {}
         built.dropped = True
     _joint_values(p, built)
     built.masses = _mass_model(p, built)
@@ -629,6 +660,113 @@ def _gear_flaws(p: Project, built: Built) -> bool:
             p.error("model-gear", f"gear {name}: {flaw}")
             flawed = True
     return flawed
+
+
+def _cable_flaw(p: Project, built: Built, cable: dict, closed_by: dict) -> str | None:
+    """What keeps this cable from being laid or from closing its joints, or None."""
+    for datum in cable["path"]:
+        if instance_datum(built, datum) is None:
+            return f"{datum} names no <instance>.<feature> datum of the assembly"
+    if "wheel" not in cable:
+        return None
+    wheel = cable["wheel"]
+    if wheel not in built.moving:
+        return f"wheel {wheel} is {'a fixed joint' if wheel in built.joints else 'not a joint'}"
+    if len(built.joints[wheel].get("range", [])) != 1:
+        return (
+            f"wheel {wheel} needs a one-ended range, its full turn from as built; "
+            f"it has {built.joints[wheel].get('range', 'none')}"
+        )
+    turn = cable_turn(built, cable)
+    if p.values.get(turn) == 0:
+        return f"wheel {wheel}'s full turn {turn} is 0, so it closes nothing"
+    first = instance_datum(built, cable["path"][0])
+    if first is not None and first[0] == built.joints[wheel]["child"]:
+        return (
+            f"its path starts at {cable['path'][0]}, on the wheel; start it where the cable "
+            "leaves the wheel, on an instance the wheel does not turn"
+        )
+    geared = {g[k] for g in built.gears.values() for k in ("driver", "driven")}
+    for joint, param in cable["closes"].items():
+        if joint not in built.moving:
+            what = "a fixed joint" if joint in built.joints else "not a joint"
+            return f"closes {joint}, which is {what}"
+        if joint == wheel:
+            return f"closes its own wheel {wheel}"
+        if joint in geared:
+            return f"closes {joint}, which a gear couples"
+        if joint in closed_by:
+            return f"closes {joint}, which cable {closed_by[joint]} closes too"
+        if param not in p.values:
+            return f"closes {joint} to {param}, which params.yaml does not define"
+    return None
+
+
+def _cable_flaws(p: Project, built: Built) -> bool:
+    """Add [model-cable] for each cable that cannot be laid or close its joints; True if any."""
+    flawed, closed_by = False, {}
+    for name, cable in built.cables.items():
+        flaw = _cable_flaw(p, built, cable, closed_by)
+        if flaw:
+            p.error("model-cable", f"cable {name}: {flaw}")
+            flawed = True
+        for joint in cable.get("closes", {}):
+            closed_by.setdefault(joint, name)
+    return flawed
+
+
+class Coupling(NamedTuple):
+    """Two joints that move in proportion: driven at ratio times driver, in the project's units of
+    each; law says how, as a finding words it."""
+
+    kind: str  # gear or cable
+    name: str
+    driver: str
+    driven: str
+    ratio: float
+    law: str
+
+
+def cable_turn(built: Built, cable: dict) -> str:
+    """The param of a wound cable's full turn: its wheel's one-ended range."""
+    return built.joints[cable["wheel"]]["range"][0]
+
+
+def couplings(p: Project, built: Built) -> list[Coupling]:
+    """Each pair of joints moving in proportion: a gear's, and a cable's wheel with each joint it
+    closes, at its closed value over the wheel's full turn."""
+    found = [
+        Coupling(
+            "gear",
+            name,
+            g["driver"],
+            g["driven"],
+            ratio := p.values[g["ratio"]],
+            f"moves {g['driven']} {ratio:g} times {g['driver']}",
+        )
+        for name, g in built.gears.items()
+    ]
+    for name, cable in built.cables.items():
+        if "wheel" not in cable:
+            continue
+        wheel = cable["wheel"]
+        turn = p.values[cable_turn(built, cable)]
+        for joint, param in cable["closes"].items():
+            closed = p.values[param]
+            law = f"closes {joint} to {closed:g} as {wheel} turns to {turn:g}"
+            found.append(Coupling("cable", name, wheel, joint, closed / turn, law))
+    return found
+
+
+def cable_length(built: Built, cable: dict) -> float:
+    """The length of a cable's path through its datums, where the assembly places them."""
+    from build123d import Location
+
+    points = [
+        (built.assembly[inst][1] * Location(point)).position
+        for inst, point in (located(built, d) for d in cable["path"])
+    ]
+    return sum((b - a).length for a, b in zip(points, points[1:]))
 
 
 def _physics_unfit(p: Project, built: Built) -> str | None:
@@ -1081,6 +1219,49 @@ def _interference(
     )
 
 
+def _stroke(
+    p: Project, built: Built, c: dict, reached: tuple[Built, dict | None], poser: Poser | None
+) -> tuple[CheckResult, dict | None, tuple[str, ...]] | None:
+    """A stroke check: how much its cable shortens from as built to the pose the check names
+    (reached), or without one to its wheel's full turn, compared with the ledger value; with the
+    pose and the params the model gives it, the wheel's turn and the closed values, where the pose
+    moves the wheel, itself or through a gear or cable."""
+    cid, name = c.get("id", "?"), c["cable"]
+    cable = built.cables.get(name)
+    if cable is None:
+        if not built.dropped:  # else that finding says the cables were dropped
+            p.error("check-config", f"check {cid}: {name} is not a cable")
+        return None
+    placed, pose = reached
+    if pose is None:
+        if "wheel" not in cable:
+            p.error(
+                "check-config",
+                f"check {cid}: cable {name} has no wheel, so name the pose its stroke is taken at",
+            )
+            return None
+        if poser is None:
+            return None
+        turn = cable_turn(built, cable)
+        posed = poser(c, {cable["wheel"]: (p.values[turn], turn)})
+        if posed is None:
+            return None
+        placed, pose = posed
+    moved, changed = set(pose), True  # the joints the pose sets, and those coupled to them
+    while changed:
+        changed = False
+        for link in couplings(p, built):
+            if {link.driver, link.driven} & moved and not {link.driver, link.driven} <= moved:
+                moved |= {link.driver, link.driven}
+                changed = True
+    also: tuple[str, ...] = ()
+    if "wheel" in cable and cable["wheel"] in moved:
+        also = (cable_turn(built, cable), *cable["closes"].values())
+    shortening = cable_length(built, cable) - cable_length(placed, cable)
+    ref = f"{c['evidence']}.{c['key']}"
+    return _compared(p, c, cid, ref, shortening, f" shortening of {name}"), pose, also
+
+
 def _placed_for(
     p: Project, built: Built, c: dict, poser: Poser | None
 ) -> tuple[Built, dict | None] | None:
@@ -1111,6 +1292,7 @@ def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[Che
             continue
         placed, pose = reached
         basis_of = c  # the check as rests_on reads it
+        moved: tuple[str, ...] = ()  # the params a stroke's pose moves its cable's joints by
         try:
             if kind == "bbox":
                 shape = _envelope(p, placed, c)
@@ -1142,6 +1324,12 @@ def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[Che
                     continue
                 basis_of = c | {"parts": list(tally)}  # the mass model's params for parts weighed
                 results += filter(None, [_mass(p, built, c, tally)])
+            elif kind == "stroke":
+                stroke = _stroke(p, built, c, reached, poser)
+                if stroke is None:
+                    continue
+                result, pose, moved = stroke
+                results.append(result)
             elif kind == "range":
                 results += _range(p, built, c, poser)
             elif kind == "interference":
@@ -1153,7 +1341,7 @@ def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[Che
             p.error("check-config", f"check {cid}: missing or unknown {exc}")
             continue
         joint = built.joints.get(_joint_name(c) or "", {})
-        basis, params = rests_on(p, basis_of, tuple(joint.get("range", ())))
+        basis, params = rests_on(p, basis_of, (*joint.get("range", ()), *moved))
         for r in results[start:]:
             r.rests_on, r.rests_on_params = basis, params
             if r.uncounted and basis != "proposed":  # how many there are is the model's choice

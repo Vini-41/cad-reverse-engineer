@@ -75,6 +75,8 @@ CHECK_KINDS = {
     # is often 0.
     # Between two datums, a distance at each end, as a slide that sets a leg's width reaches it.
     "range": CheckKind("angle", "angle", span_capped=True, joint_valued=True, between_two="length"),
+    # How far a cable shortens from as built to a pose.
+    "stroke": CheckKind("length", "length"),
 }
 SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "other")
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}

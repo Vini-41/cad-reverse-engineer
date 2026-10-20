@@ -114,6 +114,7 @@ CHECK = Record(
         "pairs": Items(Items(str)),
         "pose": Table(str),
         "joint": str,
+        "cable": str,
         "ends": Items(str),
         "sweep": Record({"joint": str, "steps": str}, required=("joint", "steps")),
         "interpretation": str,

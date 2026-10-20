@@ -143,8 +143,9 @@ def _valued(p: Project, entry: dict, keys) -> dict:
 
 def motion(p: Project, built: Built) -> dict:
     """How the model moves, as the MJCF exports it: each joint with its type, what it joins, its
-    drive, its range and its physics values, each loop, each gear with its joints and ratio, and
-    each tendon with its path and physics values; no joints means the model is static, unless a
+    drive, its range and its physics values, each loop, each gear with its joints and ratio,
+    each tendon with its path and physics values, and each cable with its path and, wound on a
+    wheel, the closed value of each joint it closes; no joints means the model is static, unless a
     finding dropped them."""
     joints = {}
     for name, j in built.joints.items():
@@ -163,6 +164,15 @@ def motion(p: Project, built: Built) -> dict:
         "tendons": {
             name: {"path": list(t["path"])} | _valued(p, t, PHYSICS["tendon"])
             for name, t in built.tendons.items()
+        },
+        "cables": {
+            name: {"path": list(c["path"])}
+            | (
+                {"wheel": c["wheel"], "closes": _valued(p, c["closes"], c["closes"])}
+                if "wheel" in c
+                else {}
+            )
+            for name, c in built.cables.items()
         },
         "dropped": built.dropped,
     }
@@ -213,11 +223,21 @@ def _motion_line(moves: dict | None) -> list[str]:
             "",
         ]
     joints, loops = len(moves["joints"]), len(moves["loops"])
+    cables = []
+    for name, c in moves["cables"].items():
+        line = f"- Cable `{name}` through {' → '.join(c['path'])}"
+        if "wheel" in c:
+            closes = ", ".join(
+                f"{j} to {v['value']:g} ({v['from']})" for j, v in c["closes"].items()
+            )
+            line += f", wound on {c['wheel']}; its full turn closes {closes}"
+        cables.append(line + ".")
     return [
         f"**Kinematic**: {joints} joint{'s' * (joints != 1)} and {loops} "
         f"loop{'s' * (loops != 1)}, exported as `build/model.mjcf`; "
         "a posed check shows its pose beside its interpretation.",
         "",
+        *([*cables, ""] if cables else []),
     ]
 
 
