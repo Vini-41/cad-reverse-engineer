@@ -146,6 +146,8 @@ def _tokens(text: str) -> list[_Token]:
         if found and n.start < found[-1][2]:
             continue  # a digit of the unit before it: the 3 of g/cm3
         unit, end = units.unit_at(text, n.stop) or (None, n.stop)
+        if unit in _HYPHENED_NAMES and text.startswith("-", n.stop):
+            unit, end = None, n.stop
         found.append((n, unit, end))
     tokens: list[_Token] = []
     for i in reversed(range(len(found))):
@@ -299,32 +301,35 @@ def _write_viewable(target: Path, data: bytes) -> Path:
 _THREAD = re.compile(r"(?<![a-z0-9.])m\d+(?:\.\d+)?(?:x\d+(?:\.\d+)?)?(?![a-z0-9])")
 # A moment, when something happens (t = 2 s, a video frame's T=0s), not how long it lasts (Δt).
 _MOMENT = re.compile(r"(?<!\w)t ?= ?$")
+# Units whose spelling, hyphened to a number, names a thing instead: a four-bar or 4-bar linkage
+# (a pressure is 2 bar).
+_HYPHENED_NAMES = ("bar",)
 
 
-def _other_symbol(t: _Token, cased: str) -> bool:
+def _capital_symbol(t: _Token, as_printed: str) -> bool:
     """Whether t's unit is a one-letter symbol SI writes in lower case (g, s, m, h) printed as a
     capital, which names something else: 8G of memory, a 2S battery."""
     unit = t.unit or ""
     return (
         len(unit) == 1
         and unit.islower()
-        and cased[t.end - 1].isupper()
-        and not cased[t.end - 2].isalpha()
+        and as_printed[t.end - 1].isupper()
+        and not as_printed[t.end - 2].isalpha()
     )
 
 
-def stated_quantities(text: str, cased: str | None = None) -> list[tuple[int, int, str]]:
+def stated_quantities(text: str, as_printed: str | None = None) -> list[tuple[int, int, str]]:
     """Spans in normalized text that state a quantity: a number the quote reader would read with
     a unit (a whole range such as 3-5 mm), an a×b×c product, or a thread size; never digits
     inside a name or a figure, table, equation or section number, a moment (t = 2 s), or, where
-    cased gives text as printed (normalized but for case), a one-letter unit printed as another
-    symbol's capital (8G, 2S).
+    as_printed gives text normalized but for case, a one-letter unit printed as another symbol's
+    capital (8G, 2S).
 
     It errs towards listing: a unit glued to a number is a candidate even where it is part of a
     name (1990s, 4g), because extracted text glues real ones too (0.5s, 20g), and a false
     candidate costs one skip where a missed one leaves a quantity unledgered."""
-    if cased is None or len(cased) != len(text):
-        cased = text
+    if as_printed is None or len(as_printed) != len(text):
+        as_printed = text
     spans, group = [], []
     for t in _tokens(text):
         group.append(t)
@@ -339,8 +344,8 @@ def stated_quantities(text: str, cased: str | None = None) -> list[tuple[int, in
             and units.quantity(t.unit) == "time"
             and _MOMENT.search(text, max(0, group[0].start - 4), group[0].start) is not None
         )
-        other = moment or (len(group) == 1 and _other_symbol(t, cased))
-        if (t.unit or product) and not glued and not other and not any(g.labelled for g in group):
+        misread = moment or (len(group) == 1 and _capital_symbol(t, as_printed))
+        if (t.unit or product) and not glued and not misread and not any(g.labelled for g in group):
             spans.append((group[0].start, t.end))
         group = []
     spans += [m.span() for m in _THREAD.finditer(text)]

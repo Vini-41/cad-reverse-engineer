@@ -53,6 +53,7 @@ for leg in MOTION_LEGS:
                  "interpretation": "toe rotation joint beta from parallel to fully spread"})
     sweeps = [(f"{leg}_slide", "four-bar compressed over its stroke"),
               (f"{leg}_flip", "leg flipped from standing to hanging")]
+    sweeps += [(f"{leg}_whl{k}", "servo wheel turned its 385 degrees") for k in (1, 2)]
     sweeps += [(f"{leg}_toe_{s}{r}_j_beta", "toe spread over 0-40 degrees") for s in "LR" for r in "fb"]
     for j, what in sweeps:
         add({"id": f"sweep-{j}", "kind": "interference", "sweep": {"joint": j, "steps": "sweep_steps"},
@@ -66,13 +67,13 @@ leg_counts = {"servo_single": "n_single_leg", "wheel": "n_single_leg", "comp": "
 parts = ["plate", "servo_dual", "thigh", "servo_single", "wheel", "comp", "pedestal", "bent", "foot_mid",
          "foot_end", "linkage", "toe_joint", "phalanx1", "phalanx2", "claw"]
 add({"id": "mass-leg", "kind": "mass", "parts": parts, "counts": leg_counts, "evidence": "P3-leg-mass", "key": "m",
-     "tol_rel": 0.25, "interpretation": "one leg with its connecting plate, as the mass model weighs it"})
+     "tol_rel": 0.10, "interpretation": "one leg with its connecting plate, as the mass model weighs it; within 10%, as only the servos' 63 g is stated, the printed parts rest on a proposed solid-resin density (gap G-density) and 200 g is a round figure"})
 all_counts = {k: v + "_all" for k, v in leg_counts.items() if v != "n_single_leg"}
 all_counts.update({"servo_single": "n_single_all", "wheel": "n_single_all",
                    "plate": "n_legs", "servo_dual": "n_legs", "thigh": "n_legs", "pedestal": "n_legs", "foot_mid": "n_legs"})
 add({"id": "mass-gear", "kind": "mass", "parts": parts, "counts": all_counts, "add": ["board_mass"],
-     "evidence": "P3-gear-mass", "key": "m", "tol_rel": 0.25,
-     "interpretation": "both legs and plates plus the stated control board and wiring"})
+     "evidence": "P3-gear-mass", "key": "m", "tol_rel": 0.10,
+     "interpretation": "both legs and plates plus the stated control board and wiring; within 10%, as for mass-leg, the stated mass being about 430 g"})
 
 with open("checks.yaml", "w") as f:
     f.write("# Geometry checks. Expected values come from evidence.yaml, never from params.yaml.\n")

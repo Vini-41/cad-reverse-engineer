@@ -239,6 +239,18 @@ checks:
     joint: a_flip
     steps: sweep_steps
   interpretation: 'no two instances overlap: leg flipped from standing to hanging'
+- id: sweep-a_whl1
+  kind: interference
+  sweep:
+    joint: a_whl1
+    steps: sweep_steps
+  interpretation: 'no two instances overlap: servo wheel turned its 385 degrees'
+- id: sweep-a_whl2
+  kind: interference
+  sweep:
+    joint: a_whl2
+    steps: sweep_steps
+  interpretation: 'no two instances overlap: servo wheel turned its 385 degrees'
 - id: sweep-a_toe_Lf_j_beta
   kind: interference
   sweep:
@@ -321,6 +333,18 @@ checks:
     joint: b_flip
     steps: sweep_steps
   interpretation: 'no two instances overlap: leg flipped from standing to hanging'
+- id: sweep-b_whl1
+  kind: interference
+  sweep:
+    joint: b_whl1
+    steps: sweep_steps
+  interpretation: 'no two instances overlap: servo wheel turned its 385 degrees'
+- id: sweep-b_whl2
+  kind: interference
+  sweep:
+    joint: b_whl2
+    steps: sweep_steps
+  interpretation: 'no two instances overlap: servo wheel turned its 385 degrees'
 - id: sweep-b_toe_Lf_j_beta
   kind: interference
   sweep:
@@ -379,8 +403,9 @@ checks:
     claw: n_toes
   evidence: P3-leg-mass
   key: m
-  tol_rel: 0.25
-  interpretation: one leg with its connecting plate, as the mass model weighs it
+  tol_rel: 0.1
+  interpretation: one leg with its connecting plate, as the mass model weighs it; within 10%, as only the servos' 63 g is stated, the printed parts rest on a proposed solid-resin density (gap G-density)
+    and 200 g is a round figure
 - id: mass-gear
   kind: mass
   parts: *id001
@@ -404,5 +429,5 @@ checks:
   - board_mass
   evidence: P3-gear-mass
   key: m
-  tol_rel: 0.25
-  interpretation: both legs and plates plus the stated control board and wiring
+  tol_rel: 0.1
+  interpretation: both legs and plates plus the stated control board and wiring; within 10%, as for mass-leg, the stated mass being about 430 g

@@ -131,8 +131,6 @@ def unit_at(text: str, pos: int) -> tuple[str, int] | None:
     if m is None:
         return None
     name = next(name for name, spelled in _SPELLED.items() if spelled.fullmatch(m.group(1)))
-    if name == "bar" and text[pos] == "-":
-        return None  # a four-bar or 4-bar linkage; a pressure is 2 bar
     return name, m.end()
 
 

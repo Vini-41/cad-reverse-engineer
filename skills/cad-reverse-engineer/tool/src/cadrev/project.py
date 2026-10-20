@@ -26,6 +26,9 @@ RESTS_ON = ("source", "measured", "proposed")
 LENGTH_TOL = 1e-3  # tolerance.length when project.yaml sets none
 ANGLE_TOL = 0.01  # tolerance.angle, in degrees, when project.yaml sets none
 DEFAULT_TOL = {"length": LENGTH_TOL, "angle": ANGLE_TOL}
+# The unit a check compares a quantity in where it is not the project's: an angle in degrees,
+# whatever the project's angle unit, as tolerance.angle is.
+COMPARED_IN = {"angle": "deg"}
 # The loosest tolerance a check may have: tol as a fraction of each value it compares, and tol_rel.
 TOL_CAP, TOL_REL_CAP = 0.05, 0.25
 
@@ -208,19 +211,17 @@ class Project:
         value, unit = ledgered[0], self.unit_of(ref)
         return value if unit is None else units.convert(value, unit, self.units)
 
-    def compared_value(self, ref: str, kind: str) -> float | None:
-        """The evidence value a check of kind compares with: an angle in degrees, since an angle
-        check evaluates in degrees whatever the project's angle unit, else in the project's units."""
-        check = CHECK_KINDS.get(kind)
-        return self.value_as(ref, check.quantity if check is not None else None)
-
     def value_as(self, ref: str, quantity: str | None) -> float | None:
         """The evidence value at ref compared as quantity: an angle in degrees, else in the
         project's units."""
         value = self.evidence_value(ref)
-        if value is None or quantity != "angle":
-            return value
-        return value * units.size("angle", self.units) / units.UNITS["deg"].si
+        return value if value is None or quantity is None else value * self.compared_size(quantity)
+
+    def compared_size(self, quantity: str) -> float:
+        """How many of the units a check compares quantity in make one of the project's: degrees
+        per project angle unit, else 1, as every other quantity is compared in the project's."""
+        unit = COMPARED_IN.get(quantity)
+        return 1.0 if unit is None else units.size(quantity, self.units) / units.UNITS[unit].si
 
 
 def read_yaml(root: Path, name: str, findings: list[Finding]) -> dict:
@@ -514,8 +515,8 @@ def check_coverage(p: Project) -> list[tuple[str, int, str]]:
                 if start != -1 and stop != -1:
                     spans.append((start, stop + len(sources.normalize(k.get("to", "")))))
                     matched.add(i)
-            cased = sources.normalize(raw, hyphen="\0", cased=True).replace("\0", "")
-            for start, end, snippet in sources.stated_quantities(text, cased):
+            as_printed = sources.normalize(raw, hyphen="\0", cased=True).replace("\0", "")
+            for start, end, snippet in sources.stated_quantities(text, as_printed):
                 if not any(a <= start and end <= b for a, b in spans):
                     context = text[max(0, start - 60) : end + 40]
                     uncovered.append((sid, n, f"{snippet}  …{context}…"))
@@ -744,9 +745,20 @@ def compared_quantity(c: dict) -> str | None:
     kind = CHECK_KINDS.get(str(c.get("kind")))
     if kind is None:
         return None
+    return kind.between_two if kind.between_two and between_two(c) else kind.quantity
+
+
+def between_two(c: dict) -> bool:
+    """Whether check c's between names two datums, a distance, rather than three, an angle."""
     between = c.get("between")
-    two = isinstance(between, list) and len(between) == 2
-    return kind.between_two if kind.between_two and two else kind.quantity
+    return isinstance(between, list) and len(between) == 2
+
+
+def joint_valued(c: dict) -> bool:
+    """Whether check c compares its joint's own value, so in its joint's quantity: a joint_valued
+    kind without between."""
+    kind = CHECK_KINDS.get(str(c.get("kind")))
+    return kind is not None and kind.joint_valued and "between" not in c
 
 
 def default_tolerance(c: dict) -> tuple[str, float] | None:
@@ -976,9 +988,8 @@ def check_units(p: Project) -> None:
     for c in p.checks:
         cid, kind = c.get("id", "?"), c.get("kind")
         if kind in CHECK_KINDS:
-            check = CHECK_KINDS[kind]
             expected = (str(compared_quantity(c)),)
-            if check.joint_valued and "between" not in c:
+            if joint_valued(c):
                 expected = JOINT_QUANTITIES  # the build holds each to its joint's
             for ref in check_refs(c):
                 expect_quantity(p, ref, expected, f"check {cid}")

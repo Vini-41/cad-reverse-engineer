@@ -139,7 +139,7 @@ params:
   toe_k: {basis: derived, expr: "E_steel * tor_d ** 4 / (64 * tor_D * tor_n)", interpretation: "torsion-spring rate at the toe rotation joint", physics: true}
 
   # ---------------- sweep resolutions ----------------
-  sweep_steps: {basis: proposed, value: 5, rationale: "five poses across each ranged joint"}
+  sweep_steps: {basis: proposed, value: 19, rationale: "19 poses across each ranged joint, each step under the 3 mm linkage thickness where parts could meet: 0.88 mm of slide, 2.2° of toe (2.8 mm at its 73 mm tip), 10° of flip (3 mm at 17 mm from the axis, where the servo and plate sit), 21° of the wheel, a disc turning about its own axis"}
 
 # Mass model: each part weighed by its datasheet mass or its printed density.
 parts:

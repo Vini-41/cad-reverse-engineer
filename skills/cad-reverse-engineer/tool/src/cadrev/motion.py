@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from . import units
-from .geometry import JOINT_TYPES, PHYSICS, Built, Poser, located, pose_text, printed, range_ends
+from .geometry import PHYSICS, Built, Poser, joint_type, located, pose_text, printed, range_ends
 from .project import Project
 
 # Steps from the as-built pose to the one a check names: each step starts from the last, so the
@@ -62,7 +62,8 @@ def mjcf_size(p: Project, quantity: str) -> float:
 def joint_size(p: Project, joint: dict) -> float:
     """The size of one of the project's units of a joint's quantity in the MJCF's: a radian for a
     revolute joint's angle, 1 for a slide's length, which the MJCF keeps in the project's unit."""
-    return units.size("angle", p.units) if JOINT_TYPES[joint["type"]].quantity == "angle" else 1.0
+    quantity = str(joint_type(joint).quantity)
+    return units.size(quantity, p.units) / mjcf_size(p, quantity)
 
 
 def _physics(p: Project, entry: dict, kind: str) -> dict[str, str]:
@@ -125,10 +126,12 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
             location if parent_location is None else parent_location.inverse() * location
         )
         element = ET.SubElement(parent, "body", {"name": inst, **frame})
-        if inst in moved_by and moved_by[inst][0] in built.moving:  # a fixed child is welded
+        if (
+            inst in moved_by and moved_by[inst][0] in built.moving
+        ):  # a fixed joint's child is one body with its parent
             name, joint = moved_by[inst]
             a, b = (_point(built, d) for d in joint["axis"])
-            attrs = {"name": name, "type": str(JOINT_TYPES[joint["type"]].mjcf), "pos": _num(*a)}
+            attrs = {"name": name, "type": str(joint_type(joint).mjcf), "pos": _num(*a)}
             attrs["axis"] = _num(*(y - x for x, y in zip(a, b)))
             if "range" in joint:
                 size = joint_size(p, joint)
@@ -251,7 +254,8 @@ def poser(p: Project, built: Built, linkage: Linkage) -> Poser:
             values[joint], pose[joint] = value, {"from": ref, "value": printed(value)[0]}
         for joint, (value, label) in (set_to or {}).items():
             values[joint], pose[joint] = value, {"from": label, "value": printed(value)[0]}
-        clash = _geared(p, built, values)
+        values = _through_gears(p, built, values)
+        clash = _gear_clash(p, built, values)
         if clash:
             p.error("check-config", f"check {cid}: pose {pose_text(pose)}: {clash}")
             return None
@@ -264,25 +268,32 @@ def poser(p: Project, built: Built, linkage: Linkage) -> Poser:
     return place
 
 
-def _geared(p: Project, built: Built, values: dict) -> str | None:
-    """Set in values each joint a gear couples to one values sets: its driven joint at ratio
-    times its driver, or its driver at its driven over ratio. Why not, where values sets a gear's
-    two joints out of its ratio."""
-    changed = True
+def _through_gears(p: Project, built: Built, values: dict) -> dict:
+    """values with each joint a gear couples to one of them set too: a driven joint at ratio
+    times its driver, a driver at its driven over ratio."""
+    geared, changed = dict(values), True
     while changed:
         changed = False
-        for name, gear in built.gears.items():
+        for gear in built.gears.values():
             ratio, (driver, driven) = p.values[gear["ratio"]], (gear["driver"], gear["driven"])
-            if driver in values and driven not in values:
-                values[driven], changed = ratio * values[driver], True
-            elif driven in values and driver not in values and ratio:
-                values[driver], changed = values[driven] / ratio, True
-            elif driver in values and driven in values:
-                if not math.isclose(values[driven], ratio * values[driver], abs_tol=1e-9):
-                    return (
-                        f"gear {name} moves {driven} {ratio:g} times {driver}, so set one of "
-                        "them and the gear moves the other"
-                    )
+            if driver in geared and driven not in geared:
+                geared[driven], changed = ratio * geared[driver], True
+            elif driven in geared and driver not in geared and ratio:
+                geared[driver], changed = geared[driven] / ratio, True
+    return geared
+
+
+def _gear_clash(p: Project, built: Built, values: dict) -> str | None:
+    """Why values cannot be reached, where it sets a gear's two joints out of its ratio; None
+    where it can."""
+    for name, gear in built.gears.items():
+        ratio, (driver, driven) = p.values[gear["ratio"]], (gear["driver"], gear["driven"])
+        if driver in values and driven in values:
+            if not math.isclose(values[driven], ratio * values[driver], abs_tol=1e-9):
+                return (
+                    f"gear {name} moves {driven} {ratio:g} times {driver}, so set one of "
+                    "them and the gear moves the other"
+                )
     return None
 
 
@@ -369,10 +380,9 @@ def _solve(
     for name, joint in built.moving.items():
         if "range" not in joint or name in set_by_check:
             continue
-        kind = JOINT_TYPES[joint["type"]]
-        slack = p.tolerance(str(kind.quantity))
-        if kind.quantity == "angle":  # tolerance.angle is in degrees
-            slack *= units.UNITS["deg"].si / size[name]
+        kind = joint_type(joint)
+        quantity = str(kind.quantity)
+        slack = p.tolerance(quantity) / p.compared_size(quantity)  # in the project's unit
         turned = float(d.qpos[m.jnt_qposadr[jid[name]]]) / size[name]
         (low_name, low), (high_name, high) = range_ends(p, joint)
         if not low - slack <= turned <= high + slack:

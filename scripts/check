@@ -20,16 +20,6 @@ step() {
   "$@" || failed+=("$name")
 }
 
-# The examples as a fresh clone of this tree holds them: their tracked files and the new ones git
-# would add, without build/ or any other ignored file. Prints the copy's examples directory.
-clean_examples() {
-  local dir
-  dir=$(mktemp -d)
-  (cd "$repo" && git ls-files -z --cached --others --exclude-standard -- examples \
-    | tar --null -T - -cf -) | tar -xf - -C "$dir" || return 1
-  echo "$dir/examples"
-}
-
 # Fails unless cadrev check on example prints the status line its README states.
 example_status() {
   local example=$1 expected log code=0
@@ -75,7 +65,8 @@ step "every rule is tested raised and not raised, documented and held by a step;
   uv run python ../../../scripts/rule-coverage
 step "plugin manifests validate" plugin_validate
 step "red-on-main: new tests are red holes or green guards" red_on_main_or_notice
-if examples=$(clean_examples); then
+# The examples as a clone after committing holds them: tracked and staged files at their staged text.
+if examples=$(../../../scripts/committed-examples); then
   step "examples/legclaw-links reaches its documented status" example_status "$examples/legclaw-links"
   step "examples/legclaw reaches its documented status" example_status "$examples/legclaw"
   rm -rf "$(dirname "$examples")"

@@ -10,15 +10,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple, Protocol
 
-from . import units
 from .project import (
-    CHECK_KINDS,
     Project,
+    between_two,
     check_params,
     check_physics_sources,
     check_tolerance,
     compared_quantity,
     expect_joint_value,
+    joint_valued,
     expect_param_quantity,
     expr_names,
     mass_params,
@@ -92,7 +92,7 @@ class Built:
     @property
     def moving(self) -> dict:
         """The joints that move their child relative to their parent: all but the fixed ones."""
-        return {n: j for n, j in self.joints.items() if JOINT_TYPES[j["type"]].mjcf is not None}
+        return {n: j for n, j in self.joints.items() if joint_type(j).mjcf is not None}
 
 
 @dataclass
@@ -126,20 +126,28 @@ DRIVES = ("actuated", "passive")
 
 
 class JointType(NamedTuple):
-    """What a joint type is in the MJCF: its joint element's type, None where the child is welded
-    into its parent's body; the quantity its value, range and poses are in; and the verb a
-    finding says it moves by."""
+    """What a joint type is in the MJCF: its joint element's type, None for a fixed joint, whose
+    child moves with its parent as one body; the quantity its value, range and poses are in; the
+    verb a finding says it moves by; and the symbol a compared value of it is printed with."""
 
     mjcf: str | None
     quantity: str | None
     moves: str
+    symbol: str = ""
 
 
 JOINT_TYPES = {
-    "revolute": JointType("hinge", "angle", "turns"),
+    "revolute": JointType("hinge", "angle", "turns", "°"),
     "slide": JointType("slide", "length", "slides"),
     "fixed": JointType(None, None, "stays"),
 }
+
+
+def joint_type(joint: dict) -> JointType:
+    """The JointType of a joint build() returned, once the contract has held its type."""
+    return JOINT_TYPES[joint["type"]]
+
+
 # What a fixed joint takes: its child moves with its parent, so it has no axis, range or drive.
 FIXED_KEYS = ("type", "parent", "child")
 
@@ -208,7 +216,7 @@ def _motion_breach(result) -> str | None:
         for key in ("parent", "child"):
             if not isinstance(joint.get(key), str):
                 return f"joint {name}: {key} must name an assembly instance"
-        if JOINT_TYPES[joint["type"]].mjcf is None:
+        if joint_type(joint).mjcf is None:
             continue  # a fixed joint takes nothing else, which [model-joint] says
         if not _names(joint.get("axis"), 2):
             return f"joint {name}: axis must be two datums of its child, not {joint.get('axis')!r}"
@@ -334,7 +342,7 @@ def build(p: Project) -> Built | None:
         expect_param_quantity(p, name, ("length", "angle"), "in model.py")
     ranges = {n for joint in built.joints.values() for n in joint.get("range", [])}
     for joint in built.joints.values():
-        quantity = JOINT_TYPES[joint["type"]].quantity
+        quantity = joint_type(joint).quantity
         for name in joint.get("range", []):
             if name in p.values and quantity is not None:
                 expect_param_quantity(p, name, (quantity,), f"in a {joint['type']} joint's range")
@@ -399,12 +407,11 @@ def _joint_values(p: Project, built: Built) -> None:
         named = [
             (j, str(ref), f"in check {cid}'s pose") for j, ref in (c.get("pose") or {}).items()
         ]
-        kind = CHECK_KINDS.get(str(c.get("kind")))
-        if kind is not None and kind.joint_valued and "between" not in c:
+        if joint_valued(c):
             named += [(c.get("joint"), str(ref), f"check {cid}") for ref in c.get("ends") or []]
         for joint, ref, use in named:
             if joint in built.moving:
-                quantity = JOINT_TYPES[built.moving[joint]["type"]].quantity
+                quantity = joint_type(built.moving[joint]).quantity
                 expect_joint_value(p, ref, quantity, use)
 
 
@@ -505,7 +512,7 @@ def _joint_flaw(p: Project, built: Built, joint: dict, moved_by: dict) -> str | 
             return f"{key} {joint[key]} is not an instance of the assembly"
     if joint["child"] in moved_by:
         return f"{joint['child']} is already the child of joint {moved_by[joint['child']]}"
-    if JOINT_TYPES[joint["type"]].mjcf is None:
+    if joint_type(joint).mjcf is None:
         extra = [key for key in joint if key not in FIXED_KEYS]
         if extra:
             return (
@@ -680,13 +687,6 @@ def export(p: Project, built: Built) -> list[Path]:
     return written
 
 
-def _expect(p: Project, ref: str, kind: str) -> float:
-    value = p.compared_value(ref, kind)
-    if value is None:
-        raise KeyError(f"evidence value {ref}")
-    return value
-
-
 def _compared(
     p: Project,
     c: dict,
@@ -700,13 +700,9 @@ def _compared(
     the check's tolerance: tol, a length or for an angle check degrees, or for a mass check
     tol_rel, a fraction of that value. quantity, where given, is the one a range check compares
     its joint's own value in."""
-    if quantity is None:
-        expected = _expect(p, ref, c["kind"])
-    else:
-        value = p.value_as(ref, quantity)
-        if value is None:
-            raise KeyError(f"evidence value {ref}")
-        expected = value
+    expected = p.value_as(ref, quantity or compared_quantity(c))
+    if expected is None:
+        raise KeyError(f"evidence value {ref}")
     tolerance = check_tolerance(p, c, quantity)
     if tolerance is None:
         raise KeyError("tol_rel")  # the only tolerance a comparing check can lack
@@ -921,9 +917,8 @@ def _range(p: Project, built: Built, c: dict, poser: Poser | None) -> list[Check
         wanted = "[low, high]" if len(joint["range"]) == 2 else "[end]"
         p.error("check-config", f"check {cid}: ends names {len(ends)} values, not {wanted}")
         return []
-    quantity = JOINT_TYPES[joint["type"]].quantity
-    scale = units.size("angle", p.units) / units.UNITS["deg"].si if quantity == "angle" else 1.0
-    unit = "°" if quantity == "angle" else ""
+    kind = joint_type(joint)
+    quantity = str(kind.quantity)
     results = []
     for param, ref in zip(joint["range"], ends):
         if "between" in c:
@@ -932,7 +927,7 @@ def _range(p: Project, built: Built, c: dict, poser: Poser | None) -> list[Check
                 continue
             placed, pose = reached
             points = _datums(p, placed, c)
-            if points is not None and len(points) == 2:
+            if points is not None and between_two(c):
                 measured, shown = _distance(c, points), f" {' - '.join(c['between'])}"
             else:
                 measured = None if points is None else _angle(p, c, points)
@@ -948,8 +943,8 @@ def _range(p: Project, built: Built, c: dict, poser: Poser | None) -> list[Check
             if reached is None:
                 continue
             pose = reached[1]
-            measured = p.values[param] * scale
-            shown = f"{unit} {name}'s range end ({param})"
+            measured = p.values[param] * p.compared_size(quantity)
+            shown = f"{kind.symbol} {name}'s range end ({param})"
         compared_in = compared_quantity(c) if "between" in c else quantity
         result = _compared(p, c, f"{cid}.{param}", ref, measured, shown, compared_in)
         result.pose = pose
@@ -1016,7 +1011,10 @@ def _interference(
     worst, worst_pose, where, across = (0.0, ""), None, "", ""
     for assembly, pose in poses:
         shapes = dict(_instances(assembly))
+        boxes = {name: shape.bounding_box().wrapped for name, shape in shapes.items()}
         for a, b in pairs:
+            if boxes[a].IsOut(boxes[b]):
+                continue  # apart, so no overlap: the boolean is the slow part of a sweep
             volume = _volume(shapes[a].intersect(shapes[b]))
             if volume > worst[0]:  # name a pair only where instances overlap
                 worst, worst_pose = (volume, f"{a} ∩ {b}"), pose
