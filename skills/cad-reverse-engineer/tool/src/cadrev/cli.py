@@ -303,7 +303,7 @@ def cmd_check(args) -> int:
             before = proj.check_params(p)  # every part's mass params, for a check naming none
             results = geometry.run_checks(p, built, poser)
             if not args.no_coverage:
-                proj.check_weighed_coverage(p, before, built.used)
+                proj.check_weighed_sources(p, before, built.used)
             moves = report.motion(p, built)
             weighed = report.masses(built)
             if not partial:

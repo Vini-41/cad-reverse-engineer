@@ -1,5 +1,6 @@
 name: test
-on: [push, pull_request]
+# workflow_dispatch reruns a commit whose push event was lost (scripts/ci-wait names the command).
+on: [push, pull_request, workflow_dispatch]
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -15,5 +16,6 @@ jobs:
       - run: npm install -g @anthropic-ai/claude-code  # for scripts/check's plugin validation
       - run: ../../../scripts/check
         env:
-          # A PR's checkout is its merge commit, whose first parent is the base it merges into.
-          BASE: ${{ github.event_name == 'pull_request' && 'HEAD^1' || github.event.before }}
+          # A PR's checkout is its merge commit, whose first parent is the base it merges into; a
+          # rerun by hand compares against the commit's own parent.
+          BASE: ${{ github.event_name != 'push' && 'HEAD^1' || github.event.before }}
