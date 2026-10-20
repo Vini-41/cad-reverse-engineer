@@ -318,7 +318,7 @@ def _solve(
         for name, joint in built.moving.items()
         if joint["drive"] == "passive" and name not in values
     ]
-    dofs = [m.jnt_dofadr[j] for j in free]
+    columns = [m.jnt_dofadr[j] for j in free]  # their columns in a Jacobian
     qpos = [m.jnt_qposadr[j] for j in free]
     loops = {
         name: tuple(mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, s) for s in pair)
@@ -349,7 +349,7 @@ def _solve(
             d.qpos[m.jnt_qposadr[jid[name]]] = value * size[name] * step / STEPS
         for _ in range(ITERATIONS):
             mujoco.mj_kinematics(m, d)
-            if not (loops or gears) or not dofs:
+            if not (loops or gears) or not columns:
                 break
             mujoco.mj_comPos(m, d)
             r = residual()
@@ -361,7 +361,7 @@ def _solve(
                 mujoco.mj_jacSite(m, d, jac2, None, b)
                 rows.append(jac1 - jac2)
             rows.append(gear_rows)
-            d.qpos[qpos] += np.linalg.lstsq(np.vstack(rows)[:, dofs], -r, rcond=None)[0]
+            d.qpos[qpos] += np.linalg.lstsq(np.vstack(rows)[:, columns], -r, rcond=None)[0]
     mujoco.mj_kinematics(m, d)
     at = pose_text(pose)
     reached = True

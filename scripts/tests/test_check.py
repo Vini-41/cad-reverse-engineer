@@ -7,7 +7,13 @@ import subprocess
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "check"
-STUBS = ("red-on-main", "check-doc-pointers", "committed-examples", "rule-coverage")
+STUBS = (
+    "red-on-main",
+    "check-doc-pointers",
+    "check-glossary-words",
+    "committed-examples",
+    "rule-coverage",
+)
 
 
 def check(tmp_path: Path, uv_sync_code: int = 0) -> tuple[subprocess.CompletedProcess[str], list]:
