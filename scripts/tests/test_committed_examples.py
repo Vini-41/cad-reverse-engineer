@@ -53,3 +53,26 @@ def test_guard_ignored_files_stay_out_of_the_copy(tmp_path):
     examples = copy(root)
     assert not (examples / "ex" / "build").exists()
     assert (examples / "ex" / "model.py").is_file()
+
+
+def stderr(root: Path) -> str:
+    return subprocess.run(
+        [str(SCRIPT)], cwd=root, capture_output=True, text=True, check=True
+    ).stderr
+
+
+def test_each_edit_left_out_of_the_copy_is_named_on_stderr(tmp_path):
+    root = repo(tmp_path)
+    (root / "examples" / "ex" / "model.py").write_text("edited, unstaged\n")
+    (root / "examples" / "ex" / "stray.yaml").write_text("untracked\n")
+    assert stderr(root).splitlines() == [
+        "not staged, so left out of the copy: examples/ex/model.py",
+        "not staged, so left out of the copy: examples/ex/stray.yaml",
+    ]
+
+
+def test_guard_a_fully_staged_tree_copies_without_a_word(tmp_path):
+    root = repo(tmp_path)
+    (root / "examples" / "ex" / "model.py").write_text("edited, staged\n")
+    git(root, "add", "examples")
+    assert stderr(root) == ""
