@@ -1,0 +1,8 @@
+build/
+# The sources are examples/legclaw-links/sources/, pinned by sha256 in project.yaml.
+# Of the extracted figures, the crops and the one page image overlays.yaml draws on are committed.
+figures/*/
+!figures/crops/
+!figures/paper/
+figures/paper/*
+!figures/paper/p004_01.jpg

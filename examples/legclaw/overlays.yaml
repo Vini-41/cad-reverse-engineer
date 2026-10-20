@@ -1,0 +1,10 @@
+overlays:
+  - id: fig2b-phalanx1
+    image: figures/paper/p004_01.jpg
+    part: phalanx1
+    view: front
+    origin: [1580, 203]
+    calibration:
+      pixels: [[1418, 200], [1742, 200]]
+      evidence: S2-phalanx1.L
+    mirror: false

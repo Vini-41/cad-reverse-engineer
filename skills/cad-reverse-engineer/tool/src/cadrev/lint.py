@@ -354,14 +354,9 @@ def _lint_param_expressions(
         literal; whether any was raised."""
         raised = False
         for name in points[0]:
-            factors = []
-            for params, value in zip(points, values):
-                shifted = evaluate(node, {**params, name: 2 * params[name]})
-                if shifted is None:
-                    break
-                factors.append((shifted - value) / params[name])
+            factors = factors_of(node, name, points, values)
             if (
-                len(factors) == len(points)
+                factors is not None
                 and _same(factors[0], factors[1])
                 and not is_allowed(factors[0])
                 and not (factors[0] and is_allowed(1 / factors[0]))  # p.x / 90 divides by 90
@@ -370,10 +365,49 @@ def _lint_param_expressions(
                 p.error(
                     "model-arithmetic",
                     f"model.py:{node.lineno}: {text} multiplies {name} by {factors[0]:g}, not "
-                    "an allowed literal; move the number to params.yaml as a derived param "
-                    "with a basis",
+                    f"an allowed literal{through(node, name, points)}; move the number to "
+                    "params.yaml as a derived param with a basis",
                 )
         return raised
+
+    def factors_of(
+        node: ast.expr, name: str, points: list[dict[str, float]], values: list[float]
+    ) -> list[float] | None:
+        """The change in node's value per unit change of param name at each point, or None
+        where it cannot be computed."""
+        factors = []
+        for params, value in zip(points, values):
+            shifted = evaluate(node, {**params, name: 2 * params[name]})
+            if shifted is None:
+                return None
+            factors.append((shifted - value) / params[name])
+        return factors
+
+    def through(node: ast.expr, name: str, points: list[dict[str, float]]) -> str:
+        """Where part of node's factor on param name comes from: each local name node reads
+        that reads name, with the line it is assigned on and its own factor, so a factor built
+        up on another line is traced there."""
+        parts, seen = [], set()
+        for child in ast.walk(node):
+            if (
+                not isinstance(child, ast.Name)
+                or child.id in seen
+                or (assigned := exprs.local.get(child.id)) is None
+                or name not in (exprs.reads(assigned) or set())
+            ):
+                continue
+            seen.add(child.id)
+            values = [v for params in points if (v := evaluate(assigned, params)) is not None]
+            factors = (
+                factors_of(assigned, name, points, values) if len(values) == len(points) else None
+            )
+            own = (
+                f", multiplies {name} by {factors[0]:g}"
+                if factors is not None and _same(factors[0], factors[1])
+                else ""
+            )
+            parts.append(f"{child.id}, assigned on model.py:{assigned.lineno}{own}")
+        return "".join(f" ({part})" for part in parts)
 
     def visit(node: ast.AST) -> None:
         if not isinstance(node, ast.expr) or (reads := exprs.reads(node)) is None:

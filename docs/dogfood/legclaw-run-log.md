@@ -187,3 +187,24 @@ Trips 1 and 2 were reproduced on a copy of the project: with `n_servo: three` wr
 | 8 | The foot was built as a rigid envelope: Table S2's X-tensile linkage row (`S2-linkage`), its springs and the tendons are `scope: not-modeled`, though the goal is the whole device with its motion. | doc | project-format.md (`scope`): `not-modeled` is for what lies outside the device or a part cadrev's joint types cannot model, the reason saying which; a part the sources' parts tables list and a mechanism they state are built. SKILL.md step 5 says so. |
 
 `gen_checks.py`, the script that wrote checks.yaml, lives in the project directory, as run 6 trip 12's fix asks.
+
+## Run 8: spec #51 at its last fixes
+
+Spec #51, issue #58. Skill and tool at `653e368` (spec-51 with #52–#57, #60, #61 and #62). Project kept at `~/Documents/AI-Tools/cadrev/Workspace/dogfood/run-8`. Same brief as run 6.
+
+**End state:** VERIFIED PENDING REVIEW, not exact: 0 errors, 0 warnings, 75/75 checks pass. Both legs and their connecting-plate mounts, with the foot built: 84 joints (74 revolute, 4 slide, 6 fixed), 24 loops (per leg, 2 knee four-bar, 6 foot X and 4 bent-linkage loops), 2 gears (ratio −1, proposed from the words) and 16 tension springs as tendons. 120 params, resting on 57 source, 0 measured and 59 proposed, with 4 proposed physics values (`G_steel`, `E_steel`, `spring_k`, `toe_k`) and the sweep resolution `sweep_steps` = 5. Conflicts K1 (430 g against 420 g), K2 (Fig. S1B against the 31 mm linkages) and K3 (L14 = 37 mm as pitch or overall length) each have a resolution. The MJCF loads in MuJoCo with every loop closed (largest residual 3.3e-10 mm), with no `[loop-open]` or `[joint-range]`. Range checks pass on the leg width D 20 to 50 mm (a distance at as built and a range between the knee pins at full stroke), the 180° hip flip (2), the 385° servo rotation (4) and the 0–40° toe range (8); sweeps of the slide, the flip and the toes find no overlap. Every Table S2 row and the Fig. 2A sole of each foot are checked; the leg (213.8 g against 200 g) and the landing gear (457.6 g against 430 g) pass at `tol_rel` 0.25 on proposed densities, servo masses and counts. Five readings await confirmation.
+
+Trip 2 was reproduced on a test fixture, since the project's final model.py moved the factor into a derived param; trip 6 was confirmed in the project's evidence.yaml (`fig2a-beta`, `fig2a-mass` and `figS1-tension` are `scope: context` restating ledgered values). The others are taken from the agent's report.
+
+| # | Trip | Kind | Fix |
+|---|---|---|---|
+| 1 | No servo or spring datasheet was available, since the brief allowed only the two sources. | inherent | Gaps G-servo, G-springs and G-density (close by: datasheet). |
+| 2 | `[model-arithmetic]` reported `model.py:185: fy + p.lnk_W / 2 multiplies lnk_W by -1.5`, but the line holds only `/ 2`: the −2 came from `fy`, assigned on another line, so the agent had to find where the factor was built up. | tool bug | The finding names each local name the factor is built up through, with the line it is assigned on and its own factor: `(fy, assigned on model.py:6, multiplies link_W by -2)`. modeling.md says so. Test: `test_model_factor_built_through_a_local_name_names_where_it_is_assigned`. |
+| 3 | A mass check cannot count a part's instances in the assembly, so each count (`n_comp`, `n_bent`, `n_end`, `n_toe`) is a proposed param with a gap. | tool gap | #64. |
+| 4 | The torsion springs' 45° preset is not representable: the export has no spring reference angle (MJCF `springref`). | tool gap | #65. |
+| 5 | The tendons wind on the servo wheel, which cadrev cannot model, so the 385° wheel drives nothing and the toes' flexion is passive. | tool gap | #63. |
+| 6 | A value stated in several places (βmax = 40° in Fig. 2A and the text, the leg mass in Fig. 2A and the text) had no guidance; the agent kept one statement in scope and the others `scope: context` to avoid `[evidence-unused]`. | doc | project-format.md (`scope`): a value stated in several places is ledgered at each and checked once; the statement a param or check reads stays in scope (a quote rather than a figure reading), and each other is `context` with a `reason` naming the item it restates. Statements that differ are a conflict. SKILL.md step 3 points to it. |
+| 7 | zsh did not word-split the `uv run … cadrev` command held in a variable. | environment | None: as run 7 trip 5, SKILL.md (Tool) asks for the command in full on every call. |
+| 8 | Fig. S1B's 60 × 46 × 20 mm schematic cannot be met by Table S2's 31 mm linkages. | inherent | Conflict K2: Table S2 and the Fig. 2A sole are realised; Fig. S1B is context. |
+
+Run 8 is the run committed as `examples/legclaw`. Vini confirmed its five figure readings (`confirmed_by` in its `evidence.yaml`), so the example reaches VERIFIED; its sources are read from `examples/legclaw-links/sources/`, and `scripts/check` reruns it on every push.

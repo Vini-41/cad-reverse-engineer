@@ -699,6 +699,18 @@ def test_model_factor_respelled_from_allowed_literals_is_a_finding(
     assert messages[0].startswith(f"model.py:6: {expr} multiplies {param} by {factor},")
 
 
+# Run 8 met a factor of -1.5 on a line that holds only / 2: the -2 came from a local name
+# assigned on another line, so the finding names that name, its line and its own factor.
+def test_model_factor_built_through_a_local_name_names_where_it_is_assigned(proj_dir):
+    _model_with(proj_dir, line="fy = p.link_L - 2 * p.link_W\n    extra = fy + p.link_W / 2")
+    messages = findings(proj_dir, "model-arithmetic")
+    assert errors(proj_dir) == ["model-arithmetic"] and len(messages) == 1
+    assert messages[0].startswith(
+        "model.py:7: fy + p.link_W / 2 multiplies link_W by -1.5, not an allowed literal "
+        "(fy, assigned on model.py:6, multiplies link_W by -2);"
+    )
+
+
 @pytest.mark.parametrize(
     "expr",
     [

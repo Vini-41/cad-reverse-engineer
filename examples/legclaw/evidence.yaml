@@ -1,0 +1,235 @@
+# Every number the sources state about the object. Each item is a verbatim quote
+# (text sources) or a pinned figure crop with its reading (figures, video frames).
+evidence:
+  # ---- Table S2: dimensions of key components (L×H×W, mm) ----
+  - {id: S2-compression, source: supp, page: 1, locator: Table S2, quote: "Compression Linkage 40×8×5", values: {L: 40, H: 8, W: 5}}
+  - {id: S2-pedestal, source: supp, page: 1, locator: Table S2, quote: "Pedestal 16×16×63", values: {L: 16, H: 16, W: 63}}
+  - {id: S2-bent, source: supp, page: 1, locator: Table S2, quote: "Bent Linkage 37×6.5×5", values: {L: 37, H: 6.5, W: 5}}
+  - {id: S2-claw, source: supp, page: 1, locator: Table S2, quote: "Claw 25×8×18", values: {L: 25, H: 8, W: 18}}
+  - {id: S2-phalanx1, source: supp, page: 1, locator: Table S2, quote: "Phalanx 1 24×12×18", values: {L: 24, H: 12, W: 18}}
+  - {id: S2-phalanx2, source: supp, page: 1, locator: Table S2, quote: "Phalanx 2 24×12×18", values: {L: 24, H: 12, W: 18}}
+  - {id: S2-linkage, source: supp, page: 1, locator: Table S2, quote: "Linkage 31×4×3", values: {L: 31, H: 4, W: 3}}
+  - {id: S2-thigh, source: supp, page: 1, locator: Table S2, quote: "Thigh 92.5×39×44", values: {L: 92.5, H: 39, W: 44}}
+  - {id: S2-wheel, source: supp, page: 1, locator: Table S2, quote: "Steering Wheel 18×5×18", values: {L: 18, H: 5, W: 18}}
+
+  # ---- bent linkage length (Methods 4.2) ----
+  - id: M42-L14
+    source: paper
+    page: 11
+    locator: "Sec. 4.2, Determination of the Length of Linkage 2"
+    quote: "L14 was determined to be no less than 37 mm, and a design value of 37 mm was therefore adopted"
+    values: {L14: 37}
+
+  # ---- motion ----
+  - id: P2-toe-range
+    source: paper
+    page: 2
+    locator: "Sec. 2.1, toes"
+    quote: "The joints permit rotation angles between 0◦ and 40◦"
+    values: {min: 0, max: 40}
+  - id: P2-toe-cyl
+    source: paper
+    page: 2
+    locator: "Sec. 2.1, toes"
+    quote: "For cylindrical objects, the inter- toe angle approaches 0◦"
+    scope: context
+    reason: "how the stated 0-40 degree toe range is used on cylinders; the range itself is P2-toe-range"
+  - id: P5-flip
+    source: paper
+    page: 5
+    locator: "Sec. 2.3, hanging perching"
+    quote: "Hanging perching requires a 180◦ rotation of the legs"
+    values: {turn: 180}
+  - id: P10-flip
+    source: paper
+    page: 10
+    locator: "Sec. 3, Conclusion"
+    quote: "Hanging perching is achieved by rotating the legs 180◦"
+    scope: context
+    reason: "restates the leg rotation ledgered as P5-flip"
+  - id: P12-flip
+    source: paper
+    page: 12
+    locator: "Sec. 4.5, Control Scheme"
+    quote: "joint servos rotate the legs by 180◦"
+    scope: context
+    reason: "restates the leg rotation ledgered as P5-flip"
+  - id: P3-servo-turn
+    source: paper
+    page: 3
+    locator: "Sec. 2.1, tendon servo"
+    quote: "corresponding to a maximum servo rotation angle of about 385◦"
+    values: {turn: 385}
+  - id: P3-tendon-stroke
+    source: paper
+    page: 3
+    locator: "Sec. 2.1, tendon servo"
+    quote: "when the claw is fully closed, the tendon shortening is approximately 38 mm"
+    values: {stroke: 38}
+    scope: not-modeled
+    reason: "the stroke of the cable tendons, which wind on the servo steering wheels; the cables are not built, since a cadrev tendon is an elastic cord fixed between datums and cannot wind on a spool"
+  - id: fig2d-width
+    source: paper
+    page: 4
+    locator: "Fig. 2D, leg four-bar width D"
+    image: figures/crops/fig2d-width.png
+    image_sha256: 27950e1b0f68afadeb92bc7532666684b490f7d5b76ff815d5dc3beb96127c52
+    confirmed_by: Vini
+    reading: "Dmin = 20mm; Dmax = 50mm"
+    values: {Dmin: 20, Dmax: 50}
+  - id: fig2a-beta
+    source: paper
+    page: 4
+    locator: "Fig. 2A, joints of the toes inset"
+    image: figures/crops/fig2a-beta.png
+    image_sha256: daa439232c69a5ea73e6e2edae5d1438b7e9d4d5524f2ad0afe03f35a03a1a53
+    confirmed_by: Vini
+    reading: "(βmax =40°)"
+    values: {max: 40}
+    scope: context
+    reason: "restates the 40 degree toe-joint limit ledgered as P2-toe-range"
+
+  # ---- foot envelopes ----
+  - id: fig2a-sole
+    source: paper
+    page: 4
+    locator: "Fig. 2A, sole of the foot inset"
+    image: figures/crops/fig2a-sole.png
+    image_sha256: b8ac73ece7f4e7661ff541379aa1dc0dbf6c34806e36028c13bec1027ba31a71
+    confirmed_by: Vini
+    reading: "70mm; 56mm; 22mm"
+    values: {L: 70, W: 56, H: 22}
+  - id: figS1-tension
+    source: supp
+    page: 1
+    locator: "Fig. S1B, simplified schematic of the tension structure"
+    image: figures/crops/figs1-tension.png
+    image_sha256: 300e824b19b8b14e6cd2f31c7796818029b20187ab6c01e34f4948891519c446
+    confirmed_by: Vini
+    reading: "20mm; 46mm; 60mm"
+    values: {H: 20, W: 46, L: 60}
+    scope: context
+    reason: "a line schematic of the X-tensile structure whose 30 x 20 mm cells the 31 mm linkages of Table S2 cannot span corner to corner (conflict K2); the model follows Fig. 2A and Table S2"
+  - id: P2-x-structure
+    source: paper
+    page: 2
+    locator: "Sec. 2.1, foot"
+    quote: "composed of two serially connected X-structures, each consisting of four linkages and four tension springs"
+    values: {n_x: two, n_link: four}
+
+  # ---- masses ----
+  - id: P3-gear-mass
+    source: paper
+    page: 3
+    locator: "Sec. 2.1, masses"
+    quote: "The landing gear weighs about 430 g"
+    values: {m: 430}
+  - id: P3-leg-mass
+    source: paper
+    page: 3
+    locator: "Sec. 2.1, masses"
+    quote: "with each leg weighing 200 g and incorporating three servos (63 g total)"
+    values: {m: 200, n_servo: three, m_servo: 63}
+  - id: P3-board-mass
+    source: paper
+    page: 3
+    locator: "Sec. 2.1, masses"
+    quote: "The control board and wiring add an additional 30 g"
+    values: {m: 30}
+  - id: fig2a-mass
+    source: paper
+    page: 4
+    locator: "Fig. 2A, leg"
+    image: figures/crops/fig2a-mass.png
+    image_sha256: 8db89fa48d991c87870e2f25a1e4fdd5a0470324a9b3b32f3471521f2a0a584c
+    confirmed_by: Vini
+    reading: "m≈200g"
+    values: {m: 200}
+    scope: context
+    reason: "restates the leg mass ledgered as P3-leg-mass"
+  - id: P10-mass-420
+    source: paper
+    page: 10
+    locator: "Sec. 3, Conclusion"
+    quote: "a compact system weighing 420 g"
+    values: {m: 420}
+    scope: context
+    reason: "total mass in conflict with the 430 g of Sec. 2.1 (conflict K1)"
+  - id: P11-mass-430
+    source: paper
+    page: 11
+    locator: "Sec. 3, limitations"
+    quote: "The mechanism weighs approximately 430 g"
+    values: {m: 430}
+    scope: context
+    reason: "restates the landing-gear mass ledgered as P3-gear-mass"
+  - id: P12-servos
+    source: paper
+    page: 12
+    locator: "Sec. 4.5, Control Scheme"
+    quote: "four single-axis servos (HL-3606-C0002, Feetech) driving the tendons and two dual- axis servos (HL-3606-C0001, Feetech) serving as joint actuators"
+    values: {n_single: four, n_dual: two}
+
+  # ---- springs and tendons (Methods 4.1) ----
+  - id: P11-tension-springs
+    source: paper
+    page: 11
+    locator: "Sec. 4.1, Manufacturing and Assembly"
+    quote: "Eight tension springs (4 mm diameter, 0.4 mm wire diameter, 15 mm length)"
+    values: {D: 4, d: 0.4, len: 15}
+  - id: P11-torsion-springs
+    source: paper
+    page: 11
+    locator: "Sec. 4.1, Manufacturing and Assembly"
+    quote: "torsion springs (0.7 mm wire diameter, 4 mm diameter, six turns"
+    values: {d: 0.7, D: 4, n: six}
+  - id: P11-torsion-preset
+    source: paper
+    page: 11
+    locator: "Sec. 4.1, Manufacturing and Assembly"
+    quote: "preset at 45◦"
+    values: {preset: 45}
+    scope: not-modeled
+    reason: "the torsion-spring preload angle; the MJCF joint stiffness rests at the as-built pose, so a preload offset is not represented"
+  - id: P11-tendons
+    source: paper
+    page: 11
+    locator: "Sec. 4.1, Manufacturing and Assembly"
+    quote: "Kevlar (0.5 mm, Dupont) selected for the passive tendons due to its high tensile strength and low elongation, and Dyneema (0.35 mm, Beadalon) adopted for the active tendons"
+    values: {d_passive: 0.5, d_active: 0.35}
+    scope: not-modeled
+    reason: "diameters of the cable tendons, which are not built (see P3-tendon-stroke)"
+
+skipped:
+  - {source: paper, page: 3, quote: "perches on a tree branch ( ∼ 75 mm diameter, 5◦ tilt)", reason: "field-test branch, not the object"}
+  - {source: paper, page: 3, quote: "mounted on a UAV with a 450 mm wheelbase and a total takeoff weight of approximately 1.2 kg (recommended range, 1–1.5 kg)", reason: "the carrier UAV"}
+  - {source: paper, page: 3, quote: "the landing gear accounts for ∼ 24.7 % of the total vehicle mass", reason: "mass fraction relative to the UAV, a derived result"}
+  - {source: paper, page: 5, from: "At tilt angles of 0◦ and 10◦", to: "improvement of ∼ 567 %", reason: "perching test loads, tilt angles, branch diameters and results"}
+  - {source: paper, pages: [6, 7, 8, 9], reason: "test results, torque and energy experiments, grasping and flight experiments"}
+  - {source: paper, page: 10, from: "diameter, positioned 3 m", to: "lifts the object to ∼ 1.5 m", reason: "flight experiment targets and trajectories"}
+  - {source: paper, page: 10, quote: "On 60–80 mm branches, it withstands tilts of at least ± 5.5◦. This capability supports UAVs weighing up to 1.2 kg.", reason: "test result and UAV mass"}
+  - {source: paper, page: 10, from: "output torque of only 1.2 kg ·cm", to: "∼ 93 % success rate", reason: "torque test setting and grasping results"}
+  - {source: paper, page: 11, quote: "optimized for a 1.2 kg takeoff weight", reason: "the carrier UAV"}
+  - {source: paper, page: 12, quote: "The rotation of each servo (360◦) was discretized into 4096 steps", reason: "servo control resolution, not a motion of the object"}
+  - {source: paper, page: 12, from: "equivalent to ∼ 13.17◦ per second", to: "2200 mAh lithium-ion battery", reason: "control speed setting and the electronics battery"}
+  - {source: paper, page: 12, quote: "within ± 5 % of the reference values", reason: "sensor calibration"}
+  - {source: paper, page: 12, quote: "servo output torque fixed at 1.2 kg ·cm", reason: "grasping-test setting"}
+  - {source: paper, pages: [13, 14, 15], reason: "grasping protocol, UAV hardware, motion capture and references"}
+  - {source: supp, page: 1, from: "Table S4.", to: "Movie S1.", reason: "grasp-test objects"}
+  - {source: supp, page: 1, from: "Applied load: 350 g", to: "No load (0 g)", reason: "stress-test loads"}
+  - {source: supp, page: 1, quote: "thigh rotated ~90°", reason: "an intermediate frame of the leg-flip demonstration (Fig. S9B); the flip itself is P5-flip"}
+  - {source: supp, page: 1, quote: "A 3S LiPo battery (3300 mAh)", reason: "UAV battery"}
+
+conflicts:
+  - id: K1
+    evidence: [P3-gear-mass, P10-mass-420]
+    summary: "Sec. 2.1 and Sec. 3 (limitations) give the landing gear as about 430 g; the Conclusion (and Table S1) give 420 g."
+    resolution: "430 g is used: it equals the stated parts, two 200 g legs plus 30 g of control board and wiring; 420 g is read as a rounded figure."
+  - id: K2
+    evidence: [figS1-tension, S2-linkage]
+    summary: "Fig. S1B draws the X-tensile structure as a 60 x 46 x 20 mm box of two 30 x 20 mm cells, whose diagonal (36 mm) is longer than the 31 mm linkages of Table S2."
+    resolution: "Table S2 and the Fig. 2A sole envelope (70 x 56 x 22 mm) are realised; Fig. S1B is read as a not-to-scale schematic, and the cell geometry follows from the linkage pitch and a proposed pin-row spacing (gap G-cell)."
+  - id: K3
+    evidence: [M42-L14, S2-bent]
+    summary: "Sec. 4.2 uses L14 = 37 mm as a kinematic length of the bent linkage in Eq. (8); Table S2 gives the bent linkage's overall length L as 37 mm. A 37 mm pin pitch cannot fit inside a 37 mm long part with rounded ends."
+    resolution: "Both are read as the overall length (checked as the bbox and as the tip-to-tip distance); the pin pitch is the length less the width (pins at the centres of the rounded ends, gap G-bent-pitch)."

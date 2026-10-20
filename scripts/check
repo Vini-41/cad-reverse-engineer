@@ -20,14 +20,26 @@ step() {
   "$@" || failed+=("$name")
 }
 
+# The examples as a fresh clone of this tree holds them: their tracked files and the new ones git
+# would add, without build/ or any other ignored file. Prints the copy's examples directory.
+clean_examples() {
+  local dir
+  dir=$(mktemp -d)
+  (cd "$repo" && git ls-files -z --cached --others --exclude-standard -- examples \
+    | tar --null -T - -cf -) | tar -xf - -C "$dir" || return 1
+  echo "$dir/examples"
+}
+
+# Fails unless cadrev check on example prints the status line its README states.
 example_status() {
-  local example=../../../examples/legclaw-links expected log
+  local example=$1 expected log code=0
   expected=$(sed -n 's/^Expected status: `\(.*\)`$/\1/p' "$example/README.md")
   [ -n "$expected" ] || { echo "$example/README.md states no expected status"; return 1; }
   log=$(mktemp)
   uv run cadrev check "$example" | tee "$log"
-  grep -qF "$expected. Report:" "$log" || { echo "expected: $expected"; rm -f "$log"; return 1; }
+  grep -qF "$expected. Report:" "$log" || { echo "expected: $expected"; code=1; }
   rm -f "$log"
+  return "$code"
 }
 
 # Runs red-on-main for real against BASE (CI sets it from the event; locally it defaults to the
@@ -63,7 +75,13 @@ step "every rule is tested raised and not raised, documented and held by a step;
   uv run python ../../../scripts/rule-coverage
 step "plugin manifests validate" plugin_validate
 step "red-on-main: new tests are red holes or green guards" red_on_main_or_notice
-step "example reaches its documented status" example_status
+if examples=$(clean_examples); then
+  step "examples/legclaw-links reaches its documented status" example_status "$examples/legclaw-links"
+  step "examples/legclaw reaches its documented status" example_status "$examples/legclaw"
+  rm -rf "$(dirname "$examples")"
+else
+  failed+=("the examples copy as a clone holds them")
+fi
 
 if [ ${#failed[@]} -gt 0 ]; then
   printf 'failed: %s\n' "${failed[@]}"

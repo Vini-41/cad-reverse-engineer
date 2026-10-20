@@ -5,8 +5,9 @@ extend-include = ["scripts/*"]
 extend-exclude = ["scripts/red-on-main", "scripts/cadrev", "scripts/check", ".claude"]
 
 [format]
-# Code blocks in the reference docs keep their hand-aligned comments.
-exclude = ["*.md"]
+# Code blocks in the reference docs keep their hand-aligned comments; examples/legclaw keeps the
+# code its dogfood run wrote, as the run left it.
+exclude = ["*.md", "examples/legclaw/*.py"]
 
 [lint]
 # pyflakes and pycodestyle errors, blind excepts (each one carries a noqa with its reason), and

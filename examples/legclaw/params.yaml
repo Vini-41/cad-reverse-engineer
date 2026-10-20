@@ -1,0 +1,160 @@
+# The only place numbers enter the model. basis: source | derived | measured | proposed.
+params:
+  # ---------------- Table S2 envelopes ----------------
+  ph1_L: {basis: source, from: S2-phalanx1.L, interpretation: "overall length along the toe, part X; the Fig. 2B overlay shows the 24 mm spanning the two pivot ears, with the top tabs and rubber pad outside the 12 mm depth"}
+  ph1_H: {basis: source, from: S2-phalanx1.H, interpretation: "depth in the toe's flexion plane, part Z"}
+  ph1_W: {basis: source, from: S2-phalanx1.W, interpretation: "width along the joint axes, part Y"}
+  ph2_L: {basis: source, from: S2-phalanx2.L, interpretation: "overall length along the toe, part X"}
+  ph2_H: {basis: source, from: S2-phalanx2.H, interpretation: "depth in the flexion plane, part Z"}
+  ph2_W: {basis: source, from: S2-phalanx2.W, interpretation: "width along the joint axes, part Y"}
+  claw_L: {basis: source, from: S2-claw.L, interpretation: "overall length along the toe, part X"}
+  claw_H: {basis: source, from: S2-claw.H, interpretation: "depth in the flexion plane, part Z"}
+  claw_W: {basis: source, from: S2-claw.W, interpretation: "width along the joint axis, part Y"}
+  comp_L: {basis: source, from: S2-compression.L, interpretation: "overall length of a four-bar link, part X"}
+  comp_H: {basis: source, from: S2-compression.H, interpretation: "width in the four-bar plane, part Z"}
+  comp_W: {basis: source, from: S2-compression.W, interpretation: "thickness along the pivot axes, part Y"}
+  bent_L: {basis: source, from: S2-bent.L, interpretation: "overall length, part X (also L14, conflict K3)"}
+  bent_H: {basis: source, from: S2-bent.H, interpretation: "width in the link's plane, part Z"}
+  bent_W: {basis: source, from: S2-bent.W, interpretation: "thickness along the pivot axes, part Y"}
+  lnk_L: {basis: source, from: S2-linkage.L, interpretation: "overall length of an X-structure linkage of the foot, part X"}
+  lnk_H: {basis: source, from: S2-linkage.H, interpretation: "width in the X plane, part Z"}
+  lnk_W: {basis: source, from: S2-linkage.W, interpretation: "thickness along the pin axes, part Y"}
+  ped_L: {basis: source, from: S2-pedestal.L, interpretation: "column section along part X (the four-bar plane)"}
+  ped_H: {basis: source, from: S2-pedestal.H, interpretation: "column section along part Y"}
+  ped_W: {basis: source, from: S2-pedestal.W, interpretation: "the long dimension, read as the column's length along the leg axis, part Z"}
+  thigh_L: {basis: source, from: S2-thigh.L, interpretation: "length along the leg axis, part Z, from the top of the flip-axis ears to the bottom wall"}
+  thigh_H: {basis: source, from: S2-thigh.H, interpretation: "lateral extent in the four-bar plane, part X"}
+  thigh_W: {basis: source, from: S2-thigh.W, interpretation: "extent along the flip axis, part Y"}
+  wheel_d: {basis: source, from: S2-wheel.L, interpretation: "diameter of the servo steering wheel (L and W are both 18, a disc)"}
+  wheel_t: {basis: source, from: S2-wheel.H, interpretation: "thickness along the servo output axis"}
+
+  # ---------------- foot envelope (Fig. 2A sole) ----------------
+  sole_L: {basis: source, from: fig2a-sole.L, interpretation: "outer extent of the foot across the bending direction (the 2θ span), assembly X: end frame to end frame"}
+  sole_W: {basis: source, from: fig2a-sole.W, interpretation: "outer extent along the toe rows, assembly Y: outer faces of the front and back X-linkage layers"}
+  sole_H: {basis: source, from: fig2a-sole.H, interpretation: "height of the end frames, assembly Z, with the bent-linkage shaft inside it"}
+
+  # ---------------- stated motion ----------------
+  Dmin: {basis: source, from: fig2d-width.Dmin, interpretation: "knee-pin to knee-pin width of the leg four-bar, as built (leg extended, unloaded)"}
+  Dmax: {basis: source, from: fig2d-width.Dmax, interpretation: "knee-pin to knee-pin width of the leg four-bar, fully compressed"}
+  toe_min: {basis: source, from: P2-toe-range.min, interpretation: "toe joint angle β, as built (toes parallel)"}
+  toe_max: {basis: source, from: P2-toe-range.max, interpretation: "toe joint angle β, fully spread outward"}
+  flip_turn: {basis: source, from: P5-flip.turn, interpretation: "leg flip about the dual-axis servo from standing (as built) to hanging"}
+  servo_turn: {basis: source, from: P3-servo-turn.turn, interpretation: "steering-wheel rotation of a tendon servo from as built (tendon slack) to claw fully closed"}
+
+  # ---------------- four-bar (shin) ----------------
+  comp_pitch: {basis: proposed, value: 26, rationale: "pivot hub at one rounded end, knee pin 10 mm in from the other end so the gear hubs and knees fit a 63 mm pedestal", gap: G-comp-pitch}
+  comp_hub: {basis: derived, expr: comp_H / 2, interpretation: "pivot-hub pin at the centre of the rounded end", gap: G-comp-pitch}
+  d4: {basis: proposed, value: 12, rationale: "spacing of the two gear-meshed upper pivots (Fig. 2D d4), read small against D as drawn; lower pivots on the pedestal taken at the same spacing", gap: G-d4}
+  gear_ratio: {basis: proposed, value: -1, rationale: "the two upper connecting rods are gear-meshed to maintain equal angles relative to the central axis (Sec. 2.1): equal and opposite turns", gap: G-gear}
+  piv_in: {basis: proposed, value: 4, rationale: "upper pivots 4 mm above the thigh's bottom face", gap: G-pivots}
+  ped_lo_in: {basis: proposed, value: 10, rationale: "lower four-bar pivots 10 mm above the pedestal's bottom", gap: G-pivots}
+  ped_bent_in: {basis: proposed, value: 4, rationale: "concentric bent-linkage pivot 4 mm above the pedestal's bottom", gap: G-pivots}
+  h_min: {basis: derived, expr: "sqrt(comp_pitch ** 2 - ((Dmin - d4) / 2) ** 2)", interpretation: "vertical drop of a four-bar link at the as-built width Dmin"}
+  h_max: {basis: derived, expr: "sqrt(comp_pitch ** 2 - ((Dmax - d4) / 2) ** 2)", interpretation: "vertical drop of a four-bar link at the compressed width Dmax"}
+  slide_max: {basis: derived, expr: "2 * (h_min - h_max)", interpretation: "pedestal stroke into the thigh that takes the four-bar from Dmin to Dmax"}
+
+  # ---------------- thigh, servos and mount ----------------
+  wall: {basis: proposed, value: 2.5, rationale: "printed shell wall", gap: G-thigh}
+  ear_r: {basis: proposed, value: 6, rationale: "flip-axis ears 12 mm wide, rounded about the axis", gap: G-thigh}
+  ear_t: {basis: proposed, value: 4, rationale: "ear plate thickness", gap: G-thigh}
+  r_clear: {basis: proposed, value: 16, rationale: "thigh box starts 16 mm below the flip axis so the dual-axis servo stays inside the swept radius over the 180° flip", gap: G-thigh}
+  ped_clear: {basis: proposed, value: 0.5, rationale: "running clearance of the pedestal in the thigh's bottom wall", gap: G-thigh}
+  pin_r: {basis: proposed, value: 1, rationale: "2 mm steel pins and shafts throughout", gap: G-pins}
+  servo_L: {basis: proposed, value: 23, rationale: "micro-servo body length", gap: G-servo}
+  servo_D: {basis: proposed, value: 11, rationale: "micro-servo body depth along the output shaft", gap: G-servo}
+  servo_H: {basis: proposed, value: 26, rationale: "micro-servo body height", gap: G-servo}
+  servo_in: {basis: proposed, value: 6, rationale: "output shaft 6 mm from the body's end", gap: G-servo}
+  shaft_r: {basis: proposed, value: 2.5, rationale: "servo output spline", gap: G-servo}
+  servo_gap: {basis: proposed, value: 2, rationale: "gap between the two tendon servos stacked in the thigh", gap: G-thigh}
+  plate_t: {basis: proposed, value: 3, rationale: "the connectors are laser-machined carbon-fibre plates (Sec. 4.1); 3 mm sheet", gap: G-plate}
+  plate_w: {basis: proposed, value: 40, rationale: "connecting plate length along the flip axis", gap: G-plate}
+  plate_h: {basis: proposed, value: 30, rationale: "connecting plate height", gap: G-plate}
+  srv_pitch_z: {basis: derived, expr: servo_H + servo_gap, interpretation: "vertical pitch of the two stacked tendon servos"}
+  leg_dx: {basis: proposed, value: 100, rationale: "spacing of the two legs' flip axes under the UAV", gap: G-leg-spacing}
+
+  # ---------------- bent linkages and tensile foot ----------------
+  bent_pitch: {basis: derived, expr: bent_L - bent_H, interpretation: "pins at the centres of the rounded ends", gap: G-bent-pitch}
+  x_sh: {basis: proposed, value: 22, rationale: "bent-linkage shafts 22 mm either side of the foot centre, inside the end frames", gap: G-bent-shaft}
+  cheek_t: {basis: proposed, value: 3.5, rationale: "side plates of the end frame carrying the shaft, outside the bent linkages", gap: G-bent-shaft}
+  lnk_pitch: {basis: derived, expr: lnk_L - lnk_H, interpretation: "pins at the centres of the rounded ends", gap: G-cell}
+  cell_v: {basis: proposed, value: 8, rationale: "vertical spacing of the X-structure pin rows, inside the 22 mm sole height", gap: G-cell}
+  cell_s: {basis: derived, expr: "sqrt(lnk_pitch ** 2 - cell_v ** 2)", interpretation: "horizontal span of one X cell, set by the linkage pitch and the pin-row spacing"}
+  mid_m: {basis: proposed, value: 4, rationale: "the two cells pin to the central post 4 mm either side of the centre so their linkages clear each other", gap: G-cell}
+  foot_fy: {basis: derived, expr: sole_W / 2 - 2 * lnk_W, interpretation: "half-depth of the end frames and centre post: the sole depth less two linkage layers per side"}
+  lnk_yA: {basis: derived, expr: foot_fy + lnk_W / 2, interpretation: "centre of the inner (A) linkage layer"}
+  lnk_yB: {basis: derived, expr: foot_fy + 3 * lnk_W / 2, interpretation: "centre of the outer (B) linkage layer"}
+  bent_yb: {basis: derived, expr: ped_H / 2 + 3 * bent_W / 2, interpretation: "centre of the second bent-linkage layer beside the pedestal (the first is ped_H/2 + bent_W/2)"}
+  frame_in: {basis: proposed, value: 2, rationale: "end frame reaches 2 mm past the shaft towards the centre", gap: G-bent-shaft}
+
+  ped_base_h: {basis: proposed, value: 16, rationale: "pedestal base block carrying the four-bar and bent-linkage pivots; above it a round shaft (Fig. 2A shows a slender column)", gap: G-pivots}
+  ped_shaft_r: {basis: proposed, value: 4, rationale: "8 mm round shaft of the pedestal sliding in the thigh", gap: G-pivots}
+  post_t: {basis: proposed, value: 4, rationale: "the centre post is two thin posts at the linkage faces joined by a crossbar (Fig. S1B draws the posts as single bars)", gap: G-cell}
+  bar_h: {basis: proposed, value: 4, rationale: "crossbar height of the centre post", gap: G-cell}
+  end_wall: {basis: proposed, value: 3, rationale: "end frame is an outer wall and two side plates (cheeks) around an open centre (Fig. S1A)", gap: G-bent-shaft}
+
+  # ---------------- toes ----------------
+  ph_wall: {basis: proposed, value: 3, rationale: "the phalanges are hollow along their length (square window in the Fig. 2B end view)", gap: G-toe-joint}
+  claw_slot: {basis: proposed, value: 6, rationale: "the claw is split by a central slot along its length (Fig. 2B, Claw(a) view)", gap: G-toe-joint}
+  tj_H: {basis: proposed, value: 12, rationale: "toe-joint block height (bearing housing of the toe rotation joint)", gap: G-toe-joint}
+  toe_x: {basis: derived, expr: sole_L / 2 - ph1_H / 2, interpretation: "toe columns flush with the sole's ends", gap: G-toe-pos}
+  toe_y: {basis: derived, expr: sole_W / 2 - ph1_W / 2, interpretation: "front and back toes flush with the sole's sides", gap: G-toe-pos}
+  beta_gap: {basis: proposed, value: 5, rationale: "gap under the end frame so the toe-joint block clears it over 40°", gap: G-toe-joint}
+
+  # ---------------- masses ----------------
+  resin_rho: {basis: proposed, value: 0.0012, rationale: "1.2 g/cm³, typical of 8200pro and T2000 photopolymer resins, printed solid", gap: G-density}
+  cf_rho: {basis: proposed, value: 0.0016, rationale: "1.6 g/cm³, carbon-fibre plate", gap: G-density}
+  servo_m_total: {basis: source, from: P3-leg-mass.m_servo, interpretation: "mass of the three servos of one leg"}
+  n_servo_leg: {basis: source, from: P3-leg-mass.n_servo, interpretation: "servos per leg"}
+  servo_mass: {basis: derived, expr: servo_m_total / n_servo_leg, interpretation: "the dual-axis and single-axis servos weigh the same", gap: G-servo}
+  board_mass: {basis: source, from: P3-board-mass.m, interpretation: "control board and wiring, not built; added to the landing-gear mass check"}
+  n_single: {basis: source, from: P12-servos.n_single, interpretation: "tendon servos, both legs"}
+  n_dual: {basis: source, from: P12-servos.n_dual, interpretation: "flip servos, both legs"}
+  n_legs: {basis: derived, expr: n_dual, interpretation: "one dual-axis flip servo per leg"}
+  n_single_leg: {basis: derived, expr: n_single / n_dual, interpretation: "tendon servos (and their steering wheels) per leg"}
+  n_x: {basis: source, from: P2-x-structure.n_x, interpretation: "X-structures per foot"}
+  n_link: {basis: source, from: P2-x-structure.n_link, interpretation: "linkages per X-structure"}
+  n_linkage: {basis: derived, expr: n_x * n_link, interpretation: "X-structure linkages per foot"}
+  n_comp: {basis: proposed, value: 4, rationale: "one four-bar of four compression linkages per leg (Fig. 2A, 2D)", gap: G-counts}
+  n_bent: {basis: proposed, value: 4, rationale: "two sets of two bent linkages (Sec. 2.1 'two sets of bent linkages')", gap: G-counts}
+  n_toes: {basis: proposed, value: 4, rationale: "four toes per foot, two per side (Fig. 2A, Fig. S10D)", gap: G-counts}
+  n_end: {basis: proposed, value: 2, rationale: "two end frames per foot (Fig. S1A)", gap: G-counts}
+  n_single_all: {basis: derived, expr: n_single_leg * n_legs, interpretation: "both legs"}
+  n_comp_all: {basis: derived, expr: n_comp * n_legs, interpretation: "both legs"}
+  n_bent_all: {basis: derived, expr: n_bent * n_legs, interpretation: "both legs"}
+  n_linkage_all: {basis: derived, expr: n_linkage * n_legs, interpretation: "both legs"}
+  n_toes_all: {basis: derived, expr: n_toes * n_legs, interpretation: "both legs"}
+  n_end_all: {basis: derived, expr: n_end * n_legs, interpretation: "both legs"}
+
+  # ---------------- physics ----------------
+  ts_D: {basis: source, from: P11-tension-springs.D, interpretation: "tension-spring coil diameter, read as the mean diameter"}
+  ts_d: {basis: source, from: P11-tension-springs.d, interpretation: "tension-spring wire diameter"}
+  ts_len: {basis: source, from: P11-tension-springs.len, interpretation: "tension-spring length, read as its close-wound body length"}
+  ts_n: {basis: derived, expr: ts_len / ts_d, interpretation: "active coils of a close-wound body, hooks neglected", gap: G-springs}
+  G_steel: {basis: proposed, value: 79000, rationale: "shear modulus of spring steel, N/mm²", gap: G-springs, physics: true}
+  E_steel: {basis: proposed, value: 206000, rationale: "Young's modulus of spring steel, N/mm²", gap: G-springs, physics: true}
+  spring_k: {basis: derived, expr: "G_steel * ts_d ** 4 / (8 * ts_D ** 3 * ts_n)", interpretation: "helical tension-spring rate", physics: true}
+  tor_d: {basis: source, from: P11-torsion-springs.d, interpretation: "torsion-spring wire diameter"}
+  tor_D: {basis: source, from: P11-torsion-springs.D, interpretation: "torsion-spring coil diameter, read as the mean diameter"}
+  tor_n: {basis: source, from: P11-torsion-springs.n, interpretation: "torsion-spring turns"}
+  toe_k: {basis: derived, expr: "E_steel * tor_d ** 4 / (64 * tor_D * tor_n)", interpretation: "torsion-spring rate at the toe rotation joint", physics: true}
+
+  # ---------------- sweep resolutions ----------------
+  sweep_steps: {basis: proposed, value: 5, rationale: "five poses across each ranged joint"}
+
+# Mass model: each part weighed by its datasheet mass or its printed density.
+parts:
+  plate: {density: cf_rho}
+  servo_dual: {mass: servo_mass}
+  servo_single: {mass: servo_mass}
+  thigh: {density: resin_rho}
+  wheel: {density: resin_rho}
+  comp: {density: resin_rho}
+  pedestal: {density: resin_rho}
+  bent: {density: resin_rho}
+  foot_mid: {density: resin_rho}
+  foot_end: {density: resin_rho}
+  linkage: {density: resin_rho}
+  toe_joint: {density: resin_rho}
+  phalanx1: {density: resin_rho}
+  phalanx2: {density: resin_rho}
+  claw: {density: resin_rho}

@@ -1,0 +1,19 @@
+# What the sources leave undefined, and how to close each gap (ask: authors | measure | datasheet | test).
+gaps:
+  - {id: G-comp-pitch, question: "What is the pin-to-pin pitch of the compression linkages, and where along the 40 mm link do the pivot and knee pins sit?", ask: authors}
+  - {id: G-d4, question: "What is the spacing d4 of the two gear-meshed upper pivots, and of the two lower pivots on the pedestal?", ask: authors}
+  - {id: G-gear, question: "What is the gear ratio between the two upper compression linkages (equal and opposite, -1, as the text implies)?", ask: authors}
+  - {id: G-pivots, question: "Where are the four-bar pivots on the thigh and the pedestal, and where is the concentric bent-linkage pivot on the pedestal?", ask: authors}
+  - {id: G-thigh, question: "What are the thigh's wall thickness, flip-axis ear geometry and internal servo layout?", ask: authors}
+  - {id: G-pins, question: "What diameter are the steel pins and shafts?", ask: authors}
+  - {id: G-servo, question: "What are the body dimensions, output-shaft position and mass of the Feetech HL-3606-C0001 and HL-3606-C0002 servos?", ask: datasheet}
+  - {id: G-plate, question: "What are the dimensions of the connecting plate between the UAV and each leg (Fig. S11B)?", ask: authors}
+  - {id: G-leg-spacing, question: "How far apart are the two legs' flip axes on the UAV?", ask: authors}
+  - {id: G-bent-pitch, question: "Is L14 = 37 mm the bent linkage's pin-to-pin pitch or its overall length, and where are its pins?", ask: authors}
+  - {id: G-bent-shaft, question: "Where on the foot are the two shafts the bent linkages attach to, and what is the end-frame geometry around them?", ask: authors}
+  - {id: G-cell, question: "What are the pin positions of the X-structure linkages (pin-row spacing, cell span, centre-post pins)?", ask: authors}
+  - {id: G-toe-joint, question: "What are the dimensions of the toe rotation-joint block and where is its axle under the foot?", ask: authors}
+  - {id: G-toe-pos, question: "Where are the toe columns on the foot (flush with the sole's ends and sides, as modelled)?", ask: authors}
+  - {id: G-density, question: "What are the densities and infill of the printed 8200pro and T2000 parts and of the carbon-fibre plate?", ask: datasheet}
+  - {id: G-counts, question: "How many compression linkages, bent linkages, toes and end frames does each leg carry?", ask: authors}
+  - {id: G-springs, question: "What are the rates of the tension and torsion springs (or their material and active coils)?", ask: datasheet}
