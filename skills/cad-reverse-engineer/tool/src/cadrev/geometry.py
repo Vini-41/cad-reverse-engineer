@@ -154,10 +154,11 @@ FIXED_KEYS = ("type", "parent", "child")
 
 class Slot(NamedTuple):
     """Where a physics value goes in the MJCF: the attribute it is written to, and the quantity
-    it is in, which the export converts from the project's units to the MJCF's."""
+    it is in, which the export converts from the project's units to the MJCF's; None for a
+    joint's own quantity, an angle on a revolute joint and a length on a slide."""
 
     attr: str
-    quantity: str
+    quantity: str | None
 
 
 # The physics values (ADR-0008) a joint or tendon may name, each as a param.
@@ -166,6 +167,8 @@ PHYSICS = {
         "damping": Slot("damping", "torsional damping"),
         "stiffness": Slot("stiffness", "torsional stiffness"),
         "friction": Slot("frictionloss", "torque"),
+        # The joint value at which its spring exerts no torque, measured from as built like a pose.
+        "spring_rest": Slot("springref", None),
     },
     "tendon": {
         "stiffness": Slot("stiffness", "linear stiffness"),
@@ -263,15 +266,25 @@ def _physics_breach(what: str, entry: dict, physics: dict, other: tuple) -> str 
     return None
 
 
+def physics_named(kind: str, entry: dict) -> dict[str, Slot]:
+    """The physics slots a joint or tendon names a param for, by key, each in its quantity: a
+    joint's own, for a slot in no fixed one; None on a fixed joint, which [model-joint] refuses."""
+    own = joint_type(entry).quantity if kind == "joint" else None
+    return {
+        key: slot._replace(quantity=slot.quantity or own)
+        for key, slot in PHYSICS[kind].items()
+        if key in entry
+    }
+
+
 def physics_slots(built: Built) -> dict[str, list[tuple[str, Slot]]]:
     """Each param a joint or tendon names as a physics value, with each place it applies and its
     Slot there."""
     slots: dict[str, list[tuple[str, Slot]]] = {}
     for kind, entries in (("joint", built.joints), ("tendon", built.tendons)):
         for name, entry in entries.items():
-            for key, slot in PHYSICS[kind].items():
-                if key in entry:
-                    slots.setdefault(entry[key], []).append((f"{kind} {name}'s {key}", slot))
+            for key, slot in physics_named(kind, entry).items():
+                slots.setdefault(entry[key], []).append((f"{kind} {name}'s {key}", slot))
     return slots
 
 
@@ -353,7 +366,8 @@ def build(p: Project) -> Built | None:
     slots = physics_slots(built)
     for name, where in sorted(slots.items()):
         for place, slot in where:
-            expect_param_quantity(p, name, (slot.quantity,), f"as {place}")
+            if slot.quantity is not None:
+                expect_param_quantity(p, name, (slot.quantity,), f"as {place}")
     _check_physics(p, built, slots, ranges | ratios)
     check_physics_sources(p, built.used)
     exported = ranges | ratios | slots.keys() | set(mass_params(p))
@@ -520,6 +534,8 @@ def _joint_flaw(p: Project, built: Built, joint: dict, moved_by: dict) -> str | 
                 f"{', '.join(extra)}; make it revolute or slide if it moves"
             )
         return None
+    if "spring_rest" in joint and "stiffness" not in joint:
+        return "spring_rest names no spring without a stiffness"
     points = []
     for datum in joint["axis"]:
         named = instance_datum(built, datum)

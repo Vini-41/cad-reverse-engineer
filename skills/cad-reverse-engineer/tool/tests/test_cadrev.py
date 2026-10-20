@@ -4821,6 +4821,141 @@ def test_physics_slot_naming_a_param_without_physics_true_is_param_physics(proj_
     ]
 
 
+# A spring's rest: the joint value where it exerts no torque, a physics value in the joint's own
+# quantity, exported as MuJoCo's springref.
+
+PRESET = "The knee spring is preset at 45°."
+_KNEE_SPRING = '"stiffness": "knee_spring",\n'
+
+
+def _resting(model: str, joint_spring: str, rest: str) -> str:
+    """model with rest named as the spring_rest of the joint whose stiffness line is joint_spring."""
+    return swap(model, joint_spring, f'{joint_spring}                "spring_rest": "{rest}",\n')
+
+
+def sprung_rest(text: str = PRESET, preset: float = 45):
+    """The physical four-bar, its knee's spring resting at knee_rest, derived as -knee_preset from
+    a source param quoted in text (N1.p): the knee opens in +, its spring pushes it back."""
+
+    def change(r, t):
+        physical(r, t)
+        add_quote(r, t, text, text.rstrip("."), {"p": preset})
+        _param("knee_preset", basis="source", **{"from": "N1.p"})(r, t)
+        why = "the knee opens in +, and its spring pushes it back"
+        spec = {"expr": "-knee_preset", "interpretation": why, "physics": True}
+        _param("knee_rest", basis="derived", **spec)(r, t)
+        write(r, "model.py", _resting((r / "model.py").read_text(), _KNEE_SPRING, "knee_rest"))
+
+    return change
+
+
+def _qpos_spring(root: Path, joint: str) -> float:
+    mujoco = importlib.import_module("mujoco")
+    m = mujoco.MjModel.from_xml_path(str(root / "build" / "model.mjcf"))
+    return m.qpos_spring[m.jnt_qposadr[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, joint)]]
+
+
+def test_spring_rest_from_a_quoted_preset_is_the_joints_springref_in_radians(proj_dir, tmp_path):
+    sprung_rest()(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert not [f for f in report["findings"] if "knee_preset" in f["message"]]
+    assert not [f for f in report["findings"] if "knee_rest" in f["message"]]
+    assert _qpos_spring(proj_dir, "knee") == pytest.approx(-math.pi / 4)
+    knee = report["motion"]["joints"]["knee"]
+    assert knee["spring_rest"] == {"from": "knee_rest", "value": -45}
+
+
+def test_spring_rest_under_a_radian_angle_unit_is_exported_unchanged(proj_dir, tmp_path):
+    sprung_rest("The knee spring is preset at 0.7854 rad.", 0.7854)(proj_dir, tmp_path)
+    edit(proj_dir, "project.yaml", lambda d: d.update(units={"angle": "rad"}))
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert _qpos_spring(proj_dir, "knee") == pytest.approx(-0.7854)
+    assert report["motion"]["joints"]["knee"]["spring_rest"]["value"] == -0.7854
+
+
+_SLIDE_RANGE = '"range": ["slide_min", "slide_max"],\n'
+
+
+def sprung_slide(root: Path, tmp_path: Path) -> None:
+    """The slider-crank, its slider on a spring, slide_k, resting 5 mm out, slide_rest: both
+    proposed physics values."""
+    slider_crank(root, tmp_path)
+    sprung = (
+        '                "stiffness": "slide_k",\n                "spring_rest": "slide_rest",\n'
+    )
+    write(root, "model.py", swap(SLIDER_CRANK, _SLIDE_RANGE, _SLIDE_RANGE + sprung))
+    for name, value in (("slide_k", 0.1), ("slide_rest", 5)):
+        spec = {"value": value, "rationale": "a guess", "gap": "G1", "physics": True}
+        _param(name, basis="proposed", **spec)(root, tmp_path)
+
+
+def test_slide_spring_rest_is_exported_as_a_length_in_the_projects_unit(proj_dir, tmp_path):
+    sprung_slide(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert _qpos_spring(proj_dir, "slide") == pytest.approx(5)
+    assert report["motion"]["joints"]["slide"]["spring_rest"] == {"from": "slide_rest", "value": 5}
+
+
+def test_slide_spring_rest_quoted_as_an_angle_is_unit_quantity(proj_dir, tmp_path):
+    sprung_slide(proj_dir, tmp_path)
+    add_quote(proj_dir, tmp_path, "The slider spring rests at 5°.", "rests at 5°", {"r": 5})
+    spec = {"from": "N1.r", "value": None, "rationale": None, "gap": None}
+    _param("slide_rest", basis="source", **spec)(proj_dir, tmp_path)
+    messages = findings(proj_dir, "unit-quantity")
+    assert len(messages) == 1 and messages[0].startswith("N1.r is printed in deg, a unit of angle")
+    assert "as joint slide's spring_rest" in messages[0]
+
+
+def test_spring_rest_param_without_physics_true_is_param_physics(proj_dir, tmp_path):
+    sprung_rest()(proj_dir, tmp_path)
+    _param("knee_rest", physics=None)(proj_dir, tmp_path)
+    assert findings(proj_dir, "param-physics") == [
+        "param knee_rest: joint knee's spring_rest is a physics value, so mark the param "
+        "physics: true"
+    ]
+
+
+def test_proposed_spring_rest_is_counted_apart_and_leaves_the_project_exact(proj_dir, tmp_path):
+    physical(proj_dir, tmp_path)
+    write(
+        proj_dir,
+        "model.py",
+        _resting((proj_dir / "model.py").read_text(), _KNEE_SPRING, "knee_rest"),
+    )
+    spec = {"value": -45, "rationale": "a guess", "gap": "G1", "physics": True}
+    _param("knee_rest", basis="proposed", **spec)(proj_dir, tmp_path)
+    _exact_bar(proj_dir)
+    code, report = verify(proj_dir)
+    assert (code, report["status"], report["exact"]) == (0, "VERIFIED", True), report["findings"]
+    assert report["counts"]["physics_proposed"] == len(PHYSICS) + 1
+
+
+def test_spring_rest_outside_its_joints_range_is_no_finding(proj_dir, tmp_path):
+    """The knee, which the crank turns negative, ranged -90 to 0, its spring resting at +45."""
+    sprung_rest()(proj_dir, tmp_path)
+    _param("knee_rest", expr="knee_preset")(proj_dir, tmp_path)
+    knee = '"axis": ["coupler_1.a", "coupler_1.a_up"],\n'
+    model = (proj_dir / "model.py").read_text()
+    write(proj_dir, "model.py", swap(model, knee, knee + '"range": ["knee_min", "knee_max"],\n'))
+    for name, value in (("knee_min", -90), ("knee_max", 0)):
+        _param(name, basis="proposed", value=value, rationale="x", gap="G1")(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert not [f for f in report["findings"] if "knee_rest" in f["message"]]
+    assert _qpos_spring(proj_dir, "knee") == pytest.approx(math.pi / 4)
+
+
+def test_spring_rest_without_a_stiffness_is_model_joint(proj_dir, tmp_path):
+    sprung_rest()(proj_dir, tmp_path)
+    write(proj_dir, "model.py", swap((proj_dir / "model.py").read_text(), _KNEE_SPRING, ""))
+    assert findings(proj_dir, "model-joint") == [
+        "joint knee: spring_rest names no spring without a stiffness"
+    ]
+
+
 # Ranges and sweeps: a joint posed at the ends of its stated range, interference across it.
 
 RANGE = "The crank turns from 0° to 60° and back."

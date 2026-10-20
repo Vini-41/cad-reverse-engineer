@@ -16,7 +16,16 @@ from pathlib import Path
 from typing import Any
 
 from . import units
-from .geometry import PHYSICS, Built, Poser, joint_type, located, pose_text, printed, range_ends
+from .geometry import (
+    Built,
+    Poser,
+    joint_type,
+    located,
+    physics_named,
+    pose_text,
+    printed,
+    range_ends,
+)
 from .project import Project
 
 # Steps from the as-built pose to the one a check names: each step starts from the last, so the
@@ -69,13 +78,13 @@ def joint_size(p: Project, joint: dict) -> float:
 def _physics(p: Project, entry: dict, kind: str) -> dict[str, str]:
     """The MJCF attributes of the physics params entry names, at their values converted from
     the project's units to the MJCF's."""
-    return {
-        slot.attr: _num(
-            p.values[entry[key]] * units.size(slot.quantity, p.units) / mjcf_size(p, slot.quantity)
-        )
-        for key, slot in PHYSICS[kind].items()
-        if key in entry
-    }
+    attrs = {}
+    for key, slot in physics_named(kind, entry).items():
+        quantity = slot.quantity
+        assert quantity is not None  # only a fixed joint has none, and it exports no joint
+        size = units.size(quantity, p.units) / mjcf_size(p, quantity)
+        attrs[slot.attr] = _num(p.values[entry[key]] * size)
+    return attrs
 
 
 @dataclass
