@@ -17,9 +17,13 @@ STUBS = (
 
 
 def check(
-    tmp_path: Path, uv_sync_code: int = 0, failing: dict[str, str] | None = None
+    tmp_path: Path,
+    uv_sync_code: int = 0,
+    failing: dict[str, str] | None = None,
+    bodies: dict[str, str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], list]:
-    """Run the copied check; each stub in failing prints its text and exits 1."""
+    """Run the copied check; each stub in failing prints its text and exits 1, and each in bodies
+    runs its shell body instead."""
     root = tmp_path / "repo"
     (root / "skills/cad-reverse-engineer/tool").mkdir(parents=True)
     (root / "scripts").mkdir()
@@ -31,6 +35,7 @@ def check(
     stubs |= {
         f"scripts/{name}": f"printf '{text}'; exit 1" for name, text in (failing or {}).items()
     }
+    stubs |= {f"scripts/{name}": body for name, body in (bodies or {}).items()}
     stubs |= {"../bin/uv": f'[ "$1" = sync ] && exit {uv_sync_code}; exit 0'}
     for name, body in stubs.items():
         path = root / name
@@ -73,3 +78,16 @@ def test_a_failed_step_that_runs_a_function_names_the_script_that_reruns_it(tmp_
     assert (
         result.stdout.split(name + "\n")[1].splitlines()[0] == "  rerun alone: scripts/red-on-main"
     )
+
+
+def test_the_last_line_names_the_unstaged_edits_the_examples_were_checked_without(tmp_path):
+    left_out = "echo 'not staged, so left out of the copy: examples/a/model.py' >&2; exit 0"
+    result, _ = check(tmp_path, bodies={"committed-examples": left_out})
+    assert result.stdout.splitlines()[-1] == (
+        "examples checked at their staged text: 1 unstaged edit or untracked file left out"
+    )
+
+
+def test_the_last_line_is_the_summary_when_nothing_is_left_out(tmp_path):
+    result, _ = check(tmp_path)
+    assert "left out" not in result.stdout.splitlines()[-1]
