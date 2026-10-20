@@ -11,6 +11,9 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 # This clone runs the repo's git hooks (.githooks) unless it already uses others.
 [ -n "$(git -C "$repo" config core.hooksPath)" ] || git -C "$repo" config core.hooksPath .githooks
 cd "$repo/skills/cad-reverse-engineer/tool" || exit 2
+# The test extra holds pytest, pyright and ruff, which CI installs with the same sync; a new
+# worktree has no environment until this runs.
+uv sync --locked --extra test || { echo "uv sync --locked --extra test failed, so no step ran"; exit 1; }
 failed=()
 
 step() {

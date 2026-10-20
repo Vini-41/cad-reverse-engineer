@@ -5,7 +5,7 @@
 set -euo pipefail
 
 tool="$(cd "$(dirname "$0")/.." && pwd)/skills/cad-reverse-engineer/tool"
-ruff() { uv run -q --project "$tool" ruff format --force-exclude "$@"; }
+ruff() { uv run -q --extra test --project "$tool" ruff format --force-exclude "$@"; }
 
 clean=() partial=()
 while IFS= read -r -d '' f; do
