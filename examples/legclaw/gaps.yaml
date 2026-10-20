@@ -17,3 +17,5 @@ gaps:
   - {id: G-density, question: "What are the densities and infill of the printed 8200pro and T2000 parts and of the carbon-fibre plate?", ask: datasheet}
   - {id: G-counts, question: "How many compression linkages, bent linkages, toes and end frames does each leg carry?", ask: authors}
   - {id: G-springs, question: "What are the rates of the tension and torsion springs (or their material and active coils)?", ask: datasheet}
+  - {id: G-claw-tendon, question: "Where does the claw tendon run through each toe segment (Fig. 2B's h1–h3, d1–d3 and γ1), and what flexion does each toe joint reach with the claw fully closed?", ask: authors}
+  - {id: G-splay, question: "Through what angle does the toe-motion servo turn to spread the toes to 40°, and where does its tendon run?", ask: authors}

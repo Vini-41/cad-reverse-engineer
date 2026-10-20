@@ -192,13 +192,21 @@ checks:
   joint: a_whl1
   ends:
   - P3-servo-turn.turn
-  interpretation: tendon-servo steering wheel turned from slack to claw fully closed
-- id: wheel-range-a2
-  kind: range
-  joint: a_whl2
-  ends:
-  - P3-servo-turn.turn
-  interpretation: tendon-servo steering wheel turned from slack to claw fully closed
+  interpretation: claw servo steering wheel turned from slack to claw fully closed
+- id: claw-stroke-aL
+  kind: stroke
+  cable: a_claw_L
+  evidence: P3-tendon-stroke
+  key: stroke
+  tol: 1.9
+  interpretation: the whole claw cable shared by the same-side pair of toes, shortened by wheel 1's full turn; 'approximately' 38 mm, so within the 5% cap
+- id: claw-stroke-aR
+  kind: stroke
+  cable: a_claw_R
+  evidence: P3-tendon-stroke
+  key: stroke
+  tol: 1.9
+  interpretation: the whole claw cable shared by the same-side pair of toes, shortened by wheel 1's full turn; 'approximately' 38 mm, so within the 5% cap
 - id: toe-range-aLf
   kind: range
   joint: a_toe_Lf_j_beta
@@ -239,42 +247,824 @@ checks:
     joint: a_flip
     steps: sweep_steps
   interpretation: 'no two instances overlap: leg flipped from standing to hanging'
-- id: sweep-a_whl1
-  kind: interference
-  sweep:
-    joint: a_whl1
-    steps: sweep_steps
-  interpretation: 'no two instances overlap: servo wheel turned its 385 degrees'
 - id: sweep-a_whl2
   kind: interference
   sweep:
     joint: a_whl2
     steps: sweep_steps
-  interpretation: 'no two instances overlap: servo wheel turned its 385 degrees'
-- id: sweep-a_toe_Lf_j_beta
+  interpretation: 'no two instances overlap: toe-motion wheel turned, spreading the toes over 0-40 degrees'
+- id: sweep-a_whl1
   kind: interference
+  pairs:
+  - - a_toe_Lf_p1
+    - a_plate
+  - - a_toe_Lf_p1
+    - a_dual
+  - - a_toe_Lf_p1
+    - a_thigh
+  - - a_toe_Lf_p1
+    - a_srv1
+  - - a_toe_Lf_p1
+    - a_whl1
+  - - a_toe_Lf_p1
+    - a_srv2
+  - - a_toe_Lf_p1
+    - a_whl2
+  - - a_toe_Lf_p1
+    - a_ped
+  - - a_toe_Lf_p1
+    - a_up_l
+  - - a_toe_Lf_p1
+    - a_lo_l
+  - - a_toe_Lf_p1
+    - a_up_r
+  - - a_toe_Lf_p1
+    - a_lo_r
+  - - a_toe_Lf_p1
+    - a_mid
+  - - a_toe_Lf_p1
+    - a_end_L
+  - - a_toe_Lf_p1
+    - a_lnk_LAf
+  - - a_toe_Lf_p1
+    - a_lnk_LAb
+  - - a_toe_Lf_p1
+    - a_lnk_LBf
+  - - a_toe_Lf_p1
+    - a_lnk_LBb
+  - - a_toe_Lf_p1
+    - a_bent_Lf
+  - - a_toe_Lf_p1
+    - a_bent_Lb
+  - - a_toe_Lf_p1
+    - a_toe_Lf_j
+  - - a_toe_Lf_p1
+    - a_toe_Lf_p2
+  - - a_toe_Lf_p1
+    - a_toe_Lf_c
+  - - a_toe_Lf_p1
+    - a_toe_Lb_j
+  - - a_toe_Lf_p1
+    - a_toe_Lb_p1
+  - - a_toe_Lf_p1
+    - a_toe_Lb_p2
+  - - a_toe_Lf_p1
+    - a_toe_Lb_c
+  - - a_toe_Lf_p1
+    - a_end_R
+  - - a_toe_Lf_p1
+    - a_lnk_RAf
+  - - a_toe_Lf_p1
+    - a_lnk_RAb
+  - - a_toe_Lf_p1
+    - a_lnk_RBf
+  - - a_toe_Lf_p1
+    - a_lnk_RBb
+  - - a_toe_Lf_p1
+    - a_bent_Rf
+  - - a_toe_Lf_p1
+    - a_bent_Rb
+  - - a_toe_Lf_p1
+    - a_toe_Rf_j
+  - - a_toe_Lf_p1
+    - a_toe_Rb_j
+  - - a_toe_Lf_p2
+    - a_plate
+  - - a_toe_Lf_p2
+    - a_dual
+  - - a_toe_Lf_p2
+    - a_thigh
+  - - a_toe_Lf_p2
+    - a_srv1
+  - - a_toe_Lf_p2
+    - a_whl1
+  - - a_toe_Lf_p2
+    - a_srv2
+  - - a_toe_Lf_p2
+    - a_whl2
+  - - a_toe_Lf_p2
+    - a_ped
+  - - a_toe_Lf_p2
+    - a_up_l
+  - - a_toe_Lf_p2
+    - a_lo_l
+  - - a_toe_Lf_p2
+    - a_up_r
+  - - a_toe_Lf_p2
+    - a_lo_r
+  - - a_toe_Lf_p2
+    - a_mid
+  - - a_toe_Lf_p2
+    - a_end_L
+  - - a_toe_Lf_p2
+    - a_lnk_LAf
+  - - a_toe_Lf_p2
+    - a_lnk_LAb
+  - - a_toe_Lf_p2
+    - a_lnk_LBf
+  - - a_toe_Lf_p2
+    - a_lnk_LBb
+  - - a_toe_Lf_p2
+    - a_bent_Lf
+  - - a_toe_Lf_p2
+    - a_bent_Lb
+  - - a_toe_Lf_p2
+    - a_toe_Lf_j
+  - - a_toe_Lf_p2
+    - a_toe_Lf_c
+  - - a_toe_Lf_p2
+    - a_toe_Lb_j
+  - - a_toe_Lf_p2
+    - a_toe_Lb_p1
+  - - a_toe_Lf_p2
+    - a_toe_Lb_p2
+  - - a_toe_Lf_p2
+    - a_toe_Lb_c
+  - - a_toe_Lf_p2
+    - a_end_R
+  - - a_toe_Lf_p2
+    - a_lnk_RAf
+  - - a_toe_Lf_p2
+    - a_lnk_RAb
+  - - a_toe_Lf_p2
+    - a_lnk_RBf
+  - - a_toe_Lf_p2
+    - a_lnk_RBb
+  - - a_toe_Lf_p2
+    - a_bent_Rf
+  - - a_toe_Lf_p2
+    - a_bent_Rb
+  - - a_toe_Lf_p2
+    - a_toe_Rf_j
+  - - a_toe_Lf_p2
+    - a_toe_Rb_j
+  - - a_toe_Lf_c
+    - a_plate
+  - - a_toe_Lf_c
+    - a_dual
+  - - a_toe_Lf_c
+    - a_thigh
+  - - a_toe_Lf_c
+    - a_srv1
+  - - a_toe_Lf_c
+    - a_whl1
+  - - a_toe_Lf_c
+    - a_srv2
+  - - a_toe_Lf_c
+    - a_whl2
+  - - a_toe_Lf_c
+    - a_ped
+  - - a_toe_Lf_c
+    - a_up_l
+  - - a_toe_Lf_c
+    - a_lo_l
+  - - a_toe_Lf_c
+    - a_up_r
+  - - a_toe_Lf_c
+    - a_lo_r
+  - - a_toe_Lf_c
+    - a_mid
+  - - a_toe_Lf_c
+    - a_end_L
+  - - a_toe_Lf_c
+    - a_lnk_LAf
+  - - a_toe_Lf_c
+    - a_lnk_LAb
+  - - a_toe_Lf_c
+    - a_lnk_LBf
+  - - a_toe_Lf_c
+    - a_lnk_LBb
+  - - a_toe_Lf_c
+    - a_bent_Lf
+  - - a_toe_Lf_c
+    - a_bent_Lb
+  - - a_toe_Lf_c
+    - a_toe_Lf_j
+  - - a_toe_Lf_c
+    - a_toe_Lb_j
+  - - a_toe_Lf_c
+    - a_toe_Lb_p1
+  - - a_toe_Lf_c
+    - a_toe_Lb_p2
+  - - a_toe_Lf_c
+    - a_toe_Lb_c
+  - - a_toe_Lf_c
+    - a_end_R
+  - - a_toe_Lf_c
+    - a_lnk_RAf
+  - - a_toe_Lf_c
+    - a_lnk_RAb
+  - - a_toe_Lf_c
+    - a_lnk_RBf
+  - - a_toe_Lf_c
+    - a_lnk_RBb
+  - - a_toe_Lf_c
+    - a_bent_Rf
+  - - a_toe_Lf_c
+    - a_bent_Rb
+  - - a_toe_Lf_c
+    - a_toe_Rf_j
+  - - a_toe_Lf_c
+    - a_toe_Rb_j
+  - - a_toe_Lb_p1
+    - a_plate
+  - - a_toe_Lb_p1
+    - a_dual
+  - - a_toe_Lb_p1
+    - a_thigh
+  - - a_toe_Lb_p1
+    - a_srv1
+  - - a_toe_Lb_p1
+    - a_whl1
+  - - a_toe_Lb_p1
+    - a_srv2
+  - - a_toe_Lb_p1
+    - a_whl2
+  - - a_toe_Lb_p1
+    - a_ped
+  - - a_toe_Lb_p1
+    - a_up_l
+  - - a_toe_Lb_p1
+    - a_lo_l
+  - - a_toe_Lb_p1
+    - a_up_r
+  - - a_toe_Lb_p1
+    - a_lo_r
+  - - a_toe_Lb_p1
+    - a_mid
+  - - a_toe_Lb_p1
+    - a_end_L
+  - - a_toe_Lb_p1
+    - a_lnk_LAf
+  - - a_toe_Lb_p1
+    - a_lnk_LAb
+  - - a_toe_Lb_p1
+    - a_lnk_LBf
+  - - a_toe_Lb_p1
+    - a_lnk_LBb
+  - - a_toe_Lb_p1
+    - a_bent_Lf
+  - - a_toe_Lb_p1
+    - a_bent_Lb
+  - - a_toe_Lb_p1
+    - a_toe_Lf_j
+  - - a_toe_Lb_p1
+    - a_toe_Lb_j
+  - - a_toe_Lb_p1
+    - a_toe_Lb_p2
+  - - a_toe_Lb_p1
+    - a_toe_Lb_c
+  - - a_toe_Lb_p1
+    - a_end_R
+  - - a_toe_Lb_p1
+    - a_lnk_RAf
+  - - a_toe_Lb_p1
+    - a_lnk_RAb
+  - - a_toe_Lb_p1
+    - a_lnk_RBf
+  - - a_toe_Lb_p1
+    - a_lnk_RBb
+  - - a_toe_Lb_p1
+    - a_bent_Rf
+  - - a_toe_Lb_p1
+    - a_bent_Rb
+  - - a_toe_Lb_p1
+    - a_toe_Rf_j
+  - - a_toe_Lb_p1
+    - a_toe_Rb_j
+  - - a_toe_Lb_p2
+    - a_plate
+  - - a_toe_Lb_p2
+    - a_dual
+  - - a_toe_Lb_p2
+    - a_thigh
+  - - a_toe_Lb_p2
+    - a_srv1
+  - - a_toe_Lb_p2
+    - a_whl1
+  - - a_toe_Lb_p2
+    - a_srv2
+  - - a_toe_Lb_p2
+    - a_whl2
+  - - a_toe_Lb_p2
+    - a_ped
+  - - a_toe_Lb_p2
+    - a_up_l
+  - - a_toe_Lb_p2
+    - a_lo_l
+  - - a_toe_Lb_p2
+    - a_up_r
+  - - a_toe_Lb_p2
+    - a_lo_r
+  - - a_toe_Lb_p2
+    - a_mid
+  - - a_toe_Lb_p2
+    - a_end_L
+  - - a_toe_Lb_p2
+    - a_lnk_LAf
+  - - a_toe_Lb_p2
+    - a_lnk_LAb
+  - - a_toe_Lb_p2
+    - a_lnk_LBf
+  - - a_toe_Lb_p2
+    - a_lnk_LBb
+  - - a_toe_Lb_p2
+    - a_bent_Lf
+  - - a_toe_Lb_p2
+    - a_bent_Lb
+  - - a_toe_Lb_p2
+    - a_toe_Lf_j
+  - - a_toe_Lb_p2
+    - a_toe_Lb_j
+  - - a_toe_Lb_p2
+    - a_toe_Lb_c
+  - - a_toe_Lb_p2
+    - a_end_R
+  - - a_toe_Lb_p2
+    - a_lnk_RAf
+  - - a_toe_Lb_p2
+    - a_lnk_RAb
+  - - a_toe_Lb_p2
+    - a_lnk_RBf
+  - - a_toe_Lb_p2
+    - a_lnk_RBb
+  - - a_toe_Lb_p2
+    - a_bent_Rf
+  - - a_toe_Lb_p2
+    - a_bent_Rb
+  - - a_toe_Lb_p2
+    - a_toe_Rf_j
+  - - a_toe_Lb_p2
+    - a_toe_Rb_j
+  - - a_toe_Lb_c
+    - a_plate
+  - - a_toe_Lb_c
+    - a_dual
+  - - a_toe_Lb_c
+    - a_thigh
+  - - a_toe_Lb_c
+    - a_srv1
+  - - a_toe_Lb_c
+    - a_whl1
+  - - a_toe_Lb_c
+    - a_srv2
+  - - a_toe_Lb_c
+    - a_whl2
+  - - a_toe_Lb_c
+    - a_ped
+  - - a_toe_Lb_c
+    - a_up_l
+  - - a_toe_Lb_c
+    - a_lo_l
+  - - a_toe_Lb_c
+    - a_up_r
+  - - a_toe_Lb_c
+    - a_lo_r
+  - - a_toe_Lb_c
+    - a_mid
+  - - a_toe_Lb_c
+    - a_end_L
+  - - a_toe_Lb_c
+    - a_lnk_LAf
+  - - a_toe_Lb_c
+    - a_lnk_LAb
+  - - a_toe_Lb_c
+    - a_lnk_LBf
+  - - a_toe_Lb_c
+    - a_lnk_LBb
+  - - a_toe_Lb_c
+    - a_bent_Lf
+  - - a_toe_Lb_c
+    - a_bent_Lb
+  - - a_toe_Lb_c
+    - a_toe_Lf_j
+  - - a_toe_Lb_c
+    - a_toe_Lb_j
+  - - a_toe_Lb_c
+    - a_end_R
+  - - a_toe_Lb_c
+    - a_lnk_RAf
+  - - a_toe_Lb_c
+    - a_lnk_RAb
+  - - a_toe_Lb_c
+    - a_lnk_RBf
+  - - a_toe_Lb_c
+    - a_lnk_RBb
+  - - a_toe_Lb_c
+    - a_bent_Rf
+  - - a_toe_Lb_c
+    - a_bent_Rb
+  - - a_toe_Lb_c
+    - a_toe_Rf_j
+  - - a_toe_Lb_c
+    - a_toe_Rb_j
+  - - a_toe_Rf_p1
+    - a_plate
+  - - a_toe_Rf_p1
+    - a_dual
+  - - a_toe_Rf_p1
+    - a_thigh
+  - - a_toe_Rf_p1
+    - a_srv1
+  - - a_toe_Rf_p1
+    - a_whl1
+  - - a_toe_Rf_p1
+    - a_srv2
+  - - a_toe_Rf_p1
+    - a_whl2
+  - - a_toe_Rf_p1
+    - a_ped
+  - - a_toe_Rf_p1
+    - a_up_l
+  - - a_toe_Rf_p1
+    - a_lo_l
+  - - a_toe_Rf_p1
+    - a_up_r
+  - - a_toe_Rf_p1
+    - a_lo_r
+  - - a_toe_Rf_p1
+    - a_mid
+  - - a_toe_Rf_p1
+    - a_end_L
+  - - a_toe_Rf_p1
+    - a_lnk_LAf
+  - - a_toe_Rf_p1
+    - a_lnk_LAb
+  - - a_toe_Rf_p1
+    - a_lnk_LBf
+  - - a_toe_Rf_p1
+    - a_lnk_LBb
+  - - a_toe_Rf_p1
+    - a_bent_Lf
+  - - a_toe_Rf_p1
+    - a_bent_Lb
+  - - a_toe_Rf_p1
+    - a_toe_Lf_j
+  - - a_toe_Rf_p1
+    - a_toe_Lb_j
+  - - a_toe_Rf_p1
+    - a_end_R
+  - - a_toe_Rf_p1
+    - a_lnk_RAf
+  - - a_toe_Rf_p1
+    - a_lnk_RAb
+  - - a_toe_Rf_p1
+    - a_lnk_RBf
+  - - a_toe_Rf_p1
+    - a_lnk_RBb
+  - - a_toe_Rf_p1
+    - a_bent_Rf
+  - - a_toe_Rf_p1
+    - a_bent_Rb
+  - - a_toe_Rf_p1
+    - a_toe_Rf_j
+  - - a_toe_Rf_p1
+    - a_toe_Rf_p2
+  - - a_toe_Rf_p1
+    - a_toe_Rf_c
+  - - a_toe_Rf_p1
+    - a_toe_Rb_j
+  - - a_toe_Rf_p1
+    - a_toe_Rb_p1
+  - - a_toe_Rf_p1
+    - a_toe_Rb_p2
+  - - a_toe_Rf_p1
+    - a_toe_Rb_c
+  - - a_toe_Rf_p2
+    - a_plate
+  - - a_toe_Rf_p2
+    - a_dual
+  - - a_toe_Rf_p2
+    - a_thigh
+  - - a_toe_Rf_p2
+    - a_srv1
+  - - a_toe_Rf_p2
+    - a_whl1
+  - - a_toe_Rf_p2
+    - a_srv2
+  - - a_toe_Rf_p2
+    - a_whl2
+  - - a_toe_Rf_p2
+    - a_ped
+  - - a_toe_Rf_p2
+    - a_up_l
+  - - a_toe_Rf_p2
+    - a_lo_l
+  - - a_toe_Rf_p2
+    - a_up_r
+  - - a_toe_Rf_p2
+    - a_lo_r
+  - - a_toe_Rf_p2
+    - a_mid
+  - - a_toe_Rf_p2
+    - a_end_L
+  - - a_toe_Rf_p2
+    - a_lnk_LAf
+  - - a_toe_Rf_p2
+    - a_lnk_LAb
+  - - a_toe_Rf_p2
+    - a_lnk_LBf
+  - - a_toe_Rf_p2
+    - a_lnk_LBb
+  - - a_toe_Rf_p2
+    - a_bent_Lf
+  - - a_toe_Rf_p2
+    - a_bent_Lb
+  - - a_toe_Rf_p2
+    - a_toe_Lf_j
+  - - a_toe_Rf_p2
+    - a_toe_Lb_j
+  - - a_toe_Rf_p2
+    - a_end_R
+  - - a_toe_Rf_p2
+    - a_lnk_RAf
+  - - a_toe_Rf_p2
+    - a_lnk_RAb
+  - - a_toe_Rf_p2
+    - a_lnk_RBf
+  - - a_toe_Rf_p2
+    - a_lnk_RBb
+  - - a_toe_Rf_p2
+    - a_bent_Rf
+  - - a_toe_Rf_p2
+    - a_bent_Rb
+  - - a_toe_Rf_p2
+    - a_toe_Rf_j
+  - - a_toe_Rf_p2
+    - a_toe_Rf_c
+  - - a_toe_Rf_p2
+    - a_toe_Rb_j
+  - - a_toe_Rf_p2
+    - a_toe_Rb_p1
+  - - a_toe_Rf_p2
+    - a_toe_Rb_p2
+  - - a_toe_Rf_p2
+    - a_toe_Rb_c
+  - - a_toe_Rf_c
+    - a_plate
+  - - a_toe_Rf_c
+    - a_dual
+  - - a_toe_Rf_c
+    - a_thigh
+  - - a_toe_Rf_c
+    - a_srv1
+  - - a_toe_Rf_c
+    - a_whl1
+  - - a_toe_Rf_c
+    - a_srv2
+  - - a_toe_Rf_c
+    - a_whl2
+  - - a_toe_Rf_c
+    - a_ped
+  - - a_toe_Rf_c
+    - a_up_l
+  - - a_toe_Rf_c
+    - a_lo_l
+  - - a_toe_Rf_c
+    - a_up_r
+  - - a_toe_Rf_c
+    - a_lo_r
+  - - a_toe_Rf_c
+    - a_mid
+  - - a_toe_Rf_c
+    - a_end_L
+  - - a_toe_Rf_c
+    - a_lnk_LAf
+  - - a_toe_Rf_c
+    - a_lnk_LAb
+  - - a_toe_Rf_c
+    - a_lnk_LBf
+  - - a_toe_Rf_c
+    - a_lnk_LBb
+  - - a_toe_Rf_c
+    - a_bent_Lf
+  - - a_toe_Rf_c
+    - a_bent_Lb
+  - - a_toe_Rf_c
+    - a_toe_Lf_j
+  - - a_toe_Rf_c
+    - a_toe_Lb_j
+  - - a_toe_Rf_c
+    - a_end_R
+  - - a_toe_Rf_c
+    - a_lnk_RAf
+  - - a_toe_Rf_c
+    - a_lnk_RAb
+  - - a_toe_Rf_c
+    - a_lnk_RBf
+  - - a_toe_Rf_c
+    - a_lnk_RBb
+  - - a_toe_Rf_c
+    - a_bent_Rf
+  - - a_toe_Rf_c
+    - a_bent_Rb
+  - - a_toe_Rf_c
+    - a_toe_Rf_j
+  - - a_toe_Rf_c
+    - a_toe_Rb_j
+  - - a_toe_Rf_c
+    - a_toe_Rb_p1
+  - - a_toe_Rf_c
+    - a_toe_Rb_p2
+  - - a_toe_Rf_c
+    - a_toe_Rb_c
+  - - a_toe_Rb_p1
+    - a_plate
+  - - a_toe_Rb_p1
+    - a_dual
+  - - a_toe_Rb_p1
+    - a_thigh
+  - - a_toe_Rb_p1
+    - a_srv1
+  - - a_toe_Rb_p1
+    - a_whl1
+  - - a_toe_Rb_p1
+    - a_srv2
+  - - a_toe_Rb_p1
+    - a_whl2
+  - - a_toe_Rb_p1
+    - a_ped
+  - - a_toe_Rb_p1
+    - a_up_l
+  - - a_toe_Rb_p1
+    - a_lo_l
+  - - a_toe_Rb_p1
+    - a_up_r
+  - - a_toe_Rb_p1
+    - a_lo_r
+  - - a_toe_Rb_p1
+    - a_mid
+  - - a_toe_Rb_p1
+    - a_end_L
+  - - a_toe_Rb_p1
+    - a_lnk_LAf
+  - - a_toe_Rb_p1
+    - a_lnk_LAb
+  - - a_toe_Rb_p1
+    - a_lnk_LBf
+  - - a_toe_Rb_p1
+    - a_lnk_LBb
+  - - a_toe_Rb_p1
+    - a_bent_Lf
+  - - a_toe_Rb_p1
+    - a_bent_Lb
+  - - a_toe_Rb_p1
+    - a_toe_Lf_j
+  - - a_toe_Rb_p1
+    - a_toe_Lb_j
+  - - a_toe_Rb_p1
+    - a_end_R
+  - - a_toe_Rb_p1
+    - a_lnk_RAf
+  - - a_toe_Rb_p1
+    - a_lnk_RAb
+  - - a_toe_Rb_p1
+    - a_lnk_RBf
+  - - a_toe_Rb_p1
+    - a_lnk_RBb
+  - - a_toe_Rb_p1
+    - a_bent_Rf
+  - - a_toe_Rb_p1
+    - a_bent_Rb
+  - - a_toe_Rb_p1
+    - a_toe_Rf_j
+  - - a_toe_Rb_p1
+    - a_toe_Rb_j
+  - - a_toe_Rb_p1
+    - a_toe_Rb_p2
+  - - a_toe_Rb_p1
+    - a_toe_Rb_c
+  - - a_toe_Rb_p2
+    - a_plate
+  - - a_toe_Rb_p2
+    - a_dual
+  - - a_toe_Rb_p2
+    - a_thigh
+  - - a_toe_Rb_p2
+    - a_srv1
+  - - a_toe_Rb_p2
+    - a_whl1
+  - - a_toe_Rb_p2
+    - a_srv2
+  - - a_toe_Rb_p2
+    - a_whl2
+  - - a_toe_Rb_p2
+    - a_ped
+  - - a_toe_Rb_p2
+    - a_up_l
+  - - a_toe_Rb_p2
+    - a_lo_l
+  - - a_toe_Rb_p2
+    - a_up_r
+  - - a_toe_Rb_p2
+    - a_lo_r
+  - - a_toe_Rb_p2
+    - a_mid
+  - - a_toe_Rb_p2
+    - a_end_L
+  - - a_toe_Rb_p2
+    - a_lnk_LAf
+  - - a_toe_Rb_p2
+    - a_lnk_LAb
+  - - a_toe_Rb_p2
+    - a_lnk_LBf
+  - - a_toe_Rb_p2
+    - a_lnk_LBb
+  - - a_toe_Rb_p2
+    - a_bent_Lf
+  - - a_toe_Rb_p2
+    - a_bent_Lb
+  - - a_toe_Rb_p2
+    - a_toe_Lf_j
+  - - a_toe_Rb_p2
+    - a_toe_Lb_j
+  - - a_toe_Rb_p2
+    - a_end_R
+  - - a_toe_Rb_p2
+    - a_lnk_RAf
+  - - a_toe_Rb_p2
+    - a_lnk_RAb
+  - - a_toe_Rb_p2
+    - a_lnk_RBf
+  - - a_toe_Rb_p2
+    - a_lnk_RBb
+  - - a_toe_Rb_p2
+    - a_bent_Rf
+  - - a_toe_Rb_p2
+    - a_bent_Rb
+  - - a_toe_Rb_p2
+    - a_toe_Rf_j
+  - - a_toe_Rb_p2
+    - a_toe_Rb_j
+  - - a_toe_Rb_p2
+    - a_toe_Rb_c
+  - - a_toe_Rb_c
+    - a_plate
+  - - a_toe_Rb_c
+    - a_dual
+  - - a_toe_Rb_c
+    - a_thigh
+  - - a_toe_Rb_c
+    - a_srv1
+  - - a_toe_Rb_c
+    - a_whl1
+  - - a_toe_Rb_c
+    - a_srv2
+  - - a_toe_Rb_c
+    - a_whl2
+  - - a_toe_Rb_c
+    - a_ped
+  - - a_toe_Rb_c
+    - a_up_l
+  - - a_toe_Rb_c
+    - a_lo_l
+  - - a_toe_Rb_c
+    - a_up_r
+  - - a_toe_Rb_c
+    - a_lo_r
+  - - a_toe_Rb_c
+    - a_mid
+  - - a_toe_Rb_c
+    - a_end_L
+  - - a_toe_Rb_c
+    - a_lnk_LAf
+  - - a_toe_Rb_c
+    - a_lnk_LAb
+  - - a_toe_Rb_c
+    - a_lnk_LBf
+  - - a_toe_Rb_c
+    - a_lnk_LBb
+  - - a_toe_Rb_c
+    - a_bent_Lf
+  - - a_toe_Rb_c
+    - a_bent_Lb
+  - - a_toe_Rb_c
+    - a_toe_Lf_j
+  - - a_toe_Rb_c
+    - a_toe_Lb_j
+  - - a_toe_Rb_c
+    - a_end_R
+  - - a_toe_Rb_c
+    - a_lnk_RAf
+  - - a_toe_Rb_c
+    - a_lnk_RAb
+  - - a_toe_Rb_c
+    - a_lnk_RBf
+  - - a_toe_Rb_c
+    - a_lnk_RBb
+  - - a_toe_Rb_c
+    - a_bent_Rf
+  - - a_toe_Rb_c
+    - a_bent_Rb
+  - - a_toe_Rb_c
+    - a_toe_Rf_j
+  - - a_toe_Rb_c
+    - a_toe_Rb_j
   sweep:
-    joint: a_toe_Lf_j_beta
+    joint: a_whl1
     steps: sweep_steps
-  interpretation: 'no two instances overlap: toe spread over 0-40 degrees'
-- id: sweep-a_toe_Lb_j_beta
-  kind: interference
-  sweep:
-    joint: a_toe_Lb_j_beta
-    steps: sweep_steps
-  interpretation: 'no two instances overlap: toe spread over 0-40 degrees'
-- id: sweep-a_toe_Rf_j_beta
-  kind: interference
-  sweep:
-    joint: a_toe_Rf_j_beta
-    steps: sweep_steps
-  interpretation: 'no two instances overlap: toe spread over 0-40 degrees'
-- id: sweep-a_toe_Rb_j_beta
-  kind: interference
-  sweep:
-    joint: a_toe_Rb_j_beta
-    steps: sweep_steps
-  interpretation: 'no two instances overlap: toe spread over 0-40 degrees'
+  interpretation: 'no two instances overlap: claw wheel turned its 385 degrees, each closing toe segment against every instance of its leg except the opposite side''s closing segments, which meet them around
+    the branch as the claws close'
 - id: flip-range-b
   kind: range
   joint: b_flip
@@ -286,13 +1076,21 @@ checks:
   joint: b_whl1
   ends:
   - P3-servo-turn.turn
-  interpretation: tendon-servo steering wheel turned from slack to claw fully closed
-- id: wheel-range-b2
-  kind: range
-  joint: b_whl2
-  ends:
-  - P3-servo-turn.turn
-  interpretation: tendon-servo steering wheel turned from slack to claw fully closed
+  interpretation: claw servo steering wheel turned from slack to claw fully closed
+- id: claw-stroke-bL
+  kind: stroke
+  cable: b_claw_L
+  evidence: P3-tendon-stroke
+  key: stroke
+  tol: 1.9
+  interpretation: the whole claw cable shared by the same-side pair of toes, shortened by wheel 1's full turn; 'approximately' 38 mm, so within the 5% cap
+- id: claw-stroke-bR
+  kind: stroke
+  cable: b_claw_R
+  evidence: P3-tendon-stroke
+  key: stroke
+  tol: 1.9
+  interpretation: the whole claw cable shared by the same-side pair of toes, shortened by wheel 1's full turn; 'approximately' 38 mm, so within the 5% cap
 - id: toe-range-bLf
   kind: range
   joint: b_toe_Lf_j_beta
@@ -333,42 +1131,824 @@ checks:
     joint: b_flip
     steps: sweep_steps
   interpretation: 'no two instances overlap: leg flipped from standing to hanging'
-- id: sweep-b_whl1
-  kind: interference
-  sweep:
-    joint: b_whl1
-    steps: sweep_steps
-  interpretation: 'no two instances overlap: servo wheel turned its 385 degrees'
 - id: sweep-b_whl2
   kind: interference
   sweep:
     joint: b_whl2
     steps: sweep_steps
-  interpretation: 'no two instances overlap: servo wheel turned its 385 degrees'
-- id: sweep-b_toe_Lf_j_beta
+  interpretation: 'no two instances overlap: toe-motion wheel turned, spreading the toes over 0-40 degrees'
+- id: sweep-b_whl1
   kind: interference
+  pairs:
+  - - b_toe_Lf_p1
+    - b_plate
+  - - b_toe_Lf_p1
+    - b_dual
+  - - b_toe_Lf_p1
+    - b_thigh
+  - - b_toe_Lf_p1
+    - b_srv1
+  - - b_toe_Lf_p1
+    - b_whl1
+  - - b_toe_Lf_p1
+    - b_srv2
+  - - b_toe_Lf_p1
+    - b_whl2
+  - - b_toe_Lf_p1
+    - b_ped
+  - - b_toe_Lf_p1
+    - b_up_l
+  - - b_toe_Lf_p1
+    - b_lo_l
+  - - b_toe_Lf_p1
+    - b_up_r
+  - - b_toe_Lf_p1
+    - b_lo_r
+  - - b_toe_Lf_p1
+    - b_mid
+  - - b_toe_Lf_p1
+    - b_end_L
+  - - b_toe_Lf_p1
+    - b_lnk_LAf
+  - - b_toe_Lf_p1
+    - b_lnk_LAb
+  - - b_toe_Lf_p1
+    - b_lnk_LBf
+  - - b_toe_Lf_p1
+    - b_lnk_LBb
+  - - b_toe_Lf_p1
+    - b_bent_Lf
+  - - b_toe_Lf_p1
+    - b_bent_Lb
+  - - b_toe_Lf_p1
+    - b_toe_Lf_j
+  - - b_toe_Lf_p1
+    - b_toe_Lf_p2
+  - - b_toe_Lf_p1
+    - b_toe_Lf_c
+  - - b_toe_Lf_p1
+    - b_toe_Lb_j
+  - - b_toe_Lf_p1
+    - b_toe_Lb_p1
+  - - b_toe_Lf_p1
+    - b_toe_Lb_p2
+  - - b_toe_Lf_p1
+    - b_toe_Lb_c
+  - - b_toe_Lf_p1
+    - b_end_R
+  - - b_toe_Lf_p1
+    - b_lnk_RAf
+  - - b_toe_Lf_p1
+    - b_lnk_RAb
+  - - b_toe_Lf_p1
+    - b_lnk_RBf
+  - - b_toe_Lf_p1
+    - b_lnk_RBb
+  - - b_toe_Lf_p1
+    - b_bent_Rf
+  - - b_toe_Lf_p1
+    - b_bent_Rb
+  - - b_toe_Lf_p1
+    - b_toe_Rf_j
+  - - b_toe_Lf_p1
+    - b_toe_Rb_j
+  - - b_toe_Lf_p2
+    - b_plate
+  - - b_toe_Lf_p2
+    - b_dual
+  - - b_toe_Lf_p2
+    - b_thigh
+  - - b_toe_Lf_p2
+    - b_srv1
+  - - b_toe_Lf_p2
+    - b_whl1
+  - - b_toe_Lf_p2
+    - b_srv2
+  - - b_toe_Lf_p2
+    - b_whl2
+  - - b_toe_Lf_p2
+    - b_ped
+  - - b_toe_Lf_p2
+    - b_up_l
+  - - b_toe_Lf_p2
+    - b_lo_l
+  - - b_toe_Lf_p2
+    - b_up_r
+  - - b_toe_Lf_p2
+    - b_lo_r
+  - - b_toe_Lf_p2
+    - b_mid
+  - - b_toe_Lf_p2
+    - b_end_L
+  - - b_toe_Lf_p2
+    - b_lnk_LAf
+  - - b_toe_Lf_p2
+    - b_lnk_LAb
+  - - b_toe_Lf_p2
+    - b_lnk_LBf
+  - - b_toe_Lf_p2
+    - b_lnk_LBb
+  - - b_toe_Lf_p2
+    - b_bent_Lf
+  - - b_toe_Lf_p2
+    - b_bent_Lb
+  - - b_toe_Lf_p2
+    - b_toe_Lf_j
+  - - b_toe_Lf_p2
+    - b_toe_Lf_c
+  - - b_toe_Lf_p2
+    - b_toe_Lb_j
+  - - b_toe_Lf_p2
+    - b_toe_Lb_p1
+  - - b_toe_Lf_p2
+    - b_toe_Lb_p2
+  - - b_toe_Lf_p2
+    - b_toe_Lb_c
+  - - b_toe_Lf_p2
+    - b_end_R
+  - - b_toe_Lf_p2
+    - b_lnk_RAf
+  - - b_toe_Lf_p2
+    - b_lnk_RAb
+  - - b_toe_Lf_p2
+    - b_lnk_RBf
+  - - b_toe_Lf_p2
+    - b_lnk_RBb
+  - - b_toe_Lf_p2
+    - b_bent_Rf
+  - - b_toe_Lf_p2
+    - b_bent_Rb
+  - - b_toe_Lf_p2
+    - b_toe_Rf_j
+  - - b_toe_Lf_p2
+    - b_toe_Rb_j
+  - - b_toe_Lf_c
+    - b_plate
+  - - b_toe_Lf_c
+    - b_dual
+  - - b_toe_Lf_c
+    - b_thigh
+  - - b_toe_Lf_c
+    - b_srv1
+  - - b_toe_Lf_c
+    - b_whl1
+  - - b_toe_Lf_c
+    - b_srv2
+  - - b_toe_Lf_c
+    - b_whl2
+  - - b_toe_Lf_c
+    - b_ped
+  - - b_toe_Lf_c
+    - b_up_l
+  - - b_toe_Lf_c
+    - b_lo_l
+  - - b_toe_Lf_c
+    - b_up_r
+  - - b_toe_Lf_c
+    - b_lo_r
+  - - b_toe_Lf_c
+    - b_mid
+  - - b_toe_Lf_c
+    - b_end_L
+  - - b_toe_Lf_c
+    - b_lnk_LAf
+  - - b_toe_Lf_c
+    - b_lnk_LAb
+  - - b_toe_Lf_c
+    - b_lnk_LBf
+  - - b_toe_Lf_c
+    - b_lnk_LBb
+  - - b_toe_Lf_c
+    - b_bent_Lf
+  - - b_toe_Lf_c
+    - b_bent_Lb
+  - - b_toe_Lf_c
+    - b_toe_Lf_j
+  - - b_toe_Lf_c
+    - b_toe_Lb_j
+  - - b_toe_Lf_c
+    - b_toe_Lb_p1
+  - - b_toe_Lf_c
+    - b_toe_Lb_p2
+  - - b_toe_Lf_c
+    - b_toe_Lb_c
+  - - b_toe_Lf_c
+    - b_end_R
+  - - b_toe_Lf_c
+    - b_lnk_RAf
+  - - b_toe_Lf_c
+    - b_lnk_RAb
+  - - b_toe_Lf_c
+    - b_lnk_RBf
+  - - b_toe_Lf_c
+    - b_lnk_RBb
+  - - b_toe_Lf_c
+    - b_bent_Rf
+  - - b_toe_Lf_c
+    - b_bent_Rb
+  - - b_toe_Lf_c
+    - b_toe_Rf_j
+  - - b_toe_Lf_c
+    - b_toe_Rb_j
+  - - b_toe_Lb_p1
+    - b_plate
+  - - b_toe_Lb_p1
+    - b_dual
+  - - b_toe_Lb_p1
+    - b_thigh
+  - - b_toe_Lb_p1
+    - b_srv1
+  - - b_toe_Lb_p1
+    - b_whl1
+  - - b_toe_Lb_p1
+    - b_srv2
+  - - b_toe_Lb_p1
+    - b_whl2
+  - - b_toe_Lb_p1
+    - b_ped
+  - - b_toe_Lb_p1
+    - b_up_l
+  - - b_toe_Lb_p1
+    - b_lo_l
+  - - b_toe_Lb_p1
+    - b_up_r
+  - - b_toe_Lb_p1
+    - b_lo_r
+  - - b_toe_Lb_p1
+    - b_mid
+  - - b_toe_Lb_p1
+    - b_end_L
+  - - b_toe_Lb_p1
+    - b_lnk_LAf
+  - - b_toe_Lb_p1
+    - b_lnk_LAb
+  - - b_toe_Lb_p1
+    - b_lnk_LBf
+  - - b_toe_Lb_p1
+    - b_lnk_LBb
+  - - b_toe_Lb_p1
+    - b_bent_Lf
+  - - b_toe_Lb_p1
+    - b_bent_Lb
+  - - b_toe_Lb_p1
+    - b_toe_Lf_j
+  - - b_toe_Lb_p1
+    - b_toe_Lb_j
+  - - b_toe_Lb_p1
+    - b_toe_Lb_p2
+  - - b_toe_Lb_p1
+    - b_toe_Lb_c
+  - - b_toe_Lb_p1
+    - b_end_R
+  - - b_toe_Lb_p1
+    - b_lnk_RAf
+  - - b_toe_Lb_p1
+    - b_lnk_RAb
+  - - b_toe_Lb_p1
+    - b_lnk_RBf
+  - - b_toe_Lb_p1
+    - b_lnk_RBb
+  - - b_toe_Lb_p1
+    - b_bent_Rf
+  - - b_toe_Lb_p1
+    - b_bent_Rb
+  - - b_toe_Lb_p1
+    - b_toe_Rf_j
+  - - b_toe_Lb_p1
+    - b_toe_Rb_j
+  - - b_toe_Lb_p2
+    - b_plate
+  - - b_toe_Lb_p2
+    - b_dual
+  - - b_toe_Lb_p2
+    - b_thigh
+  - - b_toe_Lb_p2
+    - b_srv1
+  - - b_toe_Lb_p2
+    - b_whl1
+  - - b_toe_Lb_p2
+    - b_srv2
+  - - b_toe_Lb_p2
+    - b_whl2
+  - - b_toe_Lb_p2
+    - b_ped
+  - - b_toe_Lb_p2
+    - b_up_l
+  - - b_toe_Lb_p2
+    - b_lo_l
+  - - b_toe_Lb_p2
+    - b_up_r
+  - - b_toe_Lb_p2
+    - b_lo_r
+  - - b_toe_Lb_p2
+    - b_mid
+  - - b_toe_Lb_p2
+    - b_end_L
+  - - b_toe_Lb_p2
+    - b_lnk_LAf
+  - - b_toe_Lb_p2
+    - b_lnk_LAb
+  - - b_toe_Lb_p2
+    - b_lnk_LBf
+  - - b_toe_Lb_p2
+    - b_lnk_LBb
+  - - b_toe_Lb_p2
+    - b_bent_Lf
+  - - b_toe_Lb_p2
+    - b_bent_Lb
+  - - b_toe_Lb_p2
+    - b_toe_Lf_j
+  - - b_toe_Lb_p2
+    - b_toe_Lb_j
+  - - b_toe_Lb_p2
+    - b_toe_Lb_c
+  - - b_toe_Lb_p2
+    - b_end_R
+  - - b_toe_Lb_p2
+    - b_lnk_RAf
+  - - b_toe_Lb_p2
+    - b_lnk_RAb
+  - - b_toe_Lb_p2
+    - b_lnk_RBf
+  - - b_toe_Lb_p2
+    - b_lnk_RBb
+  - - b_toe_Lb_p2
+    - b_bent_Rf
+  - - b_toe_Lb_p2
+    - b_bent_Rb
+  - - b_toe_Lb_p2
+    - b_toe_Rf_j
+  - - b_toe_Lb_p2
+    - b_toe_Rb_j
+  - - b_toe_Lb_c
+    - b_plate
+  - - b_toe_Lb_c
+    - b_dual
+  - - b_toe_Lb_c
+    - b_thigh
+  - - b_toe_Lb_c
+    - b_srv1
+  - - b_toe_Lb_c
+    - b_whl1
+  - - b_toe_Lb_c
+    - b_srv2
+  - - b_toe_Lb_c
+    - b_whl2
+  - - b_toe_Lb_c
+    - b_ped
+  - - b_toe_Lb_c
+    - b_up_l
+  - - b_toe_Lb_c
+    - b_lo_l
+  - - b_toe_Lb_c
+    - b_up_r
+  - - b_toe_Lb_c
+    - b_lo_r
+  - - b_toe_Lb_c
+    - b_mid
+  - - b_toe_Lb_c
+    - b_end_L
+  - - b_toe_Lb_c
+    - b_lnk_LAf
+  - - b_toe_Lb_c
+    - b_lnk_LAb
+  - - b_toe_Lb_c
+    - b_lnk_LBf
+  - - b_toe_Lb_c
+    - b_lnk_LBb
+  - - b_toe_Lb_c
+    - b_bent_Lf
+  - - b_toe_Lb_c
+    - b_bent_Lb
+  - - b_toe_Lb_c
+    - b_toe_Lf_j
+  - - b_toe_Lb_c
+    - b_toe_Lb_j
+  - - b_toe_Lb_c
+    - b_end_R
+  - - b_toe_Lb_c
+    - b_lnk_RAf
+  - - b_toe_Lb_c
+    - b_lnk_RAb
+  - - b_toe_Lb_c
+    - b_lnk_RBf
+  - - b_toe_Lb_c
+    - b_lnk_RBb
+  - - b_toe_Lb_c
+    - b_bent_Rf
+  - - b_toe_Lb_c
+    - b_bent_Rb
+  - - b_toe_Lb_c
+    - b_toe_Rf_j
+  - - b_toe_Lb_c
+    - b_toe_Rb_j
+  - - b_toe_Rf_p1
+    - b_plate
+  - - b_toe_Rf_p1
+    - b_dual
+  - - b_toe_Rf_p1
+    - b_thigh
+  - - b_toe_Rf_p1
+    - b_srv1
+  - - b_toe_Rf_p1
+    - b_whl1
+  - - b_toe_Rf_p1
+    - b_srv2
+  - - b_toe_Rf_p1
+    - b_whl2
+  - - b_toe_Rf_p1
+    - b_ped
+  - - b_toe_Rf_p1
+    - b_up_l
+  - - b_toe_Rf_p1
+    - b_lo_l
+  - - b_toe_Rf_p1
+    - b_up_r
+  - - b_toe_Rf_p1
+    - b_lo_r
+  - - b_toe_Rf_p1
+    - b_mid
+  - - b_toe_Rf_p1
+    - b_end_L
+  - - b_toe_Rf_p1
+    - b_lnk_LAf
+  - - b_toe_Rf_p1
+    - b_lnk_LAb
+  - - b_toe_Rf_p1
+    - b_lnk_LBf
+  - - b_toe_Rf_p1
+    - b_lnk_LBb
+  - - b_toe_Rf_p1
+    - b_bent_Lf
+  - - b_toe_Rf_p1
+    - b_bent_Lb
+  - - b_toe_Rf_p1
+    - b_toe_Lf_j
+  - - b_toe_Rf_p1
+    - b_toe_Lb_j
+  - - b_toe_Rf_p1
+    - b_end_R
+  - - b_toe_Rf_p1
+    - b_lnk_RAf
+  - - b_toe_Rf_p1
+    - b_lnk_RAb
+  - - b_toe_Rf_p1
+    - b_lnk_RBf
+  - - b_toe_Rf_p1
+    - b_lnk_RBb
+  - - b_toe_Rf_p1
+    - b_bent_Rf
+  - - b_toe_Rf_p1
+    - b_bent_Rb
+  - - b_toe_Rf_p1
+    - b_toe_Rf_j
+  - - b_toe_Rf_p1
+    - b_toe_Rf_p2
+  - - b_toe_Rf_p1
+    - b_toe_Rf_c
+  - - b_toe_Rf_p1
+    - b_toe_Rb_j
+  - - b_toe_Rf_p1
+    - b_toe_Rb_p1
+  - - b_toe_Rf_p1
+    - b_toe_Rb_p2
+  - - b_toe_Rf_p1
+    - b_toe_Rb_c
+  - - b_toe_Rf_p2
+    - b_plate
+  - - b_toe_Rf_p2
+    - b_dual
+  - - b_toe_Rf_p2
+    - b_thigh
+  - - b_toe_Rf_p2
+    - b_srv1
+  - - b_toe_Rf_p2
+    - b_whl1
+  - - b_toe_Rf_p2
+    - b_srv2
+  - - b_toe_Rf_p2
+    - b_whl2
+  - - b_toe_Rf_p2
+    - b_ped
+  - - b_toe_Rf_p2
+    - b_up_l
+  - - b_toe_Rf_p2
+    - b_lo_l
+  - - b_toe_Rf_p2
+    - b_up_r
+  - - b_toe_Rf_p2
+    - b_lo_r
+  - - b_toe_Rf_p2
+    - b_mid
+  - - b_toe_Rf_p2
+    - b_end_L
+  - - b_toe_Rf_p2
+    - b_lnk_LAf
+  - - b_toe_Rf_p2
+    - b_lnk_LAb
+  - - b_toe_Rf_p2
+    - b_lnk_LBf
+  - - b_toe_Rf_p2
+    - b_lnk_LBb
+  - - b_toe_Rf_p2
+    - b_bent_Lf
+  - - b_toe_Rf_p2
+    - b_bent_Lb
+  - - b_toe_Rf_p2
+    - b_toe_Lf_j
+  - - b_toe_Rf_p2
+    - b_toe_Lb_j
+  - - b_toe_Rf_p2
+    - b_end_R
+  - - b_toe_Rf_p2
+    - b_lnk_RAf
+  - - b_toe_Rf_p2
+    - b_lnk_RAb
+  - - b_toe_Rf_p2
+    - b_lnk_RBf
+  - - b_toe_Rf_p2
+    - b_lnk_RBb
+  - - b_toe_Rf_p2
+    - b_bent_Rf
+  - - b_toe_Rf_p2
+    - b_bent_Rb
+  - - b_toe_Rf_p2
+    - b_toe_Rf_j
+  - - b_toe_Rf_p2
+    - b_toe_Rf_c
+  - - b_toe_Rf_p2
+    - b_toe_Rb_j
+  - - b_toe_Rf_p2
+    - b_toe_Rb_p1
+  - - b_toe_Rf_p2
+    - b_toe_Rb_p2
+  - - b_toe_Rf_p2
+    - b_toe_Rb_c
+  - - b_toe_Rf_c
+    - b_plate
+  - - b_toe_Rf_c
+    - b_dual
+  - - b_toe_Rf_c
+    - b_thigh
+  - - b_toe_Rf_c
+    - b_srv1
+  - - b_toe_Rf_c
+    - b_whl1
+  - - b_toe_Rf_c
+    - b_srv2
+  - - b_toe_Rf_c
+    - b_whl2
+  - - b_toe_Rf_c
+    - b_ped
+  - - b_toe_Rf_c
+    - b_up_l
+  - - b_toe_Rf_c
+    - b_lo_l
+  - - b_toe_Rf_c
+    - b_up_r
+  - - b_toe_Rf_c
+    - b_lo_r
+  - - b_toe_Rf_c
+    - b_mid
+  - - b_toe_Rf_c
+    - b_end_L
+  - - b_toe_Rf_c
+    - b_lnk_LAf
+  - - b_toe_Rf_c
+    - b_lnk_LAb
+  - - b_toe_Rf_c
+    - b_lnk_LBf
+  - - b_toe_Rf_c
+    - b_lnk_LBb
+  - - b_toe_Rf_c
+    - b_bent_Lf
+  - - b_toe_Rf_c
+    - b_bent_Lb
+  - - b_toe_Rf_c
+    - b_toe_Lf_j
+  - - b_toe_Rf_c
+    - b_toe_Lb_j
+  - - b_toe_Rf_c
+    - b_end_R
+  - - b_toe_Rf_c
+    - b_lnk_RAf
+  - - b_toe_Rf_c
+    - b_lnk_RAb
+  - - b_toe_Rf_c
+    - b_lnk_RBf
+  - - b_toe_Rf_c
+    - b_lnk_RBb
+  - - b_toe_Rf_c
+    - b_bent_Rf
+  - - b_toe_Rf_c
+    - b_bent_Rb
+  - - b_toe_Rf_c
+    - b_toe_Rf_j
+  - - b_toe_Rf_c
+    - b_toe_Rb_j
+  - - b_toe_Rf_c
+    - b_toe_Rb_p1
+  - - b_toe_Rf_c
+    - b_toe_Rb_p2
+  - - b_toe_Rf_c
+    - b_toe_Rb_c
+  - - b_toe_Rb_p1
+    - b_plate
+  - - b_toe_Rb_p1
+    - b_dual
+  - - b_toe_Rb_p1
+    - b_thigh
+  - - b_toe_Rb_p1
+    - b_srv1
+  - - b_toe_Rb_p1
+    - b_whl1
+  - - b_toe_Rb_p1
+    - b_srv2
+  - - b_toe_Rb_p1
+    - b_whl2
+  - - b_toe_Rb_p1
+    - b_ped
+  - - b_toe_Rb_p1
+    - b_up_l
+  - - b_toe_Rb_p1
+    - b_lo_l
+  - - b_toe_Rb_p1
+    - b_up_r
+  - - b_toe_Rb_p1
+    - b_lo_r
+  - - b_toe_Rb_p1
+    - b_mid
+  - - b_toe_Rb_p1
+    - b_end_L
+  - - b_toe_Rb_p1
+    - b_lnk_LAf
+  - - b_toe_Rb_p1
+    - b_lnk_LAb
+  - - b_toe_Rb_p1
+    - b_lnk_LBf
+  - - b_toe_Rb_p1
+    - b_lnk_LBb
+  - - b_toe_Rb_p1
+    - b_bent_Lf
+  - - b_toe_Rb_p1
+    - b_bent_Lb
+  - - b_toe_Rb_p1
+    - b_toe_Lf_j
+  - - b_toe_Rb_p1
+    - b_toe_Lb_j
+  - - b_toe_Rb_p1
+    - b_end_R
+  - - b_toe_Rb_p1
+    - b_lnk_RAf
+  - - b_toe_Rb_p1
+    - b_lnk_RAb
+  - - b_toe_Rb_p1
+    - b_lnk_RBf
+  - - b_toe_Rb_p1
+    - b_lnk_RBb
+  - - b_toe_Rb_p1
+    - b_bent_Rf
+  - - b_toe_Rb_p1
+    - b_bent_Rb
+  - - b_toe_Rb_p1
+    - b_toe_Rf_j
+  - - b_toe_Rb_p1
+    - b_toe_Rb_j
+  - - b_toe_Rb_p1
+    - b_toe_Rb_p2
+  - - b_toe_Rb_p1
+    - b_toe_Rb_c
+  - - b_toe_Rb_p2
+    - b_plate
+  - - b_toe_Rb_p2
+    - b_dual
+  - - b_toe_Rb_p2
+    - b_thigh
+  - - b_toe_Rb_p2
+    - b_srv1
+  - - b_toe_Rb_p2
+    - b_whl1
+  - - b_toe_Rb_p2
+    - b_srv2
+  - - b_toe_Rb_p2
+    - b_whl2
+  - - b_toe_Rb_p2
+    - b_ped
+  - - b_toe_Rb_p2
+    - b_up_l
+  - - b_toe_Rb_p2
+    - b_lo_l
+  - - b_toe_Rb_p2
+    - b_up_r
+  - - b_toe_Rb_p2
+    - b_lo_r
+  - - b_toe_Rb_p2
+    - b_mid
+  - - b_toe_Rb_p2
+    - b_end_L
+  - - b_toe_Rb_p2
+    - b_lnk_LAf
+  - - b_toe_Rb_p2
+    - b_lnk_LAb
+  - - b_toe_Rb_p2
+    - b_lnk_LBf
+  - - b_toe_Rb_p2
+    - b_lnk_LBb
+  - - b_toe_Rb_p2
+    - b_bent_Lf
+  - - b_toe_Rb_p2
+    - b_bent_Lb
+  - - b_toe_Rb_p2
+    - b_toe_Lf_j
+  - - b_toe_Rb_p2
+    - b_toe_Lb_j
+  - - b_toe_Rb_p2
+    - b_end_R
+  - - b_toe_Rb_p2
+    - b_lnk_RAf
+  - - b_toe_Rb_p2
+    - b_lnk_RAb
+  - - b_toe_Rb_p2
+    - b_lnk_RBf
+  - - b_toe_Rb_p2
+    - b_lnk_RBb
+  - - b_toe_Rb_p2
+    - b_bent_Rf
+  - - b_toe_Rb_p2
+    - b_bent_Rb
+  - - b_toe_Rb_p2
+    - b_toe_Rf_j
+  - - b_toe_Rb_p2
+    - b_toe_Rb_j
+  - - b_toe_Rb_p2
+    - b_toe_Rb_c
+  - - b_toe_Rb_c
+    - b_plate
+  - - b_toe_Rb_c
+    - b_dual
+  - - b_toe_Rb_c
+    - b_thigh
+  - - b_toe_Rb_c
+    - b_srv1
+  - - b_toe_Rb_c
+    - b_whl1
+  - - b_toe_Rb_c
+    - b_srv2
+  - - b_toe_Rb_c
+    - b_whl2
+  - - b_toe_Rb_c
+    - b_ped
+  - - b_toe_Rb_c
+    - b_up_l
+  - - b_toe_Rb_c
+    - b_lo_l
+  - - b_toe_Rb_c
+    - b_up_r
+  - - b_toe_Rb_c
+    - b_lo_r
+  - - b_toe_Rb_c
+    - b_mid
+  - - b_toe_Rb_c
+    - b_end_L
+  - - b_toe_Rb_c
+    - b_lnk_LAf
+  - - b_toe_Rb_c
+    - b_lnk_LAb
+  - - b_toe_Rb_c
+    - b_lnk_LBf
+  - - b_toe_Rb_c
+    - b_lnk_LBb
+  - - b_toe_Rb_c
+    - b_bent_Lf
+  - - b_toe_Rb_c
+    - b_bent_Lb
+  - - b_toe_Rb_c
+    - b_toe_Lf_j
+  - - b_toe_Rb_c
+    - b_toe_Lb_j
+  - - b_toe_Rb_c
+    - b_end_R
+  - - b_toe_Rb_c
+    - b_lnk_RAf
+  - - b_toe_Rb_c
+    - b_lnk_RAb
+  - - b_toe_Rb_c
+    - b_lnk_RBf
+  - - b_toe_Rb_c
+    - b_lnk_RBb
+  - - b_toe_Rb_c
+    - b_bent_Rf
+  - - b_toe_Rb_c
+    - b_bent_Rb
+  - - b_toe_Rb_c
+    - b_toe_Rf_j
+  - - b_toe_Rb_c
+    - b_toe_Rb_j
   sweep:
-    joint: b_toe_Lf_j_beta
+    joint: b_whl1
     steps: sweep_steps
-  interpretation: 'no two instances overlap: toe spread over 0-40 degrees'
-- id: sweep-b_toe_Lb_j_beta
-  kind: interference
-  sweep:
-    joint: b_toe_Lb_j_beta
-    steps: sweep_steps
-  interpretation: 'no two instances overlap: toe spread over 0-40 degrees'
-- id: sweep-b_toe_Rf_j_beta
-  kind: interference
-  sweep:
-    joint: b_toe_Rf_j_beta
-    steps: sweep_steps
-  interpretation: 'no two instances overlap: toe spread over 0-40 degrees'
-- id: sweep-b_toe_Rb_j_beta
-  kind: interference
-  sweep:
-    joint: b_toe_Rb_j_beta
-    steps: sweep_steps
-  interpretation: 'no two instances overlap: toe spread over 0-40 degrees'
+  interpretation: 'no two instances overlap: claw wheel turned its 385 degrees, each closing toe segment against every instance of its leg except the opposite side''s closing segments, which meet them around
+    the branch as the claws close'
 - id: clear-as-built
   kind: interference
   interpretation: no two instances overlap as built

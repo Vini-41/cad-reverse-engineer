@@ -34,40 +34,6 @@ for leg in LEGS:
          "interpretation": "D between the knee pins, leg extended as built"})
 
 # ---- motion
-for leg in MOTION_LEGS:
-    add({"id": f"width-range-{leg}", "kind": "range", "joint": f"{leg}_slide", "ends": ["fig2d-width.Dmax"],
-         "instances": [f"{leg}_up_l", f"{leg}_up_r"], "between": [f"{leg}_up_l.pin_b", f"{leg}_up_r.pin_b"], "along": "x",
-         "interpretation": "pedestal pushed into the thigh by its full stroke: the knees spread to Dmax"})
-
-for leg in MOTION_LEGS:
-    add({"id": f"flip-range-{leg}", "kind": "range", "joint": f"{leg}_flip", "ends": ["P5-flip.turn"],
-         "interpretation": "leg turned from standing to hanging about the dual-axis servo"})
-    for k in (1, 2):
-        add({"id": f"wheel-range-{leg}{k}", "kind": "range", "joint": f"{leg}_whl{k}", "ends": ["P3-servo-turn.turn"],
-             "interpretation": "tendon-servo steering wheel turned from slack to claw fully closed"})
-    for side in "LR":
-        for row in "fb":
-            j = f"{leg}_toe_{side}{row}_j_beta"
-            add({"id": f"toe-range-{leg}{side}{row}", "kind": "range", "joint": j,
-                 "ends": ["P2-toe-range.min", "P2-toe-range.max"],
-                 "interpretation": "toe rotation joint beta from parallel to fully spread"})
-    sweeps = [(f"{leg}_slide", "four-bar compressed over its stroke"),
-              (f"{leg}_flip", "leg flipped from standing to hanging")]
-    sweeps += [(f"{leg}_whl{k}", "servo wheel turned its 385 degrees") for k in (1, 2)]
-    sweeps += [(f"{leg}_toe_{s}{r}_j_beta", "toe spread over 0-40 degrees") for s in "LR" for r in "fb"]
-    for j, what in sweeps:
-        add({"id": f"sweep-{j}", "kind": "interference", "sweep": {"joint": j, "steps": "sweep_steps"},
-             "interpretation": f"no two instances overlap: {what}"})
-
-add({"id": "clear-as-built", "kind": "interference", "interpretation": "no two instances overlap as built"})
-
-leg_counts = {"servo_single": "n_single_leg", "wheel": "n_single_leg", "comp": "n_comp", "bent": "n_bent",
-              "foot_end": "n_end", "linkage": "n_linkage", "toe_joint": "n_toes", "phalanx1": "n_toes",
-              "phalanx2": "n_toes", "claw": "n_toes"}
-parts = ["plate", "servo_dual", "thigh", "servo_single", "wheel", "comp", "pedestal", "bent", "foot_mid",
-         "foot_end", "linkage", "toe_joint", "phalanx1", "phalanx2", "claw"]
-
-
 def leg_instances(leg):
     """A leg's instances, named as model.py puts them: plate, servos, thigh, four-bar, foot, toes."""
     names = ["plate", "dual", "thigh", "srv1", "whl1", "srv2", "whl2", "ped", "up_l", "lo_l", "up_r", "lo_r", "mid"]
@@ -76,6 +42,59 @@ def leg_instances(leg):
         names += [f"bent_{side}{row}" for row in "fb"]
         names += [f"toe_{side}{row}_{k}" for row in "fb" for k in ("j", "p1", "p2", "c")]
     return [f"{leg}_{n}" for n in names]
+
+
+for leg in MOTION_LEGS:
+    add({"id": f"width-range-{leg}", "kind": "range", "joint": f"{leg}_slide", "ends": ["fig2d-width.Dmax"],
+         "instances": [f"{leg}_up_l", f"{leg}_up_r"], "between": [f"{leg}_up_l.pin_b", f"{leg}_up_r.pin_b"], "along": "x",
+         "interpretation": "pedestal pushed into the thigh by its full stroke: the knees spread to Dmax"})
+
+for leg in MOTION_LEGS:
+    add({"id": f"flip-range-{leg}", "kind": "range", "joint": f"{leg}_flip", "ends": ["P5-flip.turn"],
+         "interpretation": "leg turned from standing to hanging about the dual-axis servo"})
+    add({"id": f"wheel-range-{leg}1", "kind": "range", "joint": f"{leg}_whl1", "ends": ["P3-servo-turn.turn"],
+         "interpretation": "claw servo steering wheel turned from slack to claw fully closed"})
+    for side in "LR":
+        add({"id": f"claw-stroke-{leg}{side}", "kind": "stroke", "cable": f"{leg}_claw_{side}",
+             "evidence": "P3-tendon-stroke", "key": "stroke", "tol": 1.9,
+             "interpretation": "the whole claw cable shared by the same-side pair of toes, shortened by wheel 1's full turn; 'approximately' 38 mm, so within the 5% cap"})
+    for side in "LR":
+        for row in "fb":
+            j = f"{leg}_toe_{side}{row}_j_beta"
+            add({"id": f"toe-range-{leg}{side}{row}", "kind": "range", "joint": j,
+                 "ends": ["P2-toe-range.min", "P2-toe-range.max"],
+                 "interpretation": "toe rotation joint beta from parallel to fully spread"})
+    sweeps = [(f"{leg}_slide", "four-bar compressed over its stroke"),
+              (f"{leg}_flip", "leg flipped from standing to hanging")]
+    # wheel 2 spreads all four toes' beta together, so its sweep is the toe-range sweep
+    sweeps += [(f"{leg}_whl2", "toe-motion wheel turned, spreading the toes over 0-40 degrees")]
+    for j, what in sweeps:
+        add({"id": f"sweep-{j}", "kind": "interference", "sweep": {"joint": j, "steps": "sweep_steps"},
+             "interpretation": f"no two instances overlap: {what}"})
+    # wheel 1 closes the toes: each closing toe segment against its own leg, except the opposite
+    # side's toes, which close towards it around the branch (p. 2: the claws grasp from both sides)
+    inst = leg_instances(leg)
+    closing = {s: [f"{leg}_toe_{s}{r}_{k}" for r in "fb" for k in ("p1", "p2", "c")] for s in "LR"}
+    pairs = []
+    for s, other in (("L", "R"), ("R", "L")):
+        for m in closing[s]:
+            for o in inst:
+                if o == m or o in closing[other]:
+                    continue
+                if o in closing[s] and closing[s].index(o) < closing[s].index(m):
+                    continue  # this pair was listed from its other segment's side
+                pairs.append([m, o])
+    add({"id": f"sweep-{leg}_whl1", "kind": "interference", "pairs": pairs,
+         "sweep": {"joint": f"{leg}_whl1", "steps": "sweep_steps"},
+         "interpretation": "no two instances overlap: claw wheel turned its 385 degrees, each closing toe segment against every instance of its leg except the opposite side's closing segments, which meet them around the branch as the claws close"})
+
+add({"id": "clear-as-built", "kind": "interference", "interpretation": "no two instances overlap as built"})
+
+leg_counts = {"servo_single": "n_single_leg", "wheel": "n_single_leg", "comp": "n_comp", "bent": "n_bent",
+              "foot_end": "n_end", "linkage": "n_linkage", "toe_joint": "n_toes", "phalanx1": "n_toes",
+              "phalanx2": "n_toes", "claw": "n_toes"}
+parts = ["plate", "servo_dual", "thigh", "servo_single", "wheel", "comp", "pedestal", "bent", "foot_mid",
+         "foot_end", "linkage", "toe_joint", "phalanx1", "phalanx2", "claw"]
 
 
 add({"id": "mass-leg", "kind": "mass", "instances": leg_instances("a"), "counts": leg_counts, "evidence": "P3-leg-mass", "key": "m",

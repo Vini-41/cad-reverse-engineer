@@ -39,6 +39,8 @@ params:
   toe_min: {basis: source, from: P2-toe-range.min, interpretation: "toe joint angle β, as built (toes parallel)"}
   toe_max: {basis: source, from: P2-toe-range.max, interpretation: "toe joint angle β, fully spread outward"}
   flip_turn: {basis: source, from: P5-flip.turn, interpretation: "leg flip about the dual-axis servo from standing (as built) to hanging"}
+  splay_turn: {basis: proposed, value: 180, rationale: "turn of the toe-motion (purple, Fig. 2A) tendon servo from as built to the toes fully spread; 385° is stated for claw closure only", gap: G-splay}
+  claw_close: {basis: proposed, value: -38, rationale: "flexion of each toe joint, inward negative, with the claw fully closed: one value for all six joints a claw cable closes, so the source's proximal-joints-bend-first order (p. 2) is not represented (ADR-0009); with the toe geometry proposed here the stated stroke pins it between about -36° and -40°, and -38° is the whole degree inside that band (-35° gives 35.0 mm, -40° 40.0 mm)", gap: G-claw-tendon}
   servo_turn: {basis: source, from: P3-servo-turn.turn, interpretation: "steering-wheel rotation of a tendon servo from as built (tendon slack) to claw fully closed"}
 
   # ---------------- four-bar (shin) ----------------
@@ -93,6 +95,8 @@ params:
   end_wall: {basis: proposed, value: 3, rationale: "end frame is an outer wall and two side plates (cheeks) around an open centre (Fig. S1A)", gap: G-bent-shaft}
 
   # ---------------- toes ----------------
+  toe_taper: {basis: proposed, value: 20, rationale: "each toe segment's end faces, and the toe-joint block's bottom, tapered back from the outer-edge hinge (Fig. 2B's γ1, unvalued), so adjacent segments meet at twice this flexion", gap: G-claw-tendon}
+  cab_r: {basis: proposed, value: 0.5, rationale: "radius of the claw-cable bores along the segments' inner walls (the two small holes of Fig. 2B's end view), clearing the 0.35 mm Dyneema", gap: G-claw-tendon}
   ph_wall: {basis: proposed, value: 3, rationale: "the phalanges are hollow along their length (square window in the Fig. 2B end view)", gap: G-toe-joint}
   claw_slot: {basis: proposed, value: 6, rationale: "the claw is split by a central slot along its length (Fig. 2B, Claw(a) view)", gap: G-toe-joint}
   tj_H: {basis: proposed, value: 12, rationale: "toe-joint block height (bearing housing of the toe rotation joint)", gap: G-toe-joint}

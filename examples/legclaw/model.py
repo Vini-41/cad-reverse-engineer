@@ -29,15 +29,33 @@ def ybar(L, H, W, xa, xb, pin_r):
     return body, d
 
 
-def phalanx(L, H, W, cut_l, cut_w, cut_h):
+def setback(depth, taper):
+    """How far an end face tapered by `taper` from its outer-edge hinge lies back at `depth` from that edge."""
+    return depth * math.tan(math.radians(taper))
+
+
+def phalanx(L, H, W, cut_l, cut_w, cut_h, taper):
     """Toe segment along X with a cut_w x cut_h channel along its length (or a slot when
-    cut_h exceeds H); flexion hinges on the inner (+Z) edges of both ends."""
-    part = Box(L, W, H) - Box(cut_l, cut_w, cut_h)
+    cut_h exceeds H); flexion hinges on the outer (-Z) edges of both ends, each end face
+    tapered back by `taper` towards the inner (+Z) face so the segments can flex inward."""
+    s = setback(H, taper)
+    prof = Polygon((-L / 2, -H / 2), (L / 2, -H / 2), (L / 2 - s, H / 2), (-L / 2 + s, H / 2), align=None)
+    part = extrude(Plane.XZ * prof, W / 2, both=True) - Box(cut_l, cut_w, cut_h)
     d = {
-        "hp_a": (-L / 2, -W / 2, H / 2), "hp_b": (-L / 2, W / 2, H / 2),
-        "hd_a": (L / 2, -W / 2, H / 2), "hd_b": (L / 2, W / 2, H / 2),
+        "hp_a": (-L / 2, -W / 2, -H / 2), "hp_b": (-L / 2, W / 2, -H / 2),
+        "hd_a": (L / 2, -W / 2, -H / 2), "hd_b": (L / 2, W / 2, -H / 2),
     }
     return part, d
+
+
+def cable_bore(part, d, L, H, z, x0, x1, r, taper):
+    """Bore of radius r along X at height z, from x0 to x1; eye datums "e0", "e1" on its axis at
+    each end, where it leaves the part (an end clipped to the tapered end face at that height)."""
+    s = setback(z + H / 2, taper)
+    x0, x1 = max(x0, -L / 2 + s), min(x1, L / 2 - s)
+    part -= Cylinder(r, x1 - x0, rotation=(0, 90, 0)).moved(Location(((x0 + x1) / 2, 0, z)))
+    d.update({"e0": (x0, 0, z), "e1": (x1, 0, z)})
+    return part
 
 
 def ycyl(r, y0, y1, x, z):
@@ -58,28 +76,40 @@ def place(pa, pb, xa, y):
     return Location((pa[0] - xa * ux, y, pa[1] - xa * uz), (0, phi, 0))
 
 
-# Which joints, loops, gears and tendons build() returns, by name prefix (None: all).
+# Which joints, loops, gears, tendons and cables build() returns, by name prefix (None: all).
 MOTION = None
 
 
 def build(p):
     parts, datums, assembly = {}, {}, {}
-    joints, loops, gears, tendons = {}, {}, {}, {}
+    joints, loops, gears, tendons, cables = {}, {}, {}, {}, {}
 
     def add_part(name, shape, d):
         parts[name] = shape
         datums.update({f"{name}.{k}": v for k, v in d.items()})
 
     # --- toe segments
-    ph1, d = phalanx(p.ph1_L, p.ph1_H, p.ph1_W, p.ph1_L, p.ph1_W - p.ph_wall * 2, p.ph1_H - p.ph_wall * 2)
-    add_part("phalanx1", ph1, d)
-    ph2, d = phalanx(p.ph2_L, p.ph2_H, p.ph2_W, p.ph2_L, p.ph2_W - p.ph_wall * 2, p.ph2_H - p.ph_wall * 2)
-    add_part("phalanx2", ph2, d)
-    claw, d = phalanx(p.claw_L, p.claw_H, p.claw_W, p.claw_L - p.ph_wall * 2, p.claw_slot, p.claw_H)
+    # the claw cable runs in a bore along each segment's inner wall (Fig. 2B end view)
+    for name, L, H, W in (("phalanx1", p.ph1_L, p.ph1_H, p.ph1_W), ("phalanx2", p.ph2_L, p.ph2_H, p.ph2_W)):
+        ph, d = phalanx(L, H, W, L, W - p.ph_wall * 2, H - p.ph_wall * 2, p.toe_taper)
+        ph = cable_bore(ph, d, L, H, H / 2 - p.ph_wall / 2, -L / 2, L / 2, p.cab_r, p.toe_taper)
+        add_part(name, ph, d)
+    claw, d = phalanx(p.claw_L, p.claw_H, p.claw_W, p.claw_L - p.ph_wall * 2, p.claw_slot, p.claw_H, p.toe_taper)
+    # through the proximal end wall only, into the slot, where the cable crosses to the paired toe
+    claw = cable_bore(claw, d, p.claw_L, p.claw_H, p.claw_H / 2 - p.ph_wall / 2,
+                      -p.claw_L / 2, -p.claw_L / 2 + p.ph_wall, p.cab_r, p.toe_taper)
     add_part("claw", claw, d)
-    tj = box(-p.ph1_H / 2, p.ph1_H / 2, -p.ph1_W / 2, p.ph1_W / 2, -p.tj_H / 2, p.tj_H / 2)
+    # toe-joint block: its bottom face tapered back from phalanx 1's hinge like the segments' ends
+    th = p.tj_H / 2
+    s_tj = setback(p.ph1_H, p.toe_taper)
+    prof = Polygon((-p.ph1_H / 2, -th), (-p.ph1_H / 2, th), (p.ph1_H / 2, th), (p.ph1_H / 2, -th + s_tj), align=None)
+    tj = extrude(Plane.XZ * prof, p.ph1_W / 2, both=True)
     tj -= Cylinder(p.pin_r, p.ph1_H, rotation=(0, 90, 0))
-    add_part("toe_joint", tj, {"axle_a": (-p.ph1_H / 2, 0, 0), "axle_b": (p.ph1_H / 2, 0, 0)})
+    x_cb = p.ph1_H / 2 - p.ph_wall / 2
+    z_cb = -th + setback(x_cb + p.ph1_H / 2, p.toe_taper)
+    tj -= Cylinder(p.cab_r, th - z_cb).moved(Location((x_cb, 0, (th + z_cb) / 2)))
+    add_part("toe_joint", tj, {"axle_a": (-p.ph1_H / 2, 0, 0), "axle_b": (p.ph1_H / 2, 0, 0),
+                               "eye_in": (x_cb, 0, th), "eye_out": (x_cb, 0, z_cb)})
 
     # --- bars
     comp_xa = -p.comp_L / 2 + p.comp_hub
@@ -120,6 +150,7 @@ def build(p):
     add_part("thigh", thigh, {
         "flip_a": (0, -(ear_y0 + p.ear_t / 2), 0), "flip_b": (0, ear_y0 + p.ear_t / 2, 0),
         "up_l": (-hx4, th_y, z_up), "up_r": (hx4, th_y, z_up),
+        "guide": (-th_x, 0, tz_bot + p.wall),
     })
 
     # --- servos, steering wheel, plate
@@ -211,7 +242,7 @@ def build(p):
             joints[f"{leg}_srv{k}_mount"] = {"type": "fixed", "parent": thigh_i, "child": s_i}
             joints[f"{leg}_whl{k}"] = {"type": "revolute", "parent": s_i, "child": w_i,
                                        "axis": [f"{w_i}.hub_b", f"{w_i}.hub_a"],
-                                       "range": ["servo_turn"], "drive": "actuated"}
+                                       "range": ["servo_turn" if k == 1 else "splay_turn"], "drive": "actuated"}
 
         ped_i = put("ped", "pedestal", Location((0, 0, z_p)))
         joints[f"{leg}_slide"] = {"type": "slide", "parent": thigh_i, "child": ped_i,
@@ -265,6 +296,7 @@ def build(p):
                                         "axis": [f"{b_i}.pin_a_lo", f"{b_i}.pin_a_hi"], "drive": "passive"}
                 loops[f"{b_i}_shaft"] = [f"{b_i}.pin_b", f"{end_i}.sh_{row}"]
             # toes: rotation joint (beta) about X, then two phalanges and the claw flexing inward
+            toe = {}
             for row, sy in (("f", 1), ("b", -1)):
                 tl = half * Location((-p.toe_x, sy * p.toe_y, tz))
                 tj_i = put(f"toe_{side}{row}_j", "toe_joint", tl)
@@ -284,9 +316,22 @@ def build(p):
                 for parent, child in ((tj_i, p1_i), (p1_i, p2_i), (p2_i, c_i)):
                     joints[f"{child}_flex"] = {"type": "revolute", "parent": parent, "child": child,
                                                "axis": [f"{child}.hp_a", f"{child}.hp_b"], "drive": "passive"}
+                toe[row] = (tj_i, p1_i, p2_i, c_i)
+            # one claw cable per same-side pair of toes (wheel 1): down toe f through its bores, across
+            # between the claws' slots, up toe b; one toe-motion cable (wheel 2) spreads the pair's beta
+            (tf, p1f, p2f, cf), (tb, p1b, p2b, cb) = toe["f"], toe["b"]
+            down = [f"{tf}.eye_in", f"{tf}.eye_out"] + [f"{i}.{e}" for i in (p1f, p2f, cf) for e in ("e0", "e1")]
+            up = [f"{i}.{e}" for i in (cb, p2b, p1b) for e in ("e1", "e0")] + [f"{tb}.eye_out", f"{tb}.eye_in"]
+            cables[f"{leg}_claw_{side}"] = {
+                "path": [f"{thigh_i}.guide", *down, *up], "wheel": f"{leg}_whl1",
+                "closes": {f"{i}_flex": "claw_close" for i in (p1f, p2f, cf, p1b, p2b, cb)}}
+            cables[f"{leg}_splay_{side}"] = {
+                "path": [f"{thigh_i}.guide", f"{tf}.eye_in", f"{tb}.eye_in"], "wheel": f"{leg}_whl2",
+                "closes": {f"{tf}_beta": "toe_max", f"{tb}_beta": "toe_max"}}
 
     def keep(d):
         return {k: v for k, v in d.items() if MOTION is None or k.startswith(MOTION)}
 
     return {"parts": parts, "datums": datums, "assembly": assembly,
-            "joints": keep(joints), "loops": keep(loops), "gears": keep(gears), "tendons": keep(tendons)}
+            "joints": keep(joints), "loops": keep(loops), "gears": keep(gears), "tendons": keep(tendons),
+            "cables": keep(cables)}

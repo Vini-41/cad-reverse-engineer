@@ -66,8 +66,6 @@ evidence:
     locator: "Sec. 2.1, tendon servo"
     quote: "when the claw is fully closed, the tendon shortening is approximately 38 mm"
     values: {stroke: 38}
-    scope: not-modeled
-    reason: "the stroke of the cable tendons, which wind on the servo steering wheels; the cables are not built, since a cadrev tendon is an elastic cord fixed between datums and cannot wind on a spool"
   - id: fig2d-width
     source: paper
     page: 4
@@ -198,11 +196,12 @@ evidence:
     quote: "Kevlar (0.5 mm, Dupont) selected for the passive tendons due to its high tensile strength and low elongation, and Dyneema (0.35 mm, Beadalon) adopted for the active tendons"
     values: {d_passive: 0.5, d_active: 0.35}
     scope: not-modeled
-    reason: "diameters of the cable tendons, which are not built (see P3-tendon-stroke)"
+    reason: "diameters of the tendon cords; a cable is a path through datums, without a cross-section, and the passive tendon is not built (see the skipped p. 3 inequality)"
 
 skipped:
   - {source: paper, page: 3, quote: "perches on a tree branch ( ∼ 75 mm diameter, 5◦ tilt)", reason: "field-test branch, not the object"}
   - {source: paper, page: 3, quote: "mounted on a UAV with a 450 mm wheelbase and a total takeoff weight of approximately 1.2 kg (recommended range, 1–1.5 kg)", reason: "the carrier UAV"}
+  - {source: paper, page: 3, quote: "For the drone to achieve passive perching, the maximum tendon elongation must exceed the shortening produced during branch grasping", reason: "the passive (red, Fig. 2A) leg tendon, whose only statement is this inequality (Eq. 1); nothing checks it, so it is not built"}
   - {source: paper, page: 3, quote: "the landing gear accounts for ∼ 24.7 % of the total vehicle mass", reason: "mass fraction relative to the UAV, a derived result"}
   - {source: paper, page: 5, from: "At tilt angles of 0◦ and 10◦", to: "improvement of ∼ 567 %", reason: "perching test loads, tilt angles, branch diameters and results"}
   - {source: paper, pages: [6, 7, 8, 9], reason: "test results, torque and energy experiments, grasping and flight experiments"}
