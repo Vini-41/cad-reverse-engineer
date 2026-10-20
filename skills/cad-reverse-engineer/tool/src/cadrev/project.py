@@ -897,7 +897,7 @@ def check_physics_sources(p: Project, model_reads: set[str]) -> None:
 
 def check_weighed_sources(p: Project, before: set[str], model_reads: set[str]) -> None:
     """After run_checks, [unchecked-source] for the params that only the checks' reading before
-    the build (before) covers: there, a mass check naming no parts reads every part's mass model
+    the build (before) checks: there, a mass check naming no parts reads every part's mass model
     params, here only those of the parts it weighs (Project.weighed). model_reads is as
     check_physics_sources takes it."""
 

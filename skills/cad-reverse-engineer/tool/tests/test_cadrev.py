@@ -4488,14 +4488,26 @@ def test_guard_mass_check_weighing_the_crank_covers_its_mass_param(proj_dir, tmp
     assert UNCHECKED_CRANK_MASS not in printed
 
 
-@pytest.mark.parametrize("flag", ["--no-build", "--no-coverage"])
-def test_guard_partial_run_leaves_a_mass_check_over_instances_covering_every_part(
-    proj_dir, tmp_path, flag
+def _partial(root: Path, flag: str) -> list[str]:
+    """What a partial run with flag prints, after showing it is partial: exit 1, no report."""
+    code, printed = _found(root, flag)
+    assert code == 1 and not (root / "build" / "report.json").exists(), printed
+    assert not (root / "build" / "report.md").exists()
+    return printed
+
+
+def test_guard_run_without_the_build_leaves_a_mass_check_over_instances_checking_every_part(
+    proj_dir, tmp_path
 ):
     _ground_weighed(proj_dir, tmp_path, {"instances": ["ground_1"]})
-    code, printed = _found(proj_dir, flag)
-    assert code == 1 and UNCHECKED_CRANK_MASS not in printed
-    assert not any((proj_dir / "build" / name).exists() for name in ("report.md", "report.json"))
+    assert UNCHECKED_CRANK_MASS not in _partial(proj_dir, "--no-build")
+
+
+def test_run_without_the_coverage_sweep_still_checks_only_the_parts_a_mass_check_weighs(
+    proj_dir, tmp_path
+):
+    _ground_weighed(proj_dir, tmp_path, {"instances": ["ground_1"]})
+    assert _partial(proj_dir, "--no-coverage").count(UNCHECKED_CRANK_MASS) == 1
 
 
 def test_source_param_feeding_only_an_unweighed_parts_mass_through_a_derived_one_is_unchecked(

@@ -93,7 +93,7 @@ Take one closed loop all the way through before declaring any other joint: the t
 Then the rest:
 
 - **Joints and loops** for every other ring, and a posed check for every value a source states at a joint angle or stroke. Give each joint the [type](references/modeling.md#joints-and-loops) of how its child moves, so only what moves gets a drive, couple joints that meshed gears or a belt turn together with a gear, and joints a cable wound on a servo wheel closes with a cable, its stated stroke checked by a [`stroke` check](references/project-format.md#poses-and-the-mjcf-export).
-- **Ranges.** Read each stated range into its joint's `source` range params, confirm it with a `range` check that covers them, and sweep interference across each ranged joint ([Ranges and sweeps](references/project-format.md#ranges-and-sweeps)).
+- **Ranges.** Read each stated range into its joint's `source` range params, confirm it with a `range` check that checks them, and sweep interference across each ranged joint ([Ranges and sweeps](references/project-format.md#ranges-and-sweeps)).
 - **Physics values** go in the joint or tendon slot that applies them, each a param marked `physics: true` ([Physics values](references/project-format.md#physics-values)). A value no source states is proposed, with a gap.
 
 On a `[loop-open]` or `[joint-range]` at a stated pose or range end, fix the link lengths, the ranges or the as-built zero. Near a toggle (two links collinear) the solve itself can fail on links that do close; report that end to the user rather than trimming a stated range.

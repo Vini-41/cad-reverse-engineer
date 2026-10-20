@@ -96,6 +96,10 @@ _Avoid_: state, configuration (for the values themselves)
 One comparison between the built geometry and a ledger value: an envelope, a distance or an angle between datums, a mass or an interference.
 _Avoid_: test, assertion
 
+**Checked param**:
+A param some check reads, itself or through a param derived from it, or whose ledger value some check compares. A source param that is not one is unchecked.
+_Avoid_: covered (by a check), confirmed (by a check)
+
 **Tolerance**:
 How far the value a check evaluates may stray from its ledger value and still pass; one other than the default is shown beside its check. An interference check compares with no ledger value, so its overlap limit is not a tolerance, though one other than the default is shown beside its check too.
 _Avoid_: margin, allowance
