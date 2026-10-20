@@ -141,11 +141,41 @@ def test_guard_hole_test_counts_red(tmp_path):
     assert "1 red (holes), 0 green" in result.stdout
 
 
-def test_branch_with_no_upstream_compares_against_its_merge_base_with_main(tmp_path):
+def test_guard_branch_with_no_upstream_or_reflog_compares_against_its_merge_base_with_main(
+    tmp_path,
+):
     root = repo(tmp_path, dependencies='"pytest"')
-    git(root, "switch", "-qc", "ticket")
+    git(root, "-c", "core.logAllRefUpdates=false", "switch", "-qc", "ticket")
     git(root, "branch", "-f", "main", "HEAD~1")
     result = red_on_main(root, base=None)
     assert result.returncode == 0, result.stderr
     assert "1 red (holes), 0 green" in result.stdout
     assert "merge-base with main" in result.stdout
+
+
+def test_branch_cut_from_another_branch_compares_against_where_it_was_created(tmp_path):
+    root = repo(tmp_path, dependencies='"pytest"')
+    git(root, "branch", "-f", "main", "HEAD~1")
+    git(root, "switch", "-qc", "ticket")
+    commit(
+        root,
+        {
+            f"{TOOL}/tests/test_double.py": (
+                f"{BASE_TESTS}\n\ndef test_guard_double_of_two():\n    assert double(2) == 4\n"
+            )
+        },
+    )
+    result = red_on_main(root, base=None)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "0 red (holes), 1 green" in result.stdout
+    assert "the commit ticket was created at" in result.stdout
+
+
+def test_guard_branch_that_merged_main_since_it_was_created_compares_against_main(tmp_path):
+    root = repo(tmp_path, dependencies='"pytest"')
+    git(root, "branch", "-f", "main", "HEAD")
+    git(root, "switch", "-qc", "ticket", "HEAD~1")
+    git(root, "merge", "-q", "--no-ff", "-m", "merge main", "main")
+    result = red_on_main(root, base=None)
+    assert result.returncode == 3, result.stdout + result.stderr
+    assert "no test function is new or changed since merge-base with main" in result.stderr

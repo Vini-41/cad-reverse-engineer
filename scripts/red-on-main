@@ -18,7 +18,10 @@
 #
 # BASE is the commit before the fix: by default the upstream branch (origin/main), so unpushed
 # commits on main count as the fix. A branch with no upstream, such as a worktree's, compares
-# against its merge-base with main. Set BASE=<ref> to compare against another commit.
+# against the commit its reflog says it was created at, so a branch cut from an integration branch
+# counts only its own commits as the fix; without that record, or once the branch has merged a
+# later main or been rebased, it compares against its merge-base with main. Set BASE=<ref> to
+# compare against another commit.
 set -euo pipefail
 
 repo=$(git rev-parse --show-toplevel)
@@ -37,6 +40,16 @@ elif base=$(git -C "$repo" rev-parse -q --verify "@{upstream}" 2>/dev/null); the
 else
   label="merge-base with main"
   base=$(git -C "$repo" merge-base HEAD main)
+  # The commit the branch was created at, from the oldest entry of its reflog, when that entry
+  # records the creation and the branch still contains it (a rebase drops it).
+  branch=$(git -C "$repo" symbolic-ref -q --short HEAD || true)
+  created=$( [ -z "$branch" ] || git -C "$repo" log -g --format='%H %gs' "refs/heads/$branch" -- 2>/dev/null | tail -n 1 || true)
+  if [[ "$created" == *" branch: Created from "* ]] && created=${created%% *} &&
+    git -C "$repo" merge-base --is-ancestor "$base" "$created" &&
+    git -C "$repo" merge-base --is-ancestor "$created" HEAD; then
+    label="the commit $branch was created at"
+    base=$created
+  fi
 fi
 if [ "$base" = "$(git -C "$repo" rev-parse HEAD)" ] && git -C "$repo" diff --quiet HEAD -- "$tool/src"; then
   echo "BASE is HEAD and the tool source is unchanged, so there is no fix to compare; set BASE=<ref>" >&2
