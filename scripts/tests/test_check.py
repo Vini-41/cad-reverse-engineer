@@ -62,4 +62,14 @@ def test_a_failed_step_reprints_the_end_of_its_output_under_its_name(tmp_path):
     assert result.returncode == 1
     name = "failed: the skill and tool source use none of GLOSSARY.md's avoided words"
     block = result.stdout.split(name + "\n")[1].split("failed: ")[0].splitlines()
-    assert block == [f"  line {i}" for i in range(11, 31)]
+    rerun = "  rerun alone: (cd skills/cad-reverse-engineer/tool && ../../../scripts/check-glossary-words)"
+    assert block == [rerun, *(f"  line {i}" for i in range(11, 31))]
+
+
+def test_a_failed_step_that_runs_a_function_names_the_script_that_reruns_it(tmp_path):
+    result, _ = check(tmp_path, failing={"red-on-main": "misnamed\\n"})
+    assert result.returncode == 1
+    name = "failed: red-on-main: new tests are red holes or green guards"
+    assert (
+        result.stdout.split(name + "\n")[1].splitlines()[0] == "  rerun alone: scripts/red-on-main"
+    )

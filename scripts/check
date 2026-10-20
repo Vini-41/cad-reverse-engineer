@@ -16,18 +16,23 @@ cd "$repo/skills/cad-reverse-engineer/tool" || exit 2
 uv sync --locked --extra test || { echo "uv sync --locked --extra test failed, so no step ran"; exit 1; }
 failed=()
 failed_logs=() # each failed step's output, whose end the summary reprints under its name
+failed_reruns=() # each failed step's command, run alone from the repo root
 logs=$(mktemp -d)
 steps=0
 trap 'rm -rf "$logs"' EXIT
 
+# step NAME [--rerun COMMAND] CMD...: COMMAND, from the repo root, runs the step alone; by default
+# CMD in the tool directory. A step that runs a function here names its COMMAND.
 step() {
-  local name=$1 log
+  local name=$1 rerun log
   shift
+  rerun="(cd skills/cad-reverse-engineer/tool && $*)"
+  if [ "$1" = --rerun ]; then rerun=$2; shift 2; fi
   steps=$((steps + 1))
   log="$logs/$steps"
   echo "== $name"
   "$@" 2>&1 | tee "$log"
-  [ "${PIPESTATUS[0]}" -eq 0 ] || { failed+=("$name"); failed_logs+=("$log"); }
+  [ "${PIPESTATUS[0]}" -eq 0 ] || { failed+=("$name"); failed_logs+=("$log"); failed_reruns+=("$rerun"); }
 }
 
 # Fails unless cadrev check on example prints the status line its README states.
@@ -74,21 +79,25 @@ step "agent-facing docs point only at files that exist" ../../../scripts/check-d
 step "every rule is tested raised and not raised, documented and held by a step; tests use only the CLI and edit fixtures through swap" \
   uv run python ../../../scripts/rule-coverage
 step "the skill and tool source use none of GLOSSARY.md's avoided words" ../../../scripts/check-glossary-words
-step "plugin manifests validate" plugin_validate
-step "red-on-main: new tests are red holes or green guards" red_on_main_or_notice
+step "plugin manifests validate" --rerun "claude plugin validate ." plugin_validate
+step "red-on-main: new tests are red holes or green guards" --rerun scripts/red-on-main \
+  red_on_main_or_notice
 # The examples as a clone after committing holds them: tracked and staged files at their staged text.
 if examples=$(../../../scripts/committed-examples); then
-  step "examples/legclaw-links reaches its documented status" example_status "$examples/legclaw-links"
-  step "examples/legclaw reaches its documented status" example_status "$examples/legclaw"
+  for example in legclaw-links legclaw; do
+    step "examples/$example reaches its documented status" \
+      --rerun "scripts/cadrev check examples/$example" example_status "$examples/$example"
+  done
   rm -rf "$(dirname "$examples")"
 else
   failed+=("the examples copy as a clone holds them")
   failed_logs+=(/dev/null)
+  failed_reruns+=(scripts/committed-examples)
 fi
 
 if [ ${#failed[@]} -gt 0 ]; then
   for i in "${!failed[@]}"; do
-    printf 'failed: %s\n' "${failed[$i]}"
+    printf 'failed: %s\n  rerun alone: %s\n' "${failed[$i]}" "${failed_reruns[$i]}"
     tail -n 20 "${failed_logs[$i]}" | sed 's/^/  /'
   done
   exit 1

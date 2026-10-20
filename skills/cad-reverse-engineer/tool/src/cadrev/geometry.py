@@ -443,6 +443,7 @@ def build(p: Project) -> Built | None:
     if flawed or problem:
         built.joints, built.loops, built.tendons, built.gears, built.cables = {}, {}, {}, {}, {}
         built.dropped = True
+    _cables_on_axes(p, built)
     _joint_values(p, built)
     built.masses = _mass_model(p, built)
     return built
@@ -700,6 +701,37 @@ def _cable_flaw(p: Project, built: Built, cable: dict, closed_by: dict) -> str |
         if param not in p.values:
             return f"closes {joint} to {param}, which params.yaml does not define"
     return None
+
+
+def _cables_on_axes(p: Project, built: Built) -> None:
+    """[cable-on-axis] for each path datum of a cable that lies on the axis of a revolute joint the
+    cable closes and turns with it: turning that joint leaves the cable's length unchanged."""
+    from build123d import Location, Vector
+
+    def placed(datum: str) -> Vector:
+        inst, point = located(built, datum)
+        return (built.assembly[inst][1] * Location(point)).position
+
+    for name, cable in built.cables.items():
+        for joint in cable.get("closes", {}):
+            hinge = built.joints[joint]
+            if joint_type(hinge).quantity != "angle":
+                continue
+            turned, grew = {hinge["child"]}, True  # the instances the joint turns
+            while grew:
+                below = {j["child"] for j in built.joints.values() if j["parent"] in turned}
+                grew, turned = not below <= turned, turned | below
+            a, b = (placed(d) for d in hinge["axis"])
+            for datum in cable["path"]:
+                if located(built, datum)[0] in turned:
+                    off = (placed(datum) - a).cross((b - a).normalized()).length
+                    if off <= p.length_tol:
+                        p.warn(
+                            "cable-on-axis",
+                            f"cable {name}: {datum} lies on the axis of {joint}, which it closes, "
+                            f"so turning {joint} leaves the cable's length unchanged; lay the path "
+                            "through a datum off that axis, such as a guide's eye on a face",
+                        )
 
 
 def _cable_flaws(p: Project, built: Built) -> bool:

@@ -229,7 +229,9 @@ def test_findings_rows_out_of_order_fail(tmp_path):
     first, second = rows.splitlines(keepends=True)
     result = check(repo(tmp_path, tests=tests.replace(rows, second + first)))
     assert result.returncode == 1
-    assert result.stdout.splitlines()[1:] == ["FINDINGS row [too-long] comes before [open-end]"]
+    assert result.stdout.splitlines()[1:] == [
+        "FINDINGS row [open-end] sorts before [too-long] above it; move it first, above [too-long]"
+    ]
 
 
 def test_table_key_the_case_comprehension_makes_no_case_of_fails(tmp_path):

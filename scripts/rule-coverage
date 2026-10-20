@@ -27,6 +27,7 @@ module's tables where it can be; a test or case marked skip, skipif or xfail ass
 from __future__ import annotations
 
 import ast
+import bisect
 import math
 import os
 import re
@@ -346,7 +347,7 @@ def unread_units() -> list[str]:
 
 
 def unsorted_findings() -> list[str]:
-    """The first FINDINGS row whose rule sorts before the row above it."""
+    """The first FINDINGS row whose rule sorts before the row above it, and where it belongs."""
     for path in sorted(TESTS.glob("test_*.py")):
         for node in ast.parse(path.read_text(encoding="utf8")).body:
             if (
@@ -357,7 +358,18 @@ def unsorted_findings() -> list[str]:
                 keys = [k.value for k in node.value.keys if isinstance(k, ast.Constant)]
                 for above, row in zip(keys, keys[1:]):
                     if row < above:
-                        return [f"FINDINGS row [{above}] comes before [{row}]"]
+                        others = sorted(k for k in keys if k != row)
+                        at = bisect.bisect_left(others, row)
+                        after, before = others[at - 1 : at] or [None], others[at : at + 1] or [None]
+                        if after[0] is None:
+                            where = f"first, above [{before[0]}]"
+                        elif before[0] is None:
+                            where = f"last, below [{after[0]}]"
+                        else:
+                            where = f"between [{after[0]}] and [{before[0]}]"
+                        return [
+                            f"FINDINGS row [{row}] sorts before [{above}] above it; move it {where}"
+                        ]
     return []
 
 

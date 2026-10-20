@@ -6356,6 +6356,18 @@ def test_stroke_check_on_a_cable_with_no_wheel_needs_a_pose(proj_dir, tmp_path):
     )
 
 
+def test_cable_through_a_datum_on_the_axis_of_a_joint_it_closes_is_cable_on_axis(
+    proj_dir, tmp_path
+):
+    # toe_1.a_up lies on toe1's hinge: turning toe1 leaves it, and so the cable, where it was.
+    cabled(proj_dir, tmp_path, swap(_CABLE, '"spool_1.d", "tip_1.d"', '"spool_1.d", "toe_1.a_up"'))
+    assert findings(proj_dir, "cable-on-axis") == [
+        "cable pull: toe_1.a_up lies on the axis of toe1, which it closes, so turning toe1 leaves "
+        "the cable's length unchanged; lay the path through a datum off that axis, such as a "
+        "guide's eye on a face"
+    ]
+
+
 def test_report_carries_each_cable_with_its_wheel_and_closed_values(proj_dir, tmp_path):
     cabled(proj_dir, tmp_path)
     _, report = verify(proj_dir)
@@ -6516,6 +6528,14 @@ FINDINGS = {
     "assembly-part": (
         _assembly('{"link_1": ("pin", Location())}'),
         [_assembly('{"pin": ("link", Location())}')],
+    ),
+    "cable-on-axis": (
+        lambda r, t: cabled(r, t, swap(_CABLE, '"tip_1.d"', '"toe_1.a_up", "tip_1.d"')),
+        [
+            # off the axis, on the joint's child; on the axis of the wheel, which no cable closes
+            cabled,
+            lambda r, t: cabled(r, t, swap(_CABLE, '"spool_1.d"', '"spool_1.a"')),
+        ],
     ),
     "check-config": (_check("pitch", along="w"), [_check("pitch", along="x")]),
     "check-failed": (_weighs("2.0"), [_weighs("1.8")]),
