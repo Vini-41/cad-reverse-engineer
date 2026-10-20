@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""Show that a refactor leaves cadrev's verdicts alone: run cadrev check on each example with the
+tool source at BASE and as in the working tree, and compare the build/report.json each writes, its
+checks entries exactly and its findings as a sorted list, so findings may only change order.
+
+Both runs use the working tree's examples and its tool environment; only the tool source differs.
+Prints each example as same or as the first difference, and exits 0 when every example is the same,
+1 when one differs, 2 when a run writes no report.json, and 3 when there is nothing to compare: the
+tool source is the same at BASE as in the working tree, or BASE is not in this clone.
+
+    scripts/same-reports [example dir ...]     default: every examples/*/ holding a project.yaml
+
+BASE is the commit before the refactor: by default the upstream branch (origin/main), so unpushed
+commits count as the refactor, else the merge-base with main. Set BASE=<ref> for another commit.
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from collections import Counter
+from pathlib import Path
+
+TOOL = "skills/cad-reverse-engineer/tool"
+MAIN = "import sys; from cadrev.cli import main; sys.exit(main(sys.argv[1:]))"
+
+
+def git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+
+
+def base_commit(repo: Path) -> tuple[str, str] | None:
+    """BASE as (commit, how it was chosen); None when BASE names no commit in this clone."""
+    if os.environ.get("BASE"):
+        label, ref = os.environ["BASE"], os.environ["BASE"]
+    elif git(repo, "rev-parse", "-q", "--verify", "@{upstream}").returncode == 0:
+        label, ref = "upstream", "@{upstream}"
+    else:
+        label, ref = "merge-base with main", git(repo, "merge-base", "HEAD", "main").stdout.strip()
+    found = git(repo, "rev-parse", "-q", "--verify", f"{ref}^{{commit}}")
+    return (found.stdout.strip(), label) if found.returncode == 0 and ref else None
+
+
+def check(repo: Path, src: Path, example: Path) -> tuple[dict | None, str]:
+    """cadrev check on example with the tool source in src: its report.json, None if it wrote
+    none, and what it printed."""
+    run = subprocess.run(
+        ["uv", "run", "-q", "--project", str(repo / TOOL), "python", "-c", MAIN, "check", "."],
+        cwd=example,
+        env={**os.environ, "PYTHONPATH": str(src)},
+        capture_output=True,
+        text=True,
+    )
+    report = example / "build" / "report.json"
+    return (json.loads(report.read_text()) if report.exists() else None), run.stdout + run.stderr
+
+
+def difference(base: dict, head: dict) -> str | None:
+    """The first difference between two reports' checks, or between their sorted findings."""
+    for i, (old, new) in enumerate(zip(base["checks"], head["checks"])):
+        if old != new:
+            return (
+                f"checks[{i}] ({old.get('id')}): {json.dumps(old)} at BASE, {json.dumps(new)} now"
+            )
+    if len(base["checks"]) != len(head["checks"]):
+        return f"{len(base['checks'])} checks at BASE, {len(head['checks'])} now"
+    old, new = (Counter(json.dumps(f, sort_keys=True) for f in r["findings"]) for r in (base, head))
+    if old != new:
+        gone, added = sorted((old - new).elements()), sorted((new - old).elements())
+        return f"findings only at BASE: {gone or 'none'}; only now: {added or 'none'}"
+    return None
+
+
+def main() -> int:
+    repo = Path(git(Path.cwd(), "rev-parse", "--show-toplevel").stdout.strip())
+    base = base_commit(repo)
+    if base is None:
+        print(
+            f"BASE {os.environ.get('BASE')} is not in this clone, so nothing to compare",
+            file=sys.stderr,
+        )
+        return 3
+    commit, label = base
+    if git(repo, "diff", "--quiet", commit, "--", f"{TOOL}/src").returncode == 0:
+        print(
+            f"the tool source is the same at {label} as here, so nothing to compare",
+            file=sys.stderr,
+        )
+        return 3
+    named = [Path(a).resolve() for a in sys.argv[1:]]
+    examples = named or sorted(p.parent for p in (repo / "examples").glob("*/project.yaml"))
+    print(f"tool source at {label} ({commit[:7]}) and in the working tree")
+    with tempfile.TemporaryDirectory() as tmp:
+        side = {name: Path(tmp) / name for name in ("base", "head")}
+        archive = subprocess.run(
+            ["git", "-C", str(repo), "archive", commit, f"{TOOL}/src"], capture_output=True
+        )
+        subprocess.run(["tar", "-x", "-C", tmp], input=archive.stdout, check=True)
+        src = {"base": Path(tmp) / TOOL / "src", "head": repo / TOOL / "src"}
+        for root in side.values():
+            ignored = shutil.ignore_patterns("build", "__pycache__")
+            shutil.copytree(repo / "examples", root / "examples", ignore=ignored)
+        code = 0
+        for example in examples:
+            where = example.relative_to(repo / "examples")
+            reports = {}
+            for name, root in side.items():
+                reports[name], printed = check(repo, src[name], root / "examples" / where)
+                if reports[name] is None:
+                    print(f"examples/{where}: no report.json with the tool source at {name}:")
+                    print("\n".join(printed.splitlines()[-20:]))
+                    return 2
+            base_report, head_report = reports["base"], reports["head"]
+            assert base_report is not None and head_report is not None
+            differs = difference(base_report, head_report)
+            if differs:
+                print(f"examples/{where}: differs, {differs}")
+                code = 1
+            else:
+                checks, findings = len(head_report["checks"]), len(head_report["findings"])
+                print(f"examples/{where}: same ({checks} checks, {findings} findings)")
+        return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())
