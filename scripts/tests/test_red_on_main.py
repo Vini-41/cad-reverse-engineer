@@ -1,4 +1,5 @@
-"""scripts/red-on-main, run on a small git repo laid out like this one, with a fix in its last commit."""
+"""scripts/red-on-main, run on a small git repo laid out like this one, with a fix in its last
+commit."""
 
 import os
 import subprocess

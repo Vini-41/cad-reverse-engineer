@@ -321,7 +321,8 @@ def write(
     awaiting = awaiting_confirmation(p)
     if status == PENDING_REVIEW:
         md += [
-            f"PENDING REVIEW: {len(awaiting)} figure readings await human confirmation, listed below. "
+            f"PENDING REVIEW: {len(awaiting)} figure readings await human confirmation, "
+            "listed below. "
             "Once a named reviewer has checked each against its crop and written `confirmed_by`, "
             "the project is VERIFIED.",
             "",
@@ -360,7 +361,8 @@ def write(
     md += ["## Model literal override", ""]
     md += (
         [
-            f"project.yaml `model_literals` allows {', '.join(f'{v:g}' for v in override)} in model.py, "
+            "project.yaml `model_literals` allows "
+            f"{', '.join(f'{v:g}' for v in override)} in model.py, "
             f"in place of the default {', '.join(f'{v:g}' for v in MODEL_LITERALS)}.",
             "",
         ]

@@ -67,7 +67,10 @@ def test_a_failed_step_reprints_the_end_of_its_output_under_its_name(tmp_path):
     assert result.returncode == 1
     name = "failed: the skill and tool source use none of GLOSSARY.md's avoided words"
     block = result.stdout.split(name + "\n")[1].split("failed: ")[0].splitlines()
-    rerun = "  rerun alone: (cd skills/cad-reverse-engineer/tool && ../../../scripts/check-glossary-words)"
+    rerun = (
+        "  rerun alone: "
+        "(cd skills/cad-reverse-engineer/tool && ../../../scripts/check-glossary-words)"
+    )
     assert block == [rerun, *(f"  line {i}" for i in range(11, 31))]
 
 

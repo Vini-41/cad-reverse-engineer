@@ -34,7 +34,10 @@ DERIVED = {
 }
 
 # "in" before a determiner is the word ("4 in total", "2 in each leg"), not inches.
-INCH_IN = r"in(?!\s(?:the|a|an|each|every|all|total|both|this|that|these|those|its|their|which|series|parallel)\b)"
+INCH_IN = (
+    r"in(?!\s(?:the|a|an|each|every|all|total|both|this|that|these|those|its|their|which"
+    r"|series|parallel)\b)"
+)
 _SEP = r"(?:\s?[·⋅*]\s?|[.-])?"  # between the parts of a compound unit: N·m, kg ·cm, N.m, Nm
 _CUBED = r"(?:3|\^3)"  # NFKC turns ³ into 3
 _PER_CC = rf"(?:/\s?cm{_CUBED}|/\s?cc|/\s?ml|{_SEP}cm-3)"  # g/cm³, g/cc, g/ml, g·cm⁻³
@@ -149,7 +152,8 @@ def declared(q, spelled) -> tuple[str | None, str]:
     if q not in BASE:
         return (
             None,
-            f"units sets {', '.join(BASE)}; other quantities follow from them (torque in force × length)",
+            f"units sets {', '.join(BASE)}; "
+            "other quantities follow from them (torque in force × length)",
         )
     unit = named(spelled) if isinstance(spelled, str) else None
     if unit is None:
@@ -163,7 +167,8 @@ def declared(q, spelled) -> tuple[str | None, str]:
 
 
 def size(q: str, chosen: dict[str, str]) -> float:
-    """The SI size of one project unit of quantity q, given the unit chosen for each base quantity."""
+    """The SI size of one project unit of quantity q, given the unit chosen for each base
+    quantity."""
     if q in BASE:
         return UNITS[chosen.get(q, BASE[q])].si
     out = 1.0

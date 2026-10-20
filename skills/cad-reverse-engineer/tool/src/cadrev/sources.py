@@ -22,7 +22,8 @@ _TIMES = dict.fromkeys(map(ord, "×✕✖⨯"), "x")
 # stays a value, and a number followed by a unit ("section 4 mm thick") is a value; "in" and
 # the inch mark are left out there, so "Fig. 2 in" stays a label.
 _UNIT = units.spelling()
-# A number as printed: 3.5, or a fraction before a unit (1/4 inch, 1 1/2 in, 1/4-in.; a bare 1/50 is two).
+# A number as printed: 3.5, or a fraction before a unit (1/4 inch, 1 1/2 in, 1/4-in.; a bare 1/50
+# is two).
 _NUMBER = re.compile(rf"-?(?:\d+\s)?\d+/[1-9]\d*(?={units.UNIT_GAP}{_UNIT})|-?\d+(?:\.\d+)?")
 # The cardinals zero to ninety-nine in words, whole: eight is not read inside eighteen or weight,
 # nor seven inside seventy. A compound may be hyphenated, spaced, or re-joined across a line break.
@@ -169,9 +170,10 @@ def _tokens(text: str) -> list[_Token]:
 
 
 def quantities_in(text: str) -> list[tuple[float, str | None]]:
-    """The values a quote states, each with the unit printed after it (None if none):
-    whole numeric tokens and number words from zero to ninety-nine, both endpoints of a range as
-    positive values, and no number that labels a figure, table, equation or section. The numbers of a range or product share its last unit."""
+    """The values a quote states, each with the unit printed after it (None if none): whole numeric
+    tokens and number words from zero to ninety-nine, both endpoints of a range as positive
+    values, and no number that labels a figure, table, equation or section. The numbers of a
+    range or product share its last unit."""
     return [(t.value, t.unit) for t in _tokens(normalize(text)) if not t.labelled]
 
 

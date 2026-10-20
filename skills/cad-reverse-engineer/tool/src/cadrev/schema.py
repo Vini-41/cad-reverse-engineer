@@ -195,7 +195,8 @@ def _is(value, spec) -> bool:
 
 
 def conform(value, spec, where: str, problems: list[str]):
-    """value with null record keys dropped; each mismatch appended to problems as 'where: message'."""
+    """value with null record keys dropped; each mismatch appended to problems as 'where:
+    message'."""
     if isinstance(spec, tuple):
         if any(_is(value, s) for s in spec):
             return value

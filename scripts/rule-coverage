@@ -465,7 +465,8 @@ def main() -> int:
         for rule in sorted(rules - documented())
     ]
     problems += [
-        f"[{rule}] is an error no completion criterion of SKILL.md names, as [{rule}] or a [prefix-*]"
+        f"[{rule}] is an error no completion criterion of SKILL.md names, "
+        f"as [{rule}] or a [prefix-*]"
         for rule in unheld_errors()
     ]
     problems += unsorted_findings()
@@ -477,7 +478,8 @@ def main() -> int:
     ]
     print(
         f"{len(rules)} rules emitted; "
-        f"{sum(bool(asserts.present[r] and asserts.absent[r]) for r in rules)} asserted both present and absent"
+        f"{sum(bool(asserts.present[r] and asserts.absent[r]) for r in rules)} "
+        "asserted both present and absent"
     )
     for p in problems:
         print(p)

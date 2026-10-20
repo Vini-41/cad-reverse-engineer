@@ -48,12 +48,13 @@ def _mass_reads(p: Project, c: dict, weighs: tuple[str, ...] | None = None) -> l
 class CheckKind:
     """What a kind of check compares with the geometry: evidence values of quantity, within tol,
     which defaults to project.yaml's tolerance.<tolerance>; or, where tolerance is None, within
-    tol_rel, a fraction of the value, which has no default. reads gives the params a check of
-    the kind reads itself, given the parts a mass check weighs where known; span_capped caps its
-    tol against the span between the two values it compares, rather than against each. A
-    joint_valued check without between compares its joint's own value, so quantity and tolerance
-    are its joint's: an angle for a revolute joint, a length for a slide. between_two, where set, is the quantity and tolerance of a check whose
-    between names two datums rather than three: a distance."""
+    tol_rel, a fraction of the value, which has no default. reads gives the params a check of the
+    kind reads itself, given the parts a mass check weighs where known; span_capped caps its tol
+    against the span between the two values it compares, rather than against each. A joint_valued
+    check without between compares its joint's own value, so quantity and tolerance are its
+    joint's: an angle for a revolute joint, a length for a slide. between_two, where set, is the
+    quantity and tolerance of a check whose between names two datums rather than three: a
+    distance."""
 
     quantity: str
     tolerance: str | None
@@ -174,7 +175,8 @@ class Project:
 
     @property
     def units(self) -> dict[str, str]:
-        """The unit of each base quantity: the project's where it names a valid one, else the default."""
+        """The unit of each base quantity: the project's where it names a valid one, else the
+        default."""
         out = dict(units.BASE)
         for q, spelled in (self.meta.get("units") or {}).items():
             unit, _ = units.declared(q, spelled)
@@ -207,12 +209,14 @@ class Project:
         )
 
     def unit_of(self, ref: str) -> str | None:
-        """The unit an evidence value is printed in; None (the project's units) if none is printed."""
+        """The unit an evidence value is printed in; None (the project's units) if none is
+        printed."""
         printed = self.printed_units(ref)
         return printed[0] if printed else None
 
     def evidence_value(self, ref: str) -> float | None:
-        """An evidence value in the project's units, converted from the unit printed in its quote."""
+        """An evidence value in the project's units, converted from the unit printed in its
+        quote."""
         ledgered = self._ledgered(ref)
         if ledgered is None:
             return None
@@ -793,7 +797,8 @@ def _tolerance_bases(p: Project, c: dict) -> list[tuple[str, float | None]]:
 
 
 def check_tolerances(p: Project) -> None:
-    """No check is loosened past the cap: tol to TOL_CAP of each value it compares, tol_rel to TOL_REL_CAP."""
+    """No check is loosened past the cap: tol to TOL_CAP of each value it compares, tol_rel to
+    TOL_REL_CAP."""
     for c in p.checks:
         cid, tolerance = c.get("id", "?"), check_tolerance(p, c)
         if tolerance is None:
@@ -863,9 +868,9 @@ def check_accounting(p: Project) -> None:
 
 
 def _unchecked_geometry(p: Project, read: set[str]) -> set[str]:
-    """The params that no check feeds, where read is the params the checks read. A check compares what its params feed with the
-    ledger; no check sees a physics value, nor the params that feed only physics values, unless
-    model.py reads them (_unchecked_physics)."""
+    """The params that no check feeds, where read is the params the checks read. A check compares
+    what its params feed with the ledger; no check sees a physics value, nor the params that feed
+    only physics values, unless model.py reads them (_unchecked_physics)."""
     return p.params.keys() - _feeding(p, read) - p.physics - physics_only(p)
 
 

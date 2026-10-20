@@ -115,7 +115,8 @@ def test_error_no_done_line_of_skill_md_names_fails(tmp_path):
     result = check(repo(tmp_path, skill_md=SKILL_MD.replace("[too-long]", "[open-end]")))
     assert result.returncode == 1
     assert result.stdout.splitlines()[1:] == [
-        "[too-long] is an error no completion criterion of SKILL.md names, as [too-long] or a [prefix-*]"
+        "[too-long] is an error no completion criterion of SKILL.md names, "
+        "as [too-long] or a [prefix-*]"
     ]
 
 

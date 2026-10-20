@@ -1,4 +1,5 @@
-"""scripts/ci-wait, run in a one-commit repo against a fake gh that reads GitHub's state from JSON."""
+"""scripts/ci-wait, run in a one-commit repo against a fake gh that reads GitHub's state from
+JSON."""
 
 import json
 import os

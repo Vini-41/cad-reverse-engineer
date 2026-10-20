@@ -209,8 +209,8 @@ CABLE_KEYS = ("path", "wheel", "closes")
 
 
 def _motion_breach(result) -> str | None:
-    """Why build()'s joints, loops, gears, cables or tendons break the model contract, or None if they
-    keep it."""
+    """Why build()'s joints, loops, gears, cables or tendons break the model contract, or None if
+    they keep it."""
     for kind in ("joint", "loop", "gear", "cable"):
         for name in result.get(f"{kind}s", {}):
             if not isinstance(name, str):
@@ -328,7 +328,10 @@ def _contract_breach(result) -> str | None:
         if not isinstance(part, Shape):
             return f"part {name} must be a build123d shape, not {type(part).__name__}"
         if not re.fullmatch(r"[\w.-]+", str(name)):
-            return f"part name {name!r} must be letters, digits, '_', '.' or '-': it names build/parts/<name>.step"
+            return (
+                f"part name {name!r} must be letters, digits, '_', '.' or '-': "
+                "it names build/parts/<name>.step"
+            )
     for name, point in result.get("datums", {}).items():
         if not (
             isinstance(point, (tuple, list))
@@ -579,7 +582,10 @@ def _joint_flaw(p: Project, built: Built, joint: dict, moved_by: dict) -> str | 
             return f"axis {datum} is not a datum of its child {joint['child']}"
         points.append(built.datums[named[1]])
     if math.dist(*points) <= p.length_tol:
-        return f"axis {joint['axis'][0]} and {joint['axis'][1]} coincide, so they give the hinge no direction"
+        return (
+            f"axis {joint['axis'][0]} and {joint['axis'][1]} coincide, "
+            "so they give the hinge no direction"
+        )
     for param in joint.get("range", []):
         if param not in p.values:
             return f"range names {param}, which params.yaml does not define"

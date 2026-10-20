@@ -1854,7 +1854,8 @@ def test_project_of_an_unknown_format_has_no_other_file_read(proj_dir, capsys):
     write(proj_dir, "params.yaml", "params: [unclosed\n")
     assert cli.main(["check", str(proj_dir)]) == 1
     assert [line for line in capsys.readouterr().out.splitlines() if line.startswith("error:")] == [
-        "error: [format-unknown] project.yaml: format 2 is not one this cadrev reads (it reads format: 1)"
+        "error: [format-unknown] project.yaml: format 2 is not one this cadrev reads "
+        "(it reads format: 1)"
     ]
 
 
@@ -2541,7 +2542,8 @@ def test_guard_project_units_spelled_out_or_of_other_base_quantities(proj_dir, d
 
 
 def _model_reads(root: Path, tmp_path: Path, text: str) -> None:
-    """Ledger text as N1 (value 40) and feed it to the model as link_L, checked by the T1 envelope."""
+    """Ledger text as N1 (value 40) and feed it to the model as link_L, checked by the T1
+    envelope."""
     add_quote(root, tmp_path, text, text, {"v": 40})
     edit(root, "params.yaml", lambda d: d["params"]["link_L"].update({"from": "N1.v"}))
 
@@ -2789,8 +2791,8 @@ def test_guard_root_readme_shows_the_status_the_example_readme_documents():
         in root_readme
     )
     assert (
-        f"**{status}**: {errors} errors, {warnings} warnings. {passed}/{checks} geometry checks pass."
-        in root_readme
+        f"**{status}**: {errors} errors, {warnings} warnings. "
+        f"{passed}/{checks} geometry checks pass." in root_readme
     )
 
 
@@ -4373,8 +4375,8 @@ def test_mass_check_over_the_mass_model_off_its_stated_total_fails(proj_dir, tmp
 
 
 def test_mass_check_naming_nothing_weighs_what_the_mjcf_export_weighs(proj_dir, tmp_path):
-    """The four-bar with a second ground bar fixed a ground bar's length above the first: the check's total is the
-    sum of the exported bodies' masses, the ground bar weighed twice."""
+    """The four-bar with a second ground bar fixed a ground bar's length above the first: the
+    check's total is the sum of the exported bodies' masses, the ground bar weighed twice."""
     mujoco = importlib.import_module("mujoco")
 
     _total_mass("11.3")(proj_dir, tmp_path)
@@ -4440,8 +4442,8 @@ SERVO = "The crank servo weighs 7.5 g and the ground bar 1.05 g."
 
 
 def _ground_weighed(root: Path, tmp_path: Path, over: dict) -> None:
-    """The four-bar with its crank weighed by crank_mass, a source param from
-    N1.servo, and one mass check, ground-mass, of what over names against the ground bar's 1.05 g."""
+    """The four-bar with its crank weighed by crank_mass, a source param from N1.servo, and one mass
+    check, ground-mass, of what over names against the ground bar's 1.05 g."""
     four_bar(root, tmp_path)
     add_quote(root, tmp_path, SERVO, SERVO.rstrip("."), {"servo": 7.5, "g": 1.05})
     _param("crank_mass", basis="source", **{"from": "N1.servo"})(root, tmp_path)
@@ -4642,7 +4644,8 @@ _INPUT_AXIS = '"axis": ["crank_1.a", "crank_1.a_up"]'
         ),
         (
             _bar(_INPUT_AXIS, '"axis": ["crank_1.a", "crank_1.a"]'),
-            "joint input: axis crank_1.a and crank_1.a coincide, so they give the hinge no direction",
+            "joint input: axis crank_1.a and crank_1.a coincide, "
+            "so they give the hinge no direction",
         ),
         (
             _bar('"input_max"', '"input_top"'),
@@ -4776,7 +4779,8 @@ PHYSICS = {
     "cord_k": 0.2,
     "cord_damping": 0.03,
 }
-# One N in the project's units is 10⁶ of the MJCF's g·mm/s², so with mm each value is 10⁶ MJCF units.
+# One N in the project's units is 10⁶ of the MJCF's g·mm/s², so with mm each value is 10⁶ MJCF
+# units.
 MJCF_PER_N = 1e6
 
 
@@ -5060,7 +5064,8 @@ _KNEE_SPRING = '"stiffness": "knee_spring",\n'
 
 
 def _resting(model: str, joint_spring: str, rest: str) -> str:
-    """model with rest named as the spring_rest of the joint whose stiffness line is joint_spring."""
+    """model with rest named as the spring_rest of the joint whose stiffness line is
+    joint_spring."""
     return swap(model, joint_spring, f'{joint_spring}                "spring_rest": "{rest}",\n')
 
 
@@ -6124,9 +6129,10 @@ def _shortening(check: dict) -> float:
 
 def cabled(root: Path, tmp_path: Path, cable: str = _CABLE, *, sourced: bool = False) -> None:
     """The slider-crank with a toe pair beside it, each bar toe_L (10 mm) long: a base on slide
-    shift, toe1 hinged on its tip and toe2 on toe1's tip, and cable pull wound on actuated spool (one-ended range turn), closing toe1
-    to c1 and toe2 to c2. Turn, c1 and c2 are proposed at CLOSED, or sourced from N1. Checks full
-    and half read pull's stroke at the spool's full turn and at half_turn."""
+    shift, toe1 hinged on its tip and toe2 on toe1's tip, and cable pull wound on actuated spool
+    (one-ended range turn), closing toe1 to c1 and toe2 to c2. Turn, c1 and c2 are proposed at
+    CLOSED, or sourced from N1. Checks full and half read pull's stroke at the spool's full turn
+    and at half_turn."""
     slider_crank(root, tmp_path, turns=(30,))
     model = swap(
         SLIDER_CRANK,
@@ -6430,7 +6436,10 @@ def test_stroke_check_rests_on_the_wheels_turn_and_closed_angles(
 def test_stroke_check_posed_through_a_gear_on_its_wheel_rests_on_the_closed_angles(
     proj_dir, tmp_path
 ):
-    mesh = '        "gears": {"mesh": {"driver": "input", "driven": "spool", "ratio": "spool_ratio"}},\n'
+    mesh = (
+        '        "gears": '
+        '{"mesh": {"driver": "input", "driven": "spool", "ratio": "spool_ratio"}},\n'
+    )
     cabled(proj_dir, tmp_path, mesh + _CABLE)
     _param("spool_ratio", basis="proposed", value=1, rationale="a guess", gap="G1")(
         proj_dir, tmp_path
@@ -6605,7 +6614,8 @@ def _reregister(r, t):
 
 
 def _quote_from(name: str, quote: str, page: int | None = None):
-    """Register the paper as a two-page PDF or a DOCX, source doc, and ledger quote from it as N1."""
+    """Register the paper as a two-page PDF or a DOCX, source doc, and ledger quote from it as
+    N1."""
 
     def change(r, t):
         content = pdf(list(PAPER_PAGES)) if name.endswith(".pdf") else docx(PAPER)

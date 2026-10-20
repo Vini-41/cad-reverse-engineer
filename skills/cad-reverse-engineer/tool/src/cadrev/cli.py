@@ -121,7 +121,8 @@ def _rewrite_source_entry(text: str, source_id: str, fields: dict[str, str]) -> 
 
 
 def _read_keeping_newline(path: Path) -> tuple[str, str]:
-    """path's text with "\n" line ends, and the line end its first line uses, to write it back with."""
+    """path's text with "\n" line ends, and the line end its first line uses, to write it back
+    with."""
     with path.open(newline="") as f:
         text = f.read()
     newline = "\r\n" if re.match(r"[^\n]*\r\n", text) else "\n"
@@ -322,14 +323,16 @@ def cmd_check(args) -> int:
             if on
         )
         print(
-            f"\n{status}: {headline['errors']} errors, {headline['warnings']} warnings; skipped {skipped}, "
+            f"\n{status}: {headline['errors']} errors, {headline['warnings']} warnings; "
+            f"skipped {skipped}, "
             "so no claim is made and no report was written."
         )
         return 1
     path = report.write(p, status, results, images, moves, weighed)
     print(
         f"\n{status}: {headline['errors']} errors, {headline['warnings']} warnings, "
-        f"{headline['checks_passed']}/{headline['checks']} checks pass. Report: {path.relative_to(p.root)}"
+        f"{headline['checks_passed']}/{headline['checks']} checks pass. "
+        f"Report: {path.relative_to(p.root)}"
     )
     return 0 if status in report.PASSING else 1
 

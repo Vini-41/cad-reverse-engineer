@@ -1,4 +1,5 @@
-"""The model lint: model.py holds no dimension, so every number reaches the CAD through params.yaml."""
+"""The model lint: model.py holds no dimension, so every number reaches the CAD through
+params.yaml."""
 
 from __future__ import annotations
 
