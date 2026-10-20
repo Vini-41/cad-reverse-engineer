@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import math
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -321,6 +322,10 @@ def load(root: Path) -> Project:
     )
     if len(project.evidence) != len(evidence_list):
         project.error("evidence-id", "evidence ids must be unique")
+    printed = Counter(str(c["id"]) for c in project.checks)
+    for cid, n in printed.items():
+        if n > 1:
+            project.error("check-id", f"check {cid}: check ids must be unique")
     return project
 
 

@@ -119,6 +119,7 @@ CHECK = Record(
         "sweep": Record({"joint": str, "steps": str}, required=("joint", "steps")),
         "interpretation": str,
     },
+    required=("id",),
     exclusive=(("part", "instances"),),
 )
 # A part's mass: its datasheet mass, or a density its volume is weighed by; one param either way.

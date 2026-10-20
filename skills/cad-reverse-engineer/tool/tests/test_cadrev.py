@@ -1256,6 +1256,32 @@ def test_evidence_item_without_id_is_a_finding(proj_dir):
     assert findings(proj_dir, "schema") == ["evidence.yaml evidence[1]: id is required"]
 
 
+def test_check_without_id_is_a_finding(proj_dir):
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"][1].pop("id"))
+    assert findings(proj_dir, "schema") == ["checks.yaml checks[1]: id is required"]
+
+
+def _rename_checks(root: Path, first, second) -> None:
+    """Give the fixture's first two checks the ids first and second."""
+
+    def rename(d):
+        d["checks"][0]["id"], d["checks"][1]["id"] = first, second
+
+    edit(root, "checks.yaml", rename)
+
+
+@pytest.mark.parametrize("first, second, named", [("env", "env", "env"), (1, "1", "1")])
+def test_checks_sharing_an_id_is_a_finding_naming_it(proj_dir, first, second, named):
+    _rename_checks(proj_dir, first, second)
+    assert findings(proj_dir, "check-id") == [f"check {named}: check ids must be unique"]
+
+
+@pytest.mark.parametrize("first, second", [("env", "Env"), ("env", "env-2")])
+def test_guard_checks_whose_ids_differ_in_case_or_suffix(proj_dir, first, second):
+    _rename_checks(proj_dir, first, second)
+    assert findings(proj_dir, "check-id") == []
+
+
 @pytest.mark.parametrize(
     "name, change, where",
     [
@@ -2033,6 +2059,7 @@ DAMAGE = {
             {"id": "im", "source": "paper", "locator": "F", "image": "sources", "reading": "3"}
         ),
     ),
+    "check without an id": lambda r: edit(r, "checks.yaml", lambda d: d["checks"][0].pop("id")),
     "duplicate gap ids": lambda r: write(r, "gaps.yaml", {"gaps": [{"id": "G1"}, {"id": "G1"}]}),
     "source registered after a PyYAML re-dump": lambda r: (
         edit(r, "project.yaml", lambda d: None),
