@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Wait for the CI run on a pushed commit and exit with its result: 0 when it succeeds, 1 when it
-fails or never starts.
+fails or never starts, and 2 when the argument names no commit.
 
 The run is found by the commit's full SHA (gh run list --commit matches no short one), never by
 which run is newest. When no run starts within the wait, it reads where the current branch is on
@@ -45,7 +45,20 @@ def find_run(sha: str) -> str:
 
 
 def main() -> int:
-    sha = out("git", "rev-parse", f"{sys.argv[1] if len(sys.argv) > 1 else 'HEAD'}^{{commit}}")
+    arg = sys.argv[1] if len(sys.argv) > 1 else "HEAD"
+    if arg in ("-h", "--help"):
+        print(__doc__)
+        return 0
+    # --end-of-options, since rev-parse echoes an option it does not know as if it were a commit
+    found = subprocess.run(
+        ["git", "rev-parse", "--verify", "-q", "--end-of-options", f"{arg}^{{commit}}"],
+        capture_output=True,
+        text=True,
+    )
+    if found.returncode != 0:
+        print(f"{arg} names no commit", file=sys.stderr)
+        return 2
+    sha = found.stdout.strip()
     run = find_run(sha)
     if run:
         watched = subprocess.run([GH, "run", "watch", run, "--exit-status"], capture_output=True)

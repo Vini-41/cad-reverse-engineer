@@ -75,3 +75,19 @@ def test_ci_wait_says_to_push_when_github_is_at_another_commit(tmp_path):
     result = run(repo, env)
     assert result.returncode == 1
     assert f"main on GitHub is at {'0' * 40}, not {sha}: push it first" in result.stderr
+
+
+def test_ci_wait_help_prints_its_usage_and_asks_github_nothing(tmp_path):
+    repo, _, env = setup(tmp_path, runs=True)
+    for flag in ("-h", "--help"):
+        result = run(repo, {**env, "GH": "false"}, flag)
+        assert result.returncode == 0, result.stderr
+        assert "scripts/ci-wait [commit, default HEAD]" in result.stdout
+
+
+def test_ci_wait_exits_2_naming_an_argument_that_is_no_commit_before_asking_github(tmp_path):
+    repo, _, env = setup(tmp_path, runs=True)
+    for arg in ("--verbose", "nope"):
+        result = run(repo, {**env, "GH": "false"}, arg)
+        assert result.returncode == 2
+        assert result.stderr == f"{arg} names no commit\n"
