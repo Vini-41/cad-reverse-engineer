@@ -3769,9 +3769,23 @@ def _counted_through(root: Path, tmp_path: Path, counted: bool) -> dict:
 
 
 def _unchecked_in(report: dict) -> list[str]:
+    """The params report.json names [unchecked-source], as `param <name>`."""
     return [
         f["message"].split(":")[0] for f in report["findings"] if f["rule"] == "unchecked-source"
     ]
+
+
+def _unchecked(root: Path) -> list[str]:
+    """The params a fresh verification run names [unchecked-source]; where the test has already
+    run one, _unchecked_in reads its report."""
+    return _unchecked_in(verify(root)[1])
+
+
+def _unchecked_printed(printed: list[str]) -> list[str]:
+    """The params a run's printed findings name [unchecked-source], where a partial run writes no
+    report."""
+    prefix = "warning: [unchecked-source] "
+    return [line.removeprefix(prefix).split(":")[0] for line in printed if line.startswith(prefix)]
 
 
 def test_stated_counts_a_mass_check_reads_through_a_derived_param_are_covered(proj_dir, tmp_path):
@@ -5224,10 +5238,6 @@ def test_range_check_passes_when_the_joint_reaches_both_ledgered_ends(proj_dir, 
     assert high["measured"] == "60° input's range end (input_max)"
 
 
-def _unchecked(root: Path) -> list[str]:
-    return [m.split(":")[0] for m in findings(root, "unchecked-source")]
-
-
 def test_source_range_param_a_range_check_covers_is_not_unchecked_source(proj_dir, tmp_path):
     ranged(proj_dir, tmp_path)
     assert {"param input_min", "param input_max"}.isdisjoint(_unchecked(proj_dir))
@@ -6459,12 +6469,7 @@ def test_guard_run_without_the_build_leaves_source_closed_angles_unchecked_sourc
 ):
     # With nothing built, the model gives no check its wheel's turn or closed angles.
     cabled(proj_dir, tmp_path, sourced=True)
-    prefix = "warning: [unchecked-source] "
-    printed = _partial(proj_dir, "--no-build")
-    unchecked = {
-        line.removeprefix(prefix).split(":")[0] for line in printed if line.startswith(prefix)
-    }
-    assert _TURN_AND_CLOSED <= unchecked
+    assert _TURN_AND_CLOSED <= set(_unchecked_printed(_partial(proj_dir, "--no-build")))
 
 
 def test_stroke_check_posed_through_a_gear_on_its_wheel_rests_on_the_closed_angles(
