@@ -51,8 +51,12 @@ _Avoid_: assumed, guessed
 A question that, once answered, would replace a proposed or measured value, or the choice a derived parameter's computation makes, with a stated one.
 
 **Physics value**:
-A parameter only the simulation reads, such as a joint's damping or friction, a spring's stiffness or a tendon's elasticity; it has a basis like any other but shapes no geometry.
+A parameter only the simulation reads, such as a joint's damping or friction, a spring's stiffness or rest, or a tendon's elasticity; it has a basis like any other but shapes no geometry.
 _Avoid_: simulation parameter, tuning value
+
+**Spring rest**:
+The joint value at which a joint's spring exerts no torque, or no force on a slide, measured from the assembly as built like a pose. A spring preloaded against a stop rests outside its joint's range.
+_Avoid_: preset, preload, springref
 
 ## Verification
 
