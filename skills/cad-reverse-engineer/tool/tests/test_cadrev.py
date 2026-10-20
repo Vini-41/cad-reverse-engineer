@@ -1276,6 +1276,13 @@ def test_checks_sharing_an_id_is_a_finding_naming_it(proj_dir, first, second, na
     assert findings(proj_dir, "check-id") == [f"check {named}: check ids must be unique"]
 
 
+def test_guard_run_without_the_build_reports_checks_sharing_an_id(proj_dir):
+    _rename_checks(proj_dir, "env", "env")
+    assert "error: [check-id] check env: check ids must be unique" in _partial(
+        proj_dir, "--no-build"
+    )
+
+
 @pytest.mark.parametrize("first, second", [("env", "Env"), ("env", "env-2")])
 def test_guard_checks_whose_ids_differ_in_case_or_suffix(proj_dir, first, second):
     _rename_checks(proj_dir, first, second)
