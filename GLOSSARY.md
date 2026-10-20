@@ -76,6 +76,14 @@ _Avoid_: pivot (for the joint itself; a pivot is its datum), prismatic, weld, DO
 A coupling of two joints of one type, so one moves a stated ratio times as far as the other: meshed gears or a belt.
 _Avoid_: transmission, mimic joint
 
+**Cable**:
+An inextensible cord laid through datums on several instances, whose length the posed assembly gives; one wound on a wheel joint drives the joints it closes, each moving in proportion to the wheel's turn toward its closed pose. Unlike a tendon, a cable does not stretch.
+_Avoid_: tendon (for an inextensible cord)
+
+**Closed pose**:
+The value of each joint a cable closes when its wheel has made its full turn; where no source states it, it is proposed, and a stated order of closing (one joint before another) is then not represented.
+_Avoid_: grasp pose, final pose
+
 **Loop**:
 A pair of datums on two instances that must coincide, closing a ring of joints such as a four-bar.
 _Avoid_: closure constraint, cut joint
