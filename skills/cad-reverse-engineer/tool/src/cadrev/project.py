@@ -35,10 +35,9 @@ TOL_CAP, TOL_REL_CAP = 0.05, 0.25
 
 def _mass_reads(p: Project, c: dict, weighs: tuple[str, ...] | None = None) -> list[str]:
     """The params a mass check reads: its density, or without one the mass model's params for
-    the parts it weighs (its parts, else weighs, else those the build found it weighs, else every
-    part), then its add and counts params."""
-    found = weighs if weighs is not None else p.weighed.get(c.get("id", "?"))
-    parts = c.get("parts") or found
+    the parts it weighs (its parts, else weighs, else every part), then its add and counts
+    params."""
+    parts = c.get("parts") or weighs
     names = mass_params(p, parts) if c.get("density") is None else []
     names += [str(c.get("density"))] + [str(n) for n in c.get("add") or []]
     return names + [str(n) for n in (c.get("counts") or {}).values()]
@@ -126,9 +125,6 @@ class Project:
     # Params read only as a sweep's steps: a resolution the reconstruction chooses, which states
     # nothing about the object, so exact leaves them out. Set by the build.
     resolution: set[str] = field(default_factory=set)
-    # The parts each mass check weighs, by check id: those of the instances it weighs. Set by
-    # run_checks, so before it a mass check naming no parts reads every part's mass params.
-    weighed: dict[str, list[str]] = field(default_factory=dict)
     values: dict[str, float] = field(default_factory=dict)
     # Text sources whose file exists but cannot be read as text.
     unreadable: set[str] = field(default_factory=set)
@@ -822,25 +818,7 @@ def check_tolerances(p: Project) -> None:
                 break
 
 
-def _feeding(p: Project, names: set[str]) -> set[str]:
-    """names, and every param their derived exprs read, however deep: a check reading a derived
-    count reads the stated counts it multiplies."""
-    found, pending = set(), list(names)
-    while pending:
-        name = pending.pop()
-        if name in found:
-            continue
-        found.add(name)
-        spec = p.params.get(name) or {}
-        if spec.get("basis") == "derived":
-            try:
-                pending += expr_names(str(spec.get("expr", ""))) & p.params.keys()
-            except (SyntaxError, ValueError):
-                pass  # [param-derived] says why
-    return found
-
-
-def check_accounting(p: Project) -> None:
+def check_evidence_used(p: Project) -> None:
     """Every evidence value is used by a parameter, checked against geometry, or set aside."""
     used = {spec.get("from") for spec in p.params.values()}
     measured_from = {
@@ -864,57 +842,6 @@ def check_accounting(p: Project) -> None:
                     f"{eid}.{key} is neither used by a param nor checked "
                     "(or mark the item scope: not-modeled with a reason)",
                 )
-    _unchecked_sources(p, _unchecked_geometry(p, check_params(p)))
-
-
-def _unchecked_geometry(p: Project, read: set[str]) -> set[str]:
-    """The params that no check feeds, where read is the params the checks read. A check compares
-    what its params feed with the ledger; no check sees a physics value, nor the params that feed
-    only physics values, unless model.py reads them (_unchecked_physics)."""
-    return p.params.keys() - _feeding(p, read) - p.physics - physics_only(p)
-
-
-def _unchecked_physics(p: Project, read: set[str], model_reads: set[str]) -> set[str]:
-    """The params read only on the way to a physics value that model.py reads too, directly or
-    through a param, and that no check feeds, where read is the params the checks read."""
-    return physics_only(p) & _feeding(p, model_reads) - _feeding(p, read)
-
-
-def physics_only(p: Project) -> set[str]:
-    """The params read only on the way to a physics value: every param whose expr reads one is a
-    physics value or read only on the way to one."""
-    feeding = _feeding(p, p.physics) - p.physics
-    return feeding - _feeding(p, p.params.keys() - p.physics - feeding)
-
-
-def check_physics_sources(p: Project, model_reads: set[str]) -> None:
-    """[unchecked-source] for the params read only on the way to a physics value that model.py
-    reads too, directly or through a param, since they feed the geometry after all."""
-    _unchecked_sources(p, _unchecked_physics(p, check_params(p), model_reads))
-
-
-def check_weighed_sources(p: Project, before: set[str], model_reads: set[str]) -> None:
-    """After run_checks, [unchecked-source] for the params that only the checks' reading before
-    the build (before) checks: there, a mass check naming no parts reads every part's mass model
-    params, here only those of the parts it weighs (Project.weighed). model_reads is as
-    check_physics_sources takes it."""
-
-    def unchecked(read: set[str]) -> set[str]:
-        return _unchecked_geometry(p, read) | _unchecked_physics(p, read, model_reads)
-
-    _unchecked_sources(p, unchecked(check_params(p)) - unchecked(before))
-
-
-def _unchecked_sources(p: Project, names: set[str]) -> None:
-    checked = {ref for c in p.checks for ref in check_refs(c)}
-    for name in [n for n in p.params if n in names]:
-        spec = p.params[name]
-        if spec.get("basis") == "source" and spec.get("from") not in checked:
-            p.warn(
-                "unchecked-source",
-                f"param {name}: {spec.get('from')} feeds the model but no "
-                "check confirms the geometry realises it",
-            )
 
 
 def check_gaps(p: Project) -> None:
@@ -1043,7 +970,7 @@ def check_static(p: Project) -> None:
     check_sources(p)
     check_evidence(p)
     resolve_params(p)
-    check_accounting(p)
+    check_evidence_used(p)
     check_gaps(p)
     check_conflicts(p)
     check_units(p)

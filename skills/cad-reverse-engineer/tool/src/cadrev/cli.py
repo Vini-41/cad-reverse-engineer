@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import NamedTuple
 
+from . import accounting
 from . import project as proj
 from . import sources
 
@@ -292,6 +293,7 @@ def cmd_check(args) -> int:
     # A partial run makes no claim, so it writes nothing to build/.
     partial = args.no_build or args.no_coverage
     results, images, moves, weighed = [], [], None, None
+    evaluated, model_reads = None, set()
     if not args.no_build and not any(
         f.rule in ("model-missing", "model-syntax") for f in p.findings
     ):
@@ -301,9 +303,8 @@ def cmd_check(args) -> int:
         if built is not None:
             linkage = motion.mjcf(p, built)
             poser = None if linkage is None else motion.poser(p, built, linkage)
-            before = proj.check_params(p)  # every part's mass params, for a check naming none
-            results = geometry.run_checks(p, built, poser)
-            proj.check_weighed_sources(p, before, built.used)
+            results, evaluated = geometry.run_checks(p, built, poser)
+            model_reads = built.used
             moves = report.motion(p, built)
             weighed = report.masses(built)
             if not partial:
@@ -313,6 +314,7 @@ def cmd_check(args) -> int:
                 for path in written:
                     print(f"wrote {path.relative_to(p.root)}")
                 images = overlay.render(p, built)
+    accounting.check_source_params(p, evaluated, model_reads)
     status = report.status(p, partial)
     headline = report.counts(p, results)
     _print_findings(p.findings)

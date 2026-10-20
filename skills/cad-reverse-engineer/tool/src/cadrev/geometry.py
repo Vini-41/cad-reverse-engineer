@@ -16,7 +16,6 @@ from .project import (
     Project,
     between_two,
     check_params,
-    check_physics_sources,
     check_tolerance,
     compared_quantity,
     expect_joint_value,
@@ -406,7 +405,6 @@ def build(p: Project) -> Built | None:
             if slot.quantity is not None:
                 expect_param_quantity(p, name, (slot.quantity,), f"as {place}")
     _check_physics(p, built, slots, ranges | ratios)
-    check_physics_sources(p, built.used)
     exported = ranges | ratios | slots.keys() | set(mass_params(p))
     derived = _used_by_derived(p)
     p.resolution = resolution_params(p) - built.used - derived - exported
@@ -1328,18 +1326,22 @@ def _placed_for(
     return poser(c)
 
 
-def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[CheckResult]:
+def run_checks(
+    p: Project, built: Built, poser: Poser | None = None
+) -> tuple[list[CheckResult], list[accounting.Reads]]:
     """Evaluate every check: on the assembly as built, or, for a check that names a pose, on the
-    assembly poser places at it, a check that cannot be posed adding a finding instead."""
-    results = []
-    for c in p.checks:
+    assembly poser places at it, a check that cannot be posed adding a finding instead. With each
+    check's Reads: what its evaluation read, or as estimated from the check alone where it read
+    nothing."""
+    results, reads = [], accounting.estimated(p)
+    for i, c in enumerate(p.checks):
         cid, kind = c.get("id", "?"), c.get("kind")
         start = len(results)
         reached = _placed_for(p, built, c, poser)
         if reached is None:
             continue
         placed, pose = reached
-        read = accounting.reads(p, c, _range_given(built, c))
+        read = reads[i] = accounting.reads(p, c, _range_given(built, c))
         try:
             if kind == "bbox":
                 shape = _envelope(p, placed, c)
@@ -1369,7 +1371,8 @@ def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[Che
                 tally = _weighed(p, built, c)
                 if tally is None:
                     continue
-                p.weighed[cid] = list(tally)
+                # It reads the parts it weighs, though a finding stops its evaluation.
+                read = reads[i] = accounting.reads(p, c, read.given, tuple(tally))
                 weighed = _mass(p, built, c, tally)
                 if weighed is None:
                     continue
@@ -1391,6 +1394,7 @@ def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[Che
         except (KeyError, TypeError, ValueError) as exc:
             p.error("check-config", f"check {cid}: missing or unknown {exc}")
             continue
+        reads[i] = read
         basis, params = accounting.rests_on(p, read)
         for r in results[start:]:
             r.rests_on, r.rests_on_params = basis, params
@@ -1398,4 +1402,4 @@ def run_checks(p: Project, built: Built, poser: Poser | None = None) -> list[Che
     for r in results:
         if not r.ok:
             p.error("check-failed", f"{r.id}: expected {r.expected}, measured {r.measured}")
-    return results
+    return results, reads
