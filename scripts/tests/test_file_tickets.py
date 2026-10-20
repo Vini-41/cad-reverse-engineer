@@ -45,13 +45,15 @@ else:
 """
 
 
-def setup(tmp_path: Path, tickets: dict[str, str]) -> tuple[Path, dict[str, str]]:
+def setup(
+    tmp_path: Path, tickets: dict[str, str], existing: dict[str, dict] | None = None
+) -> tuple[Path, dict[str, str]]:
     tmp_path.mkdir(parents=True, exist_ok=True)
     gh = tmp_path / "gh"
     gh.write_text(FAKE_GH)
     gh.chmod(0o755)
     state = tmp_path / "state.json"
-    state.write_text(json.dumps({"next": 10, "issues": {"9": {"subs": []}}}))
+    state.write_text(json.dumps({"next": 10, "issues": {"9": {"subs": []}, **(existing or {})}}))
     folder = tmp_path / "tickets"
     folder.mkdir()
     for name, text in tickets.items():
@@ -133,3 +135,28 @@ def test_dry_run_prints_the_plan_and_files_nothing(tmp_path):
     assert result.returncode == 0
     assert "T3: Skill (blocked by T1, T2)" in result.stdout
     assert list(issues(env)) == ["9"]
+
+
+INTEGRATION = {"5": {"subs": [], "blocked_by": [3]}}
+
+
+def test_blocks_makes_an_existing_issue_blocked_by_every_ticket_filed(tmp_path):
+    folder, env = setup(tmp_path, TICKETS, INTEGRATION)
+    result = run(folder, env, "--blocks", "5")
+    assert result.returncode == 0, result.stderr
+    assert sorted(issues(env)["5"]["blocked_by"]) == [3, 10, 11, 12]
+
+
+def test_a_blocks_edge_github_did_not_keep_fails_the_read_back(tmp_path):
+    folder, env = setup(tmp_path, TICKETS, INTEGRATION)
+    result = run(folder, {**env, "FAKE_GH_DROP_BLOCKER": "12"}, "--blocks", "5")
+    assert result.returncode == 1
+    assert "#5 is blocked by [3, 10, 11], expected #12 among them" in result.stderr
+
+
+def test_dry_run_prints_the_issues_blocks_would_edit(tmp_path):
+    folder, env = setup(tmp_path, TICKETS, INTEGRATION)
+    result = run(folder, env, "--dry-run", "--blocks", "5")
+    assert result.returncode == 0
+    assert "#5: blocked by T1, T2, T3" in result.stdout
+    assert issues(env)["5"]["blocked_by"] == [3]
