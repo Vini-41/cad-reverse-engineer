@@ -4816,6 +4816,18 @@ def test_guard_mass_check_weighing_the_crank_covers_its_mass_param(proj_dir, tmp
     assert UNCHECKED_CRANK_MASS not in printed
 
 
+def test_guard_mass_check_stopped_by_a_counts_param_naming_no_param_reads_only_what_it_weighs(
+    proj_dir, tmp_path
+):
+    _ground_weighed(proj_dir, tmp_path, {"instances": ["ground_1"], "counts": {"ground": "n"}})
+    _, printed = _found(proj_dir)
+    assert "error: [check-config] check ground-mass: missing or unknown 'n'" in printed
+    # It weighed the ground bar, by density, before it stopped; crank_mass, the source param of
+    # the crank it does not weigh, is unchecked.
+    assert "param density" not in _unchecked_printed(printed)
+    assert UNCHECKED_CRANK_MASS in printed
+
+
 def _partial(root: Path, flag: str) -> list[str]:
     """What a partial run with flag prints, after showing it is partial: exit 1, no report."""
     code, printed = _found(root, flag)
@@ -4923,6 +4935,27 @@ def test_guard_check_with_no_pose_is_evaluated_on_the_assembly_as_built(proj_dir
     ac30 = _by_id(verify(proj_dir)[1])["ac30"]
     assert not ac30["ok"] and "pose" not in ac30
     assert ac30["measured"].startswith(f"{math.hypot(*bar_pivot(0)):.4g} ")
+
+
+def test_guard_bbox_check_stopped_at_a_later_axis_keeps_its_earlier_axes_results(
+    proj_dir, tmp_path
+):
+    four_bar(proj_dir, tmp_path)
+    box = {"id": "box", "kind": "bbox", "evidence": "L", "instances": ["ground_1", "rocker_1"]}
+    box["pose"] = {"input": "turn_60"}
+    _append("checks.yaml", "checks", box | {"axes": {"d": "x"}})(proj_dir, tmp_path)
+    whole = _by_id(verify(proj_dir)[1])["box.d"]
+    _check("box", axes={"d": "x", "a": "q"})(proj_dir, tmp_path)
+    report = verify(proj_dir)[1]
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-config"] == [
+        "check box: missing or unknown 'q'"
+    ]
+    kept = _by_id(report)["box.d"]
+    assert "box.a" not in _by_id(report)
+    # The axis read before it stopped carries what the check rests on and the pose it was taken at.
+    assert kept["pose"] == {"input": {"from": "turn_60", "value": 60}} == whole["pose"]
+    rests_on = (kept["rests_on"], kept["rests_on_params"])
+    assert rests_on == ("source", ["turn_60"]) == (whole["rests_on"], whole["rests_on_params"])
 
 
 def _bar(old: str, new: str, count: int = -1):
@@ -5665,6 +5698,19 @@ def test_range_check_on_a_static_model_is_check_config(proj_dir):
     assert "check reach: names joint input, but model.build returns no joints" in findings(
         proj_dir, "check-config"
     )
+
+
+def test_guard_range_check_stopped_at_a_missing_second_end_value_still_checks_both_ends(
+    proj_dir, tmp_path
+):
+    ranged(proj_dir, tmp_path)
+    _check("reach", ends=["N1.lo", "N1.mid"])(proj_dir, tmp_path)
+    report = verify(proj_dir)[1]
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-config"] == [
+        "check reach: missing or unknown 'N1.mid'"
+    ]
+    # It stopped after reading its joint's range, so neither end is left unchecked.
+    assert {"param input_min", "param input_max"}.isdisjoint(_unchecked_in(report))
 
 
 TURN = "The crank turns through 385° from upright."
