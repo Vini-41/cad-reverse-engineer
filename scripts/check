@@ -82,6 +82,8 @@ step "the skill and tool source use none of GLOSSARY.md's avoided words" ../../.
 step "plugin manifests validate" --rerun "claude plugin validate ." plugin_validate
 step "red-on-main: new tests are red holes or green guards" --rerun scripts/red-on-main \
   red_on_main_or_notice
+# Its count, repeated at the end, past the examples' output.
+red_count=$(grep -E '^[0-9]+ red \(holes\), [0-9]+ green$' "$logs/$steps" | tail -n 1)
 # The examples as a clone after committing holds them: tracked and staged files at their staged text.
 # The last line repeats how many edits that left out, so a pass never hides that it checked older text.
 left_out="$logs/left-out"
@@ -100,6 +102,10 @@ else
   failed_reruns+=(scripts/committed-examples)
 fi
 
+report_red_count() {
+  [ -z "$red_count" ] || echo "red-on-main: $red_count"
+}
+
 report_left_out() {
   local n s
   n=$(grep -c "^not staged, so left out of the copy: " "$left_out" 2>/dev/null)
@@ -113,8 +119,10 @@ if [ ${#failed[@]} -gt 0 ]; then
     printf 'failed: %s\n  rerun alone: %s\n' "${failed[$i]}" "${failed_reruns[$i]}"
     tail -n 20 "${failed_logs[$i]}" | sed 's/^/  /'
   done
+  report_red_count
   report_left_out
   exit 1
 fi
 echo "all steps passed"
+report_red_count
 report_left_out

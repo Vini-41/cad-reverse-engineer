@@ -94,3 +94,14 @@ def test_the_last_line_names_the_unstaged_edits_the_examples_were_checked_withou
 def test_the_last_line_is_the_summary_when_nothing_is_left_out(tmp_path):
     result, _ = check(tmp_path)
     assert "left out" not in result.stdout.splitlines()[-1]
+
+
+def test_the_end_repeats_red_on_mains_count_past_the_examples_output(tmp_path):
+    counted = "echo '10 red (holes), 1 green'; exit 0"
+    result, _ = check(tmp_path, bodies={"red-on-main": counted})
+    assert result.stdout.splitlines()[-1] == "red-on-main: 10 red (holes), 1 green"
+
+
+def test_guard_the_end_names_no_count_where_red_on_main_printed_none(tmp_path):
+    result, _ = check(tmp_path)
+    assert not result.stdout.splitlines()[-1].startswith("red-on-main:")
