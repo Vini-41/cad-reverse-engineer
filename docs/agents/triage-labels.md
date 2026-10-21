@@ -8,6 +8,8 @@ A `ready-for-agent` brief whose criteria lean on a project setting with a defaul
 
 A `ready-for-agent` brief calls a test a guard only when the behaviour it shows already holds on main; one the fix changes is a test, so `scripts/red-on-main` finds it red.
 
+A `ready-for-agent` refactor brief names each path its guards (`scripts/same-reports`, the tests) do not reach, such as a check a finding stops partway, and says whether it is held fixed or may change, so a difference there is decided in the brief rather than found as a departure.
+
 A `ready-for-agent` brief that changes a rule names, as an acceptance criterion, the line of the reference doc that owns the rule, so the implementer edits it in the same pass as the code.
 
 A brief gated on a future condition ("build only when a real source needs it") is `ready-for-human` until the condition holds; it moves to `ready-for-agent` with a comment naming what met it.
