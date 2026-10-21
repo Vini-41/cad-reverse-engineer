@@ -1261,6 +1261,162 @@ def test_check_without_id_is_a_finding(proj_dir):
     assert findings(proj_dir, "schema") == ["checks.yaml checks[1]: id is required"]
 
 
+def _ledger_also(root: Path, *ids: str) -> None:
+    """Append to the fixture's ledger a context item under each of ids."""
+    item = {"source": "paper", "locator": "Sec. 3", "quote": "branches of 60 mm diameter"}
+    extra = [{"id": eid, **item, "scope": "context", "reason": "r"} for eid in ids]
+    edit(root, "evidence.yaml", lambda d: d["evidence"].extend(extra))
+
+
+def test_evidence_items_sharing_an_id_is_a_finding_naming_it(proj_dir):
+    _ledger_also(proj_dir, "pitch")
+    assert findings(proj_dir, "evidence-id") == ["evidence pitch: evidence ids must be unique"]
+
+
+def test_two_repeated_evidence_ids_are_a_finding_naming_each(proj_dir):
+    _ledger_also(proj_dir, "pitch", "T1-link", "pitch")
+    assert findings(proj_dir, "evidence-id") == [
+        "evidence T1-link: evidence ids must be unique",
+        "evidence pitch: evidence ids must be unique",
+    ]
+
+
+def test_guard_evidence_ids_that_differ_in_case_or_suffix(proj_dir):
+    _ledger_also(proj_dir, "Pitch", "pitch-2")
+    assert findings(proj_dir, "evidence-id") == []
+
+
+def test_run_without_the_build_reports_evidence_items_sharing_an_id_naming_it(proj_dir):
+    _ledger_also(proj_dir, "pitch")
+    assert "error: [evidence-id] evidence pitch: evidence ids must be unique" in _partial(
+        proj_dir, "--no-build"
+    )
+
+
+def _repeat(root: Path, eid: str, **fields) -> None:
+    """Append to the fixture's ledger a copy of item eid, under the same id, with fields changed."""
+
+    def apply(d):
+        d["evidence"].append({**next(e for e in d["evidence"] if e["id"] == eid), **fields})
+
+    edit(root, "evidence.yaml", apply)
+
+
+def test_earlier_item_under_a_repeated_id_still_has_its_quote_checked(proj_dir):
+    _evidence("pitch", quote="spaced 31 mm apart")(proj_dir, None)
+    _repeat(proj_dir, "pitch", quote="spaced 30 mm apart")
+    assert findings(proj_dir, "quote-not-found") == [
+        "pitch: quote not found in paper: 'spaced 31 mm apart'"
+    ]
+
+
+def test_guard_later_item_under_a_repeated_id_has_its_quote_checked(proj_dir):
+    _repeat(proj_dir, "pitch", quote="spaced 31 mm apart")
+    assert findings(proj_dir, "quote-not-found") == [
+        "pitch: quote not found in paper: 'spaced 31 mm apart'"
+    ]
+
+
+def _repeat_link_as_context(root: Path) -> None:
+    """Append a context item under the id T1-link, quoting other text than the original."""
+    context = {"quote": "The pivot holes of the link", "values": {}, "scope": "context"}
+    _repeat(root, "T1-link", **context, reason="r")
+
+
+def test_earlier_item_under_a_repeated_id_still_covers_its_stated_quantity(proj_dir):
+    _repeat_link_as_context(proj_dir)
+    assert findings(proj_dir, "coverage") == []
+
+
+def test_report_lists_every_item_under_a_repeated_id(proj_dir):
+    _repeat_link_as_context(proj_dir)
+    verify(proj_dir)
+    rows = (proj_dir / "build" / "report.md").read_text().splitlines()
+    listed = [row for row in rows if row.startswith("| T1-link |")]
+    assert [row.split(" | ")[-1] for row in listed] == [
+        "“Link 40×8×5” |",
+        "“The pivot holes of the link” |",
+    ]
+
+
+def _pitch_proposed(r, t) -> None:
+    """Choose the pitch, so the model builds though no param reads the ledgered pitch."""
+    _param("pitch", basis="proposed", value=30, rationale="a guess", gap="G1", **{"from": None})(
+        r, t
+    )
+
+
+@pytest.mark.parametrize(
+    "setup, eid, rule, says",
+    [
+        (lambda r, t: None, "pitch", "param-from", "param pitch: from: 'pitch.pitch'"),
+        (lambda r, t: add_measured(r), "F2", "param-from", "param foot_w: from: 'F2'"),
+        (lambda r, t: None, "pitch", "check-config", "check pitch: pitch.pitch"),
+        (lambda r, t: four_bar(r, t), "P30", "check-config", "check ac30: P30.turn"),
+        (
+            lambda r, t: _append("evidence.yaml", "conflicts", _CONFLICT)(r, t),
+            "pitch",
+            "conflict-ref",
+            "conflict C1:",
+        ),
+        (
+            lambda r, t: (_pitch_proposed(r, t), _overlay(r)),
+            "pitch",
+            "overlay-config",
+            "overlay front: calibration pitch.pitch",
+        ),
+    ],
+)
+def test_citing_a_repeated_evidence_id_is_a_finding_naming_it(
+    proj_dir, tmp_path, setup, eid, rule, says
+):
+    setup(proj_dir, tmp_path)
+    _repeat(proj_dir, eid)
+    assert f"{says} cites {eid}, a repeated evidence id" in findings(proj_dir, rule)
+
+
+def test_run_without_the_build_reports_a_check_citing_a_repeated_evidence_id(proj_dir):
+    _repeat(proj_dir, "pitch")
+    assert "error: [check-config] check pitch: pitch.pitch cites pitch, a repeated evidence id" in (
+        _partial(proj_dir, "--no-build")
+    )
+
+
+def test_param_citing_a_repeated_evidence_id_takes_neither_items_value(proj_dir):
+    _repeat(proj_dir, "pitch", quote="Link 40×8×5", values={"pitch": 40})
+    assert verify(proj_dir)[1]["params"]["pitch"]["value"] is None
+
+
+def test_overlay_citing_a_repeated_evidence_id_is_scaled_by_neither_item(proj_dir, tmp_path):
+    _pitch_proposed(proj_dir, tmp_path)
+    _overlay(proj_dir)
+    _repeat(proj_dir, "pitch")
+    verify(proj_dir)
+    assert not (proj_dir / "build" / "overlays" / "front.png").exists()
+
+
+def test_check_citing_a_repeated_evidence_id_compares_with_neither_item(proj_dir, tmp_path):
+    _pitch_proposed(proj_dir, tmp_path)
+    _repeat(proj_dir, "pitch", quote="Link 40×8×5", values={"pitch": 40})
+    assert set(_by_id(verify(proj_dir)[1])) == {"env.L", "env.H", "env.W", "clear"}
+
+
+def test_guard_value_cited_by_a_repeated_evidence_id_is_used_on_both_items(proj_dir):
+    _repeat(proj_dir, "pitch")
+    assert findings(proj_dir, "evidence-unused") == []
+
+
+def test_guard_run_on_a_ledger_with_a_repeated_evidence_id_builds_and_is_not_verified(
+    proj_dir, tmp_path
+):
+    _pitch_proposed(proj_dir, tmp_path)
+    _repeat(proj_dir, "pitch")
+    code, report = verify(proj_dir)
+    assert code == 1 and report["status"] == "NOT VERIFIED"
+    assert "model-build" not in [f["rule"] for f in report["findings"]]
+    assert all(_by_id(report)[cid]["ok"] for cid in ("env.L", "env.H", "env.W", "clear"))
+
+
 def _rename_checks(root: Path, first, second) -> None:
     """Give the fixture's first two checks the ids first and second."""
 

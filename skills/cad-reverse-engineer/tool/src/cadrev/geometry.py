@@ -16,6 +16,7 @@ from .project import (
     Project,
     between_two,
     check_params,
+    cited_refs,
     check_tolerance,
     compared_quantity,
     expect_joint_value,
@@ -1337,6 +1338,8 @@ def run_checks(
     for i, c in enumerate(p.checks):
         cid, kind = c.get("id", "?"), c.get("kind")
         start = len(results)
+        if any(p.cites_repeated(ref) for ref in cited_refs(p, c)):
+            continue  # it compares with neither item; check_citations said so before the build
         reached = _placed_for(p, built, c, poser)
         if reached is None:
             continue

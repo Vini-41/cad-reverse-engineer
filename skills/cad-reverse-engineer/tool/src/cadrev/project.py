@@ -114,7 +114,8 @@ class Finding:
 class Project:
     root: Path
     meta: dict
-    evidence: dict[str, dict]
+    # Every ledger item, in order, whatever its id; look one up by id with item().
+    evidence: list[dict]
     skipped: list[dict]
     conflicts: list[dict]
     params: dict[str, dict]
@@ -181,10 +182,27 @@ class Project:
                 out[q] = unit
         return out
 
+    @property
+    def repeated(self) -> list[str]:
+        """The evidence ids two or more items share, in ledger order; a citation of one reads
+        neither item."""
+        return [eid for eid, n in Counter(e["id"] for e in self.evidence).items() if n > 1]
+
+    def item(self, eid: str) -> dict | None:
+        """The evidence item with id eid; None for an unknown or a repeated id."""
+        found = [e for e in self.evidence if e["id"] == eid]
+        return found[0] if len(found) == 1 else None
+
+    def cites_repeated(self, ref: str) -> str | None:
+        """What a citation of ref reads where its evidence id is repeated, so a citer's finding
+        can say it; None for any other ref."""
+        eid = ref.partition(".")[0]
+        return f"cites {eid}, a repeated evidence id" if eid in self.repeated else None
+
     def _ledgered(self, ref: str) -> tuple[float, str] | None:
         """An evidence value as printed, with the quote or reading it is printed in."""
         item_id, _, key = ref.partition(".")
-        item = self.evidence.get(item_id)
+        item = self.item(item_id)
         if item is None or key not in item.get("values", {}):
             return None
         return float(item["values"][key]), item["quote"] if "quote" in item else str(
@@ -306,11 +324,10 @@ def load(root: Path) -> Project:
         for name in schema.FILES
         if name != "project.yaml"
     }
-    evidence_list = files["evidence.yaml"].get("evidence", [])
     project = Project(
         root=root,
         meta=meta,
-        evidence={e["id"]: e for e in evidence_list},
+        evidence=files["evidence.yaml"].get("evidence", []),
         skipped=files["evidence.yaml"].get("skipped", []),
         conflicts=files["evidence.yaml"].get("conflicts", []),
         params=files["params.yaml"].get("params", {}),
@@ -320,8 +337,8 @@ def load(root: Path) -> Project:
         parts=files["params.yaml"].get("parts", {}),
         findings=findings,
     )
-    if len(project.evidence) != len(evidence_list):
-        project.error("evidence-id", "evidence ids must be unique")
+    for eid in project.repeated:
+        project.error("evidence-id", f"evidence {eid}: evidence ids must be unique")
     printed = Counter(str(c["id"]) for c in project.checks)
     for cid, n in printed.items():
         if n > 1:
@@ -392,7 +409,8 @@ def check_values(p: Project, eid: str, text: str, kind: str, values: dict) -> No
 
 
 def check_evidence(p: Project) -> None:
-    for eid, e in p.evidence.items():
+    for e in p.evidence:
+        eid = e["id"]
         sid = e.get("source")
         if sid not in p.sources:
             p.error("evidence-source", f"{eid}: unknown source {sid!r}")
@@ -496,7 +514,7 @@ def check_coverage(p: Project) -> list[tuple[str, int, str]]:
             )
             continue
         texts = sources.pages(p.source_path(sid))
-        anchors = [e for e in p.evidence.values() if e.get("source") == sid and "quote" in e]
+        anchors = [e for e in p.evidence if e.get("source") == sid and "quote" in e]
         skips = [k for k in p.skipped if k.get("source") == sid]
         for k in skips:
             if not k.get("reason"):
@@ -586,7 +604,8 @@ def resolve_params(p: Project) -> None:
             ref = spec.get("from", "")
             value = p.evidence_value(ref)
             if value is None:
-                p.error("param-from", f"param {name}: from: {ref!r} is not an evidence value")
+                why = p.cites_repeated(ref) or "is not an evidence value"
+                p.error("param-from", f"param {name}: from: {ref!r} {why}")
             else:
                 if "value" in spec and not math.isclose(float(spec["value"]), value, rel_tol=1e-9):
                     p.error(
@@ -596,8 +615,11 @@ def resolve_params(p: Project) -> None:
             p.rests_on[name] = "source"
             pending.pop(name)
         elif basis == "measured":
-            item = p.evidence.get(str(spec.get("from", "")).partition(".")[0])
-            if item is None or "image" not in item:
+            ref = str(spec.get("from", ""))
+            item, why = p.item(ref.partition(".")[0]), p.cites_repeated(ref)
+            if why:
+                p.error("param-from", f"param {name}: from: {ref!r} {why}")
+            elif item is None or "image" not in item:
                 p.error("param-from", f"param {name}: measured needs from: an image evidence id")
             for key in ("value", "method", "uncertainty"):
                 if key not in spec:
@@ -694,6 +716,31 @@ def check_refs(c: dict) -> list[str]:
 def pose_refs(c: dict) -> list[str]:
     """The joint values check c's pose names: each a param or an <evidence>.<key> ledger value."""
     return [str(v) for v in (c.get("pose") or {}).values()]
+
+
+def cited_refs(p: Project, c: dict) -> list[str]:
+    """The ledger values check c cites: those it compares, and those its pose names."""
+    return check_refs(c) + [ref for ref in pose_refs(c) if ref not in p.params]
+
+
+def calibration_ref(o: dict) -> str:
+    """The ledger value overlay o is scaled by."""
+    return str((o.get("calibration") or {}).get("evidence", ""))
+
+
+def check_citations(p: Project) -> None:
+    """A check or overlay citing a repeated evidence id reads neither item, so the build leaves it
+    unevaluated; its finding is raised here, so it is raised whether or not the model builds."""
+    for c in p.checks:
+        for ref in cited_refs(p, c):
+            why = p.cites_repeated(ref)
+            if why:
+                p.error("check-config", f"check {c.get('id', '?')}: {ref} {why}")
+    for o in p.overlays:
+        ref = calibration_ref(o)
+        why = p.cites_repeated(ref)
+        if why:
+            p.error("overlay-config", f"overlay {o.get('id', '?')}: calibration {ref} {why}")
 
 
 def mass_params(p: Project, parts=None) -> list[str]:
@@ -833,7 +880,8 @@ def check_evidence_used(p: Project) -> None:
     }
     checked = {ref for c in p.checks for ref in check_refs(c)}
     used |= checked | {ref for c in p.checks for ref in pose_refs(c)}
-    for eid, e in p.evidence.items():
+    for e in p.evidence:
+        eid = e["id"]
         if eid in measured_from and not e.get("values"):
             continue
         if e.get("scope") in ("not-modeled", "context"):
@@ -860,7 +908,10 @@ def check_gaps(p: Project) -> None:
 def check_conflicts(p: Project) -> None:
     for c in p.conflicts:
         for eid in c.get("evidence", []):
-            if eid not in p.evidence:
+            why = p.cites_repeated(eid)
+            if why:
+                p.error("conflict-ref", f"conflict {c.get('id')}: {why}")
+            elif p.item(eid) is None:
                 p.error("conflict-ref", f"conflict {c.get('id')}: unknown evidence {eid}")
         if not c.get("resolution"):
             p.warn("conflict-open", f"conflict {c.get('id')}: {c.get('summary', '')} (unresolved)")
@@ -978,6 +1029,7 @@ def check_static(p: Project) -> None:
     check_evidence_used(p)
     check_gaps(p)
     check_conflicts(p)
+    check_citations(p)
     check_units(p)
     check_tolerances(p)
     lint.lint_model(p)

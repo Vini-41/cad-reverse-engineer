@@ -47,12 +47,12 @@ def awaiting_confirmation(p: Project) -> list[dict]:
     """The figure readings no named human has confirmed yet, each with its crop."""
     return [
         {
-            "evidence": eid,
+            "evidence": e["id"],
             "locator": e.get("locator"),
             "reading": e.get("reading"),
             "image": e["image"],
         }
-        for eid, e in p.evidence.items()
+        for e in p.evidence
         if "image" in e and not e.get("confirmed_by")
     ]
 
@@ -405,7 +405,7 @@ def write(
         ["id", "source", "locator", "values", "anchor"],
         [
             [
-                eid,
+                e["id"],
                 e.get("source"),
                 f"{e.get('locator', '')}" + (f", p{e['page']}" if e.get("page") else ""),
                 ", ".join(f"{k}={v}" for k, v in (e.get("values") or {}).items()),
@@ -414,7 +414,7 @@ def write(
                 else f"figure {e.get('image')}: “{e.get('reading')}”"
                 + ("" if e.get("confirmed_by") else " (unconfirmed)"),
             ]
-            for eid, e in p.evidence.items()
+            for e in p.evidence
         ],
     )
 

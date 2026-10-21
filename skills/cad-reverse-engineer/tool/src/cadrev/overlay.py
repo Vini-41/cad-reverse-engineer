@@ -7,7 +7,7 @@ import textwrap
 from pathlib import Path
 
 from .geometry import Built
-from .project import Project
+from .project import Project, calibration_ref
 
 VIEWS = {"front": (0, 2), "top": (0, 1), "right": (1, 2)}  # (horizontal, vertical) axes
 DPI = 100
@@ -41,6 +41,8 @@ def render(p: Project, built: Built) -> list[Path]:
     written = []
     for o in p.overlays:
         oid = o.get("id", "?")
+        if p.cites_repeated(calibration_ref(o)):
+            continue  # it is scaled by neither item; check_citations said so before the build
         try:
             cal = o["calibration"]
             known = p.evidence_value(cal["evidence"])
