@@ -21,6 +21,7 @@ def check(
     uv_sync_code: int = 0,
     failing: dict[str, str] | None = None,
     bodies: dict[str, str] | None = None,
+    args: list[str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], list]:
     """Run the copied check; each stub in failing prints its text and exits 1, and each in bodies
     runs its shell body instead."""
@@ -44,7 +45,10 @@ def check(
     subprocess.run(["git", "init", "-q", str(root)], check=True)
     env = {**os.environ, "PATH": f"{bin_}:/usr/bin:/bin"}
     result = subprocess.run(
-        ["bash", str(root / "scripts/check")], capture_output=True, text=True, env=env
+        ["bash", str(root / "scripts/check"), *(args or [])],
+        capture_output=True,
+        text=True,
+        env=env,
     )
     return result, log.read_text().splitlines() if log.exists() else []
 
@@ -105,3 +109,22 @@ def test_the_end_repeats_red_on_mains_count_past_the_examples_output(tmp_path):
 def test_guard_the_end_names_no_count_where_red_on_main_printed_none(tmp_path):
     result, _ = check(tmp_path)
     assert not result.stdout.splitlines()[-1].startswith("red-on-main:")
+
+
+def test_lint_runs_only_the_type_and_ruff_steps(tmp_path):
+    result, calls = check(tmp_path, args=["--lint"])
+    assert result.returncode == 0
+    assert calls == [
+        "uv sync --locked --extra test",
+        "uv run pyright",
+        "uv run ruff check ../../..",
+        "uv run ruff format --check ../../..",
+    ]
+    assert result.stdout.splitlines()[-1] == "all steps passed"
+
+
+def test_an_unknown_argument_runs_no_step(tmp_path):
+    result, calls = check(tmp_path, args=["--fast"])
+    assert result.returncode == 2
+    assert calls == []
+    assert "usage: scripts/check [--lint]" in result.stderr
