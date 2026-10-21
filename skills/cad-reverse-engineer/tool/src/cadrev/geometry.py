@@ -7,6 +7,7 @@ import math
 import re
 import sys
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple, Protocol
@@ -34,8 +35,9 @@ AXES = {"x": 0, "y": 1, "z": 2}
 class Params:
     """Read-only parameter access that records which parameters the model used."""
 
-    def __init__(self, values: dict[str, float]):
+    def __init__(self, values: dict[str, float], declared: Iterable[str]):
         self._values = values
+        self._declared = set(declared)
         self.used: set[str] = set()
 
     def __getattr__(self, name: str) -> float:
@@ -44,6 +46,8 @@ class Params:
         try:
             value = self._values[name]
         except KeyError:
+            if name in self._declared:
+                raise AttributeError(f"param {name!r} has no value") from None
             raise AttributeError(f"no parameter {name!r} in params.yaml") from None
         self.used.add(name)
         return value
@@ -354,7 +358,7 @@ def build(p: Project) -> Built | None:
     spec = importlib.util.spec_from_file_location("cadrev_model", p.root / "model.py")
     assert spec is not None and spec.loader is not None  # a .py path always gets a source loader
     module = importlib.util.module_from_spec(spec)
-    params = Params(p.values)
+    params = Params(p.values, p.params)
     writes_bytecode, sys.dont_write_bytecode = sys.dont_write_bytecode, True  # no __pycache__/
     try:
         spec.loader.exec_module(module)

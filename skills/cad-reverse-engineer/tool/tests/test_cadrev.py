@@ -1503,6 +1503,44 @@ def test_derived_param_using_a_source_param_whose_from_failed_names_it_as_having
     assert findings(proj_dir, "param-derived") == ["param half: input pitch has no value"]
 
 
+def _half_without_a_value(root: Path) -> None:
+    """Add derived param half, whose expr uses an undefined name, so it has no value."""
+    add_params(root, half={"basis": "derived", "expr": "pitchh / 2"})
+
+
+def test_model_reading_a_source_param_whose_from_failed_fails_naming_it_as_having_no_value(
+    proj_dir,
+):
+    _unresolved_pitch(proj_dir)
+    assert findings(proj_dir, "model-build") == [
+        "model.build failed: AttributeError: param 'pitch' has no value"
+    ]
+
+
+def test_model_reading_a_derived_param_with_an_undefined_name_fails_naming_it_as_having_no_value(
+    proj_dir,
+):
+    _half_without_a_value(proj_dir)
+    _model_with(proj_dir, line="extra = p.half")
+    assert findings(proj_dir, "model-build") == [
+        "model.build failed: AttributeError: param 'half' has no value"
+    ]
+
+
+def test_guard_model_reading_a_name_params_yaml_does_not_declare_fails_naming_it_missing(proj_dir):
+    _model_with(proj_dir, line="extra = p.pitch_2")
+    assert findings(proj_dir, "model-build") == [
+        "model.build failed: AttributeError: no parameter 'pitch_2' in params.yaml"
+    ]
+
+
+def test_guard_model_never_reading_a_param_without_a_value_builds_and_its_checks_run(proj_dir):
+    _half_without_a_value(proj_dir)
+    _, report = verify(proj_dir)
+    assert "model-build" not in [f["rule"] for f in report["findings"]]
+    assert report["checks"] and all(c["ok"] for c in report["checks"])
+
+
 def test_derived_params_through_a_chain_each_name_their_direct_input_as_having_no_value(proj_dir):
     _unresolved_pitch(proj_dir)
     add_params(
