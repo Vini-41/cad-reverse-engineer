@@ -7,9 +7,10 @@ import math
 import re
 import sys
 from collections import Counter
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import NamedTuple, Protocol
 
@@ -1123,6 +1124,44 @@ Evaluated = tuple[list[CheckResult], accounting.Reads]
 it leaves at what it had read so far."""
 
 
+@dataclass
+class _Reading:
+    """What check c's evaluation has read so far: the assemblies it was placed or posed at, and
+    for a mass check the parts it weighs (weighs) and those it weighs in several instances with no
+    stated count (uncounted)."""
+
+    p: Project
+    built: Built
+    c: dict
+    placed: list[Built] = field(default_factory=list)
+    weighs: tuple[str, ...] | None = None
+    uncounted: tuple[str, ...] = ()
+
+    def at(self, *placed: Built) -> None:
+        """Record the assemblies the check was placed or posed at."""
+        self.placed += placed
+
+    @property
+    def reads(self) -> accounting.Reads:
+        """The check's Reads: what it has read so far, with what the model gives it there."""
+        given = _given(self.built, self.c, *self.placed)
+        return accounting.reads(self.p, self.c, given, self.weighs, self.uncounted)
+
+
+def _evaluate(
+    p: Project, built: Built, c: dict, evaluation: Callable[[_Reading], Iterable[CheckResult]]
+) -> Evaluated:
+    """Check c evaluated by its kind's evaluation, which records what it reads in a _Reading. A
+    missing or unknown key or value that stops it is a [check-config] finding; it keeps the
+    results a generator yielded before (an evaluation returning a list keeps none), and its Reads
+    are what it had read so far."""
+    reading, results = _Reading(p, built, c), []
+    with _config_findings(p, c):
+        for result in evaluation(reading):
+            results.append(result)
+    return results, reading.reads
+
+
 @contextmanager
 def _config_findings(p: Project, c: dict) -> Iterator[None]:
     """A missing or unknown key or value met evaluating check c, as a [check-config] finding."""
@@ -1132,24 +1171,15 @@ def _config_findings(p: Project, c: dict) -> Iterator[None]:
         p.error("check-config", f"check {c.get('id', '?')}: missing or unknown {exc}")
 
 
-def _range(p: Project, built: Built, c: dict, poser: Poser | None) -> Evaluated:
-    """A range check, reading its joint's range ends and what the model gives the poses it
-    reaches."""
-    results: list[CheckResult] = []
-    reached: list[Built] = []  # kept where a finding then stops it, so it reads what it reached
-    with _config_findings(p, c):
-        results = _range_ends(p, built, c, poser, reached)
-    return results, accounting.reads(p, c, _given(built, c, *reached))
-
-
-def _range_ends(
-    p: Project, built: Built, c: dict, poser: Poser | None, reached_at: list[Built]
+def _range(
+    p: Project, built: Built, c: dict, poser: Poser | None, reading: _Reading
 ) -> list[CheckResult]:
-    """A range check's results, one per end, adding each assembly it is placed at to reached_at.
-    With between, the model posed at that end of its joint's range, the angle there, or between
-    two datums the distance, compared with the end's ledger value. Without, the model posed
-    at the ledger value itself, so a loop that cannot close or a joint pushed past its own range
-    there is a finding, and the range param for that end compared with it."""
+    """A range check's results, one per end, reading its joint's range ends and what the model
+    gives each pose it reaches. With between, the model posed at that end of its joint's range,
+    the angle there, or between two datums the distance, compared with the end's ledger value.
+    Without, the model posed at the ledger value itself, so a loop that cannot close or a joint
+    pushed past its own range there is a finding, and the range param for that end compared with
+    it."""
     joint = _joint(p, built, c, poser)
     if joint is None or poser is None:
         return []
@@ -1167,7 +1197,7 @@ def _range_ends(
             if reached is None:
                 continue
             placed, pose = reached
-            reached_at.append(placed)
+            reading.at(placed)
             points = _datums(p, placed, c)
             if points is not None and between_two(c):
                 measured, shown = _datum_distance(c, points), f" {' - '.join(c['between'])}"
@@ -1184,7 +1214,7 @@ def _range_ends(
             reached = poser(c, {name: (stated, ref)})
             if reached is None:
                 continue
-            reached_at.append(reached[0])
+            reading.at(reached[0])
             pose = reached[1]
             measured = p.values[param] * p.compared_size(quantity)
             shown = f"{kind.symbol} {name}'s range end ({param})"
@@ -1222,23 +1252,20 @@ def _weighed(p: Project, built: Built, c: dict) -> Counter | None:
     return None if missing else tally
 
 
-def _mass(p: Project, built: Built, c: dict) -> Evaluated:
+def _mass(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckResult]:
     """A mass check, reading the params of the parts it weighs, even where a finding then stops
     it, and the parts it weighs in several instances with no counts entry."""
-    read = accounting.reads(p, c, _given(built, c))
-    with _config_findings(p, c):
-        tally = _weighed(p, built, c)
-        if tally is None:
-            return [], read
-        read = accounting.reads(p, c, read.given, tuple(tally))
-        result = _weighed_mass(p, built, c, tally)
-        if result is None:
-            return [], read
-        counts = c.get("counts", {})
-        result.uncounted = {n: k for n, k in tally.items() if k > 1 and n not in counts}
-        uncounted = tuple(result.uncounted)
-        return [result], accounting.reads(p, c, read.given, tuple(tally), uncounted)
-    return [], read
+    tally = _weighed(p, built, c)
+    if tally is None:
+        return []
+    reading.weighs = tuple(tally)
+    result = _weighed_mass(p, built, c, tally)
+    if result is None:
+        return []
+    counts = c.get("counts", {})
+    result.uncounted = {n: k for n, k in tally.items() if k > 1 and n not in counts}
+    reading.uncounted = tuple(result.uncounted)
+    return [result]
 
 
 def _weighed_mass(p: Project, built: Built, c: dict, tally: Counter) -> CheckResult | None:
@@ -1274,18 +1301,18 @@ def _weighed_mass(p: Project, built: Built, c: dict, tally: Counter) -> CheckRes
 
 
 def _interference(
-    p: Project, built: Built, c: dict, placed: Built, poser: Poser | None
-) -> Evaluated:
+    p: Project, built: Built, c: dict, placed: Built, poser: Poser | None, reading: _Reading
+) -> list[CheckResult]:
     """An interference check, on the placed assembly or, with sweep, across the poses of its
     joint's range, reading that joint's range ends and what the model gives the poses it is
     evaluated at; no result after a finding saying why it cannot be swept."""
-    sweep, poses, results = None, [(placed, None)], []
-    with _config_findings(p, c):
-        swept = _sweep(p, built, c, poser) if "sweep" in c else (None, poses)
-        if swept is not None:
-            sweep, poses = swept
-            results = [_worst_overlap(p, c, poses, sweep)]
-    return results, accounting.reads(p, c, _given(built, c, *(a for a, _ in poses)))
+    reading.at(placed)  # read where a sweep stops; each swept pose moves what placed does
+    swept = _sweep(p, built, c, poser) if "sweep" in c else (None, [(placed, None)])
+    if swept is None:
+        return []
+    sweep, poses = swept
+    reading.at(*(assembly for assembly, _ in poses))
+    return [_worst_overlap(p, c, poses, sweep)]
 
 
 def _worst_overlap(p: Project, c: dict, poses: list, sweep: dict | None) -> CheckResult:
@@ -1329,92 +1356,89 @@ def _worst_overlap(p: Project, c: dict, poses: list, sweep: dict | None) -> Chec
 
 
 def _stroke(
-    p: Project, built: Built, c: dict, reached: tuple[Built, dict | None], poser: Poser | None
-) -> Evaluated:
+    p: Project,
+    built: Built,
+    c: dict,
+    reached: tuple[Built, dict | None],
+    poser: Poser | None,
+    reading: _Reading,
+) -> list[CheckResult]:
     """A stroke check: how much its cable shortens from as built to the pose the check names
     (reached), or without one to its wheel's full turn, compared with the ledger value, at that
     pose; reading what the model gives that pose."""
-    read = accounting.reads(p, c, _given(built, c, reached[0]))
-    with _config_findings(p, c):
-        cid, name = c.get("id", "?"), c["cable"]
-        cable = built.cables.get(name)
-        if cable is None:
-            if not built.dropped:  # else that finding says the cables were dropped
-                p.error("check-config", f"check {cid}: {name} is not a cable")
-            return [], read
-        placed, pose = reached
-        if pose is None:
-            if "wheel" not in cable:
-                p.error(
-                    "check-config",
-                    f"check {cid}: cable {name} has no wheel, so name the pose its stroke is "
-                    "taken at",
-                )
-                return [], read
-            if poser is None:
-                return [], read
-            turn = cable_turn(built, cable)
-            posed = poser(c, {cable["wheel"]: (p.values[turn], turn)})
-            if posed is None:
-                return [], read
-            placed, pose = posed
-        shortening = cable_length(built, cable) - cable_length(placed, cable)
-        ref = f"{c['evidence']}.{c['key']}"
-        result = _compared(p, c, cid, ref, shortening, f" shortening of {name}")
-        result.pose = pose
-        return [result], accounting.reads(p, c, _given(built, c, placed))
-    return [], read
+    placed, pose = reached
+    reading.at(placed)
+    cid, name = c.get("id", "?"), c["cable"]
+    cable = built.cables.get(name)
+    if cable is None:
+        if not built.dropped:  # else that finding says the cables were dropped
+            p.error("check-config", f"check {cid}: {name} is not a cable")
+        return []
+    if pose is None:
+        if "wheel" not in cable:
+            p.error(
+                "check-config",
+                f"check {cid}: cable {name} has no wheel, so name the pose its stroke is taken at",
+            )
+            return []
+        if poser is None:
+            return []
+        turn = cable_turn(built, cable)
+        posed = poser(c, {cable["wheel"]: (p.values[turn], turn)})
+        if posed is None:
+            return []
+        placed, pose = posed
+        reading.at(placed)
+    shortening = cable_length(built, cable) - cable_length(placed, cable)
+    ref = f"{c['evidence']}.{c['key']}"
+    result = _compared(p, c, cid, ref, shortening, f" shortening of {name}")
+    result.pose = pose
+    return [result]
 
 
-def _bbox(p: Project, built: Built, c: dict, placed: Built) -> Evaluated:
-    """A bbox check, one result per axis it names: its envelope's size along that axis."""
-    cid, results = c.get("id", "?"), []
-    read = accounting.reads(p, c, _given(built, c, placed))
-    with _config_findings(p, c):
-        shape = _envelope(p, placed, c)
-        if shape is None:
-            return [], read
-        s = shape.bounding_box().size
-        size = (s.X, s.Y, s.Z)
-        for key, axis in c["axes"].items():
-            ref, measured = f"{c['evidence']}.{key}", size[AXES[axis]]
-            results.append(_compared(p, c, f"{cid}.{key}", ref, measured, f" along {axis}"))
-    return results, read
+def _bbox(p: Project, c: dict, placed: Built, reading: _Reading) -> Iterator[CheckResult]:
+    """A bbox check, one result per axis it names: its envelope's size along that axis, each
+    yielded as it is compared, so a finding that stops it at an axis keeps the earlier axes'."""
+    cid = c.get("id", "?")
+    reading.at(placed)
+    shape = _envelope(p, placed, c)
+    if shape is None:
+        return
+    s = shape.bounding_box().size
+    size = (s.X, s.Y, s.Z)
+    for key, axis in c["axes"].items():
+        ref, measured = f"{c['evidence']}.{key}", size[AXES[axis]]
+        yield _compared(p, c, f"{cid}.{key}", ref, measured, f" along {axis}")
 
 
-def _distance(p: Project, built: Built, c: dict, placed: Built) -> Evaluated:
+def _distance(p: Project, c: dict, placed: Built, reading: _Reading) -> list[CheckResult]:
     """A distance check: the distance between its two datums."""
-    read = accounting.reads(p, c, _given(built, c, placed))
-    with _config_findings(p, c):
-        points = _datums(p, placed, c)
-        if points is None:
-            return [], read
-        measured = _datum_distance(c, points)
-        ref, between = f"{c['evidence']}.{c['key']}", " - ".join(c["between"])
-        return [_compared(p, c, c.get("id", "?"), ref, measured, f" {between}")], read
-    return [], read
+    reading.at(placed)
+    points = _datums(p, placed, c)
+    if points is None:
+        return []
+    measured = _datum_distance(c, points)
+    ref, between = f"{c['evidence']}.{c['key']}", " - ".join(c["between"])
+    return [_compared(p, c, c.get("id", "?"), ref, measured, f" {between}")]
 
 
-def _angle(p: Project, built: Built, c: dict, placed: Built) -> Evaluated:
+def _angle(p: Project, c: dict, placed: Built, reading: _Reading) -> list[CheckResult]:
     """An angle check: the angle at its vertex datum between the other two."""
-    read = accounting.reads(p, c, _given(built, c, placed))
-    with _config_findings(p, c):
-        points = _datums(p, placed, c)
-        measured = None if points is None else _datum_angle(p, c, points)
-        if measured is None:
-            return [], read
-        ref, (a, vertex, b) = f"{c['evidence']}.{c['key']}", c["between"]
-        shown = f"° at {vertex} between {a} and {b}"
-        return [_compared(p, c, c.get("id", "?"), ref, measured, shown)], read
-    return [], read
+    reading.at(placed)
+    points = _datums(p, placed, c)
+    measured = None if points is None else _datum_angle(p, c, points)
+    if measured is None:
+        return []
+    ref, (a, vertex, b) = f"{c['evidence']}.{c['key']}", c["between"]
+    shown = f"° at {vertex} between {a} and {b}"
+    return [_compared(p, c, c.get("id", "?"), ref, measured, shown)]
 
 
-def _unknown_kind(p: Project, built: Built, c: dict) -> Evaluated:
+def _unknown_kind(p: Project, c: dict, reading: _Reading) -> list[CheckResult]:
     """A check of a kind with no evaluation: a [check-kind] finding, reading only what it names
     and the range ends of a joint it names."""
-    read = accounting.reads(p, c, _given(built, c))
     p.error("check-kind", f"check {c.get('id', '?')}: unknown kind {c.get('kind')!r}")
-    return [], read
+    return []
 
 
 def _placed_for(
@@ -1451,22 +1475,24 @@ def run_checks(
         if reached is None:
             continue
         placed, pose = reached
+        evaluation: Callable[[_Reading], Iterable[CheckResult]]
         if kind == "bbox":
-            found, read = _bbox(p, built, c, placed)
+            evaluation = partial(_bbox, p, c, placed)
         elif kind == "distance":
-            found, read = _distance(p, built, c, placed)
+            evaluation = partial(_distance, p, c, placed)
         elif kind == "angle":
-            found, read = _angle(p, built, c, placed)
+            evaluation = partial(_angle, p, c, placed)
         elif kind == "mass":
-            found, read = _mass(p, built, c)
+            evaluation = partial(_mass, p, built, c)
         elif kind == "stroke":
-            found, read = _stroke(p, built, c, reached, poser)
+            evaluation = partial(_stroke, p, built, c, reached, poser)
         elif kind == "range":
-            found, read = _range(p, built, c, poser)
+            evaluation = partial(_range, p, built, c, poser)
         elif kind == "interference":
-            found, read = _interference(p, built, c, placed, poser)
+            evaluation = partial(_interference, p, built, c, placed, poser)
         else:
-            found, read = _unknown_kind(p, built, c)
+            evaluation = partial(_unknown_kind, p, c)
+        found, read = _evaluate(p, built, c, evaluation)
         results += found
         reads[i] = read
         basis, params = accounting.rests_on(p, read)

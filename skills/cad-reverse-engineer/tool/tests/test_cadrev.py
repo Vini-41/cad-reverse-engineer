@@ -6964,6 +6964,37 @@ def test_stroke_check_on_a_cable_with_no_wheel_needs_a_pose(proj_dir, tmp_path):
     )
 
 
+def _stopped_after_its_pose(root: Path, tmp_path: Path, **changes) -> dict:
+    """The report of cabled with sourced turn and closed values and stroke check full alone, its
+    key naming no value in N1, so a finding stops it once it is posed."""
+    cabled(root, tmp_path, sourced=True)
+    edit(
+        root,
+        "checks.yaml",
+        lambda d: d.update(checks=[c for c in d["checks"] if c["id"] == "full"]),
+    )
+    _check("full", key="none", **changes)(root, tmp_path)
+    report = verify(root)[1]
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-config"] == [
+        "check full: missing or unknown 'evidence value N1.none'"
+    ]
+    return report
+
+
+def test_stroke_check_with_no_pose_stopped_after_its_wheels_full_turn_reads_turn_and_closed(
+    proj_dir, tmp_path
+):
+    report = _stopped_after_its_pose(proj_dir, tmp_path)
+    assert _TURN_AND_CLOSED.isdisjoint(_unchecked_in(report))
+
+
+def test_guard_stroke_check_posed_at_the_full_turn_stopped_after_it_reads_turn_and_closed(
+    proj_dir, tmp_path
+):
+    report = _stopped_after_its_pose(proj_dir, tmp_path, pose={"spool": "turn"})
+    assert _TURN_AND_CLOSED.isdisjoint(_unchecked_in(report))
+
+
 def test_cable_through_a_datum_on_the_axis_of_a_joint_it_closes_is_cable_on_axis(
     proj_dir, tmp_path
 ):
