@@ -590,6 +590,18 @@ def expr_names(expr: str) -> set[str]:
     return {n.id for n in ast.walk(ast.parse(expr, mode="eval")) if isinstance(n, ast.Name)}
 
 
+def _on_cycle(name: str, inputs: dict[str, set[str]]) -> bool:
+    """Whether following name's inputs through the params in inputs leads back to name."""
+    seen, todo = set(), list(inputs[name])
+    while todo:
+        if (n := todo.pop()) == name:
+            return True
+        if n in inputs and n not in seen:
+            seen.add(n)
+            todo += inputs[n]
+    return False
+
+
 def resolve_params(p: Project) -> None:
     """Fill p.values, enforcing each basis's obligations."""
     pending = dict(p.params)
@@ -698,8 +710,22 @@ def resolve_params(p: Project) -> None:
                 pending.pop(name)
                 progressed = True
         if pending and not progressed:
+            # What is still pending waits on an input with no value; any not on a cycle names
+            # the inputs it waits on.
+            inputs = {
+                name: expr_names(spec["expr"]) - MATH_NAMES.keys() for name, spec in pending.items()
+            }
             for name in pending:
-                p.error("param-derived", f"param {name}: circular dependency")
+                if _on_cycle(name, inputs):
+                    p.error("param-derived", f"param {name}: circular dependency")
+                    continue
+                missing = sorted(inputs[name] - p.values.keys())
+                if len(missing) == 1:
+                    p.error("param-derived", f"param {name}: input {missing[0]} has no value")
+                else:
+                    p.error(
+                        "param-derived", f"param {name}: inputs {', '.join(missing)} have no value"
+                    )
             break
 
 

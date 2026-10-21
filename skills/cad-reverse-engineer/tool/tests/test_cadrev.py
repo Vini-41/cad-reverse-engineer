@@ -1490,6 +1490,90 @@ def test_derived_expr_syntax_error_is_a_finding_and_other_params_still_evaluate(
     assert report["params"]["half_pitch"]["value"] == 15
 
 
+def _unresolved_pitch(root: Path) -> None:
+    """Point source param pitch at a ledger value that does not exist, so it has no value."""
+    edit(root, "params.yaml", lambda d: d["params"]["pitch"].update({"from": "pitch.nope"}))
+
+
+def test_derived_param_using_a_source_param_whose_from_failed_names_it_as_having_no_value(
+    proj_dir,
+):
+    _unresolved_pitch(proj_dir)
+    add_params(proj_dir, half={"basis": "derived", "expr": "pitch / 2"})
+    assert findings(proj_dir, "param-derived") == ["param half: input pitch has no value"]
+
+
+def test_derived_params_through_a_chain_each_name_their_direct_input_as_having_no_value(proj_dir):
+    _unresolved_pitch(proj_dir)
+    add_params(
+        proj_dir,
+        half={"basis": "derived", "expr": "pitch / 2"},
+        quarter={"basis": "derived", "expr": "half / 2"},
+    )
+    assert sorted(findings(proj_dir, "param-derived")) == [
+        "param half: input pitch has no value",
+        "param quarter: input half has no value",
+    ]
+
+
+def test_derived_param_using_one_dropped_for_an_undefined_name_names_it_as_having_no_value(
+    proj_dir,
+):
+    add_params(
+        proj_dir,
+        half={"basis": "derived", "expr": "pitchh / 2"},
+        quarter={"basis": "derived", "expr": "half / 2"},
+    )
+    assert findings(proj_dir, "param-derived") == [
+        "param half: expr uses undefined ['pitchh']",
+        "param quarter: input half has no value",
+    ]
+
+
+def test_derived_param_with_several_inputs_without_a_value_names_each_in_sorted_order(proj_dir):
+    _unresolved_pitch(proj_dir)
+    add_params(
+        proj_dir,
+        half={"basis": "derived", "expr": "pitchh / 2"},
+        both={"basis": "derived", "expr": "pitch + half + link_H"},
+    )
+    assert sorted(findings(proj_dir, "param-derived")) == [
+        "param both: inputs half, pitch have no value",
+        "param half: expr uses undefined ['pitchh']",
+    ]
+
+
+def test_derived_param_using_a_member_of_a_cycle_it_is_not_on_names_that_member(proj_dir):
+    add_params(
+        proj_dir,
+        probe={"basis": "derived", "expr": "loop_a * 2"},
+        loop_a={"basis": "derived", "expr": "loop_b + 1"},
+        loop_b={"basis": "derived", "expr": "loop_a + 1"},
+    )
+    assert sorted(findings(proj_dir, "param-derived")) == [
+        "param loop_a: circular dependency",
+        "param loop_b: circular dependency",
+        "param probe: input loop_a has no value",
+    ]
+
+
+def test_guard_both_members_of_a_two_param_cycle_are_a_circular_dependency(proj_dir):
+    add_params(
+        proj_dir,
+        loop_a={"basis": "derived", "expr": "loop_b + 1"},
+        loop_b={"basis": "derived", "expr": "loop_a + 1"},
+    )
+    assert sorted(findings(proj_dir, "param-derived")) == [
+        "param loop_a: circular dependency",
+        "param loop_b: circular dependency",
+    ]
+
+
+def test_guard_a_self_referencing_derived_param_is_a_circular_dependency(proj_dir):
+    add_params(proj_dir, a={"basis": "derived", "expr": "a + 1"})
+    assert findings(proj_dir, "param-derived") == ["param a: circular dependency"]
+
+
 @pytest.mark.parametrize(
     "returned",
     ["[]", "None", '{"parts": []}', '{"parts": {}, "datums": {"a": 1}}', '{"parts": {"link": 3}}'],
