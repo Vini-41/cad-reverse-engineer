@@ -343,7 +343,7 @@ def _solve(
     """The assembly with the named joints at values (in the project's angle unit, from as built),
     every other actuated joint held as built and the passive ones solved to close the loops; None
     after [loop-open] for each loop that stays open, or [joint-range] for each joint, but those
-    set_by_check, that ends outside its range."""
+    set_by_check, that ends outside its range. The assembly's moved names the joints values sets."""
     mujoco = _mujoco()
     import numpy as np
 
@@ -441,4 +441,4 @@ def _solve(
         frame = d.xmat[bid].reshape(3, 3)
         plane = Plane(origin=tuple(d.xpos[bid]), x_dir=tuple(frame[:, 0]), z_dir=tuple(frame[:, 2]))
         assembly[inst] = (part, Location(plane))
-    return replace(built, assembly=assembly)
+    return replace(built, assembly=assembly, moved=frozenset(values))

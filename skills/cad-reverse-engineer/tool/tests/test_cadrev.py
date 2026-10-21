@@ -6848,6 +6848,95 @@ def test_stroke_check_posed_through_a_gear_on_its_wheel_rests_on_the_closed_angl
     assert (half["rests_on"], half["rests_on_params"]) == ("proposed", ["turn", "c1", "c2"])
 
 
+# A check of each kind posed at the spool's full turn, besides a stroke check.
+_AT_FULL_TURN = {"evidence": "N1", "key": "half", "tol": 0.5, "pose": {"spool": "turn"}}
+_POSED_AT_THE_SPOOL = {
+    "distance": {"between": ["ground_1.d", "tip_1.d"], "instances": ["ground_1", "tip_1"]}
+    | _AT_FULL_TURN,
+    "angle": {
+        "between": ["ground_1.d", "spool_1.d", "tip_1.d"],
+        "instances": ["ground_1", "spool_1", "tip_1"],
+    }
+    | _AT_FULL_TURN,
+    "interference": {"pairs": [["ground_1", "tip_1"]], "pose": {"spool": "turn"}},
+    "bbox": {"instances": ["ground_1", "tip_1"], "evidence": "N1", "axes": {"half": "x"}}
+    | {"tol": 0.5, "pose": {"spool": "turn"}},
+}
+
+
+def _posed(report: dict) -> dict:
+    """The result of check posed, as report.json gives it: a bbox check's under posed.<key>."""
+    return next(c for c in report["checks"] if c["id"].split(".")[0] == "posed")
+
+
+def _only_posed_at_the_spool(kind: str):
+    """Replace cabled's stroke checks with one check of kind, posed at the spool's full turn."""
+    check = {"id": "posed", "kind": kind, **_POSED_AT_THE_SPOOL[kind]}
+    return lambda r, t: edit(r, "checks.yaml", lambda d: d.update(checks=[check]))
+
+
+@pytest.mark.parametrize("kind", list(_POSED_AT_THE_SPOOL))
+def test_a_check_posed_at_a_cables_wheel_reads_its_turn_and_closed_values(proj_dir, tmp_path, kind):
+    cabled(proj_dir, tmp_path, sourced=True)
+    _only_posed_at_the_spool(kind)(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    posed = _posed(report)
+    assert (posed["rests_on"], posed["rests_on_params"]) == ("source", ["turn", "c1", "c2"])
+    assert _TURN_AND_CLOSED.isdisjoint(_unchecked_in(report))
+
+
+@pytest.mark.parametrize("kind", list(_POSED_AT_THE_SPOOL))
+def test_a_check_posed_at_a_cables_wheel_rests_on_its_proposed_closed_values(
+    proj_dir, tmp_path, kind
+):
+    cabled(proj_dir, tmp_path)
+    _only_posed_at_the_spool(kind)(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    posed = _posed(report)
+    assert (posed["rests_on"], posed["rests_on_params"]) == ("proposed", ["turn", "c1", "c2"])
+
+
+def test_a_distance_check_posed_at_part_of_a_cables_turn_leaves_no_source_closed_value_unchecked(
+    proj_dir, tmp_path
+):
+    cabled(proj_dir, tmp_path, sourced=True)
+    _only_posed_at_the_spool("distance")(proj_dir, tmp_path)
+    _check("posed", pose={"spool": "half_turn"})(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    # half_turn is proposed, so the check rests on it; the source turn and closed values are read.
+    posed = _posed(report)
+    assert (posed["rests_on"], posed["rests_on_params"]) == ("proposed", ["half_turn"])
+    assert _TURN_AND_CLOSED.isdisjoint(_unchecked_in(report))
+
+
+def test_guard_a_check_posed_at_a_joint_no_cables_wheel_moves_reads_no_turn_or_closed_value(
+    proj_dir, tmp_path
+):
+    cabled(proj_dir, tmp_path, sourced=True)
+    _only_posed_at_the_spool("distance")(proj_dir, tmp_path)
+    _check("posed", pose={"input": "S30.turn"})(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    posed = _posed(report)
+    assert (posed["rests_on"], posed["rests_on_params"]) == ("source", [])
+    assert {"param c1", "param c2"} <= set(_unchecked_in(report))
+
+
+def test_an_interference_check_swept_over_a_cables_wheel_reads_its_closed_values(
+    proj_dir, tmp_path
+):
+    cabled(proj_dir, tmp_path, sourced=True)
+    _param("steps", basis="proposed", value=3, rationale="a resolution", gap="G1")(
+        proj_dir, tmp_path
+    )
+    swept = {"id": "posed", "kind": "interference", "pairs": [["ground_1", "tip_1"]]}
+    swept["sweep"] = {"joint": "spool", "steps": "steps"}
+    edit(proj_dir, "checks.yaml", lambda d: d.update(checks=[swept]))
+    _, report = verify(proj_dir)
+    posed = _posed(report)
+    assert (posed["rests_on"], posed["rests_on_params"]) == ("source", ["turn", "c1", "c2"])
+    assert _TURN_AND_CLOSED.isdisjoint(_unchecked_in(report))
+
+
 def test_a_slide_the_cable_crosses_but_the_pose_does_not_set_leaves_its_stroke_unchanged(
     proj_dir, tmp_path
 ):

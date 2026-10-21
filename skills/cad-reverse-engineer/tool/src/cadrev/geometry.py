@@ -100,6 +100,9 @@ class Built:
     # True when a [model-joint], [model-loop], [model-gear], [model-cable] or [model-return]
     # finding dropped the joints, loops, gears, tendons and cables build() returned
     dropped: bool = False
+    # The joints the pose this assembly is placed at moves, itself or through a gear or cable;
+    # none as built
+    moved: frozenset[str] = frozenset()
 
     @property
     def moving(self) -> dict:
@@ -122,8 +125,9 @@ class Mass:
 
 class Poser(Protocol):
     """What poses a check: the assembly placed at the joint values the check's pose names, and at
-    those set_to gives (joint -> (value in the project's angle unit, what it is from)), with the
-    pose as report.json shows it; None after a finding saying why it cannot be posed. A joint
+    those set_to gives (joint -> (value in the project's angle unit, what it is from)), its moved
+    naming those joints and each a gear or cable moves with them, with the pose as report.json
+    shows it; None after a finding saying why it cannot be posed. A joint
     set_to names is where its check puts it, so its own range is not held against it."""
 
     def __call__(self, c: dict, set_to: dict | None = None) -> tuple[Built, dict] | None: ...
@@ -1055,9 +1059,15 @@ def _joint_name(c: dict) -> str | None:
     return c.get("joint") or (c.get("sweep") or {}).get("joint")
 
 
-def _range_given(built: Built, c: dict) -> tuple[str, ...]:
-    """The params the model gives a check naming a joint: that joint's range ends."""
-    return tuple(built.joints.get(_joint_name(c) or "", {}).get("range", ()))
+def _given(built: Built, c: dict, *placed: Built) -> tuple[str, ...]:
+    """The params the model gives check c: the range ends of a joint it names, and for each cable
+    whose wheel the pose of an assembly placed for it moves, the wheel's turn and closed values."""
+    given = list(built.joints.get(_joint_name(c) or "", {}).get("range", ()))
+    moved = set().union(*(posed.moved for posed in placed))
+    for cable in built.cables.values():
+        if cable.get("wheel") in moved:
+            given += (cable_turn(built, cable), *cable["closes"].values())
+    return tuple(dict.fromkeys(given))
 
 
 def _joint(p: Project, built: Built, c: dict, poser: Poser | None) -> dict | None:
@@ -1123,17 +1133,21 @@ def _config_findings(p: Project, c: dict) -> Iterator[None]:
 
 
 def _range(p: Project, built: Built, c: dict, poser: Poser | None) -> Evaluated:
-    """A range check, reading its joint's range ends."""
-    read = accounting.reads(p, c, _range_given(built, c))
+    """A range check, reading its joint's range ends and what the model gives the poses it
+    reaches."""
+    results: list[CheckResult] = []
+    reached: list[Built] = []  # kept where a finding then stops it, so it reads what it reached
     with _config_findings(p, c):
-        return _range_ends(p, built, c, poser), read
-    return [], read
+        results = _range_ends(p, built, c, poser, reached)
+    return results, accounting.reads(p, c, _given(built, c, *reached))
 
 
-def _range_ends(p: Project, built: Built, c: dict, poser: Poser | None) -> list[CheckResult]:
-    """A range check's results, one per end. With between, the model posed at that end of its
-    joint's range, the angle there, or between two datums the distance, compared with the end's
-    ledger value. Without, the model posed
+def _range_ends(
+    p: Project, built: Built, c: dict, poser: Poser | None, reached_at: list[Built]
+) -> list[CheckResult]:
+    """A range check's results, one per end, adding each assembly it is placed at to reached_at.
+    With between, the model posed at that end of its joint's range, the angle there, or between
+    two datums the distance, compared with the end's ledger value. Without, the model posed
     at the ledger value itself, so a loop that cannot close or a joint pushed past its own range
     there is a finding, and the range param for that end compared with it."""
     joint = _joint(p, built, c, poser)
@@ -1153,6 +1167,7 @@ def _range_ends(p: Project, built: Built, c: dict, poser: Poser | None) -> list[
             if reached is None:
                 continue
             placed, pose = reached
+            reached_at.append(placed)
             points = _datums(p, placed, c)
             if points is not None and between_two(c):
                 measured, shown = _datum_distance(c, points), f" {' - '.join(c['between'])}"
@@ -1169,6 +1184,7 @@ def _range_ends(p: Project, built: Built, c: dict, poser: Poser | None) -> list[
             reached = poser(c, {name: (stated, ref)})
             if reached is None:
                 continue
+            reached_at.append(reached[0])
             pose = reached[1]
             measured = p.values[param] * p.compared_size(quantity)
             shown = f"{kind.symbol} {name}'s range end ({param})"
@@ -1209,7 +1225,7 @@ def _weighed(p: Project, built: Built, c: dict) -> Counter | None:
 def _mass(p: Project, built: Built, c: dict) -> Evaluated:
     """A mass check, reading the params of the parts it weighs, even where a finding then stops
     it, and the parts it weighs in several instances with no counts entry."""
-    read = accounting.reads(p, c, _range_given(built, c))
+    read = accounting.reads(p, c, _given(built, c))
     with _config_findings(p, c):
         tally = _weighed(p, built, c)
         if tally is None:
@@ -1260,30 +1276,27 @@ def _weighed_mass(p: Project, built: Built, c: dict, tally: Counter) -> CheckRes
 def _interference(
     p: Project, built: Built, c: dict, placed: Built, poser: Poser | None
 ) -> Evaluated:
-    """An interference check, reading the range ends of the joint it is swept over."""
-    read = accounting.reads(p, c, _range_given(built, c))
+    """An interference check, on the placed assembly or, with sweep, across the poses of its
+    joint's range, reading that joint's range ends and what the model gives the poses it is
+    evaluated at; no result after a finding saying why it cannot be swept."""
+    sweep, poses, results = None, [(placed, None)], []
     with _config_findings(p, c):
-        return list(filter(None, [_worst_overlap(p, built, c, placed, poser)])), read
-    return [], read
+        swept = _sweep(p, built, c, poser) if "sweep" in c else (None, poses)
+        if swept is not None:
+            sweep, poses = swept
+            results = [_worst_overlap(p, c, poses, sweep)]
+    return results, accounting.reads(p, c, _given(built, c, *(a for a, _ in poses)))
 
 
-def _worst_overlap(
-    p: Project, built: Built, c: dict, placed: Built, poser: Poser | None
-) -> CheckResult | None:
-    """An interference check's result: the worst overlap among its pairs, on the placed assembly
-    or, with sweep, across the poses of its joint's range, naming the pose it occurred at; None
-    after a finding saying why it cannot be swept."""
+def _worst_overlap(p: Project, c: dict, poses: list, sweep: dict | None) -> CheckResult:
+    """An interference check's result: the worst overlap among its pairs across poses, each a
+    (placed assembly, its pose), naming the pose it occurred at where sweep says how they were
+    swept."""
     cid, limit = c.get("id", "?"), overlap_limit(p, c)
     pairs = [tuple(pair) for pair in c.get("pairs", [])]
-    sweep, poses = None, [(placed, None)]
-    if "sweep" in c:
-        swept = _sweep(p, built, c, poser)
-        if swept is None:
-            return None
-        sweep, poses = swept
     pair_set = "listed" if pairs else "all"
     if not pairs:
-        names = sorted(placed.assembly)
+        names = sorted(poses[0][0].assembly)
         pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1 :]]
     worst, worst_pose, where, across = (0.0, ""), None, "", ""
     for assembly, pose in poses:
@@ -1320,9 +1333,8 @@ def _stroke(
 ) -> Evaluated:
     """A stroke check: how much its cable shortens from as built to the pose the check names
     (reached), or without one to its wheel's full turn, compared with the ledger value, at that
-    pose; reading, given among them, the wheel's turn and the closed values where the pose moves
-    the wheel, itself or through a gear or cable."""
-    read = accounting.reads(p, c, _range_given(built, c))
+    pose; reading what the model gives that pose."""
+    read = accounting.reads(p, c, _given(built, c, reached[0]))
     with _config_findings(p, c):
         cid, name = c.get("id", "?"), c["cable"]
         cable = built.cables.get(name)
@@ -1346,28 +1358,18 @@ def _stroke(
             if posed is None:
                 return [], read
             placed, pose = posed
-        moved, changed = set(pose), True  # the joints the pose sets, and those coupled to them
-        while changed:
-            changed = False
-            for link in couplings(p, built):
-                if {link.driver, link.driven} & moved and not {link.driver, link.driven} <= moved:
-                    moved |= {link.driver, link.driven}
-                    changed = True
-        given = read.given
-        if "wheel" in cable and cable["wheel"] in moved:
-            given += (cable_turn(built, cable), *cable["closes"].values())
         shortening = cable_length(built, cable) - cable_length(placed, cable)
         ref = f"{c['evidence']}.{c['key']}"
         result = _compared(p, c, cid, ref, shortening, f" shortening of {name}")
         result.pose = pose
-        return [result], accounting.reads(p, c, given)
+        return [result], accounting.reads(p, c, _given(built, c, placed))
     return [], read
 
 
 def _bbox(p: Project, built: Built, c: dict, placed: Built) -> Evaluated:
     """A bbox check, one result per axis it names: its envelope's size along that axis."""
     cid, results = c.get("id", "?"), []
-    read = accounting.reads(p, c, _range_given(built, c))
+    read = accounting.reads(p, c, _given(built, c, placed))
     with _config_findings(p, c):
         shape = _envelope(p, placed, c)
         if shape is None:
@@ -1382,7 +1384,7 @@ def _bbox(p: Project, built: Built, c: dict, placed: Built) -> Evaluated:
 
 def _distance(p: Project, built: Built, c: dict, placed: Built) -> Evaluated:
     """A distance check: the distance between its two datums."""
-    read = accounting.reads(p, c, _range_given(built, c))
+    read = accounting.reads(p, c, _given(built, c, placed))
     with _config_findings(p, c):
         points = _datums(p, placed, c)
         if points is None:
@@ -1395,7 +1397,7 @@ def _distance(p: Project, built: Built, c: dict, placed: Built) -> Evaluated:
 
 def _angle(p: Project, built: Built, c: dict, placed: Built) -> Evaluated:
     """An angle check: the angle at its vertex datum between the other two."""
-    read = accounting.reads(p, c, _range_given(built, c))
+    read = accounting.reads(p, c, _given(built, c, placed))
     with _config_findings(p, c):
         points = _datums(p, placed, c)
         measured = None if points is None else _datum_angle(p, c, points)
@@ -1410,7 +1412,7 @@ def _angle(p: Project, built: Built, c: dict, placed: Built) -> Evaluated:
 def _unknown_kind(p: Project, built: Built, c: dict) -> Evaluated:
     """A check of a kind with no evaluation: a [check-kind] finding, reading only what it names
     and the range ends of a joint it names."""
-    read = accounting.reads(p, c, _range_given(built, c))
+    read = accounting.reads(p, c, _given(built, c))
     p.error("check-kind", f"check {c.get('id', '?')}: unknown kind {c.get('kind')!r}")
     return [], read
 

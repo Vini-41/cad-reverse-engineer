@@ -13,9 +13,9 @@ from .project import RESTS_ON, Project, check_refs, expr_names, params_read_by
 class Reads:
     """What a check's evaluation read, shared by all its results: the params it reads itself
     (own), the params the model gives it (given: a joint's range ends, the wheel's turn and the
-    closed values a stroke's pose moves), the parts a mass check weighs (weighs, None for other
-    kinds) and the parts it weighs in several instances with no stated count (uncounted). The check
-    reads both own and given params: each is checked, and its rests on is judged from both."""
+    closed values a pose moves through a cable), the parts a mass check weighs (weighs, None for
+    other kinds) and the parts it weighs in several instances with no stated count (uncounted). The
+    check reads both own and given params: each is checked, and its rests on is judged from both."""
 
     own: tuple[str, ...] = ()
     given: tuple[str, ...] = ()
