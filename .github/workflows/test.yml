@@ -4,6 +4,12 @@ on: [push, pull_request, workflow_dispatch]
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # The ends of pyproject's requires-python, and the runner's own 3.12: uv picks the system
+      # interpreter where one matches, an early patch that caught an argparse bug a newer one hides.
+      matrix:
+        python: ["3.10", "3.12", "3.13"]
     defaults:
       run:
         working-directory: skills/cad-reverse-engineer/tool
@@ -12,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0  # red-on-main compares against the commit the change replaces
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --locked -p 3.12 --extra test
+      - run: uv sync --locked -p ${{ matrix.python }} --extra test
       - run: npm install -g @anthropic-ai/claude-code  # for scripts/check's plugin validation
       - run: ../../../scripts/check
         env:

@@ -18,6 +18,8 @@ if args[:2] == ["run", "list"]:
     print(state["runs"].get(sha, {}).get("id", ""))
 elif args[:2] == ["run", "watch"]:
     sys.exit(0 if state["conclusion"] == "success" else 1)
+elif args[:2] == ["run", "view"] and "--log-failed" in args:
+    print(state.get("log", ""))
 elif args[:2] == ["run", "view"]:
     print(state["conclusion"])
 else:
@@ -25,7 +27,9 @@ else:
 """
 
 
-def setup(tmp_path: Path, runs: bool, conclusion: str = "success", branch: str = "") -> tuple:
+def setup(
+    tmp_path: Path, runs: bool, conclusion: str = "success", branch: str = "", log: str = ""
+) -> tuple:
     repo = tmp_path / "repo"
     repo.mkdir()
     git = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t"]
@@ -37,7 +41,9 @@ def setup(tmp_path: Path, runs: bool, conclusion: str = "success", branch: str =
     gh.chmod(0o755)
     state = tmp_path / "state.json"
     found = {sha: {"id": "77"}} if runs else {}
-    state.write_text(json.dumps({"runs": found, "conclusion": conclusion, "branch": branch or sha}))
+    state.write_text(
+        json.dumps({"runs": found, "conclusion": conclusion, "branch": branch or sha, "log": log})
+    )
     env = {**os.environ, "GH": str(gh), "FAKE_GH_STATE": str(state), "CI_WAIT_SECONDS": "0"}
     return repo, sha, env
 
@@ -60,6 +66,32 @@ def test_ci_wait_exits_1_on_a_failed_run(tmp_path):
     result = run(repo, env)
     assert result.returncode == 1
     assert result.stdout == f"CI failure on {sha} (run 77)\n"
+
+
+# gh run view --log-failed: each line is job, step and a timestamped message, tab-separated.
+# scripts/check echoes a failed step's output, so pytest's lines come twice.
+FAILED_LOG = """\
+test (3.12)\tRun ../../../scripts/check\t2026-10-22T01:39:31.6Z wrote build/model.mjcf
+test (3.12)\tRun ../../../scripts/check\t2026-10-22T01:39:32.3Z failed: tool tests
+test (3.12)\tRun ../../../scripts/check\t2026-10-22T01:39:32.3Z   E   ValueError: too many values
+test (3.12)\tRun ../../../scripts/check\t2026-10-22T01:39:32.3Z   FAILED tests/test_x.py::test_a
+test (3.12)\tRun ../../../scripts/check\t2026-10-22T01:39:32.3Z   1 failed, 971 passed in 106.02s
+test (3.12)\tRun ../../../scripts/check\t2026-10-22T01:39:32.4Z   1 failed, 971 passed in 106.02s
+test (3.10)\tRun ../../../scripts/check\t2026-10-22T01:39:40.1Z failed: pyright
+"""
+
+
+def test_ci_wait_on_a_failed_run_prints_what_failed_in_each_job(tmp_path):
+    repo, sha, env = setup(tmp_path, runs=True, conclusion="failure", log=FAILED_LOG)
+    result = run(repo, env)
+    assert result.returncode == 1
+    assert result.stdout == (
+        f"CI failure on {sha} (run 77)\n"
+        "test (3.12): failed: tool tests\n"
+        "test (3.12): FAILED tests/test_x.py::test_a\n"
+        "test (3.12): 1 failed, 971 passed in 106.02s\n"
+        "test (3.10): failed: pyright\n"
+    )
 
 
 def test_ci_wait_names_the_rerun_when_the_pushed_commit_has_no_run(tmp_path):

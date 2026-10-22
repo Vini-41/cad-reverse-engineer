@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Wait for the CI run on a pushed commit and exit with its result: 0 when it succeeds, 1 when it
-fails or never starts, and 2 when the argument names no commit.
+fails or never starts, and 2 when the argument names no commit. A failed run's log is read for what
+failed in each job: scripts/check's failed steps and pytest's FAILED lines and counts.
 
 The run is found by the commit's full SHA (gh run list --commit matches no short one), never by
 which run is newest. When no run starts within the wait, it reads where the current branch is on
@@ -13,6 +14,7 @@ GH names the gh executable (default gh); CI_WAIT_SECONDS how long to look for th
 """
 
 import os
+import re
 import subprocess
 import sys
 import time
@@ -44,6 +46,23 @@ def find_run(sha: str) -> str:
         time.sleep(float(os.environ.get("CI_WAIT_POLL", 6)))
 
 
+# A line of a failed log worth printing: scripts/check's failed step, a pytest FAILED line or count.
+FAILURE = re.compile(r"failed: |FAILED |\d+ failed")
+
+
+def failures(run: str) -> list[str]:
+    """What failed in each job of run, as `<job>: <line>`, from its log of failed steps, whose
+    lines are job, step and a timestamped message, tab-separated."""
+    found = []
+    for line in out(GH, "run", "view", run, "--log-failed").splitlines():
+        job, _, rest = line.split("\t", 2) if line.count("\t") >= 2 else ("", "", "")
+        message = rest.split(" ", 1)[-1].strip()
+        # scripts/check echoes a failed step's output after it ran, so a line can come twice.
+        if FAILURE.match(message) and f"{job}: {message}" not in found:
+            found.append(f"{job}: {message}")
+    return found
+
+
 def main() -> int:
     arg = sys.argv[1] if len(sys.argv) > 1 else "HEAD"
     if arg in ("-h", "--help"):
@@ -64,7 +83,11 @@ def main() -> int:
         watched = subprocess.run([GH, "run", "watch", run, "--exit-status"], capture_output=True)
         conclusion = out(GH, "run", "view", run, "--json", "conclusion", "--jq", ".conclusion")
         print(f"CI {conclusion} on {sha} (run {run})")
-        return 0 if watched.returncode == 0 and conclusion == "success" else 1
+        if watched.returncode == 0 and conclusion == "success":
+            return 0
+        for failure in failures(run) if conclusion == "failure" else []:
+            print(failure)
+        return 1
     branch = out("git", "symbolic-ref", "--short", "HEAD")
     remote = out(GH, "api", f"repos/{{owner}}/{{repo}}/branches/{branch}", "--jq", ".commit.sha")
     print(f"no CI run started on {sha}", file=sys.stderr)
