@@ -258,7 +258,7 @@ def cmd_crop(args) -> int:
     target = root / "figures" / "crops" / f"{args.name}.png"
     target.parent.mkdir(parents=True, exist_ok=True)
     with Image.open(root / args.image) as image:
-        region = image.crop(tuple(args.box))
+        region = image.crop((args.left, args.top, args.right, args.bottom))
         if args.zoom != 1:
             region = region.resize(
                 (region.width * args.zoom, region.height * args.zoom), Image.Resampling.LANCZOS
@@ -375,7 +375,8 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("crop", help="crop a figure region to figures/crops/ and print its sha256")
     s.add_argument("dir")
     s.add_argument("image", help="path relative to the project")
-    s.add_argument("box", type=int, nargs=4, metavar=("LEFT", "TOP", "RIGHT", "BOTTOM"))
+    for edge in ("left", "top", "right", "bottom"):
+        s.add_argument(edge, type=int, metavar=edge.upper())
     s.add_argument(
         "--name", required=True, help="the crop's name: it is written to figures/crops/<NAME>.png"
     )
