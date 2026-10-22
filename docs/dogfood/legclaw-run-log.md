@@ -1,6 +1,6 @@
 # Dogfood run log: a fresh agent reconstructs the full LegClaw
 
-Spec #1, stories 56–57; issue #15 (runs 1–4). Spec #2, story 41; issue #37 (run 5). Each run is a fresh general-purpose subagent given only the skill, the CC-BY paper and supplement, a scratch project directory and the goal "reconstruct the full LegClaw"; it reads none of `examples/` beyond the sources, the tool source, its tests or `docs/`. From run 9 on, each run is briefed with [brief.md](brief.md) word for word; from run 6 on, its project is kept at `~/Documents/AI-Tools/cadrev/Workspace/dogfood/run-<n>` (each run's section records it). Each trip it reported, or that its project showed, is listed with the fix made before the next run. A trip of kind *environment* comes from the harness the run used, not from the skill: file it only once it reproduces in a default Claude Code session (#30 did not).
+Spec #1, stories 56–57; issue #15 (runs 1–4). Spec #2, story 41; issue #37 (run 5). Each run is a fresh general-purpose subagent given only the skill, the CC-BY paper and supplement, a scratch project directory and the goal "reconstruct the full LegClaw"; it reads none of `examples/` beyond the sources, the tool source, its tests or `docs/`. From run 9 on, each run is briefed with [brief.md](brief.md) word for word; from run 6 on, its project is kept at `~/Documents/Projects/cadrev/dogfood/run-<n>` (each run's section records it). Each trip it reported, or that its project showed, is listed with the fix made before the next run. A trip of kind *environment* comes from the harness the run used, not from the skill: file it only once it reproduces in a default Claude Code session (#30 did not).
 
 ## Run 1
 
@@ -146,7 +146,7 @@ Spec #2, issue #37. Skill and tool at `308d9ee` (spec-2-integration with #32–#
 
 ## Run 6: spec #51's motion
 
-Spec #51, issue #58. Skill and tool at `78e35be` (spec-51 with #52–#57). Project kept at `~/Documents/AI-Tools/cadrev/Workspace/dogfood/run-6`. Same brief as runs 1–5, now with the motion.
+Spec #51, issue #58. Skill and tool at `78e35be` (spec-51 with #52–#57). Project kept at `~/Documents/Projects/cadrev/dogfood/run-6`. Same brief as runs 1–5, now with the motion.
 
 **End state:** VERIFIED PENDING REVIEW, not exact: 0 errors, 7 warnings, 68/68 checks pass. Both legs and the carbon mount: flip, toe-splay, tendon-spool and shin/paw linkage joints (78 joints, 6 loops). 94 params, resting on 50 source, 0 measured and 42 proposed, with 2 proposed physics values (`spring_E`, `k_splay`). Conflicts on the total mass (430 g against 420 g) and on Fig. 2D's Dmin/Dmax (read as leg width) each have a resolution. The MJCF loads in MuJoCo with every loop closed (largest as-built gap 1.4e-11 mm). The 0–40° toe range has a range check on all 8 toe joints, the 180° flip a posed angle check per leg, and 12 sweeps pass with no overlap; the as-built interference is 0 over 3081 pairs. Six readings await confirmation. The 7 warnings are trips 3–5.
 
@@ -169,7 +169,7 @@ Each trip was reproduced on a copy of the project. Rerunning `cadrev check` on i
 
 ## Run 7: spec #51 with joint kinds
 
-Spec #51, issue #58. Skill and tool at `b799050` (spec-51 with #52–#57, #60 and #61). Project kept at `~/Documents/AI-Tools/cadrev/Workspace/dogfood/run-7`. Same brief as run 6.
+Spec #51, issue #58. Skill and tool at `b799050` (spec-51 with #52–#57, #60 and #61). Project kept at `~/Documents/Projects/cadrev/dogfood/run-7`. Same brief as run 6.
 
 **End state:** VERIFIED PENDING REVIEW, not exact: 0 errors, 3 warnings, 104/104 checks pass. Both legs and the mount, with the foot built as a rigid envelope: 72 joints (46 revolute, 2 slide, 24 fixed), 4 loops (the shin four-bars) and 2 gears (the upper rods, ratio −1, proposed). 98 params, resting on 44 source, 0 measured and 53 proposed, with 1 proposed physics value (`toe_k`, from the stated spring and a proposed modulus). Conflicts on the total mass (430 g against 420 g) and on Fig. 2D's Dmin/Dmax each have a resolution. The MJCF loads in MuJoCo with every loop closed (largest gap 3e-11 mm). Range checks pass on the 0–40° toe range (8 joints), the 180° hip flip (2) and the 385° servo rotation (4); the leg width D of 20 to 50 mm is checked by distance checks at both ends of the slide; 40 sweeps pass with no overlap, and the as-built interference is 0 over 85 pairs. Five readings await confirmation. The 3 warnings are trip 2. It falls short of #58: Table S2's X-tensile linkage row is `scope: not-modeled`, so the foot's X-linkages and compression loops do not move (trip 8).
 
@@ -190,7 +190,7 @@ Trips 1 and 2 were reproduced on a copy of the project: with `n_servo: three` wr
 
 ## Run 8: spec #51 at its last fixes
 
-Spec #51, issue #58. Skill and tool at `653e368` (spec-51 with #52–#57, #60, #61 and #62). Project kept at `~/Documents/AI-Tools/cadrev/Workspace/dogfood/run-8`. Same brief as run 6.
+Spec #51, issue #58. Skill and tool at `653e368` (spec-51 with #52–#57, #60, #61 and #62). Project kept at `~/Documents/Projects/cadrev/dogfood/run-8`. Same brief as run 6.
 
 **End state:** VERIFIED PENDING REVIEW, not exact: 0 errors, 0 warnings, 75/75 checks pass. Both legs and their connecting-plate mounts, with the foot built: 84 joints (74 revolute, 4 slide, 6 fixed), 24 loops (per leg, 2 knee four-bar, 6 foot X and 4 bent-linkage loops), 2 gears (ratio −1, proposed from the words) and 16 tension springs as tendons. 120 params, resting on 57 source, 0 measured and 59 proposed, with 4 proposed physics values (`G_steel`, `E_steel`, `spring_k`, `toe_k`) and the sweep resolution `sweep_steps` = 5. Conflicts K1 (430 g against 420 g), K2 (Fig. S1B against the 31 mm linkages) and K3 (L14 = 37 mm as pitch or overall length) each have a resolution. The MJCF loads in MuJoCo with every loop closed (largest residual 3.3e-10 mm), with no `[loop-open]` or `[joint-range]`. Range checks pass on the leg width D 20 to 50 mm (a distance at as built and a range between the knee pins at full stroke), the 180° hip flip (2), the 385° servo rotation (4) and the 0–40° toe range (8); sweeps of the slide, the flip and the toes find no overlap. Every Table S2 row and the Fig. 2A sole of each foot are checked; the leg (213.8 g against 200 g) and the landing gear (457.6 g against 430 g) pass at `tol_rel` 0.25 on proposed densities, servo masses and counts. Five readings await confirmation.
 
@@ -213,7 +213,7 @@ After the second review of spec #51, the orchestrator's fixer edited the committ
 
 ## Run 9: main after #81
 
-Skill and tool at `e165679` (main, after #79–#81), the first run briefed with [brief.md](brief.md) word for word. Project kept at `~/Documents/AI-Tools/cadrev/Workspace/dogfood/run-9`.
+Skill and tool at `e165679` (main, after #79–#81), the first run briefed with [brief.md](brief.md) word for word. Project kept at `~/Documents/Projects/cadrev/dogfood/run-9`.
 
 **End state:** VERIFIED PENDING REVIEW, not exact: 0 errors, 1 warning (`[coverage-off]` on the servo page, trip 1), 89/89 checks pass. Both legs and their mount, with the foot built rigid in its flat state (trip 5): 86 joints (46 revolute, 2 slide, 38 fixed), 4 loops (each leg's shin four-bar closures), 2 gears (the upper links, ratio −1, proposed from the words) and 8 cables (per leg, two claw cables on the claw wheel and two toe cables on the toe wheel), no tendons. 96 params, resting on 56 source, 0 measured and 38 proposed (`sweep_steps` among them, trip 6), with 2 proposed physics values (`spring_E`, `tors_k`). A third source, the Feetech HL-3606 product page saved as HTML, is registered; conflicts K-mass (430 g against 420 g), K-bent (L14 = 37 mm), K-servo (the paper's part numbers swapped against the datasheet's) and K-dmin (Fig. 2D's Dmin against Eq. (2)'s) each have a resolution. The MJCF is written with no `[mjcf-load]`, `[loop-open]` or `[joint-range]`. Range checks pass on the 180° leg rotation (2, with the Fig. S9 ~90° posed), the shin width D 20 to 50 mm (2, knee to knee at each end of the slide), the 0–40° toe range (8, one per spread joint) and the 385° claw-servo turn (2); the claw cable's ~38 mm shortening is checked at the full turn (37.89 mm, 4 checks), and the shin, hip, toe and claw sweeps clear at 5 poses each, with 0 overlap over 4095 pairs as built. All 9 Table S2 rows are checked as part envelopes. The leg (213.1 g against 200 g) and the landing gear (487.8 g against 430 g) pass at `tol_rel` 0.15 on proposed densities; the servo (63.9 g against 63 g) at 0.05. Five readings await confirmation, the same five labels as run 8 (`fig2d-width`, `fig2a-sole`, `figs1b-tension`, `fig2a-betamax`, `fig2a-mass`). The foot's X-linkages, its tension springs and the passive leg tendon are not built (trips 4 and 5), so it falls short of run 8's foot.
 
