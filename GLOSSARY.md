@@ -80,6 +80,10 @@ _Avoid_: transmission, mimic joint
 An inextensible cord laid through datums on several instances, whose length the posed assembly gives; one wound on a wheel joint drives the joints it closes, each moving in proportion to the wheel's turn toward its closed pose. Unlike a tendon, a cable does not stretch.
 _Avoid_: tendon (for an inextensible cord)
 
+**Wheel**:
+The joint a cable is wound on and driven by: any joint that moves, actuated or passive, revolute or slide, whose one-ended range is its full turn (a slide's, its stroke). A servo's horn is one; so is a shin's compression slide that pulls a passive cord. Each joint a cable closes is closed by that one cable alone.
+_Avoid_: spool (for the joint itself)
+
 **Closed pose**:
 The value of each joint a cable closes when its wheel has made its full turn; where no source states it, it is proposed, and a stated order of closing (one joint before another) is then not represented.
 _Avoid_: grasp pose, final pose
@@ -99,6 +103,10 @@ _Avoid_: test, assertion
 **Reads**:
 What a check's evaluation read, shared by all its results: the params it reads itself (its pose, its sweep's steps, its kind's own, a mass check's only for the parts it weighs), the params the model gives it (its joint's range ends, the wheel's turn and the closed values a pose moves through a cable), the parts it weighs and those it weighs in several instances with no stated count. A check reads both its own params and those the model gives it; its rests on is judged from its Reads.
 _Avoid_: dependencies, inputs (of a check)
+
+**Claim**:
+What a check compares with in place of a ledger value, where a source states a direction but prints no number: a stroke check's `shortens` or `lengthens`, passing only when the change between its two poses exceeds the length tolerance. The statement it cites is a quote with no values.
+_Avoid_: assertion, inequality check
 
 **Checked param**:
 A param some check reads (see Reads), directly or through a param derived from it, or whose ledger value some check compares. A source param that is not one is unchecked.
