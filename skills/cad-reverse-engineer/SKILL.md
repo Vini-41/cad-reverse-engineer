@@ -44,7 +44,7 @@ Done when every document the reconstruction will cite is registered and `cadrev 
 Read every page with `cadrev text <dir> <source>` and every figure with `cadrev figures <dir> <source>` and then the Read tool. For each statement about the object, add an evidence item:
 
 - Copy quotes from `cadrev text` output, which is the text the matcher sees.
-- Numbers printed inside figures about the object (dimension labels, scale bars, inset annotations) become image evidence: `cadrev crop` the label, view the crop, write the `reading` exactly as printed. `crop` takes pixels of the extracted file; when the Read tool shows an image downscaled, multiply by the factor it reports, and confirm in the crop that the whole label is inside.
+- Numbers printed inside figures about the object (dimension labels, scale bars, inset annotations) become image evidence: `cadrev crop` the label with `--name <name>`, which writes the crop to `figures/crops/<name>.png` and prints the `image` and `image_sha256` the evidence item takes; view the crop, write the `reading` exactly as printed. `crop` takes pixels of the extracted file; when the Read tool shows an image downscaled, multiply by the factor it reports, and confirm in the crop that the whole label is inside.
 - Ledger each stated range or angle of motion (a toe that opens 0–40°, a crank's 90° stroke) and each stated physics value (a spring's stiffness) with its `values`, in scope: step 7 reads them into params and checks them.
 - Ledger a value stated in several places at each place, with one statement in scope and the rest restatements (`scope` in project-format.md).
 - Record each disagreement between sources under `conflicts`.

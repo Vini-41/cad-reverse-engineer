@@ -8,6 +8,7 @@ import math
 import re
 import shutil
 import subprocess
+import sys
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
@@ -3290,6 +3291,20 @@ def test_guard_text_prints_a_docx_as_one_page_of_paragraphs(proj_dir, tmp_path):
     assert (code, out) == (0, f"===== doc page 1/1 =====\n{PAPER.rstrip()}\n")
 
 
+@pytest.mark.parametrize("grep", [["--grep", "x"], []], ids=["grep", "whole"])
+def test_text_whose_reader_closes_the_pipe_stops_without_a_traceback(proj_dir, tmp_path, grep):
+    # Far more than one pipe buffer, so the command is still writing when its reader stops.
+    add_source(proj_dir, tmp_path, "notes.txt", b"x\n" * 200_000)
+    command = [sys.executable, "-m", "cadrev.cli", "text", str(proj_dir), "doc", *grep]
+    child = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    assert child.stdout is not None and child.stderr is not None
+    child.stdout.readline()
+    child.stdout.close()
+    err = child.stderr.read().decode()
+    child.wait()
+    assert "Traceback" not in err and "BrokenPipeError" not in err, err
+
+
 def test_guard_text_of_an_unregistered_source_is_refused(proj_dir, capsys):
     assert cli.main(["text", str(proj_dir), "notes"]) == 1
     assert "unknown source 'notes'; registered: paper" in capsys.readouterr().err
@@ -3321,6 +3336,14 @@ def test_figures_writes_an_image_a_viewer_cannot_show_as_png(proj_dir, tmp_path)
 
 def test_guard_figures_of_a_source_without_images_writes_nothing(proj_dir):
     assert run("figures", str(proj_dir), "paper") == (0, "")
+
+
+def test_crop_help_says_what_name_and_zoom_do(capsys):
+    with pytest.raises(SystemExit):
+        cli.main(["crop", "--help"])
+    out = " ".join(capsys.readouterr().out.split())
+    assert "--name NAME the crop's name: it is written to figures/crops/<NAME>.png" in out
+    assert "--zoom ZOOM enlarge the crop by this whole-number factor (default 1)" in out
 
 
 def test_guard_crop_writes_the_region_zoomed_and_prints_its_sha256(proj_dir):
@@ -6572,6 +6595,27 @@ def test_posing_a_closed_joint_alone_sets_its_wheel_and_the_cables_other_joints(
     assert _by_id(report)["half"]["ok"]
     assert abs(pull_stroke(0.5) - pull_stroke(0.5, spool=0)) > 0.01
     assert abs(pull_stroke(0.5) - pull_stroke(0.5, toe2=0)) > 0.01
+
+
+def test_guard_a_passive_slide_may_be_a_cables_wheel(proj_dir, tmp_path):
+    cabled(proj_dir, tmp_path)
+    passive_slide = swap(swap(_SPOOL, "revolute", "slide"), "actuated", "passive")
+    write(proj_dir, "model.py", swap((proj_dir / "model.py").read_text(), _SPOOL, passive_slide))
+    by_toe = {"kind": "stroke", "cable": "pull", "evidence": "N1", "key": "half"}
+    _append("checks.yaml", "checks", by_toe | {"id": "by_toe", "pose": {"toe1": "half_c1"}})(
+        proj_dir, tmp_path
+    )
+    _, report = verify(proj_dir)
+    assert not [f for f in report["findings"] if f["rule"].startswith("model-")]
+    assert (proj_dir / "build" / "model.mjcf").exists()
+    assert report["motion"]["cables"]["pull"]["wheel"] == "spool"
+    spool = report["motion"]["joints"]["spool"]
+    assert (spool["type"], spool["drive"]) == ("slide", "passive")
+    # toe1 at half its closed angle puts the slide halfway along its stroke, as check half poses
+    # it, and that move shortens the cable by more than the toes' share alone.
+    checks = _by_id(report)
+    assert _shortening(checks["by_toe"]) == pytest.approx(_shortening(checks["half"]))
+    assert abs(_shortening(checks["half"]) - pull_stroke(0.5, spool=0)) > 0.01
 
 
 def test_pose_setting_two_joints_of_a_cable_out_of_proportion_is_check_config(proj_dir, tmp_path):

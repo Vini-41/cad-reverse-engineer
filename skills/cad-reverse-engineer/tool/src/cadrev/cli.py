@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import sys
@@ -375,8 +376,15 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("dir")
     s.add_argument("image", help="path relative to the project")
     s.add_argument("box", type=int, nargs=4, metavar=("LEFT", "TOP", "RIGHT", "BOTTOM"))
-    s.add_argument("--name", required=True)
-    s.add_argument("--zoom", type=int, default=1)
+    s.add_argument(
+        "--name", required=True, help="the crop's name: it is written to figures/crops/<NAME>.png"
+    )
+    s.add_argument(
+        "--zoom",
+        type=int,
+        default=1,
+        help="enlarge the crop by this whole-number factor (default %(default)s)",
+    )
     s.set_defaults(fn=cmd_crop)
 
     s = sub.add_parser("coverage", help="list stated quantities no evidence or skip covers")
@@ -389,8 +397,16 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--no-coverage", action="store_true", help="skip the coverage sweep")
     s.set_defaults(fn=cmd_check)
 
-    args = parser.parse_args(argv)
-    return args.fn(args)
+    try:
+        args = parser.parse_args(argv)
+        code = args.fn(args)
+        sys.stdout.flush()
+    except BrokenPipeError:
+        # The reader closed stdout, as `head` does: stop quietly, as `cat` does, and point stdout
+        # at devnull so the interpreter's flush at exit has nowhere to fail.
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        return 1
+    return code
 
 
 if __name__ == "__main__":
