@@ -16,10 +16,13 @@ from typing import NamedTuple, Protocol
 
 from . import accounting
 from .project import (
+    CLAIMS,
+    POSES,
     Project,
     between_two,
     check_params,
     cited_refs,
+    claim_config,
     check_tolerance,
     compared_quantity,
     expect_joint_value,
@@ -70,6 +73,9 @@ class CheckResult:
     pairs: int | None = None
     # The joint values a posed check was evaluated at: joint -> {from, value}; None when unposed.
     pose: dict | None = None
+    # A stroke check's from pose, in the same form, which its stroke is taken from; None when
+    # taken from as built.
+    from_pose: dict | None = None
     # A swept interference check's joint, the range params it is swept between, their values and
     # how many poses it evaluated; None for a check not swept.
     sweep: dict | None = None
@@ -129,9 +135,13 @@ class Poser(Protocol):
     those set_to gives (joint -> (value in the project's angle unit, what it is from)), its moved
     naming those joints and each a gear or cable moves with them, with the pose as report.json
     shows it; None after a finding saying why it cannot be posed. A joint
-    set_to names is where its check puts it, so its own range is not held against it."""
+    set_to names is where its check puts it, so its own range is not held against it. at names the
+    key of c whose joint values it poses at, and which its findings name: pose, or a stroke
+    check's from (POSES)."""
 
-    def __call__(self, c: dict, set_to: dict | None = None) -> tuple[Built, dict] | None: ...
+    def __call__(
+        self, c: dict, set_to: dict | None = None, at: str = "pose"
+    ) -> tuple[Built, dict] | None: ...
 
 
 def pose_text(pose: dict) -> str:
@@ -467,7 +477,9 @@ def _joint_values(p: Project, built: Built) -> None:
     for c in p.checks:
         cid = c.get("id", "?")
         named = [
-            (j, str(ref), f"in check {cid}'s pose") for j, ref in (c.get("pose") or {}).items()
+            (j, str(ref), f"in check {cid}'s {key}")
+            for key in POSES
+            for j, ref in (c.get(key) or {}).items()
         ]
         if joint_valued(c):
             named += [(c.get("joint"), str(ref), f"check {cid}") for ref in c.get("ends") or []]
@@ -1363,9 +1375,9 @@ def _stroke(
     poser: Poser | None,
     reading: _Reading,
 ) -> list[CheckResult]:
-    """A stroke check: how much its cable shortens from as built to the pose the check names
-    (reached), or without one to its wheel's full turn, compared with the ledger value, at that
-    pose; reading what the model gives that pose."""
+    """A stroke check: how much its cable shortens from as built, or from its from pose, to the
+    pose the check names (reached), or without one to its wheel's full turn, compared with the
+    ledger value, or with its claim; reading what the model gives each pose."""
     placed, pose = reached
     reading.at(placed)
     cid, name = c.get("id", "?"), c["cable"]
@@ -1374,6 +1386,13 @@ def _stroke(
         if not built.dropped:  # else that finding says the cables were dropped
             p.error("check-config", f"check {cid}: {name} is not a cable")
         return []
+    start, start_pose = built, None
+    if c.get("from"):
+        posed = _placed_for(p, built, c, poser, at="from")
+        if posed is None:
+            return []
+        start, start_pose = posed
+        reading.at(start)
     if pose is None:
         if "wheel" not in cable:
             p.error(
@@ -1389,11 +1408,28 @@ def _stroke(
             return []
         placed, pose = posed
         reading.at(placed)
-    shortening = cable_length(built, cable) - cable_length(placed, cable)
-    ref = f"{c['evidence']}.{c['key']}"
-    result = _compared(p, c, cid, ref, shortening, f" shortening of {name}")
-    result.pose = pose
+    shortening = cable_length(start, cable) - cable_length(placed, cable)
+    shown = f" shortening of {name}"
+    if "claim" in c:
+        result = _claimed(p, c, cid, shortening, shown)
+    else:
+        result = _compared(p, c, cid, f"{c['evidence']}.{c['key']}", shortening, shown)
+    result.pose, result.from_pose = pose, start_pose
     return [result]
+
+
+def _claimed(p: Project, c: dict, rid: str, change: float, shown: str = "") -> CheckResult:
+    """A claim check's result: it passes where change, signed as its claim says (CLAIMS), exceeds
+    tolerance.length, the model's resolution, so a change within it or the other way fails."""
+    claim, tol = c["claim"], p.length_tol
+    return CheckResult(
+        rid,
+        c["kind"],
+        CLAIMS[claim] * change > tol,
+        f"{claim} by more than {tol:g} ({c['evidence']})",
+        f"{change:.4g}{shown}",
+        c.get("interpretation", ""),
+    )
 
 
 def _bbox(p: Project, c: dict, placed: Built, reading: _Reading) -> Iterator[CheckResult]:
@@ -1442,21 +1478,21 @@ def _unknown_kind(p: Project, c: dict, reading: _Reading) -> list[CheckResult]:
 
 
 def _placed_for(
-    p: Project, built: Built, c: dict, poser: Poser | None
+    p: Project, built: Built, c: dict, poser: Poser | None, at: str = "pose"
 ) -> tuple[Built, dict | None] | None:
-    """The assembly check c is evaluated on, with its pose: as built, or placed at the pose it
-    names; None, after a finding, when it names a pose that cannot be placed."""
-    if not c.get("pose"):
+    """The assembly check c is evaluated on, with its pose: as built, or placed at the pose its
+    key at names; None, after a finding, when it names a pose that cannot be placed."""
+    if not c.get(at):
         return built, None
     if poser is None:
         if not built.dropped:  # else that finding says the joints were dropped
             p.error(
                 "check-config",
-                f"check {c.get('id', '?')}: its pose names {', '.join(c['pose'])}, but "
+                f"check {c.get('id', '?')}: its {at} names {', '.join(c[at])}, but "
                 "model.build returns no joints",
             )
         return None
-    return poser(c)
+    return poser(c, at=at)
 
 
 def run_checks(
@@ -1471,6 +1507,8 @@ def run_checks(
         kind = c.get("kind")
         if any(p.cites_repeated(ref) for ref in cited_refs(p, c)):
             continue  # it compares with neither item; check_citations said so before the build
+        if claim_config(p, c):
+            continue  # check_claims said why before the build
         reached = _placed_for(p, built, c, poser)
         if reached is None:
             continue
@@ -1501,5 +1539,7 @@ def run_checks(
             r.pose = r.pose or pose
     for r in results:
         if not r.ok:
-            p.error("check-failed", f"{r.id}: expected {r.expected}, measured {r.measured}")
+            moved = "" if r.from_pose is None else f" from {pose_text(r.from_pose)}"
+            moved += f" to {pose_text(r.pose)}" if moved and r.pose else ""
+            p.error("check-failed", f"{r.id}: expected {r.expected}, measured {r.measured}{moved}")
     return results, reads

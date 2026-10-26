@@ -2315,6 +2315,26 @@ DAMAGE = {
     "check tol not a number": lambda r: edit(
         r, "checks.yaml", lambda d: d["checks"][1].update(tol="wide")
     ),
+    "check claim a list": lambda r: edit(
+        r, "checks.yaml", lambda d: d["checks"][1].update(claim=["shortens"])
+    ),
+    "check claim on a distance check": lambda r: edit(
+        r, "checks.yaml", lambda d: d["checks"][1].update(claim="shortens")
+    ),
+    "check from a number": lambda r: edit(
+        r, "checks.yaml", lambda d: d["checks"][1].update({"from": 3})
+    ),
+    "check from value a number": lambda r: edit(
+        r, "checks.yaml", lambda d: d["checks"][1].update({"from": {"input": 3}})
+    ),
+    "stroke check with no cable joints": lambda r: edit(
+        r,
+        "checks.yaml",
+        lambda d: d["checks"].append(
+            {"id": "s", "kind": "stroke", "cable": "c", "evidence": "pitch", "claim": "shortens"}
+            | {"from": {"input": "pitch.pitch"}}
+        ),
+    ),
     "mass check tol_rel not a number": lambda r: edit(
         r,
         "checks.yaml",
@@ -7129,6 +7149,275 @@ def test_report_carries_each_cable_with_its_wheel_and_closed_values(proj_dir, tm
         "- Cable `pull` through ground_1.d → spool_1.d → tip_1.d, wound on spool; "
         "its full turn closes toe1 to 90 (c1), toe2 to 60 (c2)."
     ) in (proj_dir / "build" / "report.md").read_text()
+
+
+# A stroke check may claim its cable shortens or lengthens between two poses, where a source states
+# a direction but prints no length (ADR-0010).
+
+_CORD = '"cord": {"path": ["ground_1.d", "tip_1.d"]}'
+
+
+def cord_length(toe1: float = 0, toe2: float = 0) -> float:
+    """The length of path-only cable cord, from the ground link's far end straight to the second
+    toe's tip, with the toes at those angles (degrees) from as built."""
+    c1, c12 = math.radians(toe1), math.radians(toe1 + toe2)
+    tip = (10 + 10 * (math.cos(c1) + math.cos(c12)), -30 + 10 * (math.sin(c1) + math.sin(c12)))
+    return math.dist((15, 0), tip)
+
+
+def cord_at(fraction: float) -> float:
+    """cord's length with the spool at fraction of its full turn, the toes closing with it."""
+    return cord_length(fraction * CLOSED["c1"], fraction * CLOSED["c2"])
+
+
+# The ledger item the claim cites: a quote that states no number.
+_STATES = {"id": "N2", "source": "notes", "locator": "Sec. 1", "quote": "the spool closes"}
+
+
+def claimed(
+    root: Path, tmp_path: Path, check: dict | None = None, *, sourced: bool = False
+) -> None:
+    """cabled with a second, path-only cable cord beside pull, ledger item N2 stating a direction
+    with no values, and claim check perch on cord: by default that it shortens from the spool's
+    full turn (from) to half of it (pose), as the toes open; check changes its keys, None removing
+    one."""
+    cabled(
+        root, tmp_path, swap(_CABLE, '"cables": {', '"cables": {' + _CORD + ", "), sourced=sourced
+    )
+    _append("evidence.yaml", "evidence", _STATES)(root, tmp_path)
+    perch = {"id": "perch", "kind": "stroke", "cable": "cord", "evidence": "N2"}
+    perch |= {"claim": "shortens", "from": {"spool": "turn"}, "pose": {"spool": "half_turn"}}
+    _append(
+        "checks.yaml", "checks", {k: v for k, v in (perch | (check or {})).items() if v is not None}
+    )(root, tmp_path)
+
+
+def test_claim_check_passes_where_its_cable_shortens_between_its_two_poses(proj_dir, tmp_path):
+    claimed(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    perch = _by_id(report)["perch"]
+    assert code == 0, report["findings"]
+    assert perch["ok"]
+    assert _shortening(perch) == pytest.approx(cord_at(1) - cord_at(0.5), abs=1e-3)
+    assert cord_at(1) - cord_at(0.5) > 1  # the toes open: as built to full turn would not do
+    assert perch["expected"] == "shortens by more than 0.001 (N2)"
+    assert perch["from_pose"] == {"spool": {"from": "turn", "value": 120}}
+    assert perch["pose"] == {"spool": {"from": "half_turn", "value": 60}}
+    assert (
+        "| perch | pass | shortens by more than 0.001 (N2) | "
+        f"{cord_at(1) - cord_at(0.5):.4g} shortening of cord | "
+        "from: spool at 120 (turn); posed: spool at 60 (half_turn);"
+    ) in (proj_dir / "build" / "report.md").read_text()
+
+
+def test_claim_check_the_other_way_is_check_failed_naming_its_change_poses_and_claim(
+    proj_dir, tmp_path
+):
+    claimed(proj_dir, tmp_path, {"claim": "lengthens"})
+    code, report = verify(proj_dir)
+    assert code == 1 and not _by_id(report)["perch"]["ok"]
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-failed"] == [
+        "perch: expected lengthens by more than 0.001 (N2), measured "
+        f"{cord_at(1) - cord_at(0.5):.4g} shortening of cord "
+        "from spool at 120 (turn) to spool at 60 (half_turn)"
+    ]
+
+
+@pytest.mark.parametrize("tolerance, ok", [(None, True), (0.5, False)], ids=["default", "0.5"])
+def test_claim_check_passes_only_on_a_change_beyond_tolerance_length(
+    proj_dir, tmp_path, tolerance, ok
+):
+    # From the full turn to a degree short of it, the cord shortens by more than the default
+    # tolerance.length but no more than 0.5.
+    claimed(proj_dir, tmp_path, {"pose": {"spool": "near_turn"}})
+    _param("near_turn", basis="proposed", value=119, rationale="a guess", gap="G1")(
+        proj_dir, tmp_path
+    )
+    if tolerance is not None:
+        edit(proj_dir, "project.yaml", lambda d: d.update(tolerance={"length": tolerance}))
+    change = cord_at(1) - cord_at(119 / 120)
+    assert 0.001 < change <= 0.5
+    _, report = verify(proj_dir)
+    perch = _by_id(report)["perch"]
+    assert _shortening(perch) == pytest.approx(change, abs=1e-3)
+    assert perch["ok"] is ok
+
+
+@pytest.mark.parametrize(
+    "check, rule, says",
+    [
+        (
+            {"key": "full"},
+            "check-config",
+            "check perch: give key or claim, not both",
+        ),
+        (
+            {"claim": None},
+            "check-config",
+            "check perch: give key, the ledger value its stroke is compared with, "
+            "or claim: shortens or lengthens",
+        ),
+        (
+            {"claim": "grows"},
+            "check-config",
+            "check perch: claim grows is neither shortens nor lengthens",
+        ),
+        (
+            {"tol": 0.5},
+            "check-config",
+            "check perch: a claim passes only beyond tolerance.length, so it takes no tol",
+        ),
+        (
+            {"tol_rel": 0.1},
+            "check-config",
+            "check perch: a claim passes only beyond tolerance.length, so it takes no tol_rel",
+        ),
+        (
+            {"evidence": None},
+            "check-config",
+            "check perch: a claim cites the evidence item that states it",
+        ),
+        (
+            {"evidence": "N9"},
+            "check-config",
+            "check perch: evidence N9 is not an evidence item",
+        ),
+        (
+            {"claim": 3},
+            "schema",
+            "checks.yaml checks[3].claim: must be text, not 3",
+        ),
+        (
+            {"from": ["spool"]},
+            "schema",
+            "checks.yaml checks[3].from: must be a mapping, not a list",
+        ),
+    ],
+    ids=[
+        "key-and-claim",
+        "neither",
+        "unknown-claim",
+        "tol",
+        "tol_rel",
+        "no-evidence",
+        "unknown-evidence",
+        "claim-not-text",
+        "from-not-a-mapping",
+    ],
+)
+def test_claim_check_configured_wrong_is_a_finding_and_not_evaluated(
+    proj_dir, tmp_path, check, rule, says
+):
+    claimed(proj_dir, tmp_path, check)
+    _, report = verify(proj_dir)
+    assert [f["message"] for f in report["findings"] if f["rule"] == rule] == [says]
+    assert "perch" not in _by_id(report)
+
+
+@pytest.mark.parametrize("kind", ["distance", "angle", "bbox"])
+@pytest.mark.parametrize("key", ["claim", "from"])
+def test_claim_or_from_on_a_check_of_another_kind_is_check_config(proj_dir, tmp_path, kind, key):
+    cabled(proj_dir, tmp_path)
+    _only_posed_at_the_spool(kind)(proj_dir, tmp_path)
+    _check("posed", **{key: {"claim": "shortens", "from": {"spool": "half_turn"}}[key]})(
+        proj_dir, tmp_path
+    )
+    assert findings(proj_dir, "check-config") == [
+        f"check posed: {key} is for a stroke check; kind {kind} takes none"
+    ]
+
+
+def test_quote_with_no_values_cited_only_by_a_claim_check_needs_none(proj_dir, tmp_path):
+    claimed(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    assert not [f for f in report["findings"] if f["rule"] == "evidence-values"]
+
+
+def test_guard_quote_with_no_values_cited_by_nothing_still_needs_values(proj_dir, tmp_path):
+    cabled(proj_dir, tmp_path)
+    _append("evidence.yaml", "evidence", _STATES)(proj_dir, tmp_path)
+    assert findings(proj_dir, "evidence-values") == ["N2: needs values (or scope: context)"]
+
+
+def test_guard_quote_with_no_values_a_keyed_check_cites_besides_a_claim_still_needs_values(
+    proj_dir, tmp_path
+):
+    claimed(proj_dir, tmp_path)
+    keyed = {"id": "keyed", "kind": "stroke", "cable": "pull", "evidence": "N2", "key": "full"}
+    _append("checks.yaml", "checks", keyed)(proj_dir, tmp_path)
+    assert findings(proj_dir, "evidence-values") == ["N2: needs values (or scope: context)"]
+
+
+def test_guard_claim_checks_quote_is_still_matched_against_its_source(proj_dir, tmp_path):
+    claimed(proj_dir, tmp_path)
+    _evidence("N2", quote="the spool opens")(proj_dir, tmp_path)
+    assert findings(proj_dir, "quote-not-found") == [
+        "N2: quote not found in notes: 'the spool opens'"
+    ]
+
+
+def test_claim_check_rests_on_the_closed_values_its_from_pose_moves_through_a_cable(
+    proj_dir, tmp_path
+):
+    # Its pose moves only slide shift, so the closed values come from its from pose alone.
+    claimed(proj_dir, tmp_path, {"pose": {"shift": "shift_max"}})
+    _, report = verify(proj_dir)
+    perch = _by_id(report)["perch"]
+    assert perch["rests_on"] == "proposed"
+    assert perch["rests_on_params"] == ["turn", "shift_max", "c1", "c2"]
+
+
+def test_claim_check_whose_from_pose_a_loop_cannot_close_at_is_loop_open_and_unevaluated(
+    proj_dir, tmp_path
+):
+    # The slider pushed along its slide with the crank held as built: the rod cannot reach it.
+    claimed(proj_dir, tmp_path, {"from": {"slide": "shift_max"}})
+    _, report = verify(proj_dir)
+    opened = [f["message"] for f in report["findings"] if f["rule"] == "loop-open"]
+    assert len(opened) == 1 and "with slide at 5 (shift_max)" in opened[0], opened
+    assert "perch" not in _by_id(report)
+
+
+def test_claim_check_whose_from_pose_leaves_a_joint_past_its_range_is_joint_range_and_unevaluated(
+    proj_dir, tmp_path
+):
+    claimed(proj_dir, tmp_path, {"from": {"shift": "far_shift"}})
+    _param("far_shift", basis="proposed", value=10, rationale="a guess", gap="G1")(
+        proj_dir, tmp_path
+    )
+    _, report = verify(proj_dir)
+    beyond = [f["message"] for f in report["findings"] if f["rule"] == "joint-range"]
+    assert len(beyond) == 1 and beyond[0].startswith(
+        "joint shift: slides 10 with shift at 10 (far_shift), outside its range"
+    ), beyond
+    assert "perch" not in _by_id(report)
+
+
+def test_from_pose_naming_no_joint_is_check_config_naming_from(proj_dir, tmp_path):
+    claimed(proj_dir, tmp_path, {"from": {"heel": "turn"}})
+    assert findings(proj_dir, "check-config") == [
+        "check perch: from names heel, which is not a joint"
+    ]
+
+
+def test_claim_citing_a_repeated_evidence_id_is_check_config_and_unevaluated(proj_dir, tmp_path):
+    claimed(proj_dir, tmp_path)
+    _append("evidence.yaml", "evidence", _STATES)(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-config"] == [
+        "check perch: N2 cites N2, a repeated evidence id"
+    ]
+    assert "perch" not in _by_id(report)
+
+
+def test_stroke_check_with_a_key_is_taken_from_its_from_pose(proj_dir, tmp_path):
+    cabled(proj_dir, tmp_path)
+    _check("full", **{"from": {"spool": "half_turn"}}, pose={"spool": "turn"})(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    full = _by_id(report)["full"]
+    # From half the turn to the full turn: the full stroke less the half one, not the full stroke.
+    assert _shortening(full) == pytest.approx(pull_stroke() - pull_stroke(0.5), abs=1e-3)
+    assert full["from_pose"] == {"spool": {"from": "half_turn", "value": 60}}
 
 
 # Every rule beside its near miss. scripts/rule-coverage fails CI unless each rule the tool emits is

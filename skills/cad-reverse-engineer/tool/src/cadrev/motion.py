@@ -274,21 +274,21 @@ def write(p: Project, linkage: Linkage) -> list[Path]:
 def poser(p: Project, built: Built, linkage: Linkage) -> Poser:
     """What poses a check of this model: see geometry.Poser."""
 
-    def place(c: dict, set_to: dict | None = None) -> tuple[Built, dict] | None:
-        cid, named = c.get("id", "?"), c.get("pose") or {}
+    def place(c: dict, set_to: dict | None = None, at: str = "pose") -> tuple[Built, dict] | None:
+        cid, named = c.get("id", "?"), c.get(at) or {}
         if linkage.model is None:
             return None  # the [mjcf-load] finding says no posed check is evaluated
         values, pose = {}, {}
         for joint, ref in named.items():
             if joint not in built.moving:
                 why = "a fixed joint" if joint in built.joints else "not a joint"
-                p.error("check-config", f"check {cid}: pose names {joint}, which is {why}")
+                p.error("check-config", f"check {cid}: {at} names {joint}, which is {why}")
                 return None
             value = p.values[ref] if ref in p.params else p.evidence_value(ref)
             if value is None or math.isnan(value):
                 p.error(
                     "check-config",
-                    f"check {cid}: pose {joint}: {ref} names neither a param nor a ledger value",
+                    f"check {cid}: {at} {joint}: {ref} names neither a param nor a ledger value",
                 )
                 return None
             values[joint], pose[joint] = value, {"from": ref, "value": printed(value)[0]}
@@ -297,7 +297,7 @@ def poser(p: Project, built: Built, linkage: Linkage) -> Poser:
         values = _through_couplings(p, built, values)
         clash = _coupling_clash(p, built, values)
         if clash:
-            p.error("check-config", f"check {cid}: pose {pose_text(pose)}: {clash}")
+            p.error("check-config", f"check {cid}: {at} {pose_text(pose)}: {clash}")
             return None
         key = (tuple(sorted(values.items())), tuple(sorted(set_to or {})))
         if key not in linkage.posed:

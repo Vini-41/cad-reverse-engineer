@@ -54,7 +54,9 @@ class CheckKind:
     check without between compares its joint's own value, so quantity and tolerance are its
     joint's: an angle for a revolute joint, a length for a slide. between_two, where set, is the
     quantity and tolerance of a check whose between names two datums rather than three: a
-    distance."""
+    distance. claims, where set, lets a check of the kind take a from pose besides its pose, and a
+    claim (one of CLAIMS) in place of a key: a direction of change between the two poses, passing
+    only beyond its tolerance, with no tol of its own (ADR-0010)."""
 
     quantity: str
     tolerance: str | None
@@ -62,6 +64,7 @@ class CheckKind:
     span_capped: bool = False
     joint_valued: bool = False
     between_two: str | None = None
+    claims: bool = False
 
 
 # The quantities a joint's value is in: a revolute joint's angle, a slide's length. Before the
@@ -79,9 +82,14 @@ CHECK_KINDS = {
     # is often 0.
     # Between two datums, a distance at each end, as a slide that sets a leg's width reaches it.
     "range": CheckKind("angle", "angle", span_capped=True, joint_valued=True, between_two="length"),
-    # How far a cable shortens from as built to a pose.
-    "stroke": CheckKind("length", "length"),
+    # How far a cable shortens from as built, or a from pose, to a pose.
+    "stroke": CheckKind("length", "length", claims=True),
 }
+# The keys of a check that name a pose: a stroke check's from, then the pose it is evaluated at.
+POSES = ("from", "pose")
+# What a claim says its quantity does between a check's from pose and its pose: a stroke's
+# shortening is positive or negative.
+CLAIMS = {"shortens": 1, "lengthens": -1}
 SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "other")
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}
 MATH_NAMES = {
@@ -409,6 +417,9 @@ def check_values(p: Project, eid: str, text: str, kind: str, values: dict) -> No
 
 
 def check_evidence(p: Project) -> None:
+    # A statement of a direction needs no values where only claim checks cite it.
+    keyed = {ref.partition(".")[0] for c in p.checks for ref in check_refs(c)}
+    directions = claimed_items(p) - keyed
     for e in p.evidence:
         eid = e["id"]
         sid = e.get("source")
@@ -416,7 +427,7 @@ def check_evidence(p: Project) -> None:
             p.error("evidence-source", f"{eid}: unknown source {sid!r}")
             continue
         values = e.get("values") or {}
-        if not values and "quote" in e and e.get("scope") != "context":
+        if not values and "quote" in e and e.get("scope") != "context" and eid not in directions:
             p.error("evidence-values", f"{eid}: needs values (or scope: context)")
         if "quote" in e:
             if not _available(p, sid):
@@ -740,13 +751,69 @@ def check_refs(c: dict) -> list[str]:
 
 
 def pose_refs(c: dict) -> list[str]:
-    """The joint values check c's pose names: each a param or an <evidence>.<key> ledger value."""
-    return [str(v) for v in (c.get("pose") or {}).values()]
+    """The joint values check c's poses name, its from pose's then its pose's: each a param or an
+    <evidence>.<key> ledger value."""
+    return [str(v) for key in POSES for v in (c.get(key) or {}).values()]
+
+
+def claimed_items(p: Project) -> set[str]:
+    """The evidence ids claim checks cite: each a statement of a direction, with no values."""
+    return {str(c.get("evidence")) for c in p.checks if "claim" in c}
 
 
 def cited_refs(p: Project, c: dict) -> list[str]:
-    """The ledger values check c cites: those it compares, and those its pose names."""
-    return check_refs(c) + [ref for ref in pose_refs(c) if ref not in p.params]
+    """The ledger values check c cites: those it compares, those its poses name, and for a claim
+    the evidence item stating it."""
+    claimed = [str(c["evidence"])] if "claim" in c and "evidence" in c else []
+    return check_refs(c) + [ref for ref in pose_refs(c) if ref not in p.params] + claimed
+
+
+def claim_config(p: Project, c: dict) -> list[str]:
+    """Why check c's claim or from pose cannot be evaluated: either on a kind that takes neither
+    (CheckKind.claims), or for one that does, a key and a claim, neither, a claim not in CLAIMS,
+    a tol or tol_rel beside a claim, or a claim citing no evidence item."""
+    kind = CHECK_KINDS.get(str(c.get("kind")))
+    if kind is None:
+        return []
+    if not kind.claims:
+        return [
+            f"{key} is for a stroke check; kind {c['kind']} takes none"
+            for key in ("claim", "from")
+            if key in c
+        ]
+    if "claim" not in c:
+        return (
+            []
+            if "key" in c
+            else [
+                "give key, the ledger value its stroke is compared with, "
+                "or claim: shortens or lengthens"
+            ]
+        )
+    if "key" in c:
+        return ["give key or claim, not both"]
+    problems = (
+        [] if c["claim"] in CLAIMS else [f"claim {c['claim']} is neither {' nor '.join(CLAIMS)}"]
+    )
+    problems += [
+        f"a claim passes only beyond tolerance.length, so it takes no {key}"
+        for key in ("tol", "tol_rel")
+        if key in c
+    ]
+    eid = c.get("evidence")
+    if eid is None:
+        problems.append("a claim cites the evidence item that states it")
+    elif p.item(str(eid)) is None and not p.cites_repeated(str(eid)):
+        problems.append(f"evidence {eid} is not an evidence item")
+    return problems
+
+
+def check_claims(p: Project) -> None:
+    """[check-config] for each check whose claim or from pose cannot be evaluated, which the build
+    then leaves unevaluated."""
+    for c in p.checks:
+        for problem in claim_config(p, c):
+            p.error("check-config", f"check {c.get('id', '?')}: {problem}")
 
 
 def calibration_ref(o: dict) -> str:
@@ -1027,8 +1094,9 @@ def check_units(p: Project) -> None:
                 expected = JOINT_QUANTITIES  # the build holds each to its joint's
             for ref in check_refs(c):
                 expect_quantity(p, ref, expected, f"check {cid}")
-        for ref in pose_refs(c):
-            expect_joint_value(p, ref, None, f"in check {cid}'s pose")
+        for key in POSES:
+            for ref in (c.get(key) or {}).values():
+                expect_joint_value(p, str(ref), None, f"in check {cid}'s {key}")
         if kind == "mass":
             expect_param_quantity(p, c.get("density") or "", ("density",), f"in check {cid}")
             for name in c.get("add", []):
@@ -1056,6 +1124,7 @@ def check_static(p: Project) -> None:
     check_gaps(p)
     check_conflicts(p)
     check_citations(p)
+    check_claims(p)
     check_units(p)
     check_tolerances(p)
     lint.lint_model(p)

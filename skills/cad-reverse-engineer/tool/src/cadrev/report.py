@@ -246,6 +246,8 @@ def _posed(r: CheckResult) -> str:
     posed = swept = ""
     if r.pose is not None:
         posed = f"posed: {pose_text(r.pose)}"
+    if r.from_pose is not None:
+        posed = f"from: {pose_text(r.from_pose)}; {posed}"
     if r.sweep is not None:
         (low, high), (low_from, high_from) = r.sweep["range"], r.sweep["from"]
         swept = (
@@ -477,7 +479,8 @@ def write(
                     {
                         k: v
                         for k, v in asdict(r).items()
-                        if k not in ("pairs", "pose", "sweep", "uncounted") or v is not None
+                        if k not in ("pairs", "pose", "from_pose", "sweep", "uncounted")
+                        or v is not None
                     }
                     for r in results
                 ],

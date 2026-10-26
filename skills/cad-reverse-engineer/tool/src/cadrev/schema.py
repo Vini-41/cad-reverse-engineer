@@ -113,6 +113,8 @@ CHECK = Record(
         "max_volume": NUMBER,
         "pairs": Items(Items(str)),
         "pose": Table(str),
+        "from": Table(str),
+        "claim": str,
         "joint": str,
         "cable": str,
         "ends": Items(str),
