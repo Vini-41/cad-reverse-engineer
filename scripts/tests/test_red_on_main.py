@@ -39,7 +39,7 @@ def repo(tmp_path: Path, dependencies: str) -> Path:
             f"{TOOL}/tests/test_double.py": BASE_TESTS,
         },
     )
-    git(root, "init", "-q")
+    git(root, "init", "-q", "-b", "master")  # not main, whatever the machine's default
     git(root, "add", ".")
     git(root, "commit", "-qm", "base")
     write(
