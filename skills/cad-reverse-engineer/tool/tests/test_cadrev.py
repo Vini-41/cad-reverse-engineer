@@ -331,9 +331,12 @@ def test_value_must_appear_in_quote(proj_dir):
     assert "value-not-in-quote" in errors(proj_dir)
 
 
-def add_quote(root: Path, tmp_path: Path, text: str, quote: str, values: dict) -> None:
-    """Register one more source holding text, and ledger quote from it as evidence N1."""
-    notes = tmp_path / "notes.txt"
+def add_quote(
+    root: Path, tmp_path: Path, text: str, quote: str, values: dict, name: str = "notes.txt"
+) -> None:
+    """Register one more source holding text, saved as name, and ledger quote from it as evidence
+    N1."""
+    notes = tmp_path / name
     notes.write_text(text)
     assert (
         cli.main(
@@ -358,6 +361,25 @@ def add_quote(root: Path, tmp_path: Path, text: str, quote: str, values: dict) -
             {"id": "N1", "source": "notes", "locator": "Sec. 1", "quote": quote, "values": values}
         ),
     )
+
+
+DATASHEET_QUOTES = pytest.mark.parametrize(
+    "quote, values", [("Weight 20.6 g", {"m": 20.6}), ("Servo & horn", {})], ids=["cells", "entity"]
+)
+
+
+@DATASHEET_QUOTES
+def test_quote_across_an_html_sources_table_cells_or_entity_matches(
+    proj_dir, tmp_path, quote, values
+):
+    add_quote(proj_dir, tmp_path, DATASHEET_HTML.decode(), quote, values, "ds.html")
+    assert "quote-not-found" not in errors(proj_dir)
+
+
+@DATASHEET_QUOTES
+def test_guard_quote_of_the_datasheet_matches_its_txt_copy(proj_dir, tmp_path, quote, values):
+    add_quote(proj_dir, tmp_path, "Servo & horn\nWeight\n20.6 g\n", quote, values, "ds.txt")
+    assert "quote-not-found" not in errors(proj_dir)
 
 
 @pytest.mark.parametrize(
@@ -2918,9 +2940,10 @@ def test_guard_density_derived_from_a_density_or_by_a_change_of_quantity(
 # The coverage sweep, driven by the unit table the quote reader uses.
 
 
-def swept(root: Path, tmp_path: Path, capsys, text: str) -> list[str]:
-    """The candidates `cadrev coverage` lists in a notes source holding text, as printed."""
-    notes = tmp_path / "notes.txt"
+def swept(root: Path, tmp_path: Path, capsys, text: str, name: str = "notes.txt") -> list[str]:
+    """The candidates `cadrev coverage` lists in a notes source holding text, saved as name, as
+    printed."""
+    notes = tmp_path / name
     notes.write_text(text)
     assert (
         cli.main(
@@ -2983,6 +3006,17 @@ SWEPT = {
 @pytest.mark.parametrize("form", sorted(SWEPT))
 def test_coverage_lists_each_quantity_form_whole(proj_dir, tmp_path, capsys, form):
     assert swept(proj_dir, tmp_path, capsys, f"The part is {form} here.") == [SWEPT[form]]
+
+
+def test_coverage_lists_an_html_sources_stated_quantity_and_no_number_from_its_markup(
+    proj_dir, tmp_path, capsys
+):
+    assert swept(proj_dir, tmp_path, capsys, DATASHEET_HTML.decode(), "ds.html") == ["20.6 g"]
+
+
+def test_coverage_lists_no_number_from_an_html_sources_title(proj_dir, tmp_path, capsys):
+    page = "<html><head><title>Servo 5 mm</title></head><body><p>Weight 20.6 g</p></body></html>"
+    assert swept(proj_dir, tmp_path, capsys, page, "ds.html") == ["20.6 g"]
 
 
 def test_guard_coverage_lists_a_degree_sign_angle(proj_dir, tmp_path, capsys):
@@ -3289,6 +3323,33 @@ def test_guard_text_prints_a_docx_as_one_page_of_paragraphs(proj_dir, tmp_path):
     add_source(proj_dir, tmp_path, "paper.docx", docx(PAPER))
     code, out = run("text", str(proj_dir), "doc")
     assert (code, out) == (0, f"===== doc page 1/1 =====\n{PAPER.rstrip()}\n")
+
+
+# A saved datasheet page: markup, a style, a script, an entity and a table row.
+DATASHEET_HTML = (
+    b'<html><head><meta name="viewport" content="width=1"><style>td{width:32px}</style>'
+    b"<script>var w=32;</script></head><body><p>Servo &amp; horn</p>"
+    b"<table><tr><td>Weight</td><td>20.6 g</td></tr></table></body></html>"
+)
+
+
+def test_text_prints_an_html_source_as_its_rendered_lines(proj_dir, tmp_path):
+    add_source(proj_dir, tmp_path, "ds.html", DATASHEET_HTML)
+    code, out = run("text", str(proj_dir), "doc")
+    assert (code, out) == (0, "===== doc page 1/1 =====\nServo & horn\nWeight\n20.6 g\n")
+
+
+def test_text_keeps_an_html_sources_inline_tags_on_one_line(proj_dir, tmp_path):
+    add_source(proj_dir, tmp_path, "ds.html", b"<p>Weight <b>20</b>.6&nbsp;g<br/>Servo</p>")
+    assert (
+        run("text", str(proj_dir), "doc")[1] == "===== doc page 1/1 =====\nWeight 20.6 g\nServo\n"
+    )
+
+
+def test_guard_text_prints_markup_in_a_txt_source_verbatim(proj_dir, tmp_path):
+    add_source(proj_dir, tmp_path, "ds.txt", DATASHEET_HTML)
+    code, out = run("text", str(proj_dir), "doc")
+    assert (code, out) == (0, f"===== doc page 1/1 =====\n{DATASHEET_HTML.decode()}\n")
 
 
 @pytest.mark.parametrize("grep", [["--grep", "x"], []], ids=["grep", "whole"])

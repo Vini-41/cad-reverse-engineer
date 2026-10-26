@@ -10,6 +10,7 @@ import unicodedata
 import zipfile
 from dataclasses import dataclass
 from functools import cache
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import NamedTuple
 
@@ -224,8 +225,51 @@ def _docx_text(path: Path) -> str:
     return "\n".join(line for line in lines if line.strip())
 
 
+class _HtmlText(HTMLParser):
+    """An HTML page's rendered text: script, style and title dropped, tags removed, entities
+    decoded, each block element or table cell its own line."""
+
+    BLOCKS = frozenset(
+        "address article aside blockquote br caption dd div dl dt figcaption figure footer form"
+        " h1 h2 h3 h4 h5 h6 header hr li main nav ol p pre section table td th tr ul".split()
+    )
+    HIDDEN = frozenset({"script", "style", "title"})  # never shown on the page
+
+    def __init__(self) -> None:
+        super().__init__()  # convert_charrefs: entities arrive decoded
+        self.parts: list[str] = []
+        self.hidden_depth = 0  # how many hidden elements the parser is inside
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in self.HIDDEN:
+            self.hidden_depth += 1
+        if tag in self.BLOCKS:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self.HIDDEN:
+            self.hidden_depth = max(self.hidden_depth - 1, 0)
+        if tag in self.BLOCKS:
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if not self.hidden_depth:
+            self.parts.append(data.replace("\n", " "))
+
+    def text(self) -> str:
+        lines = (" ".join(line.split()) for line in "".join(self.parts).split("\n"))
+        return "\n".join(line for line in lines if line)
+
+
+def _html_text(markup: str) -> str:
+    parser = _HtmlText()
+    parser.feed(markup)
+    parser.close()
+    return parser.text()
+
+
 def pages(path: Path) -> tuple[str, ...]:
-    """Text of each page. DOCX, TXT and MD are one page."""
+    """Text of each page. DOCX, TXT, MD and HTML are one page; HTML's is its rendered text."""
     return _pages(path, sha256(path))
 
 
@@ -239,7 +283,9 @@ def _pages(path: Path, digest: str) -> tuple[str, ...]:
         return tuple(page.extract_text() or "" for page in PdfReader(path).pages)
     if suffix == ".docx":
         return (_docx_text(path),)
-    if suffix in {".txt", ".md", ".html", ".htm"}:
+    if suffix in {".html", ".htm"}:
+        return (_html_text(path.read_text(encoding="utf8", errors="replace")),)
+    if suffix in {".txt", ".md"}:
         return (path.read_text(encoding="utf8", errors="replace"),)
     raise ValueError(f"unsupported source format: {path.name}")
 

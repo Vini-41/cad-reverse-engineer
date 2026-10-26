@@ -73,7 +73,7 @@ Any other word after a number (`12 links`) leaves it in project units.
 
 A source's `kind` outside the list above is `[source-kind]`, and an empty `citation` is `[source-citation]`. A `path` with no file is `[source-missing]`, whose message names the `url` to download from; a file whose sha256 differs from the pinned one is `[source-hash]`: after a deliberate change, register it again.
 
-Text formats (quote-checked and swept): PDF, DOCX, TXT, MD, HTML. A text source whose file cannot be read as text is `[source-unreadable]`. Save a web datasheet as HTML or TXT to make it quotable. Video and image files are sources for image evidence only.
+Text formats (quote-checked and swept): PDF, DOCX, TXT, MD, HTML. An HTML source is read as its rendered text, scripts and styles dropped. A text source whose file cannot be read as text is `[source-unreadable]`. Save a web datasheet as HTML or TXT to make it quotable. Video and image files are sources for image evidence only.
 
 ## evidence.yaml
 
