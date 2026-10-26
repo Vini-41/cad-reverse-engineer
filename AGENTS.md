@@ -10,6 +10,8 @@ To see new tests go red on the source before the fix, or how that source handles
 
 A pure refactor is guarded by `scripts/same-reports`: it compares each example's `build/report.json` with the tool source before the refactor and after, checks exactly and findings as a sorted list. With `--no-build` or `--no-coverage` it compares the findings a partial run prints instead.
 
+Dogfood run n, as an issue names it, is `~/Documents/Projects/cadrev/dogfood/run-<n>`; a different path an issue gives for a run is stale.
+
 `skills/cad-reverse-engineer/SKILL.md` and its `references/` are the shipped product: before editing them, load `/writing-for-agents`.
 
 ## Agent skills
