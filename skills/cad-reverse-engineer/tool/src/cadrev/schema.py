@@ -112,6 +112,7 @@ CHECK = Record(
         "axes": Table(str),
         "between": Items(str),
         "along": str,
+        "at": str,
         "density": str,
         "counts": Table(str),
         "add": Items(str),

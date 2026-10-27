@@ -1439,6 +1439,34 @@ def _angle(p: Project, c: dict, placed: Built, reading: _Reading) -> list[CheckR
     return [_compared(p, c, c.get("id", "?"), ref, measured, shown)]
 
 
+def _diameter(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckResult]:
+    """A diameter check: the diameter of the cylindrical face its datum at lies on, in its part's
+    frame. No result, after a [check-config] finding, where at is no part's datum or lies on no
+    cylindrical face, or on the edge of two of different diameters."""
+    reading.at(built)
+    cid, at = c.get("id", "?"), str(c["at"])
+    part = _owner(built, at)
+    if part is None or at not in built.datums:
+        p.error("check-config", f"check {cid}: {at} is not a datum of a part")
+        return []
+    found = released.diameters_at(built.parts[part], built.datums[at], p.length_tol)
+    if len(found) != 1:
+        where = (
+            "no cylindrical face"
+            if not found
+            else "the edge of cylindrical faces of diameters "
+            + " and ".join(f"{d:.4g}" for d in found)
+        )
+        p.error(
+            "check-config",
+            f"check {cid}: {at} lies on {where} of part {part}; place it on the face whose "
+            "diameter the check compares",
+        )
+        return []
+    ref = f"{c['evidence']}.{c['key']}"
+    return [_compared(p, c, cid, ref, found[0], f" at {at}")]
+
+
 def _shape(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckResult]:
     """A shape check: its part carried onto its released body by the rigid motion that best fits
     its datum pairs, then the largest distance between their surfaces, compared with its
@@ -1559,6 +1587,8 @@ def run_checks(
             evaluation = partial(_distance, p, c, placed)
         elif kind == "angle":
             evaluation = partial(_angle, p, c, placed)
+        elif kind == "diameter":
+            evaluation = partial(_diameter, p, built, c)
         elif kind == "mass":
             evaluation = partial(_mass, p, built, c)
         elif kind == "stroke":

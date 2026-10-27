@@ -88,6 +88,8 @@ CHECK_KINDS = {
     "bbox": CheckKind("length", "length"),
     "distance": CheckKind("length", "length"),
     "angle": CheckKind("angle", "angle"),
+    # The diameter of the cylindrical face a datum lies on: a bore, a hub, a pitch circle.
+    "diameter": CheckKind("length", "length"),
     "mass": CheckKind("mass", None, reads=_mass_reads, names=_mass_names),
     # A joint's range: an angle at each end, or a slide's length, compared with a stated end that
     # is often 0.

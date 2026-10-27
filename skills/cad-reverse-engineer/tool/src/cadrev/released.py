@@ -79,6 +79,22 @@ def off_solid(part, point: tuple[float, float, float], tol: float) -> float | No
     return None if nearest <= tol else nearest
 
 
+def diameters_at(shape, point: tuple[float, float, float], tol: float) -> list[float]:
+    """The diameters of the cylindrical faces of shape that point lies on within tol, each once
+    (two within tol of each other are one), smallest first: none for a point on no cylindrical
+    face, several for one on the edge where two meet."""
+    from build123d import GeomType, Vector
+
+    at = Vector(*point)
+    found: list[float] = []
+    for face in shape.faces():
+        if face.geom_type == GeomType.CYLINDER and face.distance_to(at) <= tol:
+            diameter = 2 * face.radius
+            if all(abs(diameter - d) > tol for d in found):
+                found.append(diameter)
+    return sorted(found)
+
+
 def datum_distance(a, b, along: str | None = None) -> float:
     """The distance between two datums' points, along the axis x, y or z where along names one."""
     if along is None:
