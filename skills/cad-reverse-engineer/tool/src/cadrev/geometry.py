@@ -24,6 +24,7 @@ from .project import (
     check_params,
     cited_refs,
     claim_config,
+    derived_from,
     check_tolerance,
     compared_quantity,
     compared_ref,
@@ -31,6 +32,7 @@ from .project import (
     expect_value,
     expect_joint_value,
     joint_valued,
+    expect_param_count,
     expect_param_quantity,
     expr_names,
     mass_params,
@@ -427,7 +429,7 @@ def build(p: Project) -> Built | None:
         cables=result.get("cables", {}),
     )
     for name in sorted(built.used):
-        expect_param_quantity(p, name, ("length", "angle"), "in model.py")
+        expect_param_quantity(p, name, ("length", "angle", "count"), "in model.py")
     ranges = {n for joint in built.joints.values() for n in joint.get("range", [])}
     for joint in built.joints.values():
         quantity = joint_type(joint).quantity
@@ -441,6 +443,9 @@ def build(p: Project) -> Built | None:
         if param in p.values:
             quantity = "fraction" if key == "ratio" else "length"
             expect_param_quantity(p, param, (quantity,), f"as gear {name}'s {key}")
+            if key == "ratio":
+                for count in derived_from(p, param):
+                    expect_param_count(p, count, f"in gear {name}'s ratio", lengths=True)
     for name, cable in built.cables.items():
         for joint, param in cable.get("closes", {}).items():
             quantity = joint_type(built.joints[joint]).quantity if joint in built.joints else None
@@ -1280,6 +1285,36 @@ def _weighed(p: Project, built: Built, c: dict) -> Counter | None:
     return None if missing else tally
 
 
+def counted(stated: float, placed: int) -> bool:
+    """Whether a stated count agrees with the instances the assembly places: exactly, as a count
+    check and a mass check's counts compare them (ADR-0012)."""
+    return stated == placed
+
+
+def _count(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckResult]:
+    """A count check: how many instances of its part the assembly places, compared exactly with
+    the ledger value."""
+    reading.at(built)
+    cid, part, ref = c.get("id", "?"), str(c["part"]), f"{c['evidence']}.{c['key']}"
+    if part not in built.parts:
+        p.error("check-config", f"check {cid}: {part} is not a part model.build returns")
+        return []
+    stated = p.value_as(ref, "count")
+    if stated is None:
+        raise KeyError(f"evidence value {ref}")
+    placed = sum(1 for name, _ in built.assembly.values() if name == part)
+    return [
+        CheckResult(
+            cid,
+            c["kind"],
+            counted(stated, placed),
+            f"{stated:g} ({ref})",
+            f"{placed} instance{'s' * (placed != 1)} of {part}",
+            c.get("interpretation", ""),
+        )
+    ]
+
+
 def _mass(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckResult]:
     """A mass check, reading the params of the parts it weighs, even where a finding then stops
     it, and the parts it weighs in several instances with no counts entry."""
@@ -1302,7 +1337,9 @@ def _weighed_mass(p: Project, built: Built, c: dict, tally: Counter) -> CheckRes
     params. None after a [check-config] finding: a counts param other than its part's instances
     in tally, or a part the mass model leaves unweighed."""
     cid, names, counts = c.get("id", "?"), list(tally), c.get("counts", {})
-    wrong = [(part, param) for part, param in counts.items() if p.values[param] != tally[part]]
+    wrong = [
+        (part, param) for part, param in counts.items() if not counted(p.values[param], tally[part])
+    ]
     for part, param in wrong:
         p.error(
             "check-config",
@@ -1729,6 +1766,8 @@ def run_checks(
             evaluation = partial(_range, p, built, c, poser)
         elif kind == "shape":
             evaluation = partial(_shape, p, built, c)
+        elif kind == "count":
+            evaluation = partial(_count, p, built, c)
         elif kind == "interference":
             evaluation = partial(_interference, p, built, c, placed, poser)
         else:
