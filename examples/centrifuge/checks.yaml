@@ -1,0 +1,88 @@
+# Written by gen_ledger.py: edit that script, not this file.
+checks:
+  - {"id": "chk-B-bore", "kind": "diameter", "at": "body.bore_wall", "evidence": "B-bore", "key": "d"}
+  - {"id": "chk-B-deck", "kind": "distance", "between": ["body.top", "body.deck_under"], "along": "y", "evidence": "B-deck", "key": "v"}
+  - {"id": "chk-B-hole", "kind": "diameter", "at": "body.hole_wall", "evidence": "B-hole", "key": "d"}
+  - {"id": "chk-B-groove-in", "kind": "diameter", "at": "body.groove_in", "evidence": "B-groove-in", "key": "d"}
+  - {"id": "chk-B-groove-out", "kind": "diameter", "at": "body.groove_out", "evidence": "B-groove-out", "key": "d"}
+  - {"id": "chk-B-groove-depth", "kind": "distance", "between": ["body.top", "body.groove_floor"], "along": "y", "evidence": "B-groove-depth", "key": "v"}
+  - {"id": "chk-B-groove-in-wall", "kind": "distance", "between": ["body.top", "body.groove_in_edge"], "along": "y", "evidence": "B-groove-in-wall", "key": "v"}
+  - {"id": "chk-B-groove-out-wall", "kind": "distance", "between": ["body.top", "body.groove_out_edge"], "along": "y", "evidence": "B-groove-out-wall", "key": "v"}
+  - {"id": "chk-B-arrow-depth", "kind": "distance", "between": ["body.top", "body.arrow_floor"], "along": "y", "evidence": "B-arrow-depth", "key": "v"}
+  - {"id": "chk-B-arrow-in", "kind": "diameter", "at": "body.arrow_in", "evidence": "B-arrow-in", "key": "d"}
+  - {"id": "chk-B-arrow-out", "kind": "diameter", "at": "body.arrow_out", "evidence": "B-arrow-out", "key": "d"}
+  - {"id": "chk-B-arrow-tip", "kind": "distance", "between": ["body.axis_top", "body.arrow_tip"], "along": "x", "evidence": "B-arrow-tip", "key": "v"}
+  - {"id": "chk-B-arrow-base", "kind": "distance", "between": ["body.axis_top", "body.arrow_base"], "along": "x", "evidence": "B-arrow-base", "key": "v"}
+  - {"id": "chk-B-arrow-z0", "kind": "distance", "between": ["body.axis_top", "body.arrow_z0"], "along": "z", "evidence": "B-arrow-z0", "key": "v"}
+  - {"id": "chk-B-arrow-z1", "kind": "distance", "between": ["body.axis_top", "body.arrow_z1"], "along": "z", "evidence": "B-arrow-z1", "key": "v"}
+  - {"id": "chk-B-fan-hole", "kind": "diameter", "at": "body.fan_hole_wall", "evidence": "B-fan-hole", "key": "d"}
+  - {"id": "chk-B-fan-pcd", "kind": "distance", "between": ["body.fan_hole_p", "body.fan_hole_n"], "evidence": "B-fan-pcd", "key": "v"}
+  - {"id": "chk-B-boss-pcd", "kind": "distance", "between": ["body.boss1", "body.boss3"], "evidence": "B-boss-pcd", "key": "v"}
+  - {"id": "chk-B-boss-angle", "kind": "angle", "between": ["body.wall0", "body.axis_low", "body.boss1"], "evidence": "B-boss-angle", "key": "a"}
+  - {"id": "chk-B-boss-d", "kind": "diameter", "at": "body.boss_wall", "evidence": "B-boss-d", "key": "d"}
+  - {"id": "chk-B-boss-hole", "kind": "diameter", "at": "body.boss_hole_wall", "evidence": "B-boss-hole", "key": "d"}
+  - {"id": "chk-B-boss-hole-depth", "kind": "distance", "between": ["body.bottom", "body.boss_hole_top"], "along": "y", "evidence": "B-boss-hole-depth", "key": "v"}
+  - {"id": "chk-B-cone-drop", "kind": "distance", "between": ["body.top", "body.cone_wall"], "along": "y", "evidence": "B-cone-drop", "key": "v"}
+  - {"id": "chk-B-cone-open", "kind": "angle", "between": ["body.cone_up", "body.cone_wall", "body.cone_b"], "evidence": "B-cone-open", "key": "a"}
+  - {"id": "chk-B-boss-flat", "kind": "distance", "between": ["body.top", "body.boss_flat"], "along": "y", "evidence": "B-boss-flat", "key": "v"}
+  - {"id": "chk-B-rocker-p1x", "kind": "distance", "between": ["body.axis_mid", "body.rocker_p1"], "along": "x", "evidence": "B-rocker-p1x", "key": "v"}
+  - {"id": "chk-B-rocker-p1z", "kind": "distance", "between": ["body.axis_mid", "body.rocker_p1"], "along": "z", "evidence": "B-rocker-p1z", "key": "v"}
+  - {"id": "chk-B-rocker-p2x", "kind": "distance", "between": ["body.axis_mid", "body.rocker_p2"], "along": "x", "evidence": "B-rocker-p2x", "key": "v"}
+  - {"id": "chk-B-rocker-p2z", "kind": "distance", "between": ["body.axis_mid", "body.rocker_p2"], "along": "z", "evidence": "B-rocker-p2z", "key": "v"}
+  - {"id": "chk-B-rocker-w", "kind": "distance", "between": ["body.rocker_p2", "body.rocker_p2w"], "evidence": "B-rocker-w", "key": "v"}
+  - {"id": "chk-B-rocker-top", "kind": "distance", "between": ["body.top", "body.rocker_top"], "along": "y", "evidence": "B-rocker-top", "key": "v"}
+  - {"id": "chk-B-rocker-h", "kind": "distance", "between": ["body.rocker_top", "body.rocker_bottom"], "along": "y", "evidence": "B-rocker-h", "key": "v"}
+  - {"id": "chk-B-dc-q1x", "kind": "distance", "between": ["body.axis_mid", "body.dc_q1"], "along": "x", "evidence": "B-dc-q1x", "key": "v"}
+  - {"id": "chk-B-dc-q1z", "kind": "distance", "between": ["body.axis_mid", "body.dc_q1"], "along": "z", "evidence": "B-dc-q1z", "key": "v"}
+  - {"id": "chk-B-dc-q2x", "kind": "distance", "between": ["body.axis_mid", "body.dc_q2"], "along": "x", "evidence": "B-dc-q2x", "key": "v"}
+  - {"id": "chk-B-dc-q2z", "kind": "distance", "between": ["body.axis_mid", "body.dc_q2"], "along": "z", "evidence": "B-dc-q2z", "key": "v"}
+  - {"id": "chk-B-dc-y", "kind": "distance", "between": ["body.top", "body.dc_q1"], "along": "y", "evidence": "B-dc-y", "key": "v"}
+  - {"id": "chk-B-dc-d", "kind": "diameter", "at": "body.dc_wall", "evidence": "B-dc-d", "key": "d"}
+  - {"id": "chk-B-slot-c1x", "kind": "distance", "between": ["body.axis_top", "body.slot_c1"], "along": "x", "evidence": "B-slot-c1x", "key": "v"}
+  - {"id": "chk-B-slot-c1z", "kind": "distance", "between": ["body.axis_top", "body.slot_c1"], "along": "z", "evidence": "B-slot-c1z", "key": "v"}
+  - {"id": "chk-B-slot-c2x", "kind": "distance", "between": ["body.axis_top", "body.slot_c2"], "along": "x", "evidence": "B-slot-c2x", "key": "v"}
+  - {"id": "chk-B-slot-c2z", "kind": "distance", "between": ["body.axis_top", "body.slot_c2"], "along": "z", "evidence": "B-slot-c2z", "key": "v"}
+  - {"id": "chk-B-slot-len", "kind": "distance", "between": ["body.slot_c1", "body.slot_c3"], "evidence": "B-slot-len", "key": "v"}
+  - {"id": "chk-P-d", "kind": "diameter", "at": "plate.rim", "evidence": "P-d", "key": "d"}
+  - {"id": "chk-P-t", "kind": "distance", "between": ["plate.top", "plate.bottom"], "along": "y", "evidence": "P-t", "key": "v"}
+  - {"id": "chk-P-foot-d", "kind": "diameter", "at": "plate.foot_wall", "evidence": "P-foot-d", "key": "d"}
+  - {"id": "chk-P-foot-h", "kind": "distance", "between": ["plate.bottom", "plate.foot_bottom"], "along": "y", "evidence": "P-foot-h", "key": "v"}
+  - {"id": "chk-P-foot-pcd", "kind": "distance", "between": ["plate.foot_p", "plate.foot_n"], "evidence": "P-foot-pcd", "key": "v"}
+  - {"id": "chk-P-foot-angle", "kind": "angle", "between": ["plate.ref0", "plate.centre_bottom", "plate.foot_end"], "evidence": "P-foot-angle", "key": "a"}
+  - {"id": "chk-P-hole-d", "kind": "diameter", "at": "plate.hole_wall", "evidence": "P-hole-d", "key": "d"}
+  - {"id": "chk-R-wall", "kind": "distance", "between": ["rotor.slab_bot", "rotor.bend_p"], "along": "y", "evidence": "R-wall", "key": "v"}
+  - {"id": "chk-R-notch", "kind": "distance", "between": ["rotor.tab_bottom", "rotor.notch_roof"], "along": "y", "evidence": "R-notch", "key": "v"}
+  - {"id": "chk-R-ledge", "kind": "distance", "between": ["rotor.tab_bottom", "rotor.ledge"], "along": "y", "evidence": "R-ledge", "key": "v"}
+  - {"id": "chk-R-skirt-top", "kind": "distance", "between": ["rotor.tab_bottom", "rotor.skirt_top"], "along": "y", "evidence": "R-skirt-top", "key": "v"}
+  - {"id": "chk-R-ledge-d", "kind": "distance", "between": ["rotor.ledge_p", "rotor.ledge_n"], "evidence": "R-ledge-d", "key": "v"}
+  - {"id": "chk-R-cone-top-d", "kind": "distance", "between": ["rotor.cone_top_p", "rotor.cone_top_n"], "evidence": "R-cone-top-d", "key": "v"}
+  - {"id": "chk-R-kink", "kind": "distance", "between": ["rotor.tab_bottom", "rotor.kink"], "along": "y", "evidence": "R-kink", "key": "v"}
+  - {"id": "chk-R-slab-bot", "kind": "distance", "between": ["rotor.tab_bottom", "rotor.slab_bot"], "along": "y", "evidence": "R-slab-bot", "key": "v"}
+  - {"id": "chk-R-top", "kind": "distance", "between": ["rotor.tab_bottom", "rotor.ridge"], "along": "y", "evidence": "R-top", "key": "v"}
+  - {"id": "chk-R-slab-w", "kind": "distance", "between": ["rotor.slab_side_p", "rotor.slab_side_n"], "evidence": "R-slab-w", "key": "v"}
+  - {"id": "chk-R-holder-l", "kind": "distance", "between": ["rotor.end_p", "rotor.end_n"], "evidence": "R-holder-l", "key": "v"}
+  - {"id": "chk-R-chamfer", "kind": "distance", "between": ["rotor.cut_corner", "rotor.end_p"], "along": "x", "evidence": "R-chamfer", "key": "v"}
+  - {"id": "chk-R-bend-span", "kind": "distance", "between": ["rotor.bend_p", "rotor.bend_n"], "evidence": "R-bend-span", "key": "v"}
+  - {"id": "chk-R-bend-open", "kind": "angle", "between": ["rotor.slab_top_mid", "rotor.bend_p", "rotor.holder_top_edge"], "evidence": "R-bend-open", "key": "a"}
+  - {"id": "chk-R-ridge-l", "kind": "distance", "between": ["rotor.ridge_xp", "rotor.ridge_xn"], "evidence": "R-ridge-l", "key": "v"}
+  - {"id": "chk-R-ridge-w", "kind": "distance", "between": ["rotor.ridge_zp", "rotor.ridge_zn"], "evidence": "R-ridge-w", "key": "v"}
+  - {"id": "chk-R-hole-d", "kind": "diameter", "at": "rotor.hole_wall", "evidence": "R-hole-d", "key": "d"}
+  - {"id": "chk-R-hole-in", "kind": "distance", "between": ["rotor.hole_in_p", "rotor.hole_in_n"], "evidence": "R-hole-in", "key": "v"}
+  - {"id": "chk-R-hole-out", "kind": "distance", "between": ["rotor.hole_out_p", "rotor.hole_out_n"], "evidence": "R-hole-out", "key": "v"}
+  - {"id": "chk-R-hole-pitch", "kind": "distance", "between": ["rotor.hole_in_p", "rotor.hole_2_p"], "evidence": "R-hole-pitch", "key": "v"}
+  - {"id": "chk-R-hole-drop", "kind": "distance", "between": ["rotor.ridge", "rotor.hole_top"], "along": "y", "evidence": "R-hole-drop", "key": "v"}
+  - {"id": "chk-R-tab-angle", "kind": "angle", "between": ["rotor.tab_e1", "rotor.axis_low", "rotor.tab_e2"], "evidence": "R-tab-angle", "key": "a"}
+  - {"id": "chk-R-tab-edge", "kind": "distance", "between": ["rotor.axis_low", "rotor.tab_corner"], "along": "z", "evidence": "R-tab-edge", "key": "v"}
+  - {"id": "body-envelope", "kind": "bbox", "part": "body", "evidence": "fig8-body-dims", "axes": {"W": "x", "L": "z", "H": "y"}, "interpretation": "Cura's X x Y x Z read as the body's X x Z x Y"}
+  - {"id": "hub-bore", "kind": "diameter", "at": "rotor.hub_bore", "evidence": "P3-pcr325", "key": "hub_d"}
+  - {"id": "tab-pitch", "kind": "angle", "between": ["rotor.tab_e1", "rotor.axis_low", "rotor.tab1_e1"], "expect": "360 / P3-pcr325.blades", "interpretation": "one tab per blade: adjacent tabs one blade pitch apart"}
+  - {"id": "fan-w-x", "kind": "bbox", "part": "fan_frame", "evidence": "P3-fan", "axes": {"w": "x"}}
+  - {"id": "fan-w-z", "kind": "bbox", "part": "fan_frame", "evidence": "P3-fan", "axes": {"w": "z"}}
+  - {"id": "screw-d", "kind": "diameter", "at": "screw.wall", "evidence": "P4-screws", "key": "d"}
+  - {"id": "screw-l", "kind": "bbox", "part": "screw", "evidence": "P4-screws", "axes": {"L": "y"}}
+  - {"id": "screw-count", "kind": "count", "part": "screw", "evidence": "P4-screws", "key": "n"}
+  - {"id": "rotor-mass", "kind": "mass", "parts": ["rotor"], "density": "pla_density", "evidence": "P11-mass", "key": "m", "tol_rel": 0.05, "interpretation": "'the rotor' read as the modelled PCR-strip rotor, printed solid; the paper does not say which rotor weighs 16 g"}
+  - {"id": "clear", "kind": "interference"}
+  - {"id": "body-shape", "kind": "shape", "part": "body", "body": "body_step", "tol": 0.002, "interpretation": "tol 0.002: at 0.001 the DC hole's rim, where it meets the outer wall, read 0.0011 apart, which is the booleans' intersection-curve approximation rather than geometry", "pairs": [["body.boss1", "body_step.boss1"], ["body.fan_hole_p", "body_step.fan_hole_p"], ["body.arrow_tip", "body_step.arrow_tip"], ["body.rocker_p1", "body_step.rocker_p1"], ["body.slot_c1", "body_step.slot_c1"], ["body.dc_q1", "body_step.dc_q1"]]}
+  - {"id": "plate-shape", "kind": "shape", "part": "plate", "body": "plate_step", "pairs": [["plate.foot_p", "plate_step.foot_p"], ["plate.foot_n", "plate_step.foot_n"], ["plate.hole", "plate_step.hole"], ["plate.rim", "plate_step.rim"]]}
+  - {"id": "rotor-shape", "kind": "shape", "part": "rotor", "body": "rotor_pcr325_step", "pairs": [["rotor.ridge_xp", "rotor_pcr325_step.ridge_xp"], ["rotor.hole_out_p", "rotor_pcr325_step.hole_out_p"], ["rotor.tab_corner", "rotor_pcr325_step.tab_corner"], ["rotor.end_n", "rotor_pcr325_step.end_n"], ["rotor.ledge_p", "rotor_pcr325_step.ledge_p"]]}

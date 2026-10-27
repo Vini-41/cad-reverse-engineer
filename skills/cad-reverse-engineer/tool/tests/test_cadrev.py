@@ -1568,6 +1568,21 @@ def test_guard_model_reading_a_name_params_yaml_does_not_declare_fails_naming_it
     ]
 
 
+def test_model_failing_with_no_message_names_the_model_py_line_it_failed_on(proj_dir):
+    _model_with(proj_dir, line="assert p.hole_d < 0")
+    assert findings(proj_dir, "model-build") == [
+        "model.build failed: AssertionError (model.py line 6: assert p.hole_d < 0)"
+    ]
+
+
+def test_model_failing_inside_a_library_names_the_model_py_line_that_called_it(proj_dir):
+    _model_with(proj_dir, header="import json", line="json.loads('{')")
+    assert findings(proj_dir, "model-build") == [
+        "model.build failed: JSONDecodeError: Expecting property name enclosed in double quotes:"
+        " line 1 column 2 (char 1) (model.py line 6: json.loads('{'))"
+    ]
+
+
 def test_guard_model_never_reading_a_param_without_a_value_builds_and_its_checks_run(proj_dir):
     _half_without_a_value(proj_dir)
     _, report = verify(proj_dir)
@@ -3118,6 +3133,8 @@ SWEPT = {
     "Ø3": "ø3",
     "Ø 32.5 mm": "ø 32.5 mm",
     "⌀3": "⌀3",
+    "19*12.5 mm": "19x12.5 mm",
+    "13*13*10": "13x13x10",
 }
 
 
@@ -3141,6 +3158,10 @@ def test_guard_coverage_lists_a_degree_sign_angle(proj_dir, tmp_path, capsys):
     assert swept(proj_dir, tmp_path, capsys, "The part is 30° here.") == ["30°"]
 
 
+def test_guard_coverage_lists_no_product_across_a_spaced_asterisk(proj_dir, tmp_path, capsys):
+    assert swept(proj_dir, tmp_path, capsys, "Price 3500* 500 g here.") == ["500 g"]
+
+
 def test_coverage_lists_nothing_where_no_quantity_is_stated(proj_dir, tmp_path, capsys):
     assert (
         swept(
@@ -3162,6 +3183,7 @@ NOT_SWEPT = {
     "4S": "A lithium polymer battery (4S, ACE) powers it.",
     "T=0s": "(A) T=0s, BLCM in the initial state.",
     "t = 2 s": "At t = 2 s the toes close.",
+    "n.a.": "Price (EUR) 500 n.a. 20",
 }
 
 
@@ -3179,6 +3201,8 @@ STILL_SWEPT = {
     "closes in 2s": "2s",
     "a Δt = 2 s step": "2 s",
     "a wall of t = 2 mm": "2 mm",
+    "rated at 500 N.": "500 n",
+    "rated at 10 mm.The": "10 mm",
 }
 
 
@@ -9032,6 +9056,32 @@ def test_report_json_lists_each_probe_with_its_evaluated_value(proj_dir, tmp_pat
         "ok": True,
     }
     assert sorted(by_key) == ["H", "L", "W"]
+
+
+@pytest.mark.parametrize(
+    "entry, row",
+    [
+        ({}, "| L=40, W=5, H=8 | probe bbox |"),
+        (
+            {
+                "probe": "distance",
+                "between": ["link_step.a", "link_step.b"],
+                "axes": None,
+                "values": {"v": 30},
+            },
+            "| v=30 | probe distance between link_step.a, link_step.b |",
+        ),
+    ],
+    ids=["bbox", "distance"],
+)
+def test_report_md_shows_a_probe_in_the_evidence_table_as_a_probe_awaiting_no_reviewer(
+    proj_dir, tmp_path, entry, row
+):
+    probed(proj_dir, tmp_path, **entry)
+    verify(proj_dir)
+    md = (proj_dir / "build" / "report.md").read_text()
+    assert f"| P-link | link_step | the released link {row}" in md
+    assert "figure None" not in md
 
 
 _PITCH_PROBE = {"probe": "distance", "between": ["link_step.a", "link_step.b"], "axes": None}

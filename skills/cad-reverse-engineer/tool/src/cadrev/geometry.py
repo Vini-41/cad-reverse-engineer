@@ -6,6 +6,7 @@ import importlib.util
 import math
 import re
 import sys
+import traceback
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
@@ -41,6 +42,10 @@ from .project import (
 )
 
 
+class _ParamError(AttributeError):
+    """A param model.py reads that has no value: it names the param, which is where to look."""
+
+
 class Params:
     """Read-only parameter access that records which parameters the model used."""
 
@@ -56,8 +61,8 @@ class Params:
             value = self._values[name]
         except KeyError:
             if name in self._declared:
-                raise AttributeError(f"param {name!r} has no value") from None
-            raise AttributeError(f"no parameter {name!r} in params.yaml") from None
+                raise _ParamError(f"param {name!r} has no value") from None
+            raise _ParamError(f"no parameter {name!r} in params.yaml") from None
         self.used.add(name)
         return value
 
@@ -414,6 +419,18 @@ def _contract_breach(result) -> str | None:
     return _motion_breach(result)
 
 
+def _failure(exc: BaseException, model: Path) -> str:
+    """The exception, and unless it names a param, the model.py line it was raised from, the
+    innermost one where it came from inside a library."""
+    if isinstance(exc, _ParamError):  # printed as the AttributeError model.py sees it raise
+        return f"AttributeError: {exc}"
+    message = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+    frames = [f for f in traceback.extract_tb(exc.__traceback__) if Path(f.filename) == model]
+    if not frames:
+        return message
+    return f"{message} (model.py line {frames[-1].lineno}: {frames[-1].line})"
+
+
 def build(p: Project) -> Built | None:
     spec = importlib.util.spec_from_file_location("cadrev_model", p.root / "model.py")
     assert spec is not None and spec.loader is not None  # a .py path always gets a source loader
@@ -424,7 +441,7 @@ def build(p: Project) -> Built | None:
         spec.loader.exec_module(module)
         result = module.build(params)
     except (Exception, SystemExit) as exc:  # noqa: BLE001 - a broken model is a finding, not a crash
-        p.error("model-build", f"model.build failed: {type(exc).__name__}: {exc}")
+        p.error("model-build", f"model.build failed: {_failure(exc, p.root / 'model.py')}")
         return None
     finally:
         sys.dont_write_bytecode = writes_bytecode

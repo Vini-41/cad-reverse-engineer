@@ -124,7 +124,9 @@ def spelling(but: tuple[str, ...] = ()) -> str:
 # adjective (2-in. plate, 5-mm pin), unless another number follows the word (2-in-1). No
 # spelling starts with a digit, so 5-10 mm stays a range.
 UNIT_GAP = r"(?:\s|-(?!\w+-\d))?"
-_FOLLOWING = re.compile(rf"{UNIT_GAP}({spelling()})")
+# A spelling that begins a dotted abbreviation is not a unit: the n of n.a. is no newton, while
+# the mm of "10 mm.The" ends a sentence.
+_FOLLOWING = re.compile(rf"{UNIT_GAP}({spelling()})(?!\.[a-z]\.)")
 _SPELLED = {name: re.compile(rf"(?:{'|'.join(unit.spellings)})") for name, unit in UNITS.items()}
 
 

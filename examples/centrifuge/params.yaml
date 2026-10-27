@@ -1,0 +1,93 @@
+# Written by gen_ledger.py: edit that script, not this file.
+params:
+  body_bore_d: {"basis": "source", "from": "B-bore.d", "interpretation": "inner wall bore, as the released body gives it"}
+  deck_t: {"basis": "source", "from": "B-deck.v", "interpretation": "top deck thickness, as the released body gives it (along y)"}
+  hub_hole_d: {"basis": "source", "from": "B-hole.d", "interpretation": "central hole through the deck, as the released body gives it"}
+  groove_di: {"basis": "source", "from": "B-groove-in.d", "interpretation": "lid groove, inner wall, as the released body gives it"}
+  groove_do: {"basis": "source", "from": "B-groove-out.d", "interpretation": "lid groove, outer wall, as the released body gives it"}
+  groove_depth: {"basis": "source", "from": "B-groove-depth.v", "interpretation": "lid groove depth to its flat floor, as the released body gives it (along y)"}
+  groove_in_wall: {"basis": "source", "from": "B-groove-in-wall.v", "interpretation": "lid groove, straight part of the inner wall, as the released body gives it (along y)"}
+  groove_out_wall: {"basis": "source", "from": "B-groove-out-wall.v", "interpretation": "lid groove, straight part of the outer wall, as the released body gives it (along y)"}
+  arrow_depth: {"basis": "source", "from": "B-arrow-depth.v", "interpretation": "spin-direction arrow recess depth, as the released body gives it (along y)"}
+  arrow_d_in: {"basis": "source", "from": "B-arrow-in.d", "interpretation": "arrow band, inner edge, as the released body gives it"}
+  arrow_d_out: {"basis": "source", "from": "B-arrow-out.d", "interpretation": "arrow band, outer edge, as the released body gives it"}
+  arrow_tip_x: {"basis": "source", "from": "B-arrow-tip.v", "interpretation": "arrow head tip, past the axis plane, as the released body gives it (along x)"}
+  arrow_base_x: {"basis": "source", "from": "B-arrow-base.v", "interpretation": "arrow head base, before the axis plane, as the released body gives it (along x)"}
+  arrow_z0: {"basis": "source", "from": "B-arrow-z0.v", "interpretation": "arrow head base, inner corner, as the released body gives it (along z)"}
+  arrow_z1: {"basis": "source", "from": "B-arrow-z1.v", "interpretation": "arrow head base, outer corner, as the released body gives it (along z)"}
+  fan_hole_d: {"basis": "source", "from": "B-fan-hole.d", "interpretation": "fan screw holes in the deck, as the released body gives it"}
+  fan_hole_pcd: {"basis": "source", "from": "B-fan-pcd.v", "interpretation": "fan screw holes, opposite pair, as the released body gives it"}
+  boss_pcd: {"basis": "source", "from": "B-boss-pcd.v", "interpretation": "screw bosses, opposite pair, as the released body gives it"}
+  boss_angle: {"basis": "source", "from": "B-boss-angle.a", "interpretation": "screw boss angle from +X, as the released body gives it"}
+  boss_d: {"basis": "source", "from": "B-boss-d.d", "interpretation": "screw boss, as the released body gives it"}
+  boss_hole_d: {"basis": "source", "from": "B-boss-hole.d", "interpretation": "screw boss tapping hole, as the released body gives it"}
+  boss_hole_depth: {"basis": "source", "from": "B-boss-hole-depth.v", "interpretation": "screw boss hole depth, as the released body gives it (along y)"}
+  boss_cone_drop: {"basis": "source", "from": "B-cone-drop.v", "interpretation": "boss top cone meets the wall, as the released body gives it (along y)"}
+  boss_cone_open: {"basis": "source", "from": "B-cone-open.a", "interpretation": "boss top cone against the wall, as the released body gives it"}
+  boss_flat: {"basis": "source", "from": "B-boss-flat.v", "interpretation": "boss top flat, as the released body gives it (along y)"}
+  rocker_p1x: {"basis": "source", "from": "B-rocker-p1x.v", "interpretation": "main-switch cut-out, outer corner P1, as the released body gives it (along x)"}
+  rocker_p1z: {"basis": "source", "from": "B-rocker-p1z.v", "interpretation": "main-switch cut-out, outer corner P1, as the released body gives it (along z)"}
+  rocker_p2x: {"basis": "source", "from": "B-rocker-p2x.v", "interpretation": "main-switch cut-out, inner corner P2, as the released body gives it (along x)"}
+  rocker_p2z: {"basis": "source", "from": "B-rocker-p2z.v", "interpretation": "main-switch cut-out, inner corner P2, as the released body gives it (along z)"}
+  rocker_w: {"basis": "source", "from": "B-rocker-w.v", "interpretation": "main-switch cut-out width, as the released body gives it"}
+  rocker_top: {"basis": "source", "from": "B-rocker-top.v", "interpretation": "main-switch cut-out, top below the deck top, as the released body gives it (along y)"}
+  rocker_h: {"basis": "source", "from": "B-rocker-h.v", "interpretation": "main-switch cut-out height, as the released body gives it (along y)"}
+  dc_q1x: {"basis": "source", "from": "B-dc-q1x.v", "interpretation": "DC socket hole axis, point Q1, as the released body gives it (along x)"}
+  dc_q1z: {"basis": "source", "from": "B-dc-q1z.v", "interpretation": "DC socket hole axis, point Q1, as the released body gives it (along z)"}
+  dc_q2x: {"basis": "source", "from": "B-dc-q2x.v", "interpretation": "DC socket hole axis, point Q2, as the released body gives it (along x)"}
+  dc_q2z: {"basis": "source", "from": "B-dc-q2z.v", "interpretation": "DC socket hole axis, point Q2, as the released body gives it (along z)"}
+  dc_y: {"basis": "source", "from": "B-dc-y.v", "interpretation": "DC socket hole axis below the top, as the released body gives it (along y)"}
+  dc_d: {"basis": "source", "from": "B-dc-d.d", "interpretation": "DC socket hole, as the released body gives it"}
+  slot_c1x: {"basis": "source", "from": "B-slot-c1x.v", "interpretation": "lid-switch slot, corner C1, as the released body gives it (along x)"}
+  slot_c1z: {"basis": "source", "from": "B-slot-c1z.v", "interpretation": "lid-switch slot, corner C1, as the released body gives it (along z)"}
+  slot_c2x: {"basis": "source", "from": "B-slot-c2x.v", "interpretation": "lid-switch slot, corner C2, as the released body gives it (along x)"}
+  slot_c2z: {"basis": "source", "from": "B-slot-c2z.v", "interpretation": "lid-switch slot, corner C2, as the released body gives it (along z)"}
+  slot_len: {"basis": "source", "from": "B-slot-len.v", "interpretation": "lid-switch slot length, as the released body gives it"}
+  plate_d: {"basis": "source", "from": "P-d.d", "interpretation": "bottom plate rim, as the released body gives it"}
+  plate_t: {"basis": "source", "from": "P-t.v", "interpretation": "bottom plate thickness, as the released body gives it (along y)"}
+  foot_d: {"basis": "source", "from": "P-foot-d.d", "interpretation": "foot, as the released body gives it"}
+  foot_h: {"basis": "source", "from": "P-foot-h.v", "interpretation": "foot height, as the released body gives it (along y)"}
+  foot_pcd: {"basis": "source", "from": "P-foot-pcd.v", "interpretation": "feet, opposite pair, as the released body gives it"}
+  foot_angle: {"basis": "source", "from": "P-foot-angle.a", "interpretation": "foot angle from +X, as the released body gives it"}
+  plate_hole_d: {"basis": "source", "from": "P-hole-d.d", "interpretation": "screw clearance hole, as the released body gives it"}
+  rotor_wall: {"basis": "source", "from": "R-wall.v", "interpretation": "slab thickness, as the released body gives it (along y)"}
+  notch_h: {"basis": "source", "from": "R-notch.v", "interpretation": "notch height between tabs, as the released body gives it (along y)"}
+  ledge_y: {"basis": "source", "from": "R-ledge.v", "interpretation": "hub ledge above the skirt bottom, as the released body gives it (along y)"}
+  skirt_top_y: {"basis": "source", "from": "R-skirt-top.v", "interpretation": "outer skirt height, as the released body gives it (along y)"}
+  ledge_d: {"basis": "source", "from": "R-ledge-d.v", "interpretation": "hub ledge inner edge, as the released body gives it"}
+  cone_top_d: {"basis": "source", "from": "R-cone-top-d.v", "interpretation": "outer cone meets the slab, as the released body gives it"}
+  kink_y: {"basis": "source", "from": "R-kink.v", "interpretation": "cavity cone to tip kink, as the released body gives it (along y)"}
+  slab_bot_y: {"basis": "source", "from": "R-slab-bot.v", "interpretation": "slab underside, as the released body gives it (along y)"}
+  top_y: {"basis": "source", "from": "R-top.v", "interpretation": "overall height to the ridge, as the released body gives it (along y)"}
+  slab_w: {"basis": "source", "from": "R-slab-w.v", "interpretation": "slab width, as the released body gives it"}
+  holder_l: {"basis": "source", "from": "R-holder-l.v", "interpretation": "strip holder length, as the released body gives it"}
+  holder_chamfer: {"basis": "source", "from": "R-chamfer.v", "interpretation": "strip holder end chamfer, as the released body gives it (along x)"}
+  bend_span: {"basis": "source", "from": "R-bend-span.v", "interpretation": "slab length between the bends, as the released body gives it"}
+  rotor_bend_open: {"basis": "source", "from": "R-bend-open.a", "interpretation": "holder against the slab, as the released body gives it"}
+  ridge_l: {"basis": "source", "from": "R-ridge-l.v", "interpretation": "roof ridge length, as the released body gives it"}
+  ridge_w: {"basis": "source", "from": "R-ridge-w.v", "interpretation": "roof ridge width, as the released body gives it"}
+  hole_d: {"basis": "source", "from": "R-hole-d.d", "interpretation": "tube hole, as the released body gives it"}
+  hole_in_span: {"basis": "source", "from": "R-hole-in.v", "interpretation": "innermost tube holes, axis to axis, as the released body gives it"}
+  hole_out_span: {"basis": "source", "from": "R-hole-out.v", "interpretation": "outermost tube holes, axis to axis, as the released body gives it"}
+  hole_pitch: {"basis": "source", "from": "R-hole-pitch.v", "interpretation": "tube hole pitch, as the released body gives it"}
+  hole_drop: {"basis": "source", "from": "R-hole-drop.v", "interpretation": "tube hole centre on the holder face, below the top, as the released body gives it (along y)"}
+  tab_angle: {"basis": "source", "from": "R-tab-angle.a", "interpretation": "hub tab angular width, as the released body gives it"}
+  tab_edge_z: {"basis": "source", "from": "R-tab-edge.v", "interpretation": "hub tab 0 edge, outer corner offset from the XY plane, as the released body gives it (along z)"}
+  body_d: {"basis": "source", "from": "fig8-body-dims.W", "interpretation": "body outer diameter: Cura's X extent of the body"}
+  body_h: {"basis": "source", "from": "fig8-body-dims.H", "interpretation": "body height, deck top to wall bottom: Cura's Z extent of the body as printed upside down"}
+  boss_cone_angle: {"basis": "derived", "expr": "180 - boss_cone_open", "interpretation": "boss top cone from the vertical wall"}
+  rotor_slope: {"basis": "derived", "expr": "180 - rotor_bend_open", "interpretation": "rise of the strip holders above the slab; read also for the roof hips and the cavity's flare and tip, which the shape check confirms share it"}
+  hole_x_in: {"basis": "derived", "expr": "hole_in_span / 2", "interpretation": "innermost holes symmetric about the rotor's YZ plane"}
+  hole_x_out: {"basis": "derived", "expr": "hole_out_span / 2", "interpretation": "outermost holes symmetric about the rotor's YZ plane"}
+  hub_d: {"basis": "source", "from": "P3-pcr325.hub_d", "interpretation": "rotor skirt bore = fan hub outer diameter (snug press fit, §5.1.1)"}
+  n_tabs: {"basis": "source", "from": "P3-pcr325.blades", "interpretation": "one hub tab per fan blade gap: seven tabs on the rotor skirt"}
+  fan_w: {"basis": "source", "from": "P3-fan.w", "interpretation": "fan frame side, square"}
+  screw_d: {"basis": "source", "from": "P4-screws.d", "interpretation": "M3 nominal diameter; shank only, no head or thread"}
+  screw_l: {"basis": "source", "from": "P4-screws.L", "interpretation": "the stated range's shorter end, 10 mm"}
+  screw_n: {"basis": "source", "from": "P4-screws.n", "interpretation": "four screws, one per body boss; the plate's four feet follow the same count"}
+  fan_t: {"basis": "proposed", "value": 25, "rationale": "the common 80 x 80 x 25 mm case fan; the paper gives no thickness", "gap": "G-fan"}
+  fan_bore_d: {"basis": "proposed", "value": 76, "rationale": "blade bore of a typical 80 mm fan frame", "gap": "G-fan"}
+  fan_rot: {"basis": "proposed", "value": 45, "rationale": "fan frame turned so its corner screw holes meet the deck's four holes on the axes", "gap": "G-fan"}
+  fan_top_y: {"basis": "derived", "expr": "-deck_t", "gap": "G-seat", "interpretation": "fan screwed up against the deck underside (Fig. 9)"}
+  rotor_seat_y: {"basis": "derived", "expr": "fan_top_y - ledge_y", "gap": "G-seat", "interpretation": "rotor pressed on until its hub ledge sits on the fan hub, whose top is flush with the fan frame's"}
+  pla_density: {"basis": "proposed", "value": 0.00124, "rationale": "typical PLA density, 1.24 g/cm³, for a rotor printed at 100 % infill (P7-rotor-infill)", "gap": "G-pla"}

@@ -1,0 +1,5 @@
+# Written by gen_ledger.py: edit that script, not this file.
+gaps:
+  - {"id": "G-fan", "question": "What are the 80 mm fan's thickness, blade-bore diameter and screw-hole layout (AKYGA AW-8A-BK datasheet)?", "ask": "datasheet"}
+  - {"id": "G-seat", "question": "Is the fan's hub flush with its frame's top face, so that the rotor's hub ledge sits level with the deck underside?", "ask": "measure"}
+  - {"id": "G-pla", "question": "What does the PLA used for the rotor weigh per cm³ as printed?", "ask": "measure"}

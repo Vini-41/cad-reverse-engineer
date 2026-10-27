@@ -74,14 +74,16 @@ def sha256(path: Path) -> str:
 
 
 def normalize(text: str, hyphen: str = "", cased: bool = False) -> str:
-    """Canonical form for matching: NFKC, unified dashes and multiplication signs,
-    hyphenated line breaks re-joined with hyphen between the halves, single spaces, lower case
-    unless cased."""
+    """Canonical form for matching: NFKC, unified dashes and multiplication signs (an asterisk
+    between digits among them), hyphenated line breaks re-joined with hyphen between the halves,
+    single spaces, lower case unless cased."""
     text = unicodedata.normalize("NFKC", text).translate(_DASHES).translate(_TIMES)
     text = text.replace("­", "")
     text = re.sub(r"(\w)-\s*\n\s*(\w)", rf"\1{hyphen}\2", text)
     text = re.sub(r"\s+", " ", text).strip()
-    return re.sub(r"(\d)\s*[xX]\s*(?=\d)", r"\1x", text if cased else text.lower())
+    # A product: 40 x 8, 40X8, or 19*12.5 written with an asterisk, never spaced (3500* 500 is a
+    # footnote mark).
+    return re.sub(r"(\d)(?:\s*[xX]\s*|\*)(?=\d)", r"\1x", text if cased else text.lower())
 
 
 def needles(quote: str) -> list[str]:

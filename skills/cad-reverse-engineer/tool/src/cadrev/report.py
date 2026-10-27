@@ -416,10 +416,7 @@ def write(
                 e.get("source"),
                 f"{e.get('locator', '')}" + (f", p{e['page']}" if e.get("page") else ""),
                 ", ".join(f"{k}={v}" for k, v in (e.get("values") or {}).items()),
-                f"“{e['quote']}”"
-                if "quote" in e
-                else f"figure {e.get('image')}: “{e.get('reading')}”"
-                + ("" if e.get("confirmed_by") else " (unconfirmed)"),
+                _anchor(e),
             ]
             for e in p.evidence
         ],
@@ -526,3 +523,17 @@ def write(
         encoding="utf8",
     )
     return path
+
+
+def _anchor(e: dict) -> str:
+    """What an evidence item rests on: its quote, its probe of a released body (which no reviewer
+    confirms), or its figure reading and whether a reviewer confirmed it."""
+    if "quote" in e:
+        return f"“{e['quote']}”"
+    if "probe" in e:
+        where = f" at {e['at']}" if e.get("at") else ""
+        if e.get("between"):
+            where = f" between {', '.join(map(str, e['between']))}"
+        return f"probe {e['probe']}{where}"
+    confirmed = "" if e.get("confirmed_by") else " (unconfirmed)"
+    return f"figure {e.get('image')}: “{e.get('reading')}”{confirmed}"

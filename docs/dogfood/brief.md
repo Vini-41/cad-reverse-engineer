@@ -43,3 +43,17 @@ Log: [legclaw-run-log.md](legclaw-run-log.md).
   - each stated range of motion and the `range` check that covers it, and each sweep with its pose count;
   - each Table S2 row, checked or not modelled and why;
   - the total-mass checks, evaluated against stated;
+
+### Centrifuge
+
+Log: [centrifuge-run-log.md](centrifuge-run-log.md).
+
+- **goal:** reconstruct the mini benchtop centrifuge as a static project, with one rotor variant of your choosing.
+- **sources:** (CC-BY) the paper `~/Documents/Projects/cadrev/centrifuge-sources/SomaPoor2022_centrifuge.pdf` and the authors' released STEP and STL files beside it (Mendeley Data, doi:10.17632/sy2vrhj227.1)
+- **report items:**
+  - which rotor variant you modelled, and why;
+  - each released body: registered or not, and shape-checked or skipped, with the reason;
+  - each probe, its value, and the params it feeds;
+  - each stated or probed diameter and the check that covers it;
+  - the mass checks, evaluated against stated;
+  - each conflict and its resolution;

@@ -7,9 +7,9 @@ extend-exclude = [
 ]
 
 [format]
-# Code blocks in the reference docs keep their hand-aligned comments; examples/legclaw keeps the
-# code its dogfood run wrote, as the run left it.
-exclude = ["*.md", "examples/legclaw/*.py"]
+# Code blocks in the reference docs keep their hand-aligned comments; examples/legclaw and
+# examples/centrifuge keep the code their dogfood runs wrote, as the runs left it.
+exclude = ["*.md", "examples/legclaw/*.py", "examples/centrifuge/*.py"]
 
 [lint]
 # pyflakes and pycodestyle errors, lines over line-length (ruff format leaves long strings,
@@ -20,5 +20,6 @@ select = ["E4", "E7", "E9", "F", "BLE", "UP", "E501"]
 [lint.per-file-ignores]
 # A project's model.py takes build123d whole, as the template and the modeling reference show.
 "**/model.py" = ["F403", "F405"]
-# examples/legclaw keeps the code its dogfood run wrote, long lines included.
+# examples/legclaw and examples/centrifuge keep the code their dogfood runs wrote, long lines included.
 "examples/legclaw/*.py" = ["E501"]
+"examples/centrifuge/*.py" = ["E501"]

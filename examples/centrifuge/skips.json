@@ -1,0 +1,23 @@
+[
+ {"source": "paper", "page": 1, "quote": "one can hold up to six tubes (1.5/2 ml, or 500 ll and 200 ll tubes with adapters)", "reason": "tube sizes the rotors hold: loads, not the device"},
+ {"source": "paper", "page": 2, "quote": "1.5/2 ml, 500 ll and 200 ll with the appropriate adapter", "reason": "tube sizes the six-tube rotor holds: loads, not the device"},
+ {"source": "paper", "page": 3, "from": "Centrifuge body STL and STEP", "to": "0.2 ml tube adapter STL and STEP", "reason": "design-file list: file names and licences"},
+ {"source": "paper", "page": 3, "quote": "Rotor – 32.5 mm Centrifuge rotor for 7 bladed fans with 32.5 mm hub diameter.", "reason": "the six-tube rotor, a variant not modelled"},
+ {"source": "paper", "page": 3, "from": "Rotor – 32.5 mm -ﬁt tester", "to": "Rotor – 36.6 mm Centrifuge rotor for 7 bladed fans with 36.6 mm hub diameter.", "reason": "the fit tester and the 36.6 mm six-tube rotor, not modelled"},
+ {"source": "paper", "page": 3, "from": "Rotor 36.6 mm – ﬁt tester The bottom part", "to": "Adapter for 0.2 ml (200 ll) tubes.", "reason": "fit tester and tube adapters, not part of the modelled device"},
+ {"source": "paper", "page": 4, "quote": "for 3D printing /C24 100 g", "reason": "filament bought for all printed parts; not a mass of the built device"},
+ {"source": "paper", "page": 4, "quote": "allows using containers with 105 mm of minimum and 127 mm of maximum diameter", "reason": "the broader-compatibility body, a variant not modelled"},
+ {"source": "paper", "page": 4, "quote": "Cook&Lock round container 400 ml", "reason": "an alternative lid, not modelled"},
+ {"source": "paper", "page": 5, "quote": "build plate size at least 13*13 cm", "reason": "printer requirement"},
+ {"source": "paper", "page": 6, "quote": "0.4 mm, line width 0.6 mm, 3 wall perimeters", "reason": "print settings"},
+ {"source": "paper", "page": 6, "quote": "accommodate lids with 105 mm of minimum and 127 mm of maximum diameter", "reason": "the broader-compatibility body, a variant not modelled"},
+ {"source": "paper", "page": 7, "quote": "The body of the centrifuge was printed with 10%", "reason": "body print infill; the body's mass is not checked"},
+ {"source": "paper", "page": 7, "quote": "0.2 mm layer height, 0.3 mm z hop", "reason": "print settings for the optional arrow inlay"},
+ {"source": "paper", "page": 8, "quote": "30 cm long cables", "reason": "wiring"},
+ {"source": "paper", "page": 9, "from": "The nominal speed of the fan used is 2000 RPM", "to": "six tube rotor is 4.4 cm, using 1.5 ml tubes.", "reason": "speed measurements and the six-tube rotor's radius: results and another variant"},
+ {"source": "paper", "page": 9, "from": "While the intended use case", "to": "then were centrifuged for 30 s.", "reason": "stress and efficacy tests"},
+ {"source": "paper", "page": 10, "from": "results, all centrifuges were set to 230 g", "to": "Price (EUR) 3500* 500 n.a.** 20", "reason": "comparison with commercial centrifuges: test results and other devices"},
+ {"source": "paper", "page": 11, "from": "After the lid switch is opened it takes 4.2 s", "to": "the time stop extends to 5.8 s", "reason": "stopping-time test"},
+ {"source": "paper", "page": 11, "from": "Fig. 12. The DIY mini centrifuge", "to": "1 ml/1.5 ml tubes PCR strip Average", "reason": "efficacy and noise tests"},
+ {"source": "paper", "page": 3, "quote": "(0.7500*0.500)", "reason": "the rocker switch's size in inches, printed unitless: it restates P3-main-switch's 19*12.5 mm; electronics, not built"}
+]

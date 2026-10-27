@@ -1,0 +1,99 @@
+# Reconstruction project. File formats: references/project-format.md in the cad-reverse-engineer skill.
+format: 1   # version of these file formats; set by cadrev init
+name: centrifuge
+target: "Poór 2022 open-source mini benchtop centrifuge (HardwareX e00328) as released: standard centrifuge body (116 mm lid), bottom plate, and the PCR-strip rotor for 7-bladed 80 mm fans with a 32.5 mm hub, assembled at rest with the lid off; static"
+units: {length: mm, angle: deg, mass: g}
+tolerance: {length: 0.001}   # model must realise source values to this; it is not a print tolerance
+# Register sources with `cadrev source`; it copies the file and pins its sha256. Keep this key last.
+sources:
+  - id: paper
+    kind: paper
+    path: sources/SomaPoor2022_centrifuge.pdf
+    sha256: b050808e8eb3e35a52facae1b30256f60167b649c67ba0513e6443b3005e9bac
+    citation: "V. S. Poór, A low-cost and open-source mini benchtop centrifuge for molecular biology labs, HardwareX 12 (2022) e00328"
+    license: CC-BY-4.0
+    url: https://doi.org/10.1016/j.ohx.2022.e00328
+  - id: body_step
+    kind: geometry
+    path: sources/body_step.step
+    sha256: 5fa74832fb1154bf5689561b204fc7d399a1bf431b76f8ff66e880ce8dbf2b72
+    citation: "Poór 2022, released design file 'Centrifuge body' (Mendeley Data)"
+    url: https://doi.org/10.17632/sy2vrhj227.1
+    license: CC-BY-4.0
+  - id: body_compat_step
+    kind: geometry
+    path: sources/body_compat_step.step
+    sha256: 909a3d4a4a65ed03f4885481e4d8132e552f049795d13d6bdc14667cb688ddf1
+    citation: "Poór 2022, released design file 'Centrifuge body - compatibility' (Mendeley Data)"
+    url: https://doi.org/10.17632/sy2vrhj227.1
+    license: CC-BY-4.0
+  - id: arrows_step
+    kind: geometry
+    path: sources/arrows_step.step
+    sha256: 061ce1cf44f4d661030fdd501da71812178e2b46cab42f66a4a1365a25aa017e
+    citation: "Poór 2022, released design file 'Arrows' (Mendeley Data)"
+    url: https://doi.org/10.17632/sy2vrhj227.1
+    license: CC-BY-4.0
+  - id: plate_step
+    kind: geometry
+    path: sources/plate_step.step
+    sha256: 222b57767e43de0358a14b6a76f4cd4d64eef35eb7a3e3557a53f429d9feace7
+    citation: "Poór 2022, released design file 'Bottom plate' (Mendeley Data)"
+    url: https://doi.org/10.17632/sy2vrhj227.1
+    license: CC-BY-4.0
+  - id: rotor325_step
+    kind: geometry
+    path: sources/rotor325_step.step
+    sha256: e474a4fdb0308b38853f4ee00f2d15b27b183a460995d984f6153940bfcd453b
+    citation: "Poór 2022, released design file 'Rotor - 32,5 mm' (Mendeley Data)"
+    url: https://doi.org/10.17632/sy2vrhj227.1
+    license: CC-BY-4.0
+  - id: rotor_pcr325_step
+    kind: geometry
+    path: sources/rotor_pcr325_step.step
+    sha256: 7481fb6ab800196181b7fc898bf6ccf40bd538d1cf3421fb74e0733238bfbe24
+    citation: "Poór 2022, released design file 'Rotor -  PCR strip - 32,5 mm' (Mendeley Data)"
+    url: https://doi.org/10.17632/sy2vrhj227.1
+    license: CC-BY-4.0
+  - id: fit325_step
+    kind: geometry
+    path: sources/fit325_step.step
+    sha256: 2e1f5331d2e24210e1949a40329c0cdbaad1f895f1c4b5a301588a6ce9092acc
+    citation: "Poór 2022, released design file 'Rotor - 32,5 mm - fit tester' (Mendeley Data)"
+    url: https://doi.org/10.17632/sy2vrhj227.1
+    license: CC-BY-4.0
+  - id: rotor366_step
+    kind: geometry
+    path: sources/rotor366_step.step
+    sha256: d35e5ce32e8babb418d402548c8c48c193ade213a44bb3cca5696e547fb96bff
+    citation: "Poór 2022, released design file 'Rotor - 36,6 mm' (Mendeley Data)"
+    url: https://doi.org/10.17632/sy2vrhj227.1
+    license: CC-BY-4.0
+  - id: rotor_pcr366_step
+    kind: geometry
+    path: sources/rotor_pcr366_step.step
+    sha256: 70ca59dcd2e3a601ff94dedcdfa7c5224f14d2278e507ac4033477c2d5f374fe
+    citation: "Poór 2022, released design file 'Rotor - PCR strip - 36,6 mm' (Mendeley Data)"
+    url: https://doi.org/10.17632/sy2vrhj227.1
+    license: CC-BY-4.0
+  - id: fit366_step
+    kind: geometry
+    path: sources/fit366_step.step
+    sha256: 8438b7b13fd900d1dfa0ac3498c7272025f740b58b9191dc618dc5a3bcea9e17
+    citation: "Poór 2022, released design file 'Rotor - 36,6 mm - fit tester' (Mendeley Data)"
+    url: https://doi.org/10.17632/sy2vrhj227.1
+    license: CC-BY-4.0
+  - id: adapter05_step
+    kind: geometry
+    path: sources/adapter05_step.step
+    sha256: a085f8490d04b9e4bb9278662730c66e84e47ef10dbac4570392ea6c577891d0
+    citation: "Poór 2022, released design file '0,5 ml tube adapter' (Mendeley Data)"
+    url: https://doi.org/10.17632/sy2vrhj227.1
+    license: CC-BY-4.0
+  - id: adapter02_step
+    kind: geometry
+    path: sources/adapter02_step.step
+    sha256: 0e20ac21016bc8d7287bc08c5ae600741319a2783296bb9a35394c0663d216df
+    citation: "Poór 2022, released design file '0,2 ml tube adapter' (Mendeley Data)"
+    url: https://doi.org/10.17632/sy2vrhj227.1
+    license: CC-BY-4.0

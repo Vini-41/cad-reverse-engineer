@@ -1,0 +1,224 @@
+# Written by gen_ledger.py: edit that script, not this file.
+evidence:
+  - {"id": "P3-pcr325", "source": "paper", "page": 3, "locator": "Design files table, PCR strip 32.5 mm rotor", "quote": "Rotor – PCR strip – 32.5 mm Centrifuge rotor of PCR strips for 7 bladed fans with 32.5 mm hub diameter.", "values": {"hub_d": 32.5, "blades": 7}}
+  - {"id": "P3-fan", "source": "paper", "page": 3, "locator": "Bill of materials, PC fan", "quote": "PC fan 80 mm, 12 V computer fan with 7 blades", "values": {"w": 80}}
+  - {"id": "P4-screws", "source": "paper", "page": 4, "locator": "Bill of materials, bottom plate screws", "quote": "M3 * 10–12 mm metric screws 4", "values": {"d": 3, "L": 10, "n": 4}}
+  - {"id": "P11-mass", "source": "paper", "page": 11, "locator": "7.3 Safety notes", "quote": "low weight of the rotor (16 g)", "values": {"m": 16}}
+  - {"id": "P3-lid-switch", "source": "paper", "page": 3, "locator": "Bill of materials, lid switch", "quote": "Hinge lever micro switch 6*9 mm", "values": {"w": 6, "l": 9}, "scope": "not-modeled", "reason": "electronics: the lid micro switch is not built; the body's slot for it is (B-slot-*)"}
+  - {"id": "P3-main-switch", "source": "paper", "page": 3, "locator": "Bill of materials, main switch", "quote": "Rocker switch 19*12.5 mm", "values": {"h": 19, "w": 12.5}, "scope": "not-modeled", "reason": "electronics: the rocker switch is not built; the body's cut-out for it is (B-rocker-*)"}
+  - {"id": "P4-psu", "source": "paper", "page": 4, "locator": "Bill of materials, power supply", "quote": "12 V, 1 A DC power supply, 5.5 mm * 2.1 mm connector", "values": {"od": 5.5, "id": 2.1}, "scope": "not-modeled", "reason": "electronics outside the device: the mains power supply"}
+  - {"id": "P4-dc", "source": "paper", "page": 4, "locator": "Bill of materials, DC socket", "quote": "DC socket 5.5 mm * 2.1 mm DC socket", "values": {"od": 5.5, "id": 2.1}, "scope": "not-modeled", "reason": "electronics: the DC socket is not built; the body's hole for it is (B-dc-*)"}
+  - {"id": "P4-lid", "source": "paper", "page": 4, "locator": "Bill of materials note, lid", "quote": "Its diameter is 116 mm", "values": {"d": 116}, "scope": "not-modeled", "reason": "the lid is a purchased food container resting in the body's groove; the target is the lid-off configuration"}
+  - {"id": "P1-fan", "source": "paper", "page": 1, "locator": "Abstract", "quote": "cheap off-the-shelf components (80 mm computer fan", "values": {"w": 80}, "scope": "context", "reason": "restates P3-fan"}
+  - {"id": "P4-fan-upcycle", "source": "paper", "page": 4, "locator": "Bill of materials note", "quote": "80 mm fans can be found in computer cases", "values": {"w": 80}, "scope": "context", "reason": "restates P3-fan"}
+  - {"id": "P7-hub-sizes", "source": "paper", "page": 7, "locator": "5.1.1 Printing the centrifuge rotor", "quote": "the two common sizes are 32.5 mm and 36.6 mm", "values": {"d325": 32.5, "d366": 36.6}, "scope": "context", "reason": "restates P3-pcr325 for the 32.5 mm hub; 36.6 mm is the variant not modelled"}
+  - {"id": "P3-pcr366-row", "source": "paper", "page": 3, "locator": "Design files table, PCR strip 36.6 mm rotor", "quote": "Rotor – PCR strip – 36.6 mm Centrifuge rotor of PCR strips for 7 bladed fans with 32.5 mm hub diameter.", "values": {"name_d": 36.6, "hub_d": 32.5}, "scope": "context", "reason": "the 36.6 mm PCR-strip rotor, a variant not modelled; see conflict K1"}
+  - {"id": "P7-rotor-infill", "source": "paper", "page": 7, "locator": "5.1.1 Printing the centrifuge rotor", "quote": "the rotor was printed with 100 %", "values": {"infill": 100}, "scope": "context", "reason": "solid rotor: supports weighing it at the full PLA density in chk-rotor-mass"}
+  - {"id": "P9-pcr-radius", "source": "paper", "page": 9, "locator": "7.1 Testing operation and reliability", "quote": "The rotational radius of the innermost tubes of the PCR strip is also 4.4 cm.", "values": {"r": 4.4}, "scope": "context", "reason": "radius of the tube tips, which depends on the PCR tubes' length; the tubes are not part of the device"}
+  - {"id": "P10-dims", "source": "paper", "page": 10, "locator": "Table 2, DIY column, Dimensions W*L*H (cm)", "quote": "13*13*10", "values": {"W": 13, "L": 13, "H": 10}, "scope": "context", "reason": "in cm, a unit printed only in the row header: W and L restate fig8-body-dims (130 mm); H includes the lid, not modelled"}
+  - {"id": "P9-m3", "source": "paper", "page": 9, "locator": "5.2 Assembling the centrifuge", "quote": "Attach the bottom plate with M3 screws", "scope": "context", "reason": "restates P4-screws"}
+  - {"id": "P2-strip", "source": "paper", "page": 2, "locator": "1. Hardware in context", "quote": "eight small, 200 ll tubes are connected", "values": {"n": "eight"}, "scope": "context", "reason": "a PCR strip of eight tubes: the holder's eight holes are probed (R-hole-*)"}
+  - {"id": "fig8-body-dims", "source": "paper", "page": 8, "locator": "Fig. 8 right, Cura object list, AG_Centrifuge body", "image": "figures/crops/fig8-body-dims.png", "image_sha256": "7be75cac317dfd20852bd2cd466b86a29bac33f28a1e158ffbf22de3f835ae2d", "reading": "130.0 x 130.0 x 34.0 mm", "values": {"W": 130.0, "L": 130.0, "H": 34.0}, "confirmed_by": "Vini Rezanejad"}
+  - {"id": "B-bore", "source": "body_step", "locator": "released body, inner wall bore", "probe": "diameter", "at": "body_step.bore_wall", "values": {"d": 126}}
+  - {"id": "B-deck", "source": "body_step", "locator": "released body, top deck thickness", "probe": "distance", "between": ["body_step.top", "body_step.deck_under"], "along": "y", "values": {"v": 7}}
+  - {"id": "B-hole", "source": "body_step", "locator": "released body, central hole through the deck", "probe": "diameter", "at": "body_step.hole_wall", "values": {"d": 44}}
+  - {"id": "B-groove-in", "source": "body_step", "locator": "released body, lid groove, inner wall", "probe": "diameter", "at": "body_step.groove_in", "values": {"d": 107}}
+  - {"id": "B-groove-out", "source": "body_step", "locator": "released body, lid groove, outer wall", "probe": "diameter", "at": "body_step.groove_out", "values": {"d": 123}}
+  - {"id": "B-groove-depth", "source": "body_step", "locator": "released body, lid groove depth to its flat floor", "probe": "distance", "between": ["body_step.top", "body_step.groove_floor"], "along": "y", "values": {"v": 5}}
+  - {"id": "B-groove-in-wall", "source": "body_step", "locator": "released body, lid groove, straight part of the inner wall", "probe": "distance", "between": ["body_step.top", "body_step.groove_in_edge"], "along": "y", "values": {"v": 1.0}}
+  - {"id": "B-groove-out-wall", "source": "body_step", "locator": "released body, lid groove, straight part of the outer wall", "probe": "distance", "between": ["body_step.top", "body_step.groove_out_edge"], "along": "y", "values": {"v": 1.1}}
+  - {"id": "B-arrow-depth", "source": "body_step", "locator": "released body, spin-direction arrow recess depth", "probe": "distance", "between": ["body_step.top", "body_step.arrow_floor"], "along": "y", "values": {"v": 0.2}}
+  - {"id": "B-arrow-in", "source": "body_step", "locator": "released body, arrow band, inner edge", "probe": "diameter", "at": "body_step.arrow_in", "values": {"d": 74.266494}}
+  - {"id": "B-arrow-out", "source": "body_step", "locator": "released body, arrow band, outer edge", "probe": "diameter", "at": "body_step.arrow_out", "values": {"d": 78.266494}}
+  - {"id": "B-arrow-tip", "source": "body_step", "locator": "released body, arrow head tip, past the axis plane", "probe": "distance", "between": ["body_step.axis_top", "body_step.arrow_tip"], "along": "x", "values": {"v": 2}}
+  - {"id": "B-arrow-base", "source": "body_step", "locator": "released body, arrow head base, before the axis plane", "probe": "distance", "between": ["body_step.axis_top", "body_step.arrow_base"], "along": "x", "values": {"v": 2}}
+  - {"id": "B-arrow-z0", "source": "body_step", "locator": "released body, arrow head base, inner corner", "probe": "distance", "between": ["body_step.axis_top", "body_step.arrow_z0"], "along": "z", "values": {"v": 36.0}}
+  - {"id": "B-arrow-z1", "source": "body_step", "locator": "released body, arrow head base, outer corner", "probe": "distance", "between": ["body_step.axis_top", "body_step.arrow_z1"], "along": "z", "values": {"v": 40.2}}
+  - {"id": "B-fan-hole", "source": "body_step", "locator": "released body, fan screw holes in the deck", "probe": "diameter", "at": "body_step.fan_hole_wall", "values": {"d": 4}}
+  - {"id": "B-fan-pcd", "source": "body_step", "locator": "released body, fan screw holes, opposite pair", "probe": "distance", "between": ["body_step.fan_hole_p", "body_step.fan_hole_n"], "values": {"v": 100.8}}
+  - {"id": "B-boss-pcd", "source": "body_step", "locator": "released body, screw bosses, opposite pair", "probe": "distance", "between": ["body_step.boss1", "body_step.boss3"], "values": {"v": 116}}
+  - {"id": "B-boss-angle", "source": "body_step", "locator": "released body, screw boss angle from +X", "probe": "angle", "between": ["body_step.wall0", "body_step.axis_low", "body_step.boss1"], "values": {"a": 21.756866}}
+  - {"id": "B-boss-d", "source": "body_step", "locator": "released body, screw boss", "probe": "diameter", "at": "body_step.boss_wall", "values": {"d": 10}}
+  - {"id": "B-boss-hole", "source": "body_step", "locator": "released body, screw boss tapping hole", "probe": "diameter", "at": "body_step.boss_hole_wall", "values": {"d": 3.2}}
+  - {"id": "B-boss-hole-depth", "source": "body_step", "locator": "released body, screw boss hole depth", "probe": "distance", "between": ["body_step.bottom", "body_step.boss_hole_top"], "along": "y", "values": {"v": 15}}
+  - {"id": "B-cone-drop", "source": "body_step", "locator": "released body, boss top cone meets the wall", "probe": "distance", "between": ["body_step.top", "body_step.cone_wall"], "along": "y", "values": {"v": 8.6}}
+  - {"id": "B-cone-open", "source": "body_step", "locator": "released body, boss top cone against the wall", "probe": "angle", "between": ["body_step.cone_up", "body_step.cone_wall", "body_step.cone_b"], "values": {"a": 135}}
+  - {"id": "B-boss-flat", "source": "body_step", "locator": "released body, boss top flat", "probe": "distance", "between": ["body_step.top", "body_step.boss_flat"], "along": "y", "values": {"v": 18.5}}
+  - {"id": "B-rocker-p1x", "source": "body_step", "locator": "released body, main-switch cut-out, outer corner P1", "probe": "distance", "between": ["body_step.axis_mid", "body_step.rocker_p1"], "along": "x", "values": {"v": 50.25184}}
+  - {"id": "B-rocker-p1z", "source": "body_step", "locator": "released body, main-switch cut-out, outer corner P1", "probe": "distance", "between": ["body_step.axis_mid", "body_step.rocker_p1"], "along": "z", "values": {"v": 41.228055}}
+  - {"id": "B-rocker-p2x", "source": "body_step", "locator": "released body, main-switch cut-out, inner corner P2", "probe": "distance", "between": ["body_step.axis_mid", "body_step.rocker_p2"], "along": "x", "values": {"v": 48.830544}}
+  - {"id": "B-rocker-p2z", "source": "body_step", "locator": "released body, main-switch cut-out, inner corner P2", "probe": "distance", "between": ["body_step.axis_mid", "body_step.rocker_p2"], "along": "z", "values": {"v": 39.806758}}
+  - {"id": "B-rocker-w", "source": "body_step", "locator": "released body, main-switch cut-out width", "probe": "distance", "between": ["body_step.rocker_p2", "body_step.rocker_p2w"], "values": {"v": 13.0}}
+  - {"id": "B-rocker-top", "source": "body_step", "locator": "released body, main-switch cut-out, top below the deck top", "probe": "distance", "between": ["body_step.top", "body_step.rocker_top"], "along": "y", "values": {"v": 7.395837}}
+  - {"id": "B-rocker-h", "source": "body_step", "locator": "released body, main-switch cut-out height", "probe": "distance", "between": ["body_step.rocker_top", "body_step.rocker_bottom"], "along": "y", "values": {"v": 19.0}}
+  - {"id": "B-dc-q1x", "source": "body_step", "locator": "released body, DC socket hole axis, point Q1", "probe": "distance", "between": ["body_step.axis_mid", "body_step.dc_q1"], "along": "x", "values": {"v": 45.042935}}
+  - {"id": "B-dc-q1z", "source": "body_step", "locator": "released body, DC socket hole axis, point Q1", "probe": "distance", "between": ["body_step.axis_mid", "body_step.dc_q1"], "along": "z", "values": {"v": 46.17384}}
+  - {"id": "B-dc-q2x", "source": "body_step", "locator": "released body, DC socket hole axis, point Q2", "probe": "distance", "between": ["body_step.axis_mid", "body_step.dc_q2"], "along": "x", "values": {"v": 44.335828}}
+  - {"id": "B-dc-q2z", "source": "body_step", "locator": "released body, DC socket hole axis, point Q2", "probe": "distance", "between": ["body_step.axis_mid", "body_step.dc_q2"], "along": "z", "values": {"v": 45.466733}}
+  - {"id": "B-dc-y", "source": "body_step", "locator": "released body, DC socket hole axis below the top", "probe": "distance", "between": ["body_step.top", "body_step.dc_q1"], "along": "y", "values": {"v": 15.53615}}
+  - {"id": "B-dc-d", "source": "body_step", "locator": "released body, DC socket hole", "probe": "diameter", "at": "body_step.dc_wall", "values": {"d": 8.5}}
+  - {"id": "B-slot-c1x", "source": "body_step", "locator": "released body, lid-switch slot, corner C1", "probe": "distance", "between": ["body_step.axis_top", "body_step.slot_c1"], "along": "x", "values": {"v": 37.550742}}
+  - {"id": "B-slot-c1z", "source": "body_step", "locator": "released body, lid-switch slot, corner C1", "probe": "distance", "between": ["body_step.axis_top", "body_step.slot_c1"], "along": "z", "values": {"v": 39.804363}}
+  - {"id": "B-slot-c2x", "source": "body_step", "locator": "released body, lid-switch slot, corner C2", "probe": "distance", "between": ["body_step.axis_top", "body_step.slot_c2"], "along": "x", "values": {"v": 42.147008}}
+  - {"id": "B-slot-c2z", "source": "body_step", "locator": "released body, lid-switch slot, corner C2", "probe": "distance", "between": ["body_step.axis_top", "body_step.slot_c2"], "along": "z", "values": {"v": 43.661088}}
+  - {"id": "B-slot-len", "source": "body_step", "locator": "released body, lid-switch slot length", "probe": "distance", "between": ["body_step.slot_c1", "body_step.slot_c3"], "values": {"v": 12.0}}
+  - {"id": "P-d", "source": "plate_step", "locator": "released body, bottom plate rim", "probe": "diameter", "at": "plate_step.rim", "values": {"d": 130}}
+  - {"id": "P-t", "source": "plate_step", "locator": "released body, bottom plate thickness", "probe": "distance", "between": ["plate_step.top", "plate_step.bottom"], "along": "y", "values": {"v": 1}}
+  - {"id": "P-foot-d", "source": "plate_step", "locator": "released body, foot", "probe": "diameter", "at": "plate_step.foot_wall", "values": {"d": 10}}
+  - {"id": "P-foot-h", "source": "plate_step", "locator": "released body, foot height", "probe": "distance", "between": ["plate_step.bottom", "plate_step.foot_bottom"], "along": "y", "values": {"v": 3}}
+  - {"id": "P-foot-pcd", "source": "plate_step", "locator": "released body, feet, opposite pair", "probe": "distance", "between": ["plate_step.foot_p", "plate_step.foot_n"], "values": {"v": 116}}
+  - {"id": "P-foot-angle", "source": "plate_step", "locator": "released body, foot angle from +X", "probe": "angle", "between": ["plate_step.ref0", "plate_step.centre_bottom", "plate_step.foot_end"], "values": {"a": 34.369022}}
+  - {"id": "P-hole-d", "source": "plate_step", "locator": "released body, screw clearance hole", "probe": "diameter", "at": "plate_step.hole_wall", "values": {"d": 3.5}}
+  - {"id": "R-wall", "source": "rotor_pcr325_step", "locator": "released body, slab thickness", "probe": "distance", "between": ["rotor_pcr325_step.slab_bot", "rotor_pcr325_step.bend_p"], "along": "y", "values": {"v": 2}}
+  - {"id": "R-notch", "source": "rotor_pcr325_step", "locator": "released body, notch height between tabs", "probe": "distance", "between": ["rotor_pcr325_step.tab_bottom", "rotor_pcr325_step.notch_roof"], "along": "y", "values": {"v": 5}}
+  - {"id": "R-ledge", "source": "rotor_pcr325_step", "locator": "released body, hub ledge above the skirt bottom", "probe": "distance", "between": ["rotor_pcr325_step.tab_bottom", "rotor_pcr325_step.ledge"], "along": "y", "values": {"v": 5.055472}}
+  - {"id": "R-skirt-top", "source": "rotor_pcr325_step", "locator": "released body, outer skirt height", "probe": "distance", "between": ["rotor_pcr325_step.tab_bottom", "rotor_pcr325_step.skirt_top"], "along": "y", "values": {"v": 5.288}}
+  - {"id": "R-ledge-d", "source": "rotor_pcr325_step", "locator": "released body, hub ledge inner edge", "probe": "distance", "between": ["rotor_pcr325_step.ledge_p", "rotor_pcr325_step.ledge_n"], "values": {"v": 24.5}}
+  - {"id": "R-cone-top-d", "source": "rotor_pcr325_step", "locator": "released body, outer cone meets the slab", "probe": "distance", "between": ["rotor_pcr325_step.cone_top_p", "rotor_pcr325_step.cone_top_n"], "values": {"v": 25.327142}}
+  - {"id": "R-kink", "source": "rotor_pcr325_step", "locator": "released body, cavity cone to tip kink", "probe": "distance", "between": ["rotor_pcr325_step.tab_bottom", "rotor_pcr325_step.kink"], "along": "y", "values": {"v": 24.988}}
+  - {"id": "R-slab-bot", "source": "rotor_pcr325_step", "locator": "released body, slab underside", "probe": "distance", "between": ["rotor_pcr325_step.tab_bottom", "rotor_pcr325_step.slab_bot"], "along": "y", "values": {"v": 28.988}}
+  - {"id": "R-top", "source": "rotor_pcr325_step", "locator": "released body, overall height to the ridge", "probe": "distance", "between": ["rotor_pcr325_step.tab_bottom", "rotor_pcr325_step.ridge"], "along": "y", "values": {"v": 38.988}}
+  - {"id": "R-slab-w", "source": "rotor_pcr325_step", "locator": "released body, slab width", "probe": "distance", "between": ["rotor_pcr325_step.slab_side_p", "rotor_pcr325_step.slab_side_n"], "values": {"v": 29.1}}
+  - {"id": "R-holder-l", "source": "rotor_pcr325_step", "locator": "released body, strip holder length", "probe": "distance", "between": ["rotor_pcr325_step.end_p", "rotor_pcr325_step.end_n"], "values": {"v": 73.1}}
+  - {"id": "R-chamfer", "source": "rotor_pcr325_step", "locator": "released body, strip holder end chamfer", "probe": "distance", "between": ["rotor_pcr325_step.cut_corner", "rotor_pcr325_step.end_p"], "along": "x", "values": {"v": 3}}
+  - {"id": "R-bend-span", "source": "rotor_pcr325_step", "locator": "released body, slab length between the bends", "probe": "distance", "between": ["rotor_pcr325_step.bend_p", "rotor_pcr325_step.bend_n"], "values": {"v": 54}}
+  - {"id": "R-bend-open", "source": "rotor_pcr325_step", "locator": "released body, holder against the slab", "probe": "angle", "between": ["rotor_pcr325_step.slab_top_mid", "rotor_pcr325_step.bend_p", "rotor_pcr325_step.holder_top_edge"], "values": {"a": 135}}
+  - {"id": "R-ridge-l", "source": "rotor_pcr325_step", "locator": "released body, roof ridge length", "probe": "distance", "between": ["rotor_pcr325_step.ridge_xp", "rotor_pcr325_step.ridge_xn"], "values": {"v": 13.1}}
+  - {"id": "R-ridge-w", "source": "rotor_pcr325_step", "locator": "released body, roof ridge width", "probe": "distance", "between": ["rotor_pcr325_step.ridge_zp", "rotor_pcr325_step.ridge_zn"], "values": {"v": 2}}
+  - {"id": "R-hole-d", "source": "rotor_pcr325_step", "locator": "released body, tube hole", "probe": "diameter", "at": "rotor_pcr325_step.hole_wall", "values": {"d": 6.6}}
+  - {"id": "R-hole-in", "source": "rotor_pcr325_step", "locator": "released body, innermost tube holes, axis to axis", "probe": "distance", "between": ["rotor_pcr325_step.hole_in_p", "rotor_pcr325_step.hole_in_n"], "values": {"v": 9.0}}
+  - {"id": "R-hole-out", "source": "rotor_pcr325_step", "locator": "released body, outermost tube holes, axis to axis", "probe": "distance", "between": ["rotor_pcr325_step.hole_out_p", "rotor_pcr325_step.hole_out_n"], "values": {"v": 63.02}}
+  - {"id": "R-hole-pitch", "source": "rotor_pcr325_step", "locator": "released body, tube hole pitch", "probe": "distance", "between": ["rotor_pcr325_step.hole_in_p", "rotor_pcr325_step.hole_2_p"], "values": {"v": 9.003333}}
+  - {"id": "R-hole-drop", "source": "rotor_pcr325_step", "locator": "released body, tube hole centre on the holder face, below the top", "probe": "distance", "between": ["rotor_pcr325_step.ridge", "rotor_pcr325_step.hole_top"], "along": "y", "values": {"v": 3.878679}}
+  - {"id": "R-tab-angle", "source": "rotor_pcr325_step", "locator": "released body, hub tab angular width", "probe": "angle", "between": ["rotor_pcr325_step.tab_e1", "rotor_pcr325_step.axis_low", "rotor_pcr325_step.tab_e2"], "values": {"a": 15.746991}}
+  - {"id": "R-tab-edge", "source": "rotor_pcr325_step", "locator": "released body, hub tab 0 edge, outer corner offset from the XY plane", "probe": "distance", "between": ["rotor_pcr325_step.axis_low", "rotor_pcr325_step.tab_corner"], "along": "z", "values": {"v": 2.963611}}
+  - {"id": "R-hub-bore", "source": "rotor_pcr325_step", "locator": "released body, hub skirt bore", "probe": "diameter", "at": "rotor_pcr325_step.hub_bore", "values": {"d": 32.5}, "scope": "context", "reason": "restates P3-pcr325 (hub diameter 32.5 mm)"}
+skipped:
+  - {"source": "body_compat_step", "reason": "not part of the device built: the broader-lid-compatibility body, a variant for other lids (target: standard body)", "body": "body_compat_step"}
+  - {"source": "arrows_step", "body": "arrows_step#1", "reason": "not part of the device: an optional coloured arrow inlay, printed separately (§5.1.2); the body's arrow recess is modelled"}
+  - {"source": "arrows_step", "body": "arrows_step#2", "reason": "not part of the device: an optional coloured arrow inlay, printed separately (§5.1.2); the body's arrow recess is modelled"}
+  - {"source": "rotor325_step", "reason": "six-tube rotor, a variant not modelled (target: PCR-strip rotor)", "body": "rotor325_step"}
+  - {"source": "rotor366_step", "reason": "six-tube rotor for 36.6 mm hubs, a variant not modelled", "body": "rotor366_step"}
+  - {"source": "rotor_pcr366_step", "reason": "PCR-strip rotor for 36.6 mm hubs, a variant not modelled", "body": "rotor_pcr366_step"}
+  - {"source": "fit325_step", "reason": "a fit tester for the 32.5 mm hub, not part of the device", "body": "fit325_step"}
+  - {"source": "fit366_step", "reason": "a fit tester for the 36.6 mm hub, not part of the device", "body": "fit366_step"}
+  - {"source": "adapter05_step", "reason": "0.5 ml tube adapter, an accessory for the six-tube rotor not modelled", "body": "adapter05_step"}
+  - {"source": "adapter02_step", "reason": "0.2 ml tube adapter, an accessory for the six-tube rotor not modelled", "body": "adapter02_step"}
+  - {"source": "paper", "page": 1, "quote": "one can hold up to six tubes (1.5/2 ml, or 500 ll and 200 ll tubes with adapters)", "reason": "tube sizes the rotors hold: loads, not the device"}
+  - {"source": "paper", "page": 2, "quote": "1.5/2 ml, 500 ll and 200 ll with the appropriate adapter", "reason": "tube sizes the six-tube rotor holds: loads, not the device"}
+  - {"source": "paper", "page": 3, "from": "Centrifuge body STL and STEP", "to": "0.2 ml tube adapter STL and STEP", "reason": "design-file list: file names and licences"}
+  - {"source": "paper", "page": 3, "quote": "Rotor – 32.5 mm Centrifuge rotor for 7 bladed fans with 32.5 mm hub diameter.", "reason": "the six-tube rotor, a variant not modelled"}
+  - {"source": "paper", "page": 3, "from": "Rotor – 32.5 mm -ﬁt tester", "to": "Rotor – 36.6 mm Centrifuge rotor for 7 bladed fans with 36.6 mm hub diameter.", "reason": "the fit tester and the 36.6 mm six-tube rotor, not modelled"}
+  - {"source": "paper", "page": 3, "from": "Rotor 36.6 mm – ﬁt tester The bottom part", "to": "Adapter for 0.2 ml (200 ll) tubes.", "reason": "fit tester and tube adapters, not part of the modelled device"}
+  - {"source": "paper", "page": 4, "quote": "for 3D printing /C24 100 g", "reason": "filament bought for all printed parts; not a mass of the built device"}
+  - {"source": "paper", "page": 4, "quote": "allows using containers with 105 mm of minimum and 127 mm of maximum diameter", "reason": "the broader-compatibility body, a variant not modelled"}
+  - {"source": "paper", "page": 4, "quote": "Cook&Lock round container 400 ml", "reason": "an alternative lid, not modelled"}
+  - {"source": "paper", "page": 5, "quote": "build plate size at least 13*13 cm", "reason": "printer requirement"}
+  - {"source": "paper", "page": 6, "quote": "0.4 mm, line width 0.6 mm, 3 wall perimeters", "reason": "print settings"}
+  - {"source": "paper", "page": 6, "quote": "accommodate lids with 105 mm of minimum and 127 mm of maximum diameter", "reason": "the broader-compatibility body, a variant not modelled"}
+  - {"source": "paper", "page": 7, "quote": "The body of the centrifuge was printed with 10%", "reason": "body print infill; the body's mass is not checked"}
+  - {"source": "paper", "page": 7, "quote": "0.2 mm layer height, 0.3 mm z hop", "reason": "print settings for the optional arrow inlay"}
+  - {"source": "paper", "page": 8, "quote": "30 cm long cables", "reason": "wiring"}
+  - {"source": "paper", "page": 9, "from": "The nominal speed of the fan used is 2000 RPM", "to": "six tube rotor is 4.4 cm, using 1.5 ml tubes.", "reason": "speed measurements and the six-tube rotor's radius: results and another variant"}
+  - {"source": "paper", "page": 9, "from": "While the intended use case", "to": "then were centrifuged for 30 s.", "reason": "stress and efficacy tests"}
+  - {"source": "paper", "page": 10, "from": "results, all centrifuges were set to 230 g", "to": "Price (EUR) 3500* 500 n.a.** 20", "reason": "comparison with commercial centrifuges: test results and other devices"}
+  - {"source": "paper", "page": 11, "from": "After the lid switch is opened it takes 4.2 s", "to": "the time stop extends to 5.8 s", "reason": "stopping-time test"}
+  - {"source": "paper", "page": 11, "from": "Fig. 12. The DIY mini centrifuge", "to": "1 ml/1.5 ml tubes PCR strip Average", "reason": "efficacy and noise tests"}
+  - {"source": "paper", "page": 3, "quote": "(0.7500*0.500)", "reason": "the rocker switch's size in inches, printed unitless: it restates P3-main-switch's 19*12.5 mm; electronics, not built"}
+conflicts:
+  - {"id": "K1", "evidence": ["P3-pcr366-row", "P7-hub-sizes"], "summary": "The design-file table describes the 36.6 mm PCR-strip rotor as for fans 'with 32.5 mm hub diameter'; its name and §5.1.1 give 36.6 mm.", "resolution": "A copy error in the 36.6 mm row, which concerns the variant not modelled. The modelled 32.5 mm PCR-strip rotor's own row (P3-pcr325) and its released body (R-hub-bore) agree on 32.5 mm."}
+  - {"id": "K2", "evidence": ["P3-main-switch", "B-rocker-w"], "summary": "The rocker switch is listed as 19*12.5 mm; the body's cut-out for it is 19 x 13 mm.", "resolution": "Different objects: 12.5 mm is the purchased switch (not built), 13 mm the cut-out that clears it. The model takes the cut-out from the released body."}
+  - {"id": "K3", "evidence": ["P3-lid-switch", "B-slot-len"], "summary": "The lid micro switch is listed as 6*9 mm; the body's slot for it is 6 x 12 mm.", "resolution": "Different objects: the slot holds the switch and leaves room for its lever. The model takes the slot from the released body."}
+datums:
+  body_step.top: [-63.25, 0, 0]
+  body_step.bottom: [-64.0, -34, 0]
+  body_step.deck_under: [-42.5, -7, 0]
+  body_step.bore_wall: [-63, -20.5, 0]
+  body_step.hole_wall: [-22, -3.5, 0]
+  body_step.axis_top: [0, -3.5, 0]
+  body_step.groove_in: [-53.5, -0.5, 0]
+  body_step.groove_out: [-61.5, -0.55, 0]
+  body_step.groove_in_edge: [-53.5, -1.0, 0]
+  body_step.groove_out_edge: [-61.5, -1.1, 0]
+  body_step.groove_floor: [-57.55, -5, 0]
+  body_step.arrow_floor: [-19.066623, -0.2, 33.024361]
+  body_step.arrow_in: [-18.566623, -0.1, 32.158335]
+  body_step.arrow_out: [-19.566623, -0.1, 33.890386]
+  body_step.arrow_tip: [2, -0.1, 38.133247]
+  body_step.arrow_base: [-2, -0.1, 36.539674]
+  body_step.arrow_z0: [-2, -0.1, 36.0]
+  body_step.arrow_z1: [-2, -0.1, 40.2]
+  body_step.fan_hole_p: [50.4, -3.5, 0]
+  body_step.fan_hole_n: [-50.4, -3.5, 0]
+  body_step.fan_hole_wall: [-48.4, -3.5, 0]
+  body_step.axis_low: [0, -26.25, 0]
+  body_step.wall0: [63, -26.25, 0]
+  body_step.boss1: [53.868378, -26.25, 21.498787]
+  body_step.boss3: [-53.868378, -26.25, -21.498787]
+  body_step.boss_wall: [49.224552, -26.25, 19.645443]
+  body_step.boss_hole_wall: [55.354402, -26.5, 22.091857]
+  body_step.boss_hole_top: [53.868378, -19, 21.498787]
+  body_step.cone_wall: [58.512204, -8.6, 23.352131]
+  body_step.cone_up: [58.512204, -7.8, 23.352131]
+  body_step.cone_b: [56.654674, -10.6, 22.610793]
+  body_step.boss_flat: [49.224552, -18.5, 19.645443]
+  body_step.rocker_p1: [-50.25184, -16.895837, 41.228055]
+  body_step.rocker_p2: [-48.830544, -16.895837, 39.806758]
+  body_step.rocker_p2w: [-39.638153, -16.895837, 48.999143]
+  body_step.rocker_top: [-44.944996, -7.395837, 45.113599]
+  body_step.rocker_bottom: [-44.944996, -26.395837, 45.113599]
+  body_step.axis_mid: [0, -16.895837, 0]
+  body_step.dc_q1: [-45.042935, -15.53615, -46.17384]
+  body_step.dc_q2: [-44.335828, -15.53615, -45.466733]
+  body_step.dc_wall: [-45.042935, -11.28615, -46.17384]
+  body_step.slot_c1: [37.550742, -7, 39.804363]
+  body_step.slot_c2: [42.147008, -7, 43.661088]
+  body_step.slot_c3: [45.264193, -7, 30.611829]
+  plate_step.rim: [-65, -34.5, 0]
+  plate_step.top: [-61.5, -34, 0]
+  plate_step.bottom: [-61.5, -35, 0]
+  plate_step.foot_p: [47.874293, -36.5, 32.742207]
+  plate_step.foot_n: [-47.874293, -36.5, -32.742207]
+  plate_step.foot_wall: [52.874293, -36.5, 32.742207]
+  plate_step.foot_bottom: [47.874293, -38, 32.742207]
+  plate_step.foot_end: [47.874293, -35, 32.742207]
+  plate_step.ref0: [58, -35, 0]
+  plate_step.centre_bottom: [0, -35, 0]
+  plate_step.hole_wall: [55.493717, -34.5, 22.147457]
+  plate_step.hole: [53.868378, -34.5, 21.498787]
+  rotor_pcr325_step.tab_bottom: [16.476848, -40.288, -5.106463]
+  rotor_pcr325_step.notch_roof: [12.629516, -35.288, -11.749801]
+  rotor_pcr325_step.ledge: [14.25, -35.232528, 0]
+  rotor_pcr325_step.skirt_top: [18.25, -35.0, 0]
+  rotor_pcr325_step.ledge_p: [12.25, -35.232528, 0]
+  rotor_pcr325_step.ledge_n: [-12.25, -35.232528, 0]
+  rotor_pcr325_step.cone_top_p: [12.663571, -11.3, 0]
+  rotor_pcr325_step.cone_top_n: [-12.663571, -11.3, 0]
+  rotor_pcr325_step.kink: [11.551618, -15.3, 0]
+  rotor_pcr325_step.slab_bot: [0, -11.3, 27]
+  rotor_pcr325_step.bend_p: [0, -9.3, 27]
+  rotor_pcr325_step.bend_n: [0, -9.3, -27]
+  rotor_pcr325_step.slab_top_mid: [0, -9.3, 18]
+  rotor_pcr325_step.holder_top_edge: [0, -1.3, 35]
+  rotor_pcr325_step.ridge: [0, -1.3, 0]
+  rotor_pcr325_step.ridge_xp: [6.55, -1.3, 0]
+  rotor_pcr325_step.ridge_xn: [-6.55, -1.3, 0]
+  rotor_pcr325_step.ridge_zp: [0, -1.3, 1]
+  rotor_pcr325_step.ridge_zn: [0, -1.3, -1]
+  rotor_pcr325_step.slab_side_p: [14.55, -10.3, 27]
+  rotor_pcr325_step.slab_side_n: [-14.55, -10.3, 27]
+  rotor_pcr325_step.end_p: [36.55, -4.3, 32.0]
+  rotor_pcr325_step.end_n: [-36.55, -4.3, 32.0]
+  rotor_pcr325_step.cut_corner: [33.55, -1.3, 35.0]
+  rotor_pcr325_step.hole_in_p: [4.5, -5.885786, 31.828428]
+  rotor_pcr325_step.hole_in_n: [-4.5, -5.885786, 31.828428]
+  rotor_pcr325_step.hole_2_p: [13.503333, -5.885786, 31.828428]
+  rotor_pcr325_step.hole_out_p: [31.51, -5.885786, 31.828428]
+  rotor_pcr325_step.hole_out_n: [-31.51, -5.885786, 31.828428]
+  rotor_pcr325_step.hole_wall: [7.8, -5.885786, 31.828428]
+  rotor_pcr325_step.hole_top: [4.5, -5.178679, 31.121321]
+  rotor_pcr325_step.axis_low: [0, -37.788, 0]
+  rotor_pcr325_step.tab_e1: [17.021036, -37.788, -2.801221]
+  rotor_pcr325_step.tab_e2: [15.622004, -37.788, -7.315427]
+  rotor_pcr325_step.tab_corner: [18.007762, -40.288, -2.963611]
+  rotor_pcr325_step.hub_bore: [15.521669, -37.788, -4.810436]
