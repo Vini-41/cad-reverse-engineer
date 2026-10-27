@@ -3047,6 +3047,10 @@ SWEPT = {
     "5-10 mm": "5-10 mm",
     "six turns": "six turns",
     "three degrees": "three degrees",
+    "Ø 32.5": "ø 32.5",
+    "Ø3": "ø3",
+    "Ø 32.5 mm": "ø 32.5 mm",
+    "⌀3": "⌀3",
 }
 
 
@@ -3114,6 +3118,17 @@ STILL_SWEPT = {
 @pytest.mark.parametrize("form", sorted(STILL_SWEPT))
 def test_guard_coverage_lists_the_near_miss_of_each_look_alike(proj_dir, tmp_path, capsys, form):
     assert swept(proj_dir, tmp_path, capsys, f"The part is {form} here.") == [STILL_SWEPT[form]]
+
+
+@pytest.mark.parametrize("form", ["32.5", "3"])
+def test_guard_coverage_lists_no_number_without_a_diameter_sign_or_unit(
+    proj_dir, tmp_path, capsys, form
+):
+    assert swept(proj_dir, tmp_path, capsys, f"The part is {form} here.") == []
+
+
+def test_guard_coverage_lists_no_diameter_sign_inside_a_word(proj_dir, tmp_path, capsys):
+    assert swept(proj_dir, tmp_path, capsys, "Built at Ørsted 3 and Søborg 2.") == []
 
 
 def test_guard_coverage_lists_no_number_word_without_a_unit(proj_dir, tmp_path, capsys):
@@ -8347,3 +8362,89 @@ def test_file_of_several_bodies_names_each_by_its_place_in_the_file(proj_dir, tm
 def test_probe_recording_no_values_is_evidence_values_whatever_its_scope(proj_dir, tmp_path):
     probed(proj_dir, tmp_path, values=None)
     assert "evidence-values" in errors(proj_dir)
+
+
+# A diameter check: the link's hole a stated as a Ø callout, its datum wall on the hole's face and
+# top on the link's flat top face.
+_HOLE_DATUMS = swap(
+    MODEL,
+    '"link.b": (p.pitch / 2, 0, 0)}',
+    '"link.b": (p.pitch / 2, 0, 0), "link.wall": (-p.pitch / 2 + p.hole_d / 2, 0, 0), '
+    '"link.top": (0, 0, p.link_H / 2)}',
+)
+
+
+def diameter_checked(root: Path, tmp_path: Path, at: str = "link.wall", stated: float = 3) -> None:
+    """Ledger the link's hole as the callout "Ø 3" (N1.d, stated) and check it at datum at."""
+    add_quote(root, tmp_path, "The pivot holes are Ø 3 through.", "Ø 3", {"d": stated})
+    write(root, "model.py", _HOLE_DATUMS)
+    check = {"id": "bore", "kind": "diameter", "at": at, "evidence": "N1", "key": "d"}
+    edit(root, "checks.yaml", lambda d: d["checks"].append(check))
+
+
+def _bore(report: dict) -> list[dict]:
+    return [r for r in report["checks"] if r["id"] == "bore"]
+
+
+@pytest.mark.parametrize("stated, ok", [(3, True), (4, False)])
+def test_diameter_check_compares_the_cylindrical_face_its_datum_lies_on(
+    proj_dir, tmp_path, stated, ok
+):
+    diameter_checked(proj_dir, tmp_path, stated=stated)
+    code, report = verify(proj_dir)
+    (result,) = _bore(report)
+    assert result["ok"] == ok and result["measured"].startswith("3 ")
+    assert ("check-failed" in [f["rule"] for f in report["findings"]]) != ok
+    assert (code == 0) == ok
+
+
+def test_diameter_check_whose_datum_lies_on_no_cylindrical_face_is_check_config(proj_dir, tmp_path):
+    diameter_checked(proj_dir, tmp_path, at="link.top")
+    _, report = verify(proj_dir)
+    assert _bore(report) == []
+    assert any(
+        f["rule"] == "check-config" and "link.top lies on no cylindrical face" in f["message"]
+        for f in report["findings"]
+    )
+
+
+def test_guard_diameter_check_whose_datum_lies_on_a_cylindrical_face_raises_no_check_config(
+    proj_dir, tmp_path
+):
+    diameter_checked(proj_dir, tmp_path)
+    assert "check-config" not in rules(proj_dir)
+
+
+def test_diameter_check_whose_datum_lies_where_two_cylindrical_faces_meet_is_check_config(
+    proj_dir, tmp_path
+):
+    # A 1.5 mm cross hole along Y through hole a; link.wall moved onto the edge where its face
+    # meets the 3 mm hole's.
+    diameter_checked(proj_dir, tmp_path)
+    cross = (
+        "    link -= Pos(-p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2 / 2, p.link_W * 2, "
+        "rotation=(90, 0, 0))\n    return {"
+    )
+    edge = (
+        '"link.wall": (-p.pitch / 2 + p.hole_d / 2 / 2, '
+        "math.sqrt((p.hole_d / 2) ** 2 - (p.hole_d / 2 / 2) ** 2), 0)"
+    )
+    model = swap(_HOLE_DATUMS, "    return {", cross, 1)
+    model = swap(model, '"link.wall": (-p.pitch / 2 + p.hole_d / 2, 0, 0)', edge)
+    write(proj_dir, "model.py", "import math\n" + model)
+    _, report = verify(proj_dir)
+    assert _bore(report) == []
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-config"] == [
+        "check bore: link.wall lies on the edge of cylindrical faces of diameters 1.5 and 3 of "
+        "part link; place it on the face whose diameter the check compares"
+    ]
+
+
+@pytest.mark.parametrize("at", ["link.nowhere", "rotor.wall"])
+def test_diameter_check_at_no_datum_of_a_part_is_check_config(proj_dir, tmp_path, at):
+    diameter_checked(proj_dir, tmp_path, at=at)
+    _, report = verify(proj_dir)
+    assert _bore(report) == []
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-config"] == [
+        f"check bore: {at} is not a datum of a part"
+    ]

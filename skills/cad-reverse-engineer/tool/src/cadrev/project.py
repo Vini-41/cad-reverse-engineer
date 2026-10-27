@@ -91,6 +91,8 @@ CHECK_KINDS = {
     # With from, the change between two poses: a slide's travel, a carrier's turn.
     "distance": CheckKind("length", "length", changes=True),
     "angle": CheckKind("angle", "angle", changes=True),
+    # The diameter of the cylindrical face a datum lies on: a bore, a hub, a pitch circle.
+    "diameter": CheckKind("length", "length"),
     "mass": CheckKind("mass", None, reads=_mass_reads, names=_mass_names),
     # A joint's range: an angle at each end, or a slide's length, compared with a stated end that
     # is often 0.
