@@ -91,6 +91,7 @@ if [ "$lint" -eq 0 ]; then
     uv run python ../../../scripts/rule-coverage
   step "the skill and tool source use none of GLOSSARY.md's avoided words" ../../../scripts/check-glossary-words
   step "the tool source branches on a check or probe kind only in run_checks" ../../../scripts/check-kind-branches
+  step "the branch holds no merge commit, so it rebase-merges" ../../../scripts/check-linear
   step "plugin manifests validate" --rerun "claude plugin validate ." plugin_validate
   step "red-on-main: new tests are red holes or green guards" --rerun scripts/red-on-main \
     red_on_main_or_notice

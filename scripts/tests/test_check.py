@@ -12,6 +12,7 @@ STUBS = (
     "check-doc-pointers",
     "check-glossary-words",
     "check-kind-branches",
+    "check-linear",
     "committed-examples",
     "rule-coverage",
 )

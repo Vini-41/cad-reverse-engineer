@@ -25,3 +25,5 @@ jobs:
           # A PR's checkout is its merge commit, whose first parent is the base it merges into; a
           # rerun by hand compares against the commit's own parent.
           BASE: ${{ github.event_name != 'push' && 'HEAD^1' || github.event.before }}
+          # A PR's head, past GitHub's merge of it, for scripts/check-linear.
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
