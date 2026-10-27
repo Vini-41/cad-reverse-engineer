@@ -44,6 +44,11 @@ def _mass_reads(p: Project, c: dict, weighs: tuple[str, ...] | None = None) -> l
     return names + [str(n) for n in (c.get("counts") or {}).values()]
 
 
+def _mass_names(c: dict) -> list[tuple[str, str]]:
+    """The params a mass check names: its density, then each mass it adds."""
+    return [(c.get("density") or "", "density")] + [(n, "mass") for n in c.get("add", [])]
+
+
 @dataclass(frozen=True)
 class CheckKind:
     """What a kind of check compares with the geometry: evidence values of quantity, within tol,
@@ -58,7 +63,8 @@ class CheckKind:
     claim (one of CLAIMS) in place of a key: a direction of change between the two poses, passing
     only beyond its tolerance, with no tol of its own (ADR-0010). body_cap, where set, makes it
     compare a built part with a released body (its body), its tol capped at that fraction of the
-    body's bbox diagonal, as it compares with no value."""
+    body's bbox diagonal, as it compares with no value. names, where set, gives the params a
+    check of the kind names by key, each with the quantity it must be in."""
 
     quantity: str
     tolerance: str | None
@@ -68,6 +74,7 @@ class CheckKind:
     between_two: str | None = None
     claims: bool = False
     body_cap: float | None = None
+    names: Callable[[dict], list[tuple[str, str]]] | None = None
 
 
 # The quantities a joint's value is in: a revolute joint's angle, a slide's length. Before the
@@ -76,12 +83,12 @@ JOINT_QUANTITIES = ("angle", "length")
 
 
 # The kinds of check that compare with a ledger value, or a shape check with a released body;
-# interference compares with neither.
+# interference (OVERLAP_KINDS) compares with neither.
 CHECK_KINDS = {
     "bbox": CheckKind("length", "length"),
     "distance": CheckKind("length", "length"),
     "angle": CheckKind("angle", "angle"),
-    "mass": CheckKind("mass", None, reads=_mass_reads),
+    "mass": CheckKind("mass", None, reads=_mass_reads, names=_mass_names),
     # A joint's range: an angle at each end, or a slide's length, compared with a stated end that
     # is often 0.
     # Between two datums, a distance at each end, as a slide that sets a leg's width reaches it.
@@ -92,13 +99,13 @@ CHECK_KINDS = {
     # ledger value states, its tol capped against the body's size.
     "shape": CheckKind("length", "length", body_cap=0.01),
 }
+# The kinds of check that compare how much instances overlap with an overlap limit.
+OVERLAP_KINDS = ("interference",)
 # The keys of a check that name a pose: a stroke check's from, then the pose it is evaluated at.
 POSES = ("from", "pose")
 # What a claim says its quantity does between a check's from pose and its pose: a stroke's
 # shortening is positive or negative.
 CLAIMS = {"shortens": 1, "lengthens": -1}
-# The kinds of check a probe reads a released body as, each compared in its CHECK_KINDS quantity.
-PROBE_KINDS = ("bbox", "distance", "angle")
 AXES = {"x": 0, "y": 1, "z": 2}
 SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "geometry", "other")
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}
@@ -548,26 +555,28 @@ def check_evidence(p: Project) -> None:
             )
 
 
-def _probed(p: Project, e: dict, body: str) -> dict[str, float] | str:
-    """What probe e evaluates on body, each value key's value in the project's units (an angle in
-    degrees), or why it cannot be evaluated."""
-    kind, values = e["probe"], e.get("values") or {}
-    if kind == "bbox":
-        axes = e.get("axes") or {}
-        for key in axes.keys() - values.keys():
-            return f"axes names {key}, which values does not record"
-        size = p.bodies[body].bounding_box().size
-        out = {}
-        for key in values:
-            if axes.get(key) not in AXES:
-                return f"{key} names no axis x, y or z in axes"
-            out[key] = (size.X, size.Y, size.Z)[AXES[axes[key]]]
-        return out
-    between, count = e.get("between") or [], 2 if kind == "distance" else 3
+def _probe_bbox(p: Project, e: dict, body: str) -> dict[str, float] | str:
+    """The size of body's bbox along the axis each of bbox probe e's values names in axes."""
+    axes, values = e.get("axes") or {}, e.get("values") or {}
+    for key in axes.keys() - values.keys():
+        return f"axes names {key}, which values does not record"
+    size = p.bodies[body].bounding_box().size
+    out = {}
+    for key in values:
+        if axes.get(key) not in AXES:
+            return f"{key} names no axis x, y or z in axes"
+        out[key] = (size.X, size.Y, size.Z)[AXES[axes[key]]]
+    return out
+
+
+def _probe_datums(p: Project, e: dict, body: str, count: int) -> tuple[str, list] | str:
+    """The one value key probe e records and the points of the count datums its between names,
+    each declared on body."""
+    between, values = e.get("between") or [], e.get("values") or {}
     if len(between) != count:
-        return f"a {kind} probe names {count} datums in between, not {len(between)}"
+        return f"a {e['probe']} probe names {count} datums in between, not {len(between)}"
     if len(values) != 1:
-        return f"a {kind} probe records one value, not {len(values)}"
+        return f"a {e['probe']} probe records one value, not {len(values)}"
     points = []
     for name in between:
         named = p.released_datum(name)
@@ -575,15 +584,37 @@ def _probed(p: Project, e: dict, body: str) -> dict[str, float] | str:
             return f"{name} is not a datum declared on body {body}"
         points.append(named[1])
     (key,) = values
-    if kind == "distance":
-        axis = e.get("along")
-        if axis is not None and axis not in AXES:
-            return f"along names no axis x, y or z: {axis}"
-        return {key: released.datum_distance(points[0], points[1], axis)}
+    return key, points
+
+
+def _probe_distance(p: Project, e: dict, body: str) -> dict[str, float] | str:
+    """The distance between distance probe e's two datums, along its axis where along names one."""
+    read = _probe_datums(p, e, body, 2)
+    if isinstance(read, str):
+        return read
+    (key, points), axis = read, e.get("along")
+    if axis is not None and axis not in AXES:
+        return f"along names no axis x, y or z: {axis}"
+    return {key: released.datum_distance(points[0], points[1], axis)}
+
+
+def _probe_angle(p: Project, e: dict, body: str) -> dict[str, float] | str:
+    """The angle in degrees at the middle of angle probe e's three datums."""
+    read = _probe_datums(p, e, body, 3)
+    if isinstance(read, str):
+        return read
+    key, points = read
     angle = released.angle_at(points[0], points[1], points[2], p.length_tol)
     if angle is None:
+        between = e["between"]
         return f"{between[0]} or {between[2]} coincides with the vertex {between[1]}"
     return {key: angle}
+
+
+# The kinds of check a probe reads a released body as, each with what it evaluates there: each
+# value key's value in the project's units (an angle in degrees), or why it cannot be evaluated.
+# Each is compared in its CHECK_KINDS quantity.
+PROBE_KINDS = {"bbox": _probe_bbox, "distance": _probe_distance, "angle": _probe_angle}
 
 
 def check_probe(p: Project, e: dict) -> None:
@@ -610,7 +641,7 @@ def check_probe(p: Project, e: dict) -> None:
         )
         return
     quantity = CHECK_KINDS[e["probe"]].quantity
-    evaluated = _probed(p, e, body)
+    evaluated = PROBE_KINDS[e["probe"]](p, e, body)
     if isinstance(evaluated, str):
         p.error("evidence-anchor", f"{eid}: {evaluated}")
         return
@@ -1352,10 +1383,9 @@ def check_units(p: Project) -> None:
         for key in POSES:
             for ref in (c.get(key) or {}).values():
                 expect_joint_value(p, str(ref), None, f"in check {cid}'s {key}")
-        if kind == "mass":
-            expect_param_quantity(p, c.get("density") or "", ("density",), f"in check {cid}")
-            for name in c.get("add", []):
-                expect_param_quantity(p, name, ("mass",), f"in check {cid}")
+        named = CHECK_KINDS[kind].names if kind in CHECK_KINDS else None
+        for name, quantity in named(c) if named else []:
+            expect_param_quantity(p, name, (quantity,), f"in check {cid}")
     for part, entry in p.parts.items():
         for by, name in entry.items():
             expect_param_quantity(p, name, (by,), f"in params.yaml parts.{part}")

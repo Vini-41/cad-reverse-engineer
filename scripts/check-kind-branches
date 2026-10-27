@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""Fail when the tool source branches on a check or probe kind outside run_checks.
+
+Facts about a kind sit in project.py's kind tables (CHECK_KINDS, OVERLAP_KINDS, PROBE_KINDS), which
+the rest of the source looks up; run_checks in geometry.py dispatches on a check's kind to evaluate
+it, and is the one place a branch on a kind belongs. A branch is a comparison (==, !=, in, not in,
+or a match case) between a kind's name, as those tables spell it, and an expression that holds a
+kind: a name `kind` or `<x>_kind`, an attribute `.kind`, or a key "kind" or "probe" read by
+subscript or .get(). Comparing with a table (`kind in CHECK_KINDS`) is a lookup and passes, as do
+other kinds of thing (a source's kind "geometry", a coupling's "gear"). Prints file:line: branches
+on kind "<name>" outside run_checks for each and exits 1 if there is one.
+
+    scripts/check-kind-branches [repo root, default this script's repo]
+"""
+
+import ast
+import sys
+from pathlib import Path
+
+SRC = "skills/cad-reverse-engineer/tool/src/cadrev"
+TABLES = ("CHECK_KINDS", "OVERLAP_KINDS", "PROBE_KINDS")
+KEYS = ("kind", "probe")
+DISPATCH = ("geometry.py", "run_checks")
+
+
+def kind_names(project: ast.Module) -> tuple[set[str], list[str]]:
+    """The kind names project.py's tables spell, and the tables it is missing."""
+    names, found = set(), set()
+    for node in project.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id in TABLES:
+                found.add(target.id)
+                value = node.value
+                items = value.keys if isinstance(value, ast.Dict) else getattr(value, "elts", [])
+                names |= {i.value for i in items if isinstance(i, ast.Constant)}
+    return names, [t for t in TABLES if t not in found]
+
+
+def holds_kind(node: ast.AST) -> bool:
+    if isinstance(node, ast.Name):
+        return node.id == "kind" or node.id.endswith("_kind")
+    if isinstance(node, ast.Attribute):
+        return node.attr == "kind"
+    if isinstance(node, ast.Subscript):
+        key = node.slice
+        return isinstance(key, ast.Constant) and key.value in KEYS
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        args = node.args
+        return (
+            node.func.attr == "get"
+            and bool(args)
+            and isinstance(args[0], ast.Constant)
+            and args[0].value in KEYS
+        )
+    return False
+
+
+def literals(node: ast.AST) -> list[str]:
+    """The strings node spells: a string, or a tuple, list or set of them."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return [node.value]
+    if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+        return [s for e in node.elts for s in literals(e)]
+    return []
+
+
+def branches(tree: ast.Module, names: set[str], skip: str | None):
+    """(line, name) for each branch on a kind in tree, outside the function named skip."""
+    skipped = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == skip:
+            skipped |= {id(n) for n in ast.walk(node)}
+    for node in ast.walk(tree):
+        if id(node) in skipped:
+            continue
+        if isinstance(node, ast.Compare):
+            ops = (ast.Eq, ast.NotEq, ast.In, ast.NotIn)
+            if not all(isinstance(op, ops) for op in node.ops):
+                continue
+            operands = [node.left, *node.comparators]
+            if any(holds_kind(o) for o in operands):
+                spelled = [s for o in operands for s in literals(o) if s in names]
+                if spelled:
+                    yield node.lineno, spelled[0]
+        elif isinstance(node, ast.Match) and holds_kind(node.subject):
+            for case in node.cases:
+                for sub in ast.walk(case.pattern):
+                    if isinstance(sub, ast.MatchValue):
+                        spelled = [s for s in literals(sub.value) if s in names]
+                        if spelled:
+                            yield sub.lineno, spelled[0]
+
+
+def main() -> int:
+    root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[1]
+    src = root / SRC
+    names, missing = kind_names(ast.parse((src / "project.py").read_text()))
+    if missing:
+        print(f"{SRC}/project.py defines no {', '.join(missing)}, so no kind can be checked")
+        return 1
+    found = []
+    for path in sorted(src.rglob("*.py")):
+        rel = path.relative_to(root)
+        skip = DISPATCH[1] if path.name == DISPATCH[0] else None
+        for line, name in branches(ast.parse(path.read_text()), names, skip):
+            found.append((str(rel), line, name))
+    for rel, line, name in sorted(found):
+        print(f'{rel}:{line}: branches on kind "{name}" outside run_checks')
+    return 1 if found else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

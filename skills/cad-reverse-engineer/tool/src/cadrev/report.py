@@ -17,6 +17,7 @@ from .project import (
     check_tolerance,
     default_overlap_limit,
     default_tolerance,
+    OVERLAP_KINDS,
     overlap_limit,
 )
 
@@ -115,7 +116,7 @@ def overlap_limits(p: Project) -> list[dict]:
     overlap limit is not a tolerance, so it is listed apart from the tolerances."""
     out = []
     for c in p.checks:
-        if c.get("kind") == "interference":
+        if c.get("kind") in OVERLAP_KINDS:
             limit = overlap_limit(p, c)
             if not math.isclose(limit, default_overlap_limit()):
                 out.append({"check": c.get("id"), "max_volume": limit})

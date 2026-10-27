@@ -11,6 +11,7 @@ STUBS = (
     "red-on-main",
     "check-doc-pointers",
     "check-glossary-words",
+    "check-kind-branches",
     "committed-examples",
     "rule-coverage",
 )
