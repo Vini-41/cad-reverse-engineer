@@ -320,7 +320,33 @@ A planetary train with one member fixed is a chain of [gears](modeling.md#joints
 
 - The carrier's turn reads both gears' ratios, so the tooth counts they derive from are checked, while its expected value comes from the stated ratio: a wrong formula, a misread count, a sign error or a unit slip fails it. Place `ring_1.d` a quarter turn from the carrier's datum, so the 0–180° angle the check evaluates stays on one side through the turn.
 - The pitch diameter and the planet axis together fail a ring count that breaks `z_ring = z_sun + 2 * z_planet`.
-- A stepped planet is one instance with one joint, coupled from the carrier through the step that meshes the ring (`-z_ring / z_p2`). A train with no member fixed (a differential) is out of reach: a gear ties only two joints.
+- A train with no member fixed (a differential) is out of reach: a gear ties only two joints.
+
+### Untested examples: a rack and pinion and a stepped planet
+
+No test or example project runs these two yet; they follow the rules above.
+
+**A rack and pinion** is a [lead gear](modeling.md#joints-and-loops): the pinion a revolute joint, the rack a slide, its lead the pinion's pitch circumference.
+
+```yaml
+# params.yaml
+  pinion_pitch_d: {basis: derived, expr: module * z_pinion}
+  rack_lead:      {basis: derived, expr: pi * pinion_pitch_d}       # negate where the rack moves toward its axis's first datum
+```
+
+```python
+"gears": {"rack_drive": {"driver": "pinion", "driven": "rack", "lead": "rack_lead"}},
+```
+
+**A stepped planet** (COMPAct's CPG, 14:1: planets of 66 and 33 teeth, ring 117, module 0.6) is one instance with one joint, two gear steps on one body: its 66-tooth step meshes the sun, its 33-tooth step the fixed ring. The carrier → planet gear takes the step that meshes the ring, and the sun → carrier gear reads both steps:
+
+```yaml
+# params.yaml
+  carrier_ratio: {basis: derived, expr: z_sun * z_p2 / (z_sun * z_p2 + z_ring * z_p1)}   # 1/14 needs an 18-tooth sun
+  planet_ratio:  {basis: derived, expr: -z_ring / z_p2}                                  # the 33-tooth step
+```
+
+The carrier's turn is checked as in the single-stage train, `expect: "360 / R1.ratio"` against the stated 14:1, and each step's pitch diameter by its own `diameter` check.
 
 ## Poses and the MJCF export
 
