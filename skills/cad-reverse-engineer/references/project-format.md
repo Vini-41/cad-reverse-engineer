@@ -286,6 +286,7 @@ Where a source states the numbers a value is worked out from rather than the val
 - Each ledger value reads as a check compares it: one printed in an angle unit in degrees, one printed in another unit in the project's units, and one printed with no unit (a count, a ratio such as "7.2:1", ledgered as `{ratio: 7.2}`) as printed. The expression's value is in the check's own units: degrees for an angle check, the project's otherwise.
 - `distance`, `angle`, `diameter`, `mass` and `stroke` checks take `expect`, with or without `from`; `bbox`, `range`, `shape`, `count` and `interference` take none.
 - Each ledger value an expect names counts as compared, so a source param taking its value from it is checked. An expect reads no params: the check rests on what its pose and kind read, else on source.
+- An expect reads each ledger value in the project's units, a rate per second: with angles in degrees, "1000 rpm" reads as 6000 (°/s), so a lead from a stated speed and rpm is `E-vmax.v * 360 / E-rpm.rpm`.
 - The tolerance is capped at 5% of the value the expect works out to.
 - `[check-config]`, raised whether or not the model builds, and the check is not evaluated: an expect naming a param, a name that is neither a ledger value nor a function, an entry not in the ledger or a key its entry does not record, or one that does not parse or evaluate (a division by 0), each finding naming the reason; a check naming both `expect` and `evidence`; a check of a kind that takes one naming neither (a `stroke` check with a `claim` aside); `expect` on a kind that takes none.
 

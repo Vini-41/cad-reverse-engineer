@@ -27,7 +27,7 @@ Each step ends on a criterion `cadrev` confirms: the rules named in brackets are
 
 ### 1. Scope the target
 
-Ask the user where the project directory goes if they have not said. `cadrev init <dir>`, then write `target:` in project.yaml: the object, the version or iteration, and the configuration. Papers often show earlier iterations next to the reported one; the target names which one the ledger describes. When you choose a released variant later (step 4), rewrite the target to name it.
+Ask the user where the project directory goes if they have not said. `cadrev init <dir>`, then write `target:` in project.yaml: the object, the version or iteration, and the configuration. Papers often show earlier iterations next to the reported one; the target names which one the ledger describes. A target narrows the object by version and configuration (lid off), and keeps every part of it: a cut sheet nesting all of a unit's plates is that many parts to build and compare, while a sheet's regions of another unit (a controller housing, a mould) are skipped in step 4. When you choose a released variant later (step 4), rewrite the target to name it.
 
 Done when `target` names one object in one version and `cadrev check <dir> --no-build` reports no `[target]`, `[format-*]` or `[units]`.
 
@@ -44,7 +44,7 @@ Done when every document the reconstruction will cite is registered and `cadrev 
 Read every page with `cadrev text <dir> <source>` and every figure with `cadrev figures <dir> <source>` and then the Read tool. For each statement about the object, add an evidence item:
 
 - Copy quotes from `cadrev text` output, which is the text the matcher sees.
-- Numbers printed inside figures about the object (dimension labels, scale bars, inset annotations) become image evidence: `cadrev crop` the label with `--name <name>`, which writes the crop to `figures/crops/<name>.png` and prints the `image` and `image_sha256` the evidence item takes; view the crop, write the `reading` exactly as printed. `crop` takes pixels of the extracted file; when the Read tool shows an image downscaled, multiply by the factor it reports, and confirm in the crop that the whole label is inside.
+- Numbers printed inside figures about the object (dimension labels, inset annotations) become image evidence, and so does a scale bar that an overlay or a measured param calibrates from. A scale bar states nothing about the object, so one that calibrates nothing stays out of the ledger. To ledger one: `cadrev crop` the label with `--name <name>`, which writes the crop to `figures/crops/<name>.png` and prints the `image` and `image_sha256` the evidence item takes; view the crop, write the `reading` exactly as printed. `crop` takes pixels of the extracted file; when the Read tool shows an image downscaled, multiply by the factor it reports, and confirm in the crop that the whole label is inside.
 - Ledger each stated range or angle of motion (a toe that opens 0–40°, a crank's 90° stroke) and each stated physics value (a spring's stiffness) with its `values`, in scope: step 8 reads them into params and checks them.
 - Ledger a value stated in several places at each place, with one statement in scope and the rest restatements (`scope` in project-format.md).
 - Ledger a **count** (a gear's teeth, a train's planets) as printed, with no unit: Table I's `SSPG [25, 65, 155, 0.5, 3]` is `values: {z_sun: 25, z_planet: 65, z_ring: 155, module: 0.5, n_planets: 3}`. The sweep lists `25 teeth` but never a table cell or `3 planets`, so ledger each count a param or check will use.

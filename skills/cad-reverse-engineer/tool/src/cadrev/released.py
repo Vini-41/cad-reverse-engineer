@@ -113,10 +113,17 @@ def _regions(path: Path, digest: str, scale: float) -> tuple:
     ]
     contours = [w for w in contours if w.is_closed]
     filled = [Face(w) for w in contours]
+    areas = [f.area for f in filled]
+    boxes = [f.bounding_box() for f in filled]
     # Each contour lies inside those that enclose it; one inside an even number bounds a region
-    # (its outer contour), one inside an odd number a hole of the smallest that encloses it.
+    # (its outer contour), one inside an odd number a hole of the smallest that encloses it. A
+    # contour can only lie inside one whose bbox holds its own, which rules out most pairs cheaply.
     within = [
-        [j for j, f in enumerate(filled) if f.area > filled[i].area and _encloses(f, w)]
+        [
+            j
+            for j, f in enumerate(filled)
+            if areas[j] > areas[i] and _holds(boxes[j], boxes[i]) and _encloses(f, w)
+        ]
         for i, w in enumerate(contours)
     ]
     out = []
@@ -126,11 +133,20 @@ def _regions(path: Path, digest: str, scale: float) -> tuple:
         holes = [
             contours[j]
             for j in range(len(contours))
-            if len(within[j]) == len(within[i]) + 1
-            and min(within[j], key=lambda k: filled[k].area) == i
+            if len(within[j]) == len(within[i]) + 1 and min(within[j], key=areas.__getitem__) == i
         ]
         out.append(Face(outer, holes))
     return tuple(out)
+
+
+def _holds(outer, inner, tol: float = 1e-6) -> bool:
+    """Whether bbox outer holds bbox inner in the sheet's plane, within tol."""
+    return (
+        outer.min.X <= inner.min.X + tol
+        and outer.min.Y <= inner.min.Y + tol
+        and outer.max.X >= inner.max.X - tol
+        and outer.max.Y >= inner.max.Y - tol
+    )
 
 
 def _encloses(filled, contour) -> bool:

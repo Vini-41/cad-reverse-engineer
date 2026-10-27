@@ -70,3 +70,18 @@ Log: [centrifuge-run-log.md](centrifuge-run-log.md).
   - each stated or probed diameter and the check that covers it;
   - the mass checks, evaluated against stated;
   - each conflict and its resolution;
+
+### Cell stretcher
+
+Log: [cell-stretcher-run-log.md](cell-stretcher-run-log.md).
+
+- **goal:** reconstruct the uniaxial cell stretcher with its lead-screw motion: the stretcher unit with its clamps, and the mould its substrates are cast in.
+- **sources:** (CC-BY) the paper `~/Documents/Projects/cadrev/cell-stretcher-sources/Kah2021_cell_stretcher.pdf` and the authors' released laser-cut SVG sheets and STL files beside it (Mendeley Data, doi:10.17632/mgkbmytx63.1)
+- **report items:**
+  - whether one motor drives both screws or each has its own, quoting the paper, and the chain of gears from each motor to the carriage;
+  - each lead gear, its lead param and where it comes from, and the posed check that covers it;
+  - the stroke check, the stated value it rests on, and its interpretation;
+  - whether `build/model.mjcf` loaded, joint counts by type, and the gears;
+  - each region of each cut sheet and each STL body: registered or not, and shape-checked or skipped, with the reason;
+  - each probe, its value, and the params it feeds;
+  - each conflict and its resolution;
