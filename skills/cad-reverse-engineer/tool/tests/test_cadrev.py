@@ -6535,7 +6535,8 @@ def test_joints_coupled_by_a_gear_move_in_its_ratio_and_the_mjcf_and_report_carr
         (
             '"driven": "wheel"',
             '"driven": "slide"',
-            "couples a revolute joint with a slide one; a gear couples two of one type",
+            "couples a revolute joint with a slide one by a ratio; a ratio couples two joints of "
+            "one type, and a revolute joint and a slide take a lead",
         ),
         (
             '"driven": "wheel"',
@@ -6997,7 +6998,7 @@ def test_guard_run_without_the_build_leaves_source_closed_angles_unchecked_sourc
     assert _TURN_AND_CLOSED <= set(_unchecked_printed(_partial(proj_dir, "--no-build")))
 
 
-def test_stroke_check_posed_through_a_gear_on_its_wheel_rests_on_the_closed_angles(
+def test_stroke_check_posed_through_a_gear_on_its_wheel_rests_on_its_ratio_and_closed_angles(
     proj_dir, tmp_path
 ):
     mesh = (
@@ -7012,7 +7013,10 @@ def test_stroke_check_posed_through_a_gear_on_its_wheel_rests_on_the_closed_angl
     _check("half", pose={"input": "S30.turn"}, tol=0.5)(proj_dir, tmp_path)
     _, report = verify(proj_dir)
     half = _by_id(report)["half"]
-    assert (half["rests_on"], half["rests_on_params"]) == ("proposed", ["turn", "c1", "c2"])
+    assert (half["rests_on"], half["rests_on_params"]) == (
+        "proposed",
+        ["spool_ratio", "turn", "c1", "c2"],
+    )
 
 
 # A check of each kind posed at the spool's full turn, besides a stroke check.
@@ -7603,6 +7607,271 @@ def test_guard_from_on_a_stroke_check_or_naming_a_bare_number_is_a_finding(
 ):
     rule, says = _from_finding(proj_dir, tmp_path, kind, case)
     assert findings(proj_dir, rule) == [says]
+
+
+# A lead screw is a gear between a revolute joint and a slide, stated by a lead: how far the slide
+# moves per full turn of the revolute joint (ADR-0013).
+
+LEAD_SCREW = """\
+from build123d import *
+
+
+def build(p):
+    w, h = p.block_w, p.block_h
+    return {
+        "parts": {
+            "frame": Box(w, w, h),
+            "screw": Cylinder(p.screw_r, p.screw_l),
+            "carriage": Box(w, w, h),
+        },
+        "datums": {
+            "frame.a": (0, 0, h / 2),
+            "screw.a": (0, 0, 0),
+            "screw.b": (0, 0, p.screw_l / 2),
+            "carriage.a": (0, 0, h / 2),
+            "carriage.e": (0, 0, -h / 2),
+            "carriage.x": (w / 2, 0, 0),
+        },
+        "assembly": {
+            "frame_1": ("frame", Location()),
+            "screw_1": ("screw", Location((0, 0, p.screw_l))),
+            "carriage_1": ("carriage", Location((p.offset, 0, p.screw_l))),
+        },
+        "joints": {
+            "screw": {
+                "type": "revolute",
+                "parent": "frame_1",
+                "child": "screw_1",
+                "axis": ["screw_1.a", "screw_1.b"],
+                "drive": "actuated",
+            },
+            "slide": {
+                "type": "slide",
+                "parent": "frame_1",
+                "child": "carriage_1",
+                "axis": ["carriage_1.e", "carriage_1.a"],
+                "drive": "passive",
+            },
+        },
+        "gears": {"drive": {"driver": "screw", "driven": "slide", "lead": "screw_lead"}},
+    }
+"""
+
+LEAD = "The screw moves the carriage 8 mm per revolution."
+TRAVEL = "A full revolution of the screw carries the carriage 8 mm."
+
+
+def lead_screw(root: Path, tmp_path: Path, model: str = LEAD_SCREW, text: str = LEAD) -> None:
+    """Replace the project with a lead screw: a frame, a screw turning on it about z (screw,
+    actuated) and a carriage sliding on it along z (slide, passive), coupled by the gear drive at
+    the source param screw_lead, from N1.lead (8 mm per revolution in text). One check, travel:
+    how far the carriage moves along z from as built to the screw turned one_turn (proposed 360),
+    compared with N2.travel, the travel a turn gives stated apart from the lead."""
+    edit(root, "project.yaml", lambda d: d.update(sources=[]))
+    (root / "sources" / "paper.txt").unlink()
+    write(root, "evidence.yaml", {"evidence": [], "skipped": [], "conflicts": []})
+    add_quote(root, tmp_path, f"{text}\n{TRAVEL}\n", text.rstrip("."), {"lead": 8})
+    stated = {"id": "N2", "source": "notes", "locator": "Sec. 1", "quote": TRAVEL.rstrip(".")}
+    _append("evidence.yaml", "evidence", stated | {"values": {"travel": 8}})(root, tmp_path)
+    chosen = {"block_w": 10, "block_h": 4, "screw_r": 2, "screw_l": 20, "offset": 20}
+    chosen |= {"one_turn": 360, "density": 1.2}
+    params = {
+        name: {"basis": "proposed", "value": value, "rationale": "a test part", "gap": "G1"}
+        for name, value in chosen.items()
+    }
+    params["screw_lead"] = {"basis": "source", "from": "N1.lead"}
+    parts = {name: {"density": "density"} for name in ("frame", "screw", "carriage")}
+    write(root, "params.yaml", {"params": params, "parts": parts})
+    write(root, "gaps.yaml", {"gaps": [{"id": "G1", "question": "part size?", "ask": "authors"}]})
+    travel = {
+        "id": "travel",
+        "kind": "distance",
+        "instances": ["frame_1", "carriage_1"],
+        "between": ["frame_1.a", "carriage_1.a"],
+        "along": "z",
+        "evidence": "N2",
+        "key": "travel",
+        "from": {},
+        "pose": {"screw": "one_turn"},
+    }
+    write(root, "checks.yaml", {"checks": [travel]})
+    write(root, "model.py", model)
+
+
+def test_distance_check_from_as_built_to_a_screw_turn_moves_the_carriage_its_lead(
+    proj_dir, tmp_path
+):
+    lead_screw(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    travel = _by_id(report)["travel"]
+    assert travel["ok"]
+    assert travel["measured"] == "8 change in frame_1.a - carriage_1.a"
+
+
+_DRIVE = '"driver": "screw", "driven": "slide", "lead": "screw_lead"'
+
+
+def test_lead_screw_driven_by_its_slide_turns_the_screw_once_per_lead(proj_dir, tmp_path):
+    mujoco = importlib.import_module("mujoco")
+
+    driven = '"driver": "slide", "driven": "screw", "lead": "screw_lead"'
+    lead_screw(proj_dir, tmp_path, swap(LEAD_SCREW, _DRIVE, driven))
+    code, report = verify(proj_dir)
+    # Posing the screw a full turn sets the slide that drives it to the lead, 8 mm.
+    assert code == 0, report["findings"]
+    assert _by_id(report)["travel"]["measured"] == "8 change in frame_1.a - carriage_1.a"
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    drive = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_EQUALITY, "drive")
+    assert list(m.eq_data[drive][:5]) == pytest.approx([0, 2 * math.pi / 8, 0, 0, 0])
+
+
+def _proposed_lead(value: float):
+    """Make screw_lead a proposed value in place of the stated 8 mm."""
+    spec = {"basis": "proposed", "value": value, "rationale": "x", "gap": "G1", "from": None}
+    return lambda r, t: _param("screw_lead", **spec)(r, t)
+
+
+def _slide_across(r: Path, t: Path) -> None:
+    axis = '"axis": ["carriage_1.e", "carriage_1.a"]'
+    write(r, "model.py", swap(LEAD_SCREW, axis, '"axis": ["carriage_1.a", "carriage_1.x"]'))
+
+
+@pytest.mark.parametrize(
+    "change", [_proposed_lead(-8), _slide_across], ids=["lead-sign-flipped", "slide-off-screw-axis"]
+)
+def test_distance_check_across_a_lead_screw_fails_with_the_lead_flipped_or_the_slide_off_its_axis(
+    proj_dir, tmp_path, change
+):
+    lead_screw(proj_dir, tmp_path)
+    change(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 1 and not _by_id(report)["travel"]["ok"]
+    assert [m.split(":")[0] for m in findings(proj_dir, "check-failed")] == ["travel"]
+
+
+def test_lead_gear_exports_its_lead_per_radian_and_report_shows_the_lead(proj_dir, tmp_path):
+    mujoco = importlib.import_module("mujoco")
+
+    lead_screw(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    drive = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_EQUALITY, "drive")
+    joint = mujoco.mjtObj.mjOBJ_JOINT
+    assert (m.eq_obj1id[drive], m.eq_obj2id[drive]) == (
+        mujoco.mj_name2id(m, joint, "slide"),
+        mujoco.mj_name2id(m, joint, "screw"),
+    )
+    # 8 mm per full turn is 8 / 2π mm per radian.
+    assert list(m.eq_data[drive][:5]) == pytest.approx([0, 8 / (2 * math.pi), 0, 0, 0])
+    assert report["motion"]["gears"] == {
+        "drive": {"driver": "screw", "driven": "slide", "lead": {"from": "screw_lead", "value": 8}}
+    }
+
+
+@pytest.mark.parametrize(
+    "old, new, says",
+    [
+        (
+            '"type": "slide"',
+            '"type": "revolute"',
+            "couples a revolute joint with a revolute one by a lead; a lead couples a revolute "
+            "joint and a slide, and two joints of one type take a ratio",
+        ),
+        (
+            '"lead": "screw_lead"',
+            '"ratio": "screw_lead"',
+            "couples a revolute joint with a slide one by a ratio; a ratio couples two joints of "
+            "one type, and a revolute joint and a slide take a lead",
+        ),
+    ],
+    ids=["lead-on-one-type", "ratio-across-types"],
+)
+def test_gear_stated_by_the_other_of_ratio_and_lead_than_its_joints_take_is_model_gear(
+    proj_dir, tmp_path, old, new, says
+):
+    lead_screw(proj_dir, tmp_path, swap(LEAD_SCREW, old, new))
+    assert findings(proj_dir, "model-gear") == [f"gear drive: {says}"]
+
+
+def test_lead_of_0_is_model_gear(proj_dir, tmp_path):
+    lead_screw(proj_dir, tmp_path)
+    _proposed_lead(0)(proj_dir, tmp_path)
+    assert findings(proj_dir, "model-gear") == [
+        "gear drive: lead screw_lead is 0, so the slide never moves"
+    ]
+
+
+@pytest.mark.parametrize(
+    "old, new, says",
+    [
+        ('"lead"', '"ratio": "screw_lead", "lead"', "names both"),
+        (', "lead": "screw_lead"', "", "names neither"),
+    ],
+    ids=["both", "neither"],
+)
+def test_gear_with_both_or_neither_of_ratio_and_lead_is_model_return(
+    proj_dir, tmp_path, old, new, says
+):
+    lead_screw(proj_dir, tmp_path, swap(LEAD_SCREW, old, new))
+    assert findings(proj_dir, "model-return") == [
+        f"model.build gear drive: takes a ratio or a lead, and {says}"
+    ]
+
+
+def test_lead_quoted_in_a_unit_other_than_a_length_is_unit_quantity(proj_dir, tmp_path):
+    lead_screw(proj_dir, tmp_path, text="The screw moves the carriage 8° per revolution.")
+    messages = findings(proj_dir, "unit-quantity")
+    assert any("as gear drive's lead" in m and "where a length is expected" in m for m in messages)
+
+
+def test_lead_a_posed_check_moves_through_is_in_its_reads_and_so_checked(proj_dir, tmp_path):
+    lead_screw(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert "param screw_lead" not in _unchecked_in(report)
+    # Unposed, the same distance check moves no joint, so it reads no lead.
+    edit(proj_dir, "checks.yaml", lambda d: [d["checks"][0].pop(k) for k in ("pose", "from")])
+    assert "param screw_lead" in _unchecked(proj_dir)
+
+
+_MOTOR = """\
+            "motor": {
+                "type": "revolute",
+                "parent": "frame_1",
+                "child": "motor_1",
+                "axis": ["motor_1.a", "motor_1.b"],
+                "drive": "actuated",
+            },
+"""
+
+
+def test_posed_check_through_a_belt_then_a_lead_screw_reads_both_gears(proj_dir, tmp_path):
+    model = swap(LEAD_SCREW, '"drive": "actuated"', '"drive": "passive"')  # the screw's
+    model = swap(model, '        "joints": {\n', '        "joints": {\n' + _MOTOR)
+    model = swap(
+        model,
+        '"frame_1": ("frame", Location()),',
+        '"frame_1": ("frame", Location()),\n'
+        '            "motor_1": ("screw", Location((-p.offset, 0, p.screw_l))),',
+    )
+    belt = '"belt": {"driver": "motor", "driven": "screw", "ratio": "belt_ratio"}, "drive": {'
+    model = swap(model, '"drive": {', belt)
+    lead_screw(proj_dir, tmp_path, model)
+    # The motor turns half a turn at a belt ratio of 2: the screw one turn, the carriage 8 mm.
+    for name, value in (("belt_ratio", 2), ("half_turn", 180)):
+        _param(name, basis="proposed", value=value, rationale="a test belt", gap="G1")(
+            proj_dir, tmp_path
+        )
+    _proposed_lead(8)(proj_dir, tmp_path)
+    _check("travel", pose={"motor": "half_turn"})(proj_dir, tmp_path)
+    edit(proj_dir, "params.yaml", lambda d: d["params"].pop("one_turn"))
+    code, report = verify(proj_dir)
+    travel = _by_id(report)["travel"]
+    assert travel["ok"], report["findings"]
+    assert travel["rests_on"] == "proposed"
+    assert set(travel["rests_on_params"]) == {"half_turn", "belt_ratio", "screw_lead"}
 
 
 # Every rule beside its near miss. scripts/rule-coverage fails CI unless each rule the tool emits is

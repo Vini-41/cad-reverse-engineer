@@ -14,7 +14,7 @@ from functools import partial
 from pathlib import Path
 from typing import NamedTuple, Protocol
 
-from . import accounting, released
+from . import accounting, released, units
 from .project import (
     AXES,
     CLAIMS,
@@ -101,7 +101,8 @@ class Built:
     loops: dict = field(default_factory=dict)
     # tendon name -> {path: [<instance>.<feature>, ...], stiffness: param, damping: param}
     tendons: dict = field(default_factory=dict)
-    # gear name -> {driver: joint, driven: joint, ratio: param}: driven moves ratio times driver
+    # gear name -> {driver: joint, driven: joint, ratio or lead: param}: driven moves ratio times
+    # driver, or a slide moves lead per full turn of a revolute joint
     gears: dict = field(default_factory=dict)
     # cable name -> {path: [<instance>.<feature>, ...], wheel: joint, closes: {joint: param}}: an
     # inextensible cord; its wheel's full turn moves each joint it closes to that param's value
@@ -229,8 +230,17 @@ def _names(value, count: int) -> bool:
     )
 
 
-GEAR_KEYS = ("driver", "driven", "ratio")
+GEAR_KEYS = ("driver", "driven", "ratio", "lead")
 CABLE_KEYS = ("path", "wheel", "closes")
+# What a gear is stated by: a ratio between two joints of one type, or a lead between a revolute
+# joint and a slide (ADR-0013).
+GEAR_BY = ("ratio", "lead")
+
+
+def gear_by(gear: dict) -> tuple[str, str]:
+    """What a gear is stated by, once the contract has held it: (ratio or lead, its param)."""
+    key = next(k for k in GEAR_BY if k in gear)
+    return key, gear[key]
 
 
 def _motion_breach(result) -> str | None:
@@ -271,9 +281,13 @@ def _motion_breach(result) -> str | None:
             return f"gear {name} must be a mapping, not {type(gear).__name__}"
         for key in sorted(set(gear) - set(GEAR_KEYS)):
             return f"gear {name}: unknown key {key!r}"
-        for key in GEAR_KEYS:
+        stated = [key for key in GEAR_BY if key in gear]
+        if len(stated) != 1:
+            named = "names both" if stated else "names neither"
+            return f"gear {name}: takes a ratio or a lead, and {named}"
+        for key in ("driver", "driven", *stated):
             if not isinstance(gear.get(key), str):
-                what = "a param name" if key == "ratio" else "a joint name"
+                what = "a param name" if key in GEAR_BY else "a joint name"
                 return f"gear {name}: {key} must be {what}, not {gear.get(key)!r}"
     for name, cable in result.get("cables", {}).items():
         if not isinstance(cable, dict):
@@ -414,11 +428,13 @@ def build(p: Project) -> Built | None:
         for name in joint.get("range", []):
             if name in p.values and quantity is not None:
                 expect_param_quantity(p, name, (quantity,), f"in a {joint['type']} joint's range")
-    # gear ratios and cables' closed poses, which the MJCF exports as joint equalities
-    ratios = {gear["ratio"] for gear in built.gears.values()}
+    # gear ratios and leads and cables' closed poses, which the MJCF exports as joint equalities
+    ratios = {gear_by(gear)[1] for gear in built.gears.values()}
     for name, gear in built.gears.items():
-        if gear["ratio"] in p.values:
-            expect_param_quantity(p, gear["ratio"], ("fraction",), f"as gear {name}'s ratio")
+        key, param = gear_by(gear)
+        if param in p.values:
+            quantity = "fraction" if key == "ratio" else "length"
+            expect_param_quantity(p, param, (quantity,), f"as gear {name}'s {key}")
     for name, cable in built.cables.items():
         for joint, param in cable.get("closes", {}).items():
             quantity = joint_type(built.joints[joint]).quantity if joint in built.joints else None
@@ -676,16 +692,28 @@ def _gear_flaw(p: Project, built: Built, gear: dict) -> str | None:
     if gear["driver"] == gear["driven"]:
         return f"driver and driven are both {gear['driver']}; a gear couples two joints"
     driver, driven = (built.joints[gear[key]]["type"] for key in ("driver", "driven"))
-    if driver != driven:
-        return f"couples a {driver} joint with a {driven} one; a gear couples two of one type"
-    if gear["ratio"] not in p.values:
-        return f"ratio names {gear['ratio']}, which params.yaml does not define"
+    key, param = gear_by(gear)
+    if key == "ratio" and driver != driven:
+        return (
+            f"couples a {driver} joint with a {driven} one by a ratio; a ratio couples two joints "
+            "of one type, and a revolute joint and a slide take a lead"
+        )
+    if key == "lead" and {driver, driven} != {"revolute", "slide"}:
+        return (
+            f"couples a {driver} joint with a {driven} one by a lead; a lead couples a revolute "
+            "joint and a slide, and two joints of one type take a ratio"
+        )
+    if param not in p.values:
+        return f"{key} names {param}, which params.yaml does not define"
+    if key == "lead" and p.values[param] == 0:
+        return f"lead {param} is 0, so the slide never moves"
     return None
 
 
 def _gear_flaws(p: Project, built: Built) -> bool:
     """Add [model-gear] for each gear that cannot couple its joints (an unknown or fixed joint,
-    one joint twice, joints of two types, an undefined ratio param); True if there is any."""
+    one joint twice, a ratio across two types or a lead within one, an undefined ratio or lead
+    param, a lead of 0); True if there is any."""
     flawed = False
     for name, gear in built.gears.items():
         flaw = _gear_flaw(p, built, gear)
@@ -796,20 +824,25 @@ def cable_turn(built: Built, cable: dict) -> str:
     return built.joints[cable["wheel"]]["range"][0]
 
 
+def _gear_coupling(p: Project, built: Built, name: str, gear: dict) -> Coupling:
+    """A gear's two joints in proportion: at its ratio, or at its lead per full turn of its
+    revolute joint in the project's angle unit, inverted where the slide drives."""
+    key, param = gear_by(gear)
+    driver, driven, value = gear["driver"], gear["driven"], p.values[param]
+    if key == "ratio":
+        law = f"moves {driven} {value:g} times {driver}"
+        return Coupling("gear", name, driver, driven, value, law)
+    turn = 2 * math.pi / units.size("angle", p.units)
+    turns = joint_type(built.joints[driver]).quantity == "angle"
+    revolute, slide = (driver, driven) if turns else (driven, driver)
+    law = f"moves {slide} {value:g} per full turn of {revolute}"
+    return Coupling("gear", name, driver, driven, value / turn if turns else turn / value, law)
+
+
 def couplings(p: Project, built: Built) -> list[Coupling]:
     """Each pair of joints moving in proportion: a gear's, and a cable's wheel with each joint it
     closes, at its closed value over the wheel's full turn."""
-    found = [
-        Coupling(
-            "gear",
-            name,
-            g["driver"],
-            g["driven"],
-            ratio := p.values[g["ratio"]],
-            f"moves {g['driven']} {ratio:g} times {g['driver']}",
-        )
-        for name, g in built.gears.items()
-    ]
+    found = [_gear_coupling(p, built, name, g) for name, g in built.gears.items()]
     for name, cable in built.cables.items():
         if "wheel" not in cable:
             continue
@@ -1044,10 +1077,13 @@ def _joint_name(c: dict) -> str | None:
 
 
 def _given(built: Built, c: dict, *placed: Built) -> tuple[str, ...]:
-    """The params the model gives check c: the range ends of a joint it names, and for each cable
-    whose wheel the pose of an assembly placed for it moves, the wheel's turn and closed values."""
+    """The params the model gives check c: the range ends of a joint it names, the ratio or lead
+    of each gear the pose of an assembly placed for it moves a joint through, and for each cable
+    whose wheel such a pose moves, the wheel's turn and closed values. A pose moves every joint a
+    chain of gears and cables couples to one it sets, so each gear along a chain is read."""
     given = list(built.joints.get(_joint_name(c) or "", {}).get("range", ()))
     moved = set().union(*(posed.moved for posed in placed))
+    given += (gear_by(g)[1] for g in built.gears.values() if g["driver"] in moved)
     for cable in built.cables.values():
         if cable.get("wheel") in moved:
             given += (cable_turn(built, cable), *cable["closes"].values())
