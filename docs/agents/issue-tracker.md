@@ -11,7 +11,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: `gh issue close <number> --comment "..."`. An issue closes once its fix is pushed and CI is green on that commit, which `scripts/ci-wait` waits for: first comment any departures from the brief, then close with `Landed in <sha>; CI green on <sha>.` A spec's close-out names, for each part of its work order, the issue or commit that shows it done.
 - **File a spec's tickets**: `scripts/file-tickets <spec> <dir> --label enhancement --label ready-for-agent`, from one `t<n>.md` per ticket (`# <title>`, then the body, naming blockers as `- Blocked by T<k>`). It files them in order as sub-issues with blocking edges and reads both back; `--blocks <n>` (repeatable) also makes existing issue n, such as an integration branch's, blocked by every ticket filed; `--dry-run` prints the plan.
-- **Merge a PR**: `gh pr merge <n> --rebase --delete-branch`, once CI is green on its head commit.
+- **Merge a PR**: `gh pr merge <n> --rebase --delete-branch`, once `scripts/ci-wait` on its head commit is green, push and pull_request runs both. A branch rebase-merges only while it holds no merge commit, which `scripts/check-linear` holds: a ticket branch lands on an integration branch by rebasing onto its tip and fast-forwarding, never by a merge.
 
 Repo: `Vini-41/cad-reverse-engineer`. Infer it from `git remote -v`; `gh` does this automatically when run inside a clone.
 
