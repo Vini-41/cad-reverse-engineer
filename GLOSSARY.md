@@ -5,7 +5,7 @@ Rebuilding a published object, from a single part up to a mechanism like the Leg
 ## Evidence
 
 **Source**:
-A registered, hash-pinned document that states things about the object: a paper, supplement, datasheet, video or drawing.
+A registered, hash-pinned document that states things about the object: a paper, supplement, datasheet, video or drawing, or geometry its authors released (a STEP, STL or cut file), which states shape rather than text.
 _Avoid_: reference, input
 
 **Figure**:
@@ -13,12 +13,16 @@ An image in a source: a plot, photo, drawing or video frame. Figure crops and ov
 _Avoid_: source figure, source image, source pixel
 
 **Ledger**:
-The record of every statement the sources make about the object, each a verbatim quote or a hashed figure crop.
+The record of every statement the sources make about the object, each a verbatim quote, a hashed figure crop or a probe.
 _Avoid_: evidence list, extraction
 
 **Reading**:
 The label text of a figure crop, transcribed exactly as printed; it counts fully only once a named human has confirmed it.
 _Avoid_: quote (for image evidence)
+
+**Probe**:
+A ledger entry taken from a body in released geometry: its envelope, a distance or angle between datums on it, or a diameter, which cadrev evaluates from the file and compares with the design value the entry records. Unlike a reading, it needs no human confirmation.
+_Avoid_: geometry reading, measurement (for a value taken from released geometry)
 
 **Conflict**:
 Two ledger entries that disagree about the same feature; open until it carries a resolution.
@@ -28,7 +32,7 @@ A number a source prints with a unit, as an `a×b×c` product or as a thread siz
 _Avoid_: dimension (for anything that is not a size of the object's geometry), dimension candidate
 
 **Skip**:
-A stated quantity set aside with a reason because it is not about the object, such as a test load or a result.
+A stated quantity, or a body in released geometry, set aside with a reason because it is not about the object, such as a test load, a result or a fit tester.
 _Avoid_: exclusion, ignore
 
 ## Parameters
@@ -97,7 +101,7 @@ A configuration of the assembly given by joint values measured from the assembly
 _Avoid_: state, configuration (for the values themselves)
 
 **Check**:
-One comparison between the built geometry and a ledger value: an envelope, a distance or an angle between datums, a mass or an interference.
+One comparison between the built geometry and a ledger value: an envelope, a distance or an angle between datums, a diameter, a mass, an interference, or a whole part against its released body (a shape check).
 _Avoid_: test, assertion
 
 **Reads**:
@@ -117,8 +121,12 @@ How far the value a check evaluates may stray from its ledger value and still pa
 _Avoid_: margin, allowance
 
 **Coverage sweep**:
-The pass over every text source that lists each stated quantity no ledger quote or skip covers.
+The pass over every text source that lists each stated quantity no ledger quote or skip covers, and over every geometry source that lists each body no shape check or skip covers.
 _Avoid_: coverage check, scan
+
+**Shape check**:
+A check that aligns a built part with its released body through pairs of datums and compares the largest distance between their surfaces with a length tolerance. It checks the shape as a whole, not the params that build it.
+_Avoid_: mesh comparison, ICP check
 
 **Verification run**:
 One execution of `cadrev check`: lint, build, every check, and the report.
