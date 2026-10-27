@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import math
+import re
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -64,7 +65,9 @@ class CheckKind:
     only beyond its tolerance, with no tol of its own (ADR-0010). body_cap, where set, makes it
     compare a built part with a released body (its body), its tol capped at that fraction of the
     body's bbox diagonal, as it compares with no value. names, where set, gives the params a
-    check of the kind names by key, each with the quantity it must be in."""
+    check of the kind names by key, each with the quantity it must be in. expects, unless False,
+    lets a check of the kind compare with a value worked out from the ledger (its expect) in place
+    of evidence and key: a kind that compares one value (ADR-0014)."""
 
     quantity: str
     tolerance: str | None
@@ -75,6 +78,7 @@ class CheckKind:
     claims: bool = False
     body_cap: float | None = None
     names: Callable[[dict], list[tuple[str, str]]] | None = None
+    expects: bool = True
 
 
 # The quantities a joint's value is in: a revolute joint's angle, a slide's length. Before the
@@ -85,19 +89,21 @@ JOINT_QUANTITIES = ("angle", "length")
 # The kinds of check that compare with a ledger value, or a shape check with a released body;
 # interference (OVERLAP_KINDS) compares with neither.
 CHECK_KINDS = {
-    "bbox": CheckKind("length", "length"),
+    "bbox": CheckKind("length", "length", expects=False),
     "distance": CheckKind("length", "length"),
     "angle": CheckKind("angle", "angle"),
     "mass": CheckKind("mass", None, reads=_mass_reads, names=_mass_names),
     # A joint's range: an angle at each end, or a slide's length, compared with a stated end that
     # is often 0.
     # Between two datums, a distance at each end, as a slide that sets a leg's width reaches it.
-    "range": CheckKind("angle", "angle", span_capped=True, joint_valued=True, between_two="length"),
+    "range": CheckKind(
+        "angle", "angle", span_capped=True, joint_valued=True, between_two="length", expects=False
+    ),
     # How far a cable shortens from as built, or a from pose, to a pose.
     "stroke": CheckKind("length", "length", claims=True),
     # A part against its released body: the largest distance between their surfaces, which no
     # ledger value states, its tol capped against the body's size.
-    "shape": CheckKind("length", "length", body_cap=0.01),
+    "shape": CheckKind("length", "length", body_cap=0.01, expects=False),
 }
 # The kinds of check that compare how much instances overlap with an overlap limit.
 OVERLAP_KINDS = ("interference",)
@@ -301,6 +307,15 @@ class Project:
             return None
         value, unit = ledgered[0], self.unit_of(ref)
         return value if unit is None else units.convert(value, unit, self.units)
+
+    def ledger_value(self, ref: str) -> float | None:
+        """An evidence value as an expect reads it: in the unit a check compares its printed
+        unit's quantity in, an angle in degrees and any other in the project's units, or as
+        printed where it is printed with no unit."""
+        value, unit = self.evidence_value(ref), self.unit_of(ref)
+        if value is None or unit is None:
+            return value
+        return value * self.compared_size(units.quantity(unit))
 
     def value_as(self, ref: str, quantity: str | None) -> float | None:
         """The evidence value at ref compared as quantity: an angle in degrees, else in the
@@ -972,13 +987,121 @@ def resolve_params(p: Project) -> None:
 
 
 def check_refs(c: dict) -> list[str]:
-    """The evidence values a check compares with the geometry."""
+    """The evidence values a check compares with the geometry, those its expect names among them."""
     eid = c.get("evidence")
     return (
         [f"{eid}.{key}" for key in (c.get("axes") or {})]
         + ([f"{eid}.{c['key']}"] if c.get("key") else [])
         + [str(ref) for ref in c.get("ends") or []]
+        + expect_refs(str(c.get("expect", "")))
     )
+
+
+# A ledger value an expect names, <entry>.<key>: an evidence id, which may hold hyphens, then one
+# of its values' keys.
+_LEDGER_NAME = re.compile(r"(?<![\w.])([A-Za-z_][\w-]*)\.([A-Za-z_]\w*)")
+# What an expect is built from besides the ledger values it names: arithmetic, numbers and
+# MATH_NAMES.
+_EXPECT_SYNTAX = (
+    ast.Expression,
+    ast.BinOp,
+    ast.UnaryOp,
+    ast.Call,
+    ast.Name,
+    ast.Load,
+    ast.Constant,
+    ast.operator,
+    ast.unaryop,
+)
+
+
+def expect_refs(expr: str) -> list[str]:
+    """The ledger values an expect names, <entry>.<key>, in order."""
+    return list(dict.fromkeys(f"{m[1]}.{m[2]}" for m in _LEDGER_NAME.finditer(expr)))
+
+
+def expect_value(p: Project, expr: str) -> float:
+    """The value an expect works out from the ledger values it names, each read as
+    Project.ledger_value reads it; raises ValueError saying why it cannot: it names a param, an
+    unknown name, entry or key, or does not parse or evaluate."""
+    refs, names = expect_refs(expr), {}
+    for i, ref in enumerate(refs):
+        entry, _, key = ref.partition(".")
+        item = p.item(entry)
+        if item is None:
+            raise ValueError(f"{entry} is not a ledger entry")
+        if key not in (item.get("values") or {}):
+            raise ValueError(f"{entry} records no {key}")
+        names[f"_ledger{i}"] = p.ledger_value(ref)
+    text = _LEDGER_NAME.sub(lambda m: f"_ledger{refs.index(f'{m[1]}.{m[2]}')}", expr)
+    try:
+        tree = ast.parse(text, mode="eval")
+    except SyntaxError as exc:
+        raise ValueError(f"does not parse: {exc.msg}") from exc
+    except (RecursionError, MemoryError) as exc:  # the parser's stack overflowing
+        raise ValueError("does not parse: nested too deep") from exc
+    for node in ast.walk(tree):
+        if not isinstance(node, _EXPECT_SYNTAX):
+            raise ValueError(f"does not parse as arithmetic: {type(node).__name__}")
+        if isinstance(node, ast.Constant):
+            number = node.value
+            if type(number) is not int and type(number) is not float:
+                raise ValueError(f"does not parse as arithmetic: {number!r}")
+            node.value = float(number)  # so a power overflows rather than running on
+        if isinstance(node, ast.Name) and node.id not in names.keys() | MATH_NAMES.keys():
+            if node.id in p.params:
+                raise ValueError(
+                    f"names param {node.id}; an expect reads only ledger values, <entry>.<key>"
+                )
+            raise ValueError(f"names {node.id}, neither a ledger value <entry>.<key> nor math")
+    try:
+        code = compile(tree, "<expect>", "eval")
+        value = float(eval(code, {"__builtins__": {}}, MATH_NAMES | names))
+    except (ArithmeticError, ValueError, TypeError, RecursionError) as exc:
+        raise ValueError(f"does not evaluate: {exc}") from exc
+    if not math.isfinite(value):
+        raise ValueError(f"does not evaluate: it gives {value}")
+    return value
+
+
+def expect_config(p: Project, c: dict) -> list[str]:
+    """Why check c's expect, or its want of one, leaves it nothing to compare with: an expect on a
+    kind that compares no one value (CheckKind.expects), beside evidence, or that cannot be worked
+    out (expect_value); or a kind that takes one naming neither it nor evidence. An expect citing a
+    repeated evidence id is left to check_citations."""
+    kind = CHECK_KINDS.get(str(c.get("kind")))
+    if "expect" not in c:
+        # A claim citing no evidence is claim_config's to name.
+        missing = kind is not None and kind.expects and not {"evidence", "claim"} & c.keys()
+        return (
+            ["give evidence and key, or expect, the value it is compared with"] if missing else []
+        )
+    if kind is None or not kind.expects:
+        return [f"expect is for a check that compares one value; kind {c.get('kind')} takes none"]
+    if "evidence" in c:
+        return ["give expect or evidence, not both"]
+    expr = str(c["expect"])
+    if any(p.cites_repeated(ref) for ref in expect_refs(expr)):
+        return []
+    try:
+        expect_value(p, expr)
+    except ValueError as exc:
+        return [f"expect {expr!r}: {exc}"]
+    return []
+
+
+def check_expects(p: Project) -> None:
+    """[check-config] for each check whose expect cannot be compared with, or that names neither
+    an expect nor evidence, which the build then leaves unevaluated."""
+    for c in p.checks:
+        for problem in expect_config(p, c):
+            p.error("check-config", f"check {c.get('id', '?')}: {problem}")
+
+
+def compared_ref(c: dict) -> str:
+    """What check c compares with, as its result names it: its expect, else the ledger value at
+    its evidence and key; raises KeyError for a check naming neither."""
+    return str(c["expect"]) if "expect" in c else f"{c['evidence']}.{c['key']}"
 
 
 def pose_refs(c: dict) -> list[str]:
@@ -1015,7 +1138,7 @@ def claim_config(p: Project, c: dict) -> list[str]:
     if "claim" not in c:
         return (
             []
-            if "key" in c
+            if "key" in c or "expect" in c
             else [
                 "give key, the ledger value its stroke is compared with, "
                 "or claim: shortens or lengthens"
@@ -1166,6 +1289,11 @@ def overlap_limit(p: Project, c: dict) -> float:
 def _tolerance_bases(p: Project, c: dict) -> list[tuple[str, float | None]]:
     """The values check c's tolerance is capped against, each with how it is named: each value it
     compares, or the span between its two for a span_capped kind."""
+    if "expect" in c:
+        try:
+            return [(f"expect {c['expect']}", expect_value(p, str(c["expect"])))]
+        except ValueError:
+            return []  # check_expects says why
     refs, quantity = check_refs(c), compared_quantity(c)
     if CHECK_KINDS[str(c.get("kind"))].span_capped and len(refs) == 2:
         low, high = (p.value_as(ref, quantity) for ref in refs)
@@ -1378,7 +1506,8 @@ def check_units(p: Project) -> None:
             expected = (str(compared_quantity(c)),)
             if joint_valued(c):
                 expected = JOINT_QUANTITIES  # the build holds each to its joint's
-            for ref in check_refs(c):
+            # An expect's ledger values are of whatever quantities its arithmetic combines.
+            for ref in [] if "expect" in c else check_refs(c):
                 expect_quantity(p, ref, expected, f"check {cid}")
         for key in POSES:
             for ref in (c.get(key) or {}).values():
@@ -1411,6 +1540,7 @@ def check_static(p: Project) -> None:
     check_conflicts(p)
     check_citations(p)
     check_claims(p)
+    check_expects(p)
     check_units(p)
     check_tolerances(p)
     lint.lint_model(p)

@@ -26,6 +26,9 @@ from .project import (
     claim_config,
     check_tolerance,
     compared_quantity,
+    compared_ref,
+    expect_config,
+    expect_value,
     expect_joint_value,
     joint_valued,
     expect_param_quantity,
@@ -85,6 +88,9 @@ class CheckResult:
     # once they fit, the largest distance between the surfaces (distance) and where it occurs in
     # the body's frame (worst_point); None for other kinds.
     shape: dict | None = None
+    # A check compared with a value worked out from the ledger: its expect expression (expr) and
+    # the value it works out to (value); None for a check compared with a ledger value.
+    expect: dict | None = None
 
 
 @dataclass
@@ -887,11 +893,13 @@ def _compared(
     shown: str = "",
     quantity: str | None = None,
 ) -> CheckResult:
-    """The comparison of a value a check evaluates with the ledger value at ref: it passes within
-    the check's tolerance: tol, a length or for an angle check degrees, or for a mass check
-    tol_rel, a fraction of that value. quantity, where given, is the one a range check compares
-    its joint's own value in."""
-    expected = p.value_as(ref, quantity or compared_quantity(c))
+    """The comparison of a value a check evaluates with the ledger value at ref, or for a check
+    with an expect, ref, with the value it works out from the ledger: it passes within the check's
+    tolerance: tol, a length or for an angle check degrees, or for a mass check tol_rel, a
+    fraction of that value. quantity, where given, is the one a range check compares its joint's
+    own value in."""
+    worked = "expect" in c
+    expected = expect_value(p, ref) if worked else p.value_as(ref, quantity or compared_quantity(c))
     if expected is None:
         raise KeyError(f"evidence value {ref}")
     tolerance = check_tolerance(p, c, quantity)
@@ -908,6 +916,7 @@ def _compared(
         f"{expected:g}{band} ({ref})",
         f"{measured:.4g}{shown}",
         c.get("interpretation", ""),
+        expect={"expr": ref, "value": printed(expected)[0]} if worked else None,
     )
 
 
@@ -1278,7 +1287,7 @@ def _weighed_mass(p: Project, built: Built, c: dict, tally: Counter) -> CheckRes
             return None
         each = {n: built.masses[n].mass for n in names}
     measured = sum(each[n] * tally[n] for n in names) + sum(p.values[n] for n in c.get("add", []))
-    return _compared(p, c, cid, f"{c['evidence']}.{c['key']}", measured)
+    return _compared(p, c, cid, compared_ref(c), measured)
 
 
 def _interference(
@@ -1382,7 +1391,7 @@ def _stroke(
     if "claim" in c:
         result = _claimed(p, c, cid, shortening, shown)
     else:
-        result = _compared(p, c, cid, f"{c['evidence']}.{c['key']}", shortening, shown)
+        result = _compared(p, c, cid, compared_ref(c), shortening, shown)
     result.pose, result.from_pose = pose, start_pose
     return [result]
 
@@ -1423,7 +1432,7 @@ def _distance(p: Project, c: dict, placed: Built, reading: _Reading) -> list[Che
     if points is None:
         return []
     measured = _datum_distance(c, points)
-    ref, between = f"{c['evidence']}.{c['key']}", " - ".join(c["between"])
+    ref, between = compared_ref(c), " - ".join(c["between"])
     return [_compared(p, c, c.get("id", "?"), ref, measured, f" {between}")]
 
 
@@ -1434,7 +1443,7 @@ def _angle(p: Project, c: dict, placed: Built, reading: _Reading) -> list[CheckR
     measured = None if points is None else _datum_angle(p, c, points)
     if measured is None:
         return []
-    ref, (a, vertex, b) = f"{c['evidence']}.{c['key']}", c["between"]
+    ref, (a, vertex, b) = compared_ref(c), c["between"]
     shown = f"° at {vertex} between {a} and {b}"
     return [_compared(p, c, c.get("id", "?"), ref, measured, shown)]
 
@@ -1546,8 +1555,8 @@ def run_checks(
         kind = c.get("kind")
         if any(p.cites_repeated(ref) for ref in cited_refs(p, c)):
             continue  # it compares with neither item; check_citations said so before the build
-        if claim_config(p, c):
-            continue  # check_claims said why before the build
+        if claim_config(p, c) or expect_config(p, c):
+            continue  # check_claims or check_expects said why before the build
         reached = _placed_for(p, built, c, poser)
         if reached is None:
             continue

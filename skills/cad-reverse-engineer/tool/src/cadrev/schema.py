@@ -109,6 +109,7 @@ CHECK = Record(
         "parts": Items(str),
         "evidence": str,
         "key": str,
+        "expect": str,
         "axes": Table(str),
         "between": Items(str),
         "along": str,

@@ -217,7 +217,7 @@ cadrev computes each weighed part's centre of mass and inertia from its solid at
 
 ## checks.yaml
 
-Expected values always come from evidence, so a check compares the geometry with the source, never with params.
+Expected values always come from evidence, so a check compares the geometry with the source, never with params: a ledger value its `evidence` and `key` name, or one its `expect` works out from the ledger (see [Worked ledger values](#worked-ledger-values-expect)).
 
 ```yaml
 checks:
@@ -253,6 +253,25 @@ Every datum `build` returns, read by a check or not, lies on its part's solid wi
 Each check rests on the weakest basis among the params it reads (proposed < measured < source), or on source when it reads none. report.json gives each check result its `rests_on` and, in `rests_on_params`, the params it reads that rest on that basis; report.md's checks table shows "rests on <basis>: <params>" beside a check resting on less than source. A mass check on a proposed density then confirms the model against the stated mass given that chosen density, not the density itself. A mass check weighing a part in several instances with no `counts` entry rests on proposed whatever its params rest on: report.json names each such part and its instance count under `uncounted`, and report.md shows it as "<part> (<n> instances uncounted)" beside "rests on proposed". What a check rests on leaves its pass/fail and the status unchanged.
 
 `tol` overrides `tolerance.length` for one check, or `tolerance.angle` (degrees) for an angle check. A check's tolerance is capped: `tol` (or the project tolerance, where the check sets none) at 5% of each value the check compares, and `tol_rel` at 0.25; above either is `[tolerance-cap]`. A `range` check's `tol` is capped at 5% of the span between its two ends, since an end is often 0. The report lists every non-default tolerance beside its check: each `tol` other than 0.001 (0.01 for an angle check), and every `tol_rel`, which has no default. Each source param that is not checked raises `[unchecked-source]`. A check checks the params whose ledger values it compares, the params it reads, and every param those params' `expr`s read: stated counts a mass check reads through a derived product are checked. A check reads what the model gives it too: the range ends of the joint it sweeps, and the wheel's turn and closed values a cable moves at its pose. A run with `--no-build` has no model to give them, so there they stay `[unchecked-source]`.
+
+### Worked ledger values: `expect`
+
+Where a source states the numbers a value is worked out from rather than the value itself (a pitch diameter from a module and a tooth count, a carrier's turn from a stated ratio), a check names `expect: <expr>` in place of `evidence` and `key`:
+
+```yaml
+  - {id: pitch-sun, kind: distance, between: [sun.pitch_a, sun.pitch_b],
+     expect: "T1-gears.module * T1-gears.z_sun"}      # module × teeth
+  - {id: sun-planet, kind: distance, instances: [sun_1, planet_1],
+     between: [sun_1.axis, planet_1.axis],
+     expect: "T1-gears.module * (T1-gears.z_sun + T1-gears.z_planet) / 2"}
+```
+
+- The expression combines ledger values, each written `<entry>.<key>`, with numbers, arithmetic and the functions a derived `expr` may call. Quote it in YAML, and put a space before a `-` that precedes an entry, since an evidence id may hold a hyphen.
+- Each ledger value reads as a check compares it: one printed in an angle unit in degrees, one printed in another unit in the project's units, and one printed with no unit (a count, a ratio such as "7.2:1", ledgered as `{ratio: 7.2}`) as printed. The expression's value is in the check's own units: degrees for an angle check, the project's otherwise.
+- `distance`, `angle`, `mass` and `stroke` checks take `expect`; `bbox`, `range`, `shape` and `interference` take none.
+- Each ledger value an expect names counts as compared, so a source param taking its value from it is checked. An expect reads no params: the check rests on what its pose and kind read, else on source.
+- The tolerance is capped at 5% of the value the expect works out to.
+- `[check-config]`, raised whether or not the model builds, and the check is not evaluated: an expect naming a param, a name that is neither a ledger value nor a function, an entry not in the ledger or a key its entry does not record, or one that does not parse or evaluate (a division by 0), each finding naming the reason; a check naming both `expect` and `evidence`; a `distance`, `angle`, `mass` or `stroke` check naming neither; `expect` on a kind that takes none.
 
 ## Poses and the MJCF export
 
@@ -349,7 +368,7 @@ The machine-readable report `cadrev check` writes beside `report.md`, which rend
 | `exact` | whether the project is exact (see [Statuses](#statuses)) |
 | `counts` | `errors`, `warnings`, `checks`, `checks_passed`, `params`, the params resting on each basis: `source`, `measured`, `proposed`, and the proposed physics values counted apart from `proposed`: `physics_proposed` |
 | `findings` | every finding as `level`, `rule`, `message` |
-| `checks` | every geometry check with its result, expected and evaluated values, the basis it `rests_on`, and the params it reads resting on that basis (`rests_on_params`); for a mass check, each part it weighs in several instances with no `counts` entry and its instance count (`uncounted`); for an interference check, also the number of pairs it evaluated (`pairs`); for a posed check, its `pose`: each joint with the param or ledger value it is set `from` and that `value`; for a swept interference check, its `sweep` (`joint`, the range params it is swept `from`, their values as `range`, and the number of `poses`), and as `pose` the one with the worst overlap; for a shape check, its `shape`: the `residual` its datum pairs fit within and, once they fit, the largest surface `distance` and the `worst_point` where it occurs, in the body's frame |
+| `checks` | every geometry check with its result, expected and evaluated values, the basis it `rests_on`, and the params it reads resting on that basis (`rests_on_params`); for a mass check, each part it weighs in several instances with no `counts` entry and its instance count (`uncounted`); for an interference check, also the number of pairs it evaluated (`pairs`); for a posed check, its `pose`: each joint with the param or ledger value it is set `from` and that `value`; for a swept interference check, its `sweep` (`joint`, the range params it is swept `from`, their values as `range`, and the number of `poses`), and as `pose` the one with the worst overlap; for a shape check, its `shape`: the `residual` its datum pairs fit within and, once they fit, the largest surface `distance` and the `worst_point` where it occurs, in the body's frame; for a check with an `expect`, its `expect`: the expression (`expr`) and the `value` it works out to |
 | `tolerances` | each check with a non-default tolerance: its `check` id, `kind`, and `tol` or `tol_rel` |
 | `overlap_limits` | each interference check with a non-default overlap limit: its `check` id and `max_volume` |
 | `motion` | how the model moves, as `build/model.mjcf` exports it: its `joints`, each with its `type`, `parent`, `child` and `drive` (none for a fixed joint), its `range` as the params it is `from` (`as built` for a one-ended range's other end) and their `value`s in the joint's unit, low first, and each physics value it names (`damping`, `stiffness`, `spring_rest`, `friction`) as `{from, value}` in the project's units; its `loops`, each as its two datums; its `gears`, each with its `driver`, `driven` and `ratio` as `{from, value}`; its `tendons`, each with its `path` and physics values; its `cables`, each with its `path` and, wound on a wheel, its `wheel` and `closes` as `{joint: {from, value}}`, listed in report.md's motion section too; and `dropped`, true when a `[model-joint]`, `[model-loop]`, `[model-gear]`, `[model-cable]` or `[model-return]` dropped them. No joints and not dropped means static; null when no model was built |

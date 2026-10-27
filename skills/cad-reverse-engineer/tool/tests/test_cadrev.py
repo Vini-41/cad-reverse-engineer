@@ -2230,7 +2230,22 @@ def _replace(root: Path, name: str, old: str, new: str) -> None:
 
 # Damage that once crashed, or plausibly could crash, a verification run. Add a case for every
 # new way project input or user code enters the run.
+def _expect_instead(root: Path, expr) -> None:
+    """The pitch check compared with expect expr in place of its evidence and key."""
+
+    def change(d):
+        pitch = d["checks"][1]
+        del pitch["evidence"], pitch["key"]
+        pitch["expect"] = expr
+
+    edit(root, "checks.yaml", change)
+
+
 DAMAGE = {
+    "expect is a list": lambda r: _expect_instead(r, ["pitch.pitch"]),
+    "expect nested past the parser": lambda r: _expect_instead(r, "-" * 100_000 + "pitch.pitch"),
+    "expect raising a power past any float": lambda r: _expect_instead(r, "9 ** 9 ** 9"),
+    "expect calling a math function wrongly": lambda r: _expect_instead(r, "sqrt(x=pitch.pitch)"),
     "param named by a number": lambda r: edit(
         r,
         "params.yaml",
@@ -8204,3 +8219,137 @@ def test_file_of_several_bodies_names_each_by_its_place_in_the_file(proj_dir, tm
 def test_probe_recording_no_values_is_evidence_values_whatever_its_scope(proj_dir, tmp_path):
     probed(proj_dir, tmp_path, values=None)
     assert "evidence-values" in errors(proj_dir)
+
+
+# A check compares with a value worked out from the ledger: expect (ADR-0014).
+
+GEAR_QUOTE = "a module of 1.5 mm and 20 teeth"
+PITCH_CHECK = {"kind": "distance", "between": ["link.a", "link.b"]}
+
+
+def expecting(root: Path, tmp_path: Path, expr: str, quote: str = GEAR_QUOTE, **check) -> None:
+    """Ledger quote as N1, its module m and teeth z, and add check pitch-expect, a distance
+    check of the link's pitch against expr."""
+    values = {"m": 1.5, "z": int(re.findall(r"(\d+) teeth", quote)[0])}
+    add_quote(root, tmp_path, f"The gear has {quote}.", quote, values)
+    pitch = {"id": "pitch-expect", **PITCH_CHECK, "expect": expr, **check}
+    edit(root, "checks.yaml", lambda d: d["checks"].append(pitch))
+
+
+def _result(report: dict, cid: str) -> dict:
+    return next(r for r in report["checks"] if r["id"] == cid)
+
+
+def _config(root: Path, cid: str) -> list[str]:
+    """The [check-config] messages a fresh verification run gives check cid."""
+    return [m for m in findings(root, "check-config") if m.startswith(f"check {cid}:")]
+
+
+@pytest.mark.parametrize(
+    "quote, ok", [(GEAR_QUOTE, True), ("a module of 1.5 mm and 21 teeth", False)]
+)
+def test_expect_multiplying_two_ledger_values_passes_only_on_geometry_matching_the_product(
+    proj_dir, tmp_path, quote, ok
+):
+    # The link's pivots are 30 mm apart: 1.5 × 20, not 1.5 × 21.
+    expecting(proj_dir, tmp_path, "N1.m * N1.z", quote)
+    code, report = verify(proj_dir)
+    assert _result(report, "pitch-expect")["ok"] == ok
+    assert (code, report["status"]) == ((0, "VERIFIED") if ok else (1, "NOT VERIFIED"))
+    failed = [f["message"] for f in report["findings"] if f["rule"] == "check-failed"]
+    measured = "measured 30 link.a - link.b"
+    assert failed == ([] if ok else [f"pitch-expect: expected 31.5 (N1.m * N1.z), {measured}"])
+
+
+def test_report_json_shows_each_checks_expect_expression_and_its_value(proj_dir, tmp_path):
+    expecting(proj_dir, tmp_path, "N1.m * N1.z")
+    _, report = verify(proj_dir)
+    assert _result(report, "pitch-expect")["expect"] == {"expr": "N1.m * N1.z", "value": 30}
+    assert "expect" not in _result(report, "pitch")
+
+
+def test_entry_an_expect_names_counts_as_compared_so_its_source_param_is_checked(proj_dir):
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].pop(1))  # the pitch check
+    assert "param pitch" in _unchecked(proj_dir)
+    pitch = {"id": "pitch-2", **PITCH_CHECK, "expect": "pitch.pitch"}
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].append(pitch))
+    code, report = verify(proj_dir)
+    assert _unchecked_in(report) == [] and (code, report["status"]) == (0, "VERIFIED")
+    assert _result(report, "pitch-2")["rests_on"] == "source"
+
+
+@pytest.mark.parametrize(
+    "expr, reason",
+    [
+        ("hole_d * 10", "names param hole_d"),
+        ("N9.m * N1.z", "N9 is not a ledger entry"),
+        ("N1.d * N1.z", "N1 records no d"),
+        ("N1.m * * N1.z", "does not parse"),
+        ("N1.m.x", "does not parse"),
+        ("N1.m * N1.z / 0", "does not evaluate"),
+        ("sqrt(N1.m - N1.z)", "does not evaluate"),
+        ("open(N1.m)", "names open"),
+    ],
+)
+def test_expect_that_cannot_be_evaluated_is_check_config_naming_why(
+    proj_dir, tmp_path, expr, reason
+):
+    expecting(proj_dir, tmp_path, expr)
+    messages = _config(proj_dir, "pitch-expect")
+    assert len(messages) == 1 and reason in messages[0], messages
+
+
+def test_expect_naming_a_ledger_entry_that_shares_a_params_name_reads_the_entry(proj_dir, tmp_path):
+    # pitch is both a param and an evidence id; pitch.pitch is the ledger value.
+    expecting(proj_dir, tmp_path, "pitch.pitch * N1.m * N1.z / (N1.m * N1.z)")
+    _, report = verify(proj_dir)
+    assert _result(report, "pitch-expect")["ok"] and report["status"] == "VERIFIED"
+
+
+def test_run_without_the_build_reports_an_expect_naming_an_unknown_entry(proj_dir, tmp_path):
+    expecting(proj_dir, tmp_path, "N9.m * N1.z")
+    _, printed = run("check", str(proj_dir), "--no-build")
+    assert "[check-config] check pitch-expect: expect 'N9.m * N1.z': N9 is not a ledger entry" in (
+        printed
+    )
+
+
+@pytest.mark.parametrize("check", [{"evidence": "pitch", "key": "pitch"}, {"evidence": "pitch"}])
+def test_check_naming_both_expect_and_evidence_is_check_config(proj_dir, tmp_path, check):
+    expecting(proj_dir, tmp_path, "N1.m * N1.z", **check)
+    messages = _config(proj_dir, "pitch-expect")
+    assert len(messages) == 1 and "give expect or evidence, not both" in messages[0], messages
+
+
+def test_check_naming_neither_expect_nor_evidence_is_check_config(proj_dir):
+    edit(proj_dir, "checks.yaml", lambda d: [d["checks"][1].pop(k) for k in ("evidence", "key")])
+    messages = _config(proj_dir, "pitch")
+    assert len(messages) == 1 and "give evidence and key, or expect" in messages[0], messages
+
+
+@pytest.mark.parametrize("kind", ["bbox", "range", "shape", "interference"])
+def test_expect_on_a_kind_that_compares_no_one_value_is_check_config(proj_dir, kind):
+    check = {"id": "other", "kind": kind, "expect": "pitch.pitch"}
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].append(check))
+    assert any(f"kind {kind} takes none" in m for m in _config(proj_dir, "other"))
+
+
+def test_guard_ratio_printed_n_to_1_ledgers_as_a_fraction(proj_dir, tmp_path):
+    # "7.2:1" is ledgered as {ratio: 7.2}, with no unit, and the sweep lists nothing in it.
+    text = "The gearbox reduces 7.2:1 overall."
+    add_quote(proj_dir, tmp_path, text, "reduces 7.2:1", {"ratio": 7.2})
+    add_params(proj_dir, ratio={"basis": "source", "from": "N1.ratio"})
+    _, report = verify(proj_dir)
+    assert report["params"]["ratio"]["value"] == 7.2
+    rules = {f["rule"] for f in report["findings"] if f["level"] == "error"}
+    assert not rules & {"value-not-in-quote", "unit-quantity", "coverage"}, rules
+
+
+def test_expect_reads_a_ratio_printed_n_to_1_as_a_fraction(proj_dir, tmp_path):
+    # 30 = 7.2 × 25 / 6, so the check passes only where "7.2:1" reads as 7.2.
+    text = "The gearbox reduces 7.2:1 overall."
+    add_quote(proj_dir, tmp_path, text, "reduces 7.2:1", {"ratio": 7.2})
+    pitch = {"id": "pitch-ratio", **PITCH_CHECK, "expect": "N1.ratio * 25 / 6"}
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].append(pitch))
+    code, report = verify(proj_dir)
+    assert _result(report, "pitch-ratio")["ok"] and (code, report["status"]) == (0, "VERIFIED")

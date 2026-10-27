@@ -279,6 +279,10 @@ def counts(p: Project, results: list[CheckResult]) -> dict[str, int]:
     )
 
 
+# The keys of a check result report.json gives only the checks they apply to, left out as None.
+_LEFT_OUT_WHEN_NONE = ("pairs", "pose", "from_pose", "sweep", "uncounted", "shape", "expect")
+
+
 def write(
     p: Project,
     status: str,
@@ -496,8 +500,7 @@ def write(
                     {
                         k: v
                         for k, v in asdict(r).items()
-                        if k not in ("pairs", "pose", "from_pose", "sweep", "uncounted", "shape")
-                        or v is not None
+                        if k not in _LEFT_OUT_WHEN_NONE or v is not None
                     }
                     for r in results
                 ],
