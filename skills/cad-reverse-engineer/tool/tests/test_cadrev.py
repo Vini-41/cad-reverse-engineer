@@ -2561,6 +2561,7 @@ UNITS = {
     "spinning at 300 r/min": (300, 1800),
     "turning at 2 rad/s": (2, 114.59155902616465),
     "wound 3 turns": (3, 3),
+    "a sun of 25 teeth": (25, 25),
     "a 3300 mAh battery": (3300, 11880),
     "a spring of 0.25 N·m/rad": (0.25, 250),
     "a spring of 4 N·mm/rad": (4, 4),
@@ -3046,6 +3047,8 @@ SWEPT = {
     "5-mm": "5-mm",
     "5-10 mm": "5-10 mm",
     "six turns": "six turns",
+    "25 teeth": "25 teeth",
+    "1 tooth": "1 tooth",
     "three degrees": "three degrees",
 }
 
@@ -3118,6 +3121,11 @@ def test_guard_coverage_lists_the_near_miss_of_each_look_alike(proj_dir, tmp_pat
 
 def test_guard_coverage_lists_no_number_word_without_a_unit(proj_dir, tmp_path, capsys):
     assert swept(proj_dir, tmp_path, capsys, "Eight tension springs hold one of the links.") == []
+
+
+def test_guard_coverage_lists_no_open_ended_count_noun_or_bare_integer(proj_dir, tmp_path, capsys):
+    text = "Its 3 planets mesh with a ring; SSPG [25, 65, 155, 0.5, 3] lists each."
+    assert swept(proj_dir, tmp_path, capsys, text) == []
 
 
 def test_coverage_counts_a_number_word_with_a_unit_as_ledgered_by_its_value(proj_dir, tmp_path):
@@ -4073,6 +4081,136 @@ def test_mass_check_naming_what_it_weighs_none_of_is_check_config(
 ):
     report = _two_weighed_links(proj_dir, tmp_path, check)
     assert [f["message"] for f in report["findings"] if f["rule"] == "check-config"] == [message]
+
+
+# A count check: an instance count a source states, compared exactly with the instances the
+# assembly places (ADR-0012).
+
+
+def _counted_links(root: Path, tmp_path: Path, placed: int, stated="3") -> dict:
+    """placed links, and check links counting the link's instances against N1.n, stated as the
+    count of links; report.json."""
+    text = f"The leg carries {stated} links."
+    add_quote(root, tmp_path, text, text.rstrip("."), {"n": float(stated.split()[0])})
+    write(root, "model.py", _links(placed))
+    count = {"id": "links", "kind": "count", "part": "link", "evidence": "N1", "key": "n"}
+    edit(root, "checks.yaml", lambda d: d["checks"].append(count))
+    return verify(root)[1]
+
+
+def test_count_check_passes_when_the_assembly_places_the_stated_count(proj_dir, tmp_path):
+    report = _counted_links(proj_dir, tmp_path, placed=3)
+    assert report["status"] == "VERIFIED", report["findings"]
+    links = _by_id(report)["links"]
+    assert (links["ok"], links["kind"], links["rests_on"]) == (True, "count", "source")
+    assert (links["expected"], links["measured"]) == ("3 (N1.n)", "3 instances of link")
+
+
+def test_count_check_fails_when_the_assembly_places_one_more(proj_dir, tmp_path):
+    report = _counted_links(proj_dir, tmp_path, placed=4)
+    assert not _by_id(report)["links"]["ok"]
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-failed"] == [
+        "links: expected 3 (N1.n), measured 4 instances of link"
+    ]
+
+
+@pytest.mark.parametrize("stated", ["3 mm", "3 g"])
+def test_count_printed_in_a_unit_of_another_quantity_is_unit_quantity(proj_dir, tmp_path, stated):
+    report = _counted_links(proj_dir, tmp_path, placed=3, stated=stated)
+    messages = [f["message"] for f in report["findings"] if f["rule"] == "unit-quantity"]
+    assert len(messages) == 1
+    assert messages[0].startswith("N1.n is printed in ")
+    assert messages[0].endswith("where a count is expected (check links)")
+
+
+@pytest.mark.parametrize("stated", ["3", "3 teeth"])
+def test_guard_count_printed_with_no_unit_or_a_count_unit_is_no_unit_quantity(
+    proj_dir, tmp_path, stated
+):
+    report = _counted_links(proj_dir, tmp_path, placed=3, stated=stated)
+    assert [f for f in report["findings"] if f["rule"] == "unit-quantity"] == []
+
+
+def test_count_check_on_a_count_that_is_not_whole_is_unit_quantity(proj_dir, tmp_path):
+    report = _counted_links(proj_dir, tmp_path, placed=3, stated="2.5")
+    assert [f["message"] for f in report["findings"] if f["rule"] == "unit-quantity"] == [
+        "N1.n = 2.5 is not a whole number, where a count is expected (check links)"
+    ]
+
+
+def test_guard_count_check_on_a_whole_count_is_no_unit_quantity(proj_dir, tmp_path):
+    report = _counted_links(proj_dir, tmp_path, placed=3, stated="3")
+    assert [f for f in report["findings"] if f["rule"] == "unit-quantity"] == []
+
+
+def test_mass_checks_count_that_is_not_whole_is_unit_quantity(proj_dir, tmp_path):
+    _mass_of_two_links(proj_dir, tmp_path, "n_links")
+    add_params(
+        proj_dir,
+        n_links={"basis": "proposed", "value": 2.5, "rationale": "'two links'", "gap": "G1"},
+    )
+    assert findings(proj_dir, "unit-quantity") == [
+        "param n_links = 2.5 is not a whole number, where a count is expected (in check m)"
+    ]
+
+
+def test_mass_checks_count_printed_in_a_unit_of_another_quantity_is_unit_quantity(
+    proj_dir, tmp_path
+):
+    _mass_of_two_links(proj_dir, tmp_path, "n_links")
+    add_params(proj_dir, n_links={"basis": "source", "from": "N1.n"})
+    edit(proj_dir, "evidence.yaml", lambda d: d["evidence"][-1]["values"].update(n=1.2))
+    messages = findings(proj_dir, "unit-quantity")
+    assert len(messages) == 1
+    assert messages[0].startswith("N1.n is printed in g/cm³, a unit of density, where a count")
+
+
+def test_count_check_with_a_tol_is_check_config(proj_dir, tmp_path):
+    _counted_links(proj_dir, tmp_path, placed=3)
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"][-1].update(tol=1))
+    assert "check links: a count check compares exactly, so it takes no tol" in findings(
+        proj_dir, "check-config"
+    )
+
+
+def _off_by_one(root: Path, tmp_path: Path, kind: str) -> list[tuple[str, str]]:
+    """Four links placed where a source states three, compared by a count check or a mass check's
+    counts; the error findings, as (rule, message)."""
+    text = "The leg carries 3 links, together 7.2 g, printed in resin of 1.2 g/cm3."
+    add_quote(root, tmp_path, text, text.rstrip("."), {"n": 3, "m": 7.2, "rho": 1.2})
+    write(root, "model.py", _links(4))
+    add_params(
+        root, rho={"basis": "source", "from": "N1.rho"}, n_links={"basis": "source", "from": "N1.n"}
+    )
+    checks = {
+        "count": {"id": "c", "kind": "count", "part": "link", "evidence": "N1", "key": "n"},
+        "mass": {
+            "id": "c",
+            "kind": "mass",
+            "parts": ["link"],
+            "density": "rho",
+            "counts": {"link": "n_links"},
+            "evidence": "N1",
+            "key": "m",
+            "tol_rel": 0.05,
+        },
+    }
+    edit(root, "checks.yaml", lambda d: d["checks"].append(checks[kind]))
+    _, report = verify(root)
+    return [(f["rule"], f["message"]) for f in report["findings"] if f["level"] == "error"]
+
+
+def test_count_check_and_a_mass_checks_counts_each_reject_the_same_off_by_one(proj_dir, tmp_path):
+    assert ("check-failed", "c: expected 3 (N1.n), measured 4 instances of link") in _off_by_one(
+        proj_dir, tmp_path, "count"
+    )
+
+
+def test_guard_mass_checks_counts_rejects_the_off_by_one_a_count_check_rejects(proj_dir, tmp_path):
+    assert (
+        "check-config",
+        "check c: counts link as n_links (3), but it weighs 4 instances of it",
+    ) in _off_by_one(proj_dir, tmp_path, "mass")
 
 
 # What a check rests on: the weakest basis among the params it reads.
@@ -6560,6 +6698,77 @@ def test_gear_ratio_typed_into_model_py_is_model_return(proj_dir, tmp_path):
 def test_guard_gear_ratio_typed_into_model_py_is_a_model_literal(proj_dir, tmp_path):
     geared(proj_dir, tmp_path, swap(_MESH, '"gear_ratio"', "3"))
     assert "model-literal" in errors(proj_dir)
+
+
+# COMPAct's Table I row for its single-stage gearbox: sun, planet and ring teeth, module, planets.
+TABLE_I = "SSPG [25, 65, 155, 0.5, 3]"
+_TEETH = {"z_sun": 25, "z_planet": 65, "z_ring": 155}
+
+
+def counted_gear(root: Path, tmp_path: Path, row: str = TABLE_I, values=_TEETH) -> dict:
+    """The geared slider-crank with gear_ratio derived from the counts row states, ledgered as T1:
+    z_planet / (z_ring - z_sun), 65 / (155 - 25) = 0.5 as Table I states them; report.json."""
+    geared(root, tmp_path)
+    table = tmp_path / "table.txt"
+    table.write_text(f"Table I. Gear trains\n{row}\n")
+    register = ["source", str(root), str(table), "--id", "table", "--kind", "paper"]
+    assert cli.main([*register, "--citation", "Singh 2025"]) == 0
+    item = {"id": "T1", "source": "table", "locator": "Table I", "quote": row, "values": values}
+    _append("evidence.yaml", "evidence", item)(root, tmp_path)
+    for name in _TEETH:
+        _param(name, basis="source", **{"from": f"T1.{name}"})(root, tmp_path)
+    drop = {"value": None, "rationale": None, "gap": None}
+    _param("gear_ratio", basis="derived", expr="z_planet / (z_ring - z_sun)", **drop)(
+        root, tmp_path
+    )
+    return verify(root)[1]
+
+
+def test_guard_gear_ratio_derived_from_counts_in_a_table_cell_reads_them_as_numbers(
+    proj_dir, tmp_path
+):
+    report = counted_gear(proj_dir, tmp_path)
+    assert [f for f in report["findings"] if f["level"] == "error"] == []
+    assert {n: report["params"][n]["value"] for n in (*_TEETH, "gear_ratio")} == {
+        **_TEETH,
+        "gear_ratio": 0.5,
+    }
+    assert _by_id(report)["tips"]["ok"]
+
+
+def test_gear_ratio_derived_from_a_count_printed_in_a_unit_of_another_quantity_is_unit_quantity(
+    proj_dir, tmp_path
+):
+    row = "The sun has 25 g, the planet 65 teeth and the ring 155 teeth"
+    report = counted_gear(proj_dir, tmp_path, row)
+    assert [f["message"] for f in report["findings"] if f["rule"] == "unit-quantity"] == [
+        "T1.z_sun is printed in g, a unit of mass, where a count or a length is expected "
+        "(param z_sun in gear mesh's ratio)"
+    ]
+
+
+def test_gear_ratio_derived_from_a_count_that_is_not_whole_is_unit_quantity(proj_dir, tmp_path):
+    row = "The sun has 25.5 teeth, the planet 65 teeth and the ring 155 teeth"
+    report = counted_gear(proj_dir, tmp_path, row, _TEETH | {"z_sun": 25.5})
+    assert [f["message"] for f in report["findings"] if f["rule"] == "unit-quantity"] == [
+        "param z_sun = 25.5 is not a whole number, where a count is expected (in gear mesh's ratio)"
+    ]
+
+
+def test_guard_gear_ratio_derived_from_lengths_is_no_unit_quantity(proj_dir, tmp_path):
+    row = "Its pulleys are 25.5 mm, 65 mm and 155 mm across"
+    report = counted_gear(proj_dir, tmp_path, row, _TEETH | {"z_sun": 25.5})
+    rules = {f["rule"] for f in report["findings"]}
+    assert "unit-quantity" not in rules
+
+
+def test_guard_model_py_reading_a_count_is_no_unit_quantity(proj_dir, tmp_path):
+    add_quote(proj_dir, tmp_path, "The link has 4 teeth.", "4 teeth", {"z": 4})
+    add_params(proj_dir, teeth={"basis": "source", "from": "N1.z"})
+    write(
+        proj_dir, "model.py", swap(MODEL, "    link = Box(", "    teeth = p.teeth\n    link = Box(")
+    )
+    assert findings(proj_dir, "unit-quantity") == []
 
 
 # A cable wound on a wheel closes the joints it names toward their closed pose, in proportion to the

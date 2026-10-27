@@ -109,6 +109,7 @@ UNITS: dict[str, Unit] = {
     "h": Unit("time", 3600.0, (r"h", r"hrs?", r"hours?")),
     "%": Unit("fraction", 1e-2, (r"%", r"percent")),
     "turns": Unit("count", 1.0, (r"turns?",)),
+    "teeth": Unit("count", 1.0, (r"teeth", r"tooth")),
     "mAh": Unit("charge", 3.6, (r"mah",)),
 }
 
