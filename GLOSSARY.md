@@ -81,7 +81,7 @@ How one instance moves relative to another: revolute (turning about an axis thro
 _Avoid_: pivot (for the joint itself; a pivot is its datum), prismatic, weld, DOF
 
 **Gear**:
-A coupling of two joints, so one moves in step with the other: of one type at a stated ratio (meshed gears, a belt), or a revolute joint and a slide at a stated lead (a lead screw, a rack and pinion).
+A coupling of two joints, so one moves in step with the other: of one type at a stated ratio (meshed gears, a belt), or a revolute joint and a slide at a stated lead (a lead screw, a rack and pinion). A planetary train with one member fixed is a chain of gears: sun to carrier, and carrier to each planet.
 _Avoid_: transmission, mimic joint, screw joint
 
 **Lead**:
