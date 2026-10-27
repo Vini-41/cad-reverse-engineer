@@ -24,9 +24,11 @@ def check(
     failing: dict[str, str] | None = None,
     bodies: dict[str, str] | None = None,
     args: list[str] | None = None,
+    uv_run: str = "exit 0",
+    env: dict[str, str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], list]:
-    """Run the copied check; each stub in failing prints its text and exits 1, and each in bodies
-    runs its shell body instead."""
+    """Run the copied check; each stub in failing prints its text and exits 1, each in bodies
+    runs its shell body instead, and uv runs uv_run for any command but sync."""
     root = tmp_path / "repo"
     (root / "skills/cad-reverse-engineer/tool").mkdir(parents=True)
     (root / "scripts").mkdir()
@@ -39,13 +41,13 @@ def check(
         f"scripts/{name}": f"printf '{text}'; exit 1" for name, text in (failing or {}).items()
     }
     stubs |= {f"scripts/{name}": body for name, body in (bodies or {}).items()}
-    stubs |= {"../bin/uv": f'[ "$1" = sync ] && exit {uv_sync_code}; exit 0'}
+    stubs |= {"../bin/uv": f'[ "$1" = sync ] && exit {uv_sync_code}; {uv_run}'}
     for name, body in stubs.items():
         path = root / name
         path.write_text(f'#!/bin/sh\necho "{path.name} $*" >>"{log}"\n{body}\n')
         path.chmod(0o755)
     subprocess.run(["git", "init", "-q", str(root)], check=True)
-    env = {**os.environ, "PATH": f"{bin_}:/usr/bin:/bin"}
+    env = {**os.environ, "PATH": f"{bin_}:/usr/bin:/bin", **(env or {})}
     result = subprocess.run(
         ["bash", str(root / "scripts/check"), *(args or [])],
         capture_output=True,
@@ -177,3 +179,52 @@ def test_nightly_checks_only_the_examples_marked_nightly(tmp_path):
         "committed-examples ",
         f"uv run cadrev check {copy}/beta",
     ]
+
+
+# A cadrev check that takes two seconds and prints the status every example's README expects.
+SLOW_CHECK = '[ "$2" = cadrev ] && { sleep 2; echo "VERIFIED. Report: build/report.md"; }; exit 0'
+
+
+def test_an_example_checked_on_every_push_slower_than_the_budget_fails_naming_the_nightly_line(
+    tmp_path,
+):
+    result, _ = check(
+        tmp_path,
+        bodies=examples_copy(tmp_path, nightly=()),
+        uv_run=SLOW_CHECK,
+        env={"EXAMPLE_SECONDS": "1"},
+    )
+    assert result.returncode == 1
+    assert "failed: examples/alpha reaches its documented status" in result.stdout
+    assert "examples/alpha took 2 s, over the 1 s an example checked on every push may take" in (
+        result.stdout
+    )
+    assert "Checked: nightly" in result.stdout
+
+
+def test_guard_an_example_within_the_budget_passes(tmp_path):
+    result, _ = check(
+        tmp_path,
+        bodies=examples_copy(tmp_path, nightly=()),
+        uv_run=SLOW_CHECK,
+        env={"EXAMPLE_SECONDS": "60"},
+    )
+    assert result.returncode == 0
+
+
+def test_guard_an_example_checked_nightly_is_held_to_no_budget(tmp_path):
+    result, _ = check(
+        tmp_path,
+        bodies=examples_copy(tmp_path, nightly=("alpha", "beta")),
+        uv_run=SLOW_CHECK,
+        env={"EXAMPLE_SECONDS": "1"},
+        args=["--nightly"],
+    )
+    assert result.returncode == 0
+
+
+def test_an_edit_to_the_script_while_it_runs_takes_effect_only_on_the_next_run(tmp_path):
+    # A step empties scripts/check partway through; the run still reaches its summary.
+    emptied = ': > "$(dirname "$0")/check"; exit 0'
+    result, _ = check(tmp_path, bodies={"check-glossary-words": emptied})
+    assert result.stdout.splitlines()[-1] == "all steps passed"

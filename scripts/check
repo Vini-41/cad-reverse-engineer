@@ -7,10 +7,15 @@
 #   scripts/check --nightly   # only the examples whose README says `Checked: nightly`
 #
 # An example too slow for every push says `Checked: nightly` in its README: the plain check leaves
-# it out, naming it, and .github/workflows/nightly.yml checks it with --nightly.
+# it out, naming it, and .github/workflows/nightly.yml checks it with --nightly. An example checked
+# on every push fails past EXAMPLE_SECONDS (default 150, about the slowest CI runner's time for
+# examples/legclaw with room to spare).
 #
 # The plugin manifests are validated only where the `claude` CLI is installed; CI installs it.
 set -uo pipefail
+# Bash reads a script as it runs it; inside these braces it parses the whole file first, so an edit
+# made while the check runs takes effect on the next run.
+{
 
 case "${1-}" in
   "") mode=full ;;
@@ -47,15 +52,23 @@ step() {
   [ "${PIPESTATUS[0]}" -eq 0 ] || { failed+=("$name"); failed_logs+=("$log"); failed_reruns+=("$rerun"); }
 }
 
-# Fails unless cadrev check on example prints the status line its README states.
+# Fails unless cadrev check on example prints the status line its README states, and, for an
+# example checked on every push, within EXAMPLE_SECONDS.
 example_status() {
-  local example=$1 expected log code=0
+  local example=$1 expected log code=0 start took budget=${EXAMPLE_SECONDS:-150}
   expected=$(sed -n 's/^Expected status: `\(.*\)`$/\1/p' "$example/README.md")
   [ -n "$expected" ] || { echo "$example/README.md states no expected status"; return 1; }
   log=$(mktemp)
+  start=$SECONDS
   uv run cadrev check "$example" | tee "$log"
+  took=$((SECONDS - start))
   grep -qF "$expected. Report:" "$log" || { echo "expected: $expected"; code=1; }
   rm -f "$log"
+  echo "examples/$(basename "$example") took $took s"
+  if [ "$mode" = full ] && [ "$took" -gt "$budget" ]; then
+    echo "examples/$(basename "$example") took $took s, over the $budget s an example checked on every push may take: make it faster, or say \`Checked: nightly\` in its README, on the line after its status"
+    code=1
+  fi
   return "$code"
 }
 
@@ -157,3 +170,5 @@ fi
 echo "all steps passed"
 report_red_count
 report_left_out
+exit
+}
