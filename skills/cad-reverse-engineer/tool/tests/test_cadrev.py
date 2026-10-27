@@ -15,7 +15,17 @@ from pathlib import Path
 
 import pytest
 import yaml
-from build123d import Axis, Box, Compound, Cylinder, Location, Pos, chamfer, export_step
+from build123d import (
+    Axis,
+    Box,
+    Compound,
+    Cylinder,
+    Location,
+    Pos,
+    chamfer,
+    export_step,
+    export_stl,
+)
 
 from cadrev import cli
 
@@ -8103,7 +8113,7 @@ def test_distance_and_angle_probes_compare_the_datums_declared_on_the_body(
     [
         ({"source": "paper"}, "a probe reads a geometry source, and paper is not one"),
         ({"body": "link_step#2"}, "link_step#2 is not a body of link_step"),
-        ({"probe": "volume"}, "probe must be bbox, distance, angle, not 'volume'"),
+        ({"probe": "volume"}, "probe must be bbox, distance, angle, diameter, not 'volume'"),
         ({"axes": {"L": "y", "W": "x"}}, "H names no axis x, y or z in axes"),
         (
             _PITCH_PROBE | {"between": ["link_step.a", "link_step.d"], "values": {"v": 30}},
@@ -8216,6 +8226,91 @@ def test_file_of_several_bodies_names_each_by_its_place_in_the_file(proj_dir, tm
     assert _shape_result(report)["ok"] and (code, report["status"]) == (0, "VERIFIED")
 
 
+def _two_bodies(root: Path, tmp_path: Path) -> None:
+    """The link, then a 4 mm cube beside it, released as link_step#1 and link_step#2, with the
+    link's datums declared on link_step#1."""
+    both = Compound(children=[link_body(), Pos(0, 20, 0) * Box(4, 4, 4)])
+    released(root, tmp_path, body=both, at=Location(), check=False)
+    first = {f"link_step#1.{k}": list(v) for k, v in LINK_DATUMS.items()}
+    edit(root, "evidence.yaml", lambda d: d.update(datums=first))
+
+
+def test_guard_probe_of_a_body_past_the_last_in_its_file_is_evidence_anchor(proj_dir, tmp_path):
+    _two_bodies(proj_dir, tmp_path)
+    past = PROBE | {"body": "link_step#3", "axes": {"s": "x"}, "values": {"s": 4}}
+    edit(proj_dir, "evidence.yaml", lambda d: d["evidence"].append(past))
+    anchors = [
+        f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "evidence-anchor"
+    ]
+    assert anchors == [
+        "P-link: link_step#3 is not a body of link_step; its bodies are link_step#1, link_step#2"
+    ]
+
+
+def test_guard_coverage_over_several_bodies_names_each_neither_compared_nor_skipped(
+    proj_dir, tmp_path
+):
+    _two_bodies(proj_dir, tmp_path)
+    found = _coverage(verify(proj_dir)[1])
+    assert found == [
+        f"link_step body link_step#{n}: no shape check compares it and no skip sets it aside"
+        for n in (1, 2)
+    ]
+    pairs = [[f"link.{k}", f"link_step#1.{k}"] for k in LINK_DATUMS]
+    shape = {"id": "shape", "kind": "shape", "part": "link", "body": "link_step#1", "pairs": pairs}
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].append(shape))
+    assert _coverage(verify(proj_dir)[1]) == [found[1]]
+
+
+def test_guard_probe_restating_a_quote_is_context_and_the_quote_stays_in_scope(proj_dir, tmp_path):
+    probed(proj_dir, tmp_path)  # context, restates T1-link
+    code, report = verify(proj_dir)
+    assert report["params"]["link_L"]["value"] == 40
+    assert report["params"]["link_L"]["rests_on"] == "source"
+    assert [q["ok"] for q in report["probes"]] == [True] * 3
+    assert "evidence-unused" not in [f["rule"] for f in report["findings"]]
+    assert (code, report["status"]) == (0, "VERIFIED")
+    edit(proj_dir, "evidence.yaml", lambda d: d["evidence"][-1].pop("reason"))
+    assert "evidence-scope" in errors(proj_dir)
+
+
+def _pitch_in_conflict(root: Path, tmp_path: Path, resolution: str | None = None) -> dict:
+    """The link released with its holes 32 mm apart, the paper's 30 mm pitch, and a probe of the
+    file's 32 set beside it as a conflict, open unless resolution is given."""
+    released(root, tmp_path, body=link_body(pitch=32), at=Location(), check=False)
+    wide = {"link_step.a": [-16, 0, 0], "link_step.b": [16, 0, 0]}
+    probe = PROBE | _PITCH_PROBE | {"id": "P-pitch", "values": {"v": 32}}
+    probe |= {"reason": "differs from pitch, see C1"}
+    skip = {"source": "link_step", "body": "link_step", "reason": "probed only"}
+    conflict = {"id": "C1", "evidence": ["pitch", "P-pitch"], "summary": "pitch 30 or 32"}
+    if resolution:
+        conflict["resolution"] = resolution
+    edit(
+        root,
+        "evidence.yaml",
+        lambda d: (
+            d.update(datums=wide),
+            d["evidence"].append({k: v for k, v in probe.items() if v is not None}),
+            d["skipped"].append(skip),
+            d["conflicts"].append(conflict),
+        ),
+    )
+    return verify(root)[1]
+
+
+def test_guard_probe_differing_from_a_quote_is_a_conflict_open_as_a_warning(proj_dir, tmp_path):
+    report = _pitch_in_conflict(proj_dir, tmp_path)
+    assert [q["ok"] for q in report["probes"]] == [True]
+    found = [(f["level"], f["rule"]) for f in report["findings"]]
+    assert ("warning", "conflict-open") in found
+    assert [f for f in report["findings"] if f["level"] == "error"] == []
+
+
+def test_guard_probe_conflict_with_a_resolution_raises_no_conflict_open(proj_dir, tmp_path):
+    report = _pitch_in_conflict(proj_dir, tmp_path, resolution="the paper's 30 is the pitch built")
+    assert "conflict-open" not in [f["rule"] for f in report["findings"]]
+
+
 def test_probe_recording_no_values_is_evidence_values_whatever_its_scope(proj_dir, tmp_path):
     probed(proj_dir, tmp_path, values=None)
     assert "evidence-values" in errors(proj_dir)
@@ -8297,6 +8392,82 @@ def test_diameter_check_whose_datum_lies_where_two_cylindrical_faces_meet_is_che
     ]
 
 
+# A diameter probe of the released link's hole a, whose diameter the paper does not state: datum
+# wall on the hole's face, top on the link's flat top face, both where RELEASED_AT puts them.
+HOLE_PROBE = {
+    "id": "P-hole",
+    "source": "link_step",
+    "locator": "the released link, hole a",
+    "probe": "diameter",
+    "at": "link_step.wall",
+    "values": {"d": 3},
+}
+
+
+def hole_probed(root: Path, tmp_path: Path, **entry) -> None:
+    """The link released and its hole a probed by HOLE_PROBE with entry's changes, hole_d taking
+    the probe's value."""
+    released(root, tmp_path)
+    wall, top = placed_at(RELEASED_AT, (-13.5, 0, 0)), placed_at(RELEASED_AT, (0, 0, 4))
+    edit(
+        root,
+        "evidence.yaml",
+        lambda d: (
+            d["datums"].update({"link_step.wall": wall, "link_step.top": top}),
+            d["evidence"].append({k: v for k, v in (HOLE_PROBE | entry).items() if v is not None}),
+        ),
+    )
+    hole_d = {"basis": "source", "from": "P-hole.d"}
+    edit(root, "params.yaml", lambda d: d["params"].update(hole_d=hole_d))
+
+
+@pytest.mark.parametrize("recorded, mismatched", [(3, False), (3.1, True)])
+def test_diameter_probe_compares_the_cylindrical_face_its_datum_lies_on(
+    proj_dir, tmp_path, recorded, mismatched
+):
+    hole_probed(proj_dir, tmp_path, values={"d": recorded})
+    code, report = verify(proj_dir)
+    assert [(q["probe"], q["value"]) for q in report["probes"]] == [("diameter", pytest.approx(3))]
+    assert _mismatches(report) == (
+        ["probe P-hole.d: evaluates to 3 on body link_step, but records 3.1 (tolerance 0.001)"]
+        if mismatched
+        else []
+    )
+    assert "evidence-anchor" not in [f["rule"] for f in report["findings"]]
+    assert (code == 0) != mismatched
+
+
+def test_probe_of_a_value_no_quote_states_is_in_scope(proj_dir, tmp_path):
+    hole_probed(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert report["params"]["hole_d"]["rests_on"] == "source"
+    assert (code, report["status"]) == (0, "VERIFIED")
+    # hole_d proposed again: the probe's in-scope value is then unused.
+    proposed = {"basis": "proposed", "value": 3, "rationale": "M3 pin", "gap": "G1"}
+    edit(proj_dir, "params.yaml", lambda d: d["params"].update(hole_d=proposed))
+    unused = [
+        f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "evidence-unused"
+    ]
+    assert [m.split(" ")[0] for m in unused] == ["P-hole.d"]
+
+
+@pytest.mark.parametrize(
+    "at, why",
+    [
+        ("link_step.top", "link_step.top lies on no cylindrical face of body link_step"),
+        ("link_step.d", "link_step.d is not a datum declared on body link_step"),
+        (None, "a diameter probe names the datum it is taken at in at"),
+    ],
+    ids=["flat face", "unknown datum", "no at"],
+)
+def test_diameter_probe_that_cannot_be_evaluated_is_evidence_anchor(proj_dir, tmp_path, at, why):
+    hole_probed(proj_dir, tmp_path, at=at)
+    anchors = [
+        f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "evidence-anchor"
+    ]
+    assert anchors == [f"P-hole: {why}"]
+
+
 @pytest.mark.parametrize("at", ["link.nowhere", "rotor.wall"])
 def test_diameter_check_at_no_datum_of_a_part_is_check_config(proj_dir, tmp_path, at):
     diameter_checked(proj_dir, tmp_path, at=at)
@@ -8305,3 +8476,71 @@ def test_diameter_check_at_no_datum_of_a_part_is_check_config(proj_dir, tmp_path
     assert [f["message"] for f in report["findings"] if f["rule"] == "check-config"] == [
         f"check bore: {at} is not a datum of a part"
     ]
+
+
+# An STL: the released link as a mesh of flat triangles, which a probe reads as it reads a STEP.
+
+
+def released_stl(root: Path, tmp_path: Path, body=None, skipped=True) -> Path:
+    """Register body (the link by default), placed at RELEASED_AT, as the STL link_stl, and with
+    skipped set its one body aside so coverage holds without a shape check. Returns the STL."""
+    path = tmp_path / "link.stl"
+    export_stl((link_body() if body is None else body).moved(RELEASED_AT), str(path))
+    register = ["source", str(root), str(path), "--id", "link_stl", "--kind", "geometry"]
+    assert cli.main([*register, "--citation", "Doe 2026, link.stl"]) == 0
+    if skipped:
+        skip = {"source": "link_stl", "body": "link_stl", "reason": "the link, probed only"}
+        edit(root, "evidence.yaml", lambda d: d["skipped"].append(skip))
+    return path
+
+
+@pytest.mark.parametrize("recorded, mismatched", [(40, False), (40.002, True)])
+def test_released_stl_is_probed_like_a_step(proj_dir, tmp_path, recorded, mismatched):
+    released_stl(proj_dir, tmp_path)
+    probe = PROBE | {"source": "link_stl", "values": {"L": recorded, "W": 5, "H": 8}}
+    edit(proj_dir, "evidence.yaml", lambda d: d["evidence"].append(probe))
+    code, report = verify(proj_dir)
+    assert [(q["body"], q["ok"]) for q in report["probes"] if q["key"] == "L"] == [
+        ("link_stl", not mismatched)
+    ]
+    assert "source-unreadable" not in [f["rule"] for f in report["findings"]]
+    assert bool(_mismatches(report)) == mismatched and (code == 0) != mismatched
+
+
+def test_stl_of_several_bodies_names_each_by_its_place_in_the_file(proj_dir, tmp_path):
+    # A 4 mm cube, then the link: link_stl#1 and link_stl#2.
+    both = Compound(children=[Pos(0, 40, 0) * Box(4, 4, 4), link_body()])
+    released_stl(proj_dir, tmp_path, body=both, skipped=False)
+    cube = PROBE | {"id": "P-cube", "body": "link_stl#1", "axes": {"s": "z"}, "values": {"s": 4}}
+    link = PROBE | {"body": "link_stl#2"}
+    entries = [entry | {"source": "link_stl"} for entry in (cube, link)]
+    skips = [{"source": "link_stl", "body": f"link_stl#{n}", "reason": "probed"} for n in (1, 2)]
+    edit(
+        proj_dir,
+        "evidence.yaml",
+        lambda d: (d["evidence"].extend(entries), d["skipped"].extend(skips)),
+    )
+    code, report = verify(proj_dir)
+    assert [(q["body"], q["ok"]) for q in report["probes"]] == [("link_stl#1", True)] + [
+        ("link_stl#2", True)
+    ] * 3
+    assert (code, report["status"]) == (0, "VERIFIED")
+
+
+@pytest.mark.parametrize(
+    "content, why",
+    [("not an STL\n", "the file holds no triangle"), (None, "the mesh does not close into solids")],
+    ids=["text", "open mesh"],
+)
+def test_stl_that_holds_no_closed_mesh_is_source_unreadable(proj_dir, tmp_path, content, why):
+    stl = released_stl(proj_dir, tmp_path, skipped=False)
+    stl = proj_dir / "sources" / stl.name
+    if content is None:
+        export_stl(Box(4, 4, 4).faces()[0], str(stl))
+    else:
+        stl.write_text(content)
+    edit(proj_dir, "project.yaml", lambda d: d["sources"][1].update(sha256=sha256(stl)))
+    found = [
+        f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "source-unreadable"
+    ]
+    assert len(found) == 1 and why in found[0]

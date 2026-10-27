@@ -4,6 +4,7 @@ and the distances and angles between datums."""
 
 from __future__ import annotations
 
+import importlib
 import math
 import re
 from functools import cache
@@ -11,31 +12,63 @@ from pathlib import Path
 
 from . import sources
 
-# The file formats a geometry source is read from.
-GEOMETRY_FORMATS = {".step", ".stp"}
 # How finely a shape check samples each face (an n × n grid of its parameters) and each edge.
 SAMPLES = 8
 # How finely off_solid samples each edge of a cylindrical face to find the face's axial extent.
 _EDGE_SAMPLES = 16
+# How far apart, in millimetres, two triangle corners of an STL may be and still be sewn as one.
+_SEWING_TOL = 1e-6
+
+
+def _step_solids(path: Path) -> list:
+    """The solids of the STEP at path, in file order, in millimetres."""
+    from build123d import import_step
+
+    return import_step(str(path)).solids()
+
+
+def _stl_solids(path: Path) -> list:
+    """The solids of the STL at path, in file order, in millimetres: its triangles sewn into
+    closed shells, each one solid of flat faces. Raises where the file holds no triangle, or a
+    shell does not close."""
+    from build123d import Shell, Solid
+    from build123d.topology import Shape
+
+    # OCP's modules re-export a compiled module whose names pyright cannot see, so they are
+    # looked up at run time.
+    ocp = {name: importlib.import_module(f"OCP.{name}") for name in ("BRepBuilderAPI", "StlAPI")}
+    mesh = importlib.import_module("OCP.TopoDS").TopoDS_Shape()
+    if not ocp["StlAPI"].StlAPI_Reader().Read(mesh, str(path)) or mesh.IsNull():
+        raise ValueError("the file holds no triangle")
+    sewing = ocp["BRepBuilderAPI"].BRepBuilderAPI_Sewing(_SEWING_TOL)
+    sewing.Add(mesh)
+    sewing.Perform()
+    sewn = Shape.cast(sewing.SewedShape())
+    shells = [sewn] if isinstance(sewn, Shell) else list(sewn.shells())
+    if not shells or not all(s.is_manifold for s in shells):
+        raise ValueError("the mesh does not close into solids")
+    return [Solid(s) for s in shells]
+
+
+# The file formats a geometry source is read from, each with its reader.
+GEOMETRY_FORMATS = {".step": _step_solids, ".stp": _step_solids, ".stl": _stl_solids}
 
 
 @cache
 def _solids(path: Path, digest: str, scale: float) -> tuple:
-    """The solids of the STEP at path, in file order, scaled from millimetres, which the reader
-    gives, to the project's length unit; digest keys the cache to the file's content."""
-    from build123d import import_step
-
+    """The solids of the geometry file at path, in file order, scaled from millimetres, which
+    the readers give, to the project's length unit; digest keys the cache to the file's content."""
     del digest
-    solids = import_step(str(path)).solids()
+    solids = GEOMETRY_FORMATS[path.suffix.lower()](path)
     return tuple(s if scale == 1 else s.scale(scale) for s in solids)
 
 
 def solids(path: Path, scale: float) -> tuple:
     """The solids of the geometry source at path, in file order, in the project's length unit
-    (scale project units to a millimetre). Raises when the file cannot be read as STEP."""
+    (scale project units to a millimetre). Raises when the file cannot be read as STEP or STL."""
     if path.suffix.lower() not in GEOMETRY_FORMATS:
         raise ValueError(
-            f"a geometry source is read as STEP ({', '.join(sorted(GEOMETRY_FORMATS))})"
+            f"a geometry source is read as STEP or STL ({', '.join(sorted(GEOMETRY_FORMATS))})"
         )
     found = _solids(path.resolve(), sources.sha256(path), scale)
     if not found:
@@ -93,6 +126,18 @@ def diameters_at(shape, point: tuple[float, float, float], tol: float) -> list[f
             if all(abs(diameter - d) > tol for d in found):
                 found.append(diameter)
     return sorted(found)
+
+
+def diameter_at(shape, point: tuple[float, float, float], tol: float) -> float | str:
+    """The diameter of the one cylindrical face of shape that point lies on within tol
+    (diameters_at), else where point lies instead: on no cylindrical face, or on the edge of
+    several."""
+    found = diameters_at(shape, point, tol)
+    if len(found) == 1:
+        return found[0]
+    if not found:
+        return "no cylindrical face"
+    return "the edge of cylindrical faces of diameters " + " and ".join(f"{d:.4g}" for d in found)
 
 
 def datum_distance(a, b, along: str | None = None) -> float:

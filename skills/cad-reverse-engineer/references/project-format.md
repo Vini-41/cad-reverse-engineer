@@ -75,7 +75,7 @@ A source's `kind` outside the list above is `[source-kind]`, and an empty `citat
 
 Text formats (quote-checked and swept): PDF, DOCX, TXT, MD, HTML. An HTML source is read as its rendered text, scripts and styles dropped. A text source whose file cannot be read as text is `[source-unreadable]`. Save a web datasheet as HTML or TXT to make it quotable. Video and image files are sources for image evidence only.
 
-Geometry the authors released is `kind: geometry`: a STEP file (.step, .stp), read in the project's length unit; one that cannot be read as STEP is `[source-unreadable]`. Where a part ships as both STEP and STL, register the STEP. Its ledger entries are [probes](#probes-released-geometry), and coverage runs over its bodies. A body is the source's id where the file holds one solid, else `<source>#<n>`, the nth solid in file order from 1.
+Geometry the authors released is `kind: geometry`: a STEP (.step, .stp) or STL (.stl) file, read in millimetres and converted to the project's length unit; one that cannot be read as either, or an STL whose triangles do not close into solids, is `[source-unreadable]`. Where a part ships as both STEP and STL, register the STEP: an STL holds only flat triangles, so on its bodies a datum lies on a face rather than on a hole's axis, and a diameter probe finds no cylindrical face. Its ledger entries are [probes](#probes-released-geometry), and coverage runs over its bodies. A body is the source's id where the file holds one solid, else `<source>#<n>`, the nth solid in file order from 1.
 
 ## evidence.yaml
 
@@ -122,17 +122,20 @@ evidence:
      between: [rotor_step.hub_top, rotor_step.hub_bottom], values: {h: 20}}
   - {id: R-env, source: lid_step, body: "lid_step#2", locator: "lid, envelope", probe: bbox,
      axes: {D: x, H: z}, values: {D: 130, H: 4}}
+  - {id: R-bore, source: rotor_step, locator: "rotor, hub bore", probe: diameter,
+     at: rotor_step.bore_wall, values: {d: 32.5}}
 datums:                        # on released bodies: <body>.<feature>: [x, y, z] in the file's frame
   rotor_step.hub_top: [0, 0, 20]
   rotor_step.hub_bottom: [0, 0, 0]
   rotor_step.rim: [65, 0, 10]
+  rotor_step.bore_wall: [16.25, 0, 10]
 ```
 
-- `probe` is `bbox` (with `axes`, one per value), `distance` (two datums in `between`, `along` optional) or `angle` (three, the angle at the middle one, in degrees), read as the check of that kind reads the built model, on the body. `body` names a body of its `source`, and may be left out where the file holds one solid.
+- `probe` is `bbox` (with `axes`, one per value), `distance` (two datums in `between`, `along` optional) `angle` (three, the angle at the middle one, in degrees) or `diameter` (of the cylindrical face the datum `at` lies on), each recording one value except `bbox`, read as the check of that kind reads the built model, on the body. `body` names a body of its `source`, and may be left out where the file holds one solid.
 - Datums on a released body need no basis: each lies on its body's solid within `tolerance.length`, as a built part's does, else `[datum-off-solid]`, as is one naming no body. Name each `<body>.<feature>`.
-- cadrev evaluates every probe from its file on every run, `--no-build` included. A recorded value farther than `tolerance.length` (`tolerance.angle` for an angle) from what the body gives, or than the probe's own `tol`, is `[probe-mismatch]`, naming the probe, the evaluated value and the recorded one. `tol` is capped as a check's is (`[tolerance-cap]`). A probe that cannot be evaluated (a source that is not geometry, an unknown body, datum or axis) is `[evidence-anchor]`.
+- cadrev evaluates every probe from its file on every run, `--no-build` included. A recorded value farther than `tolerance.length` (`tolerance.angle` for an angle) from what the body gives, or than the probe's own `tol`, is `[probe-mismatch]`, naming the probe, the evaluated value and the recorded one. `tol` is capped as a check's is (`[tolerance-cap]`). A probe that cannot be evaluated (a source that is not geometry, an unknown body, datum or axis, a diameter's datum on no cylindrical face or on the edge of two) is `[evidence-anchor]`.
 - A probe needs no confirmation and never holds the project at VERIFIED PENDING REVIEW. A param takes its value with `from:` and basis `source`, like a quote's.
-- A probe that restates a quote is `context` (`restates T1-hub`), and the quote stays in scope; one that differs from a quote is a [conflict](#conflicts).
+- A probe that restates a quote is `context` (`restates T1-hub`), and the quote stays in scope; one that differs from a quote is a [conflict](#conflicts). A probe of a value no quote states is in scope, its value used by a param or compared by a check like a quote's.
 
 ### `skipped`: stated quantities that are not about the object
 

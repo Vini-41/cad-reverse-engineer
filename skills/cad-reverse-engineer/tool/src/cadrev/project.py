@@ -613,10 +613,32 @@ def _probe_angle(p: Project, e: dict, body: str) -> dict[str, float] | str:
     return {key: angle}
 
 
+def _probe_diameter(p: Project, e: dict, body: str) -> dict[str, float] | str:
+    """The diameter of the cylindrical face of body that diameter probe e's datum at lies on."""
+    values = e.get("values") or {}
+    if "at" not in e:
+        return "a diameter probe names the datum it is taken at in at"
+    if len(values) != 1:
+        return f"a diameter probe records one value, not {len(values)}"
+    at, named = str(e["at"]), p.released_datum(str(e["at"]))
+    if named is None or named[0] != body:
+        return f"{at} is not a datum declared on body {body}"
+    found = released.diameter_at(p.bodies[body], named[1], p.length_tol)
+    if isinstance(found, str):
+        return f"{at} lies on {found} of body {body}"
+    (key,) = values
+    return {key: found}
+
+
 # The kinds of check a probe reads a released body as, each with what it evaluates there: each
 # value key's value in the project's units (an angle in degrees), or why it cannot be evaluated.
 # Each is compared in its CHECK_KINDS quantity.
-PROBE_KINDS = {"bbox": _probe_bbox, "distance": _probe_distance, "angle": _probe_angle}
+PROBE_KINDS = {
+    "bbox": _probe_bbox,
+    "distance": _probe_distance,
+    "angle": _probe_angle,
+    "diameter": _probe_diameter,
+}
 
 
 def check_probe(p: Project, e: dict) -> None:

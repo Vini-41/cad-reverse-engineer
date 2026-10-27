@@ -69,6 +69,7 @@ EVIDENCE = Record(
         "axes": Table(str),
         "between": Items(str),
         "along": str,
+        "at": str,
         "tol": NUMBER,
     },
     required=("id",),

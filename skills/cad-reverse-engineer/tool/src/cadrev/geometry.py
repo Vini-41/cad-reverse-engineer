@@ -1449,22 +1449,16 @@ def _diameter(p: Project, built: Built, c: dict, reading: _Reading) -> list[Chec
     if part is None or at not in built.datums:
         p.error("check-config", f"check {cid}: {at} is not a datum of a part")
         return []
-    found = released.diameters_at(built.parts[part], built.datums[at], p.length_tol)
-    if len(found) != 1:
-        where = (
-            "no cylindrical face"
-            if not found
-            else "the edge of cylindrical faces of diameters "
-            + " and ".join(f"{d:.4g}" for d in found)
-        )
+    found = released.diameter_at(built.parts[part], built.datums[at], p.length_tol)
+    if isinstance(found, str):
         p.error(
             "check-config",
-            f"check {cid}: {at} lies on {where} of part {part}; place it on the face whose "
+            f"check {cid}: {at} lies on {found} of part {part}; place it on the face whose "
             "diameter the check compares",
         )
         return []
     ref = f"{c['evidence']}.{c['key']}"
-    return [_compared(p, c, cid, ref, found[0], f" at {at}")]
+    return [_compared(p, c, cid, ref, found, f" at {at}")]
 
 
 def _shape(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckResult]:
