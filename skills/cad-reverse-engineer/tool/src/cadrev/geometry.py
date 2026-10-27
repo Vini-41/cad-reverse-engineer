@@ -72,8 +72,9 @@ class CheckResult:
     pairs: int | None = None
     # The joint values a posed check was evaluated at: joint -> {from, value}; None when unposed.
     pose: dict | None = None
-    # A stroke check's from pose, in the same form, which its stroke is taken from; None when
-    # taken from as built.
+    # The from pose a stroke, distance or angle check's change is taken from, in the same form:
+    # {} where it names as built; None for a check with no from (a stroke's then taken from as
+    # built).
     from_pose: dict | None = None
     # A swept interference check's joint, the range params it is swept between, their values and
     # how many poses it evaluated; None for a check not swept.
@@ -148,8 +149,9 @@ class Poser(Protocol):
 
 
 def pose_text(pose: dict) -> str:
-    """A pose as findings and report.md name it: `input at 60 (turn_60)`."""
-    return ", ".join(f"{j} at {s['value']:g} ({s['from']})" for j, s in pose.items())
+    """A pose as findings and report.md name it: `input at 60 (turn_60)`, or `as built` where it
+    sets no joint."""
+    return ", ".join(f"{j} at {s['value']:g} ({s['from']})" for j, s in pose.items()) or "as built"
 
 
 DRIVES = ("actuated", "passive")
@@ -1355,13 +1357,6 @@ def _stroke(
         if not built.dropped:  # else that finding says the cables were dropped
             p.error("check-config", f"check {cid}: {name} is not a cable")
         return []
-    start, start_pose = built, None
-    if c.get("from"):
-        posed = _placed_for(p, built, c, poser, at="from")
-        if posed is None:
-            return []
-        start, start_pose = posed
-        reading.at(start)
     if pose is None:
         if "wheel" not in cable:
             p.error(
@@ -1377,7 +1372,10 @@ def _stroke(
             return []
         placed, pose = posed
         reading.at(placed)
-    shortening = cable_length(start, cable) - cable_length(placed, cable)
+    changed = _change(p, built, c, poser, reading, placed, lambda at: -cable_length(at, cable))
+    if changed is None:
+        return []
+    shortening, start_pose = changed
     shown = f" shortening of {name}"
     if "claim" in c:
         result = _claimed(p, c, cid, shortening, shown)
@@ -1385,6 +1383,36 @@ def _stroke(
         result = _compared(p, c, cid, f"{c['evidence']}.{c['key']}", shortening, shown)
     result.pose, result.from_pose = pose, start_pose
     return [result]
+
+
+def _change(
+    p: Project,
+    built: Built,
+    c: dict,
+    poser: Poser | None,
+    reading: _Reading,
+    placed: Built,
+    measure: Callable[[Built], float | None],
+) -> tuple[float, dict | None] | None:
+    """How much what measure evaluates changes from check c's from pose to placed, reading what the
+    model gives the from pose, with that pose as report.json shows it: {} where from names no joint,
+    and the change is then taken from as built, as it is for a stroke check with no from (None).
+    None after a finding: a from pose that cannot be placed, or one measure raises at either pose.
+    The one code path a change between two poses is taken by, for every kind CheckKind.changes
+    names."""
+    after = measure(placed)
+    if after is None:
+        return None
+    posed = _placed_for(p, built, c, poser, at="from")
+    if posed is None:
+        return None
+    start, start_pose = posed
+    if start_pose is None:
+        start_pose = {} if "from" in c else None
+    else:
+        reading.at(start)
+    before = measure(start)
+    return None if before is None else (after - before, start_pose)
 
 
 def _claimed(p: Project, c: dict, rid: str, change: float, shown: str = "") -> CheckResult:
@@ -1416,27 +1444,92 @@ def _bbox(p: Project, c: dict, placed: Built, reading: _Reading) -> Iterator[Che
         yield _compared(p, c, f"{cid}.{key}", ref, measured, f" along {axis}")
 
 
-def _distance(p: Project, c: dict, placed: Built, reading: _Reading) -> list[CheckResult]:
-    """A distance check: the distance between its two datums."""
-    reading.at(placed)
-    points = _datums(p, placed, c)
-    if points is None:
-        return []
-    measured = _datum_distance(c, points)
-    ref, between = f"{c['evidence']}.{c['key']}", " - ".join(c["between"])
-    return [_compared(p, c, c.get("id", "?"), ref, measured, f" {between}")]
+def _distance(
+    p: Project, built: Built, c: dict, placed: Built, poser: Poser | None, reading: _Reading
+) -> list[CheckResult]:
+    """A distance check: the distance between its two datums, or with from its change between the
+    two poses."""
+
+    def measure(at: Built) -> float | None:
+        points = _datums(p, at, c)
+        return None if points is None else _datum_distance(c, points)
+
+    between = " - ".join(c["between"])
+    shown = (f" {between}", f" change in {between}")
+    return _measured(p, built, c, placed, poser, reading, measure, shown)
 
 
-def _angle(p: Project, c: dict, placed: Built, reading: _Reading) -> list[CheckResult]:
-    """An angle check: the angle at its vertex datum between the other two."""
+def _angle(
+    p: Project, built: Built, c: dict, placed: Built, poser: Poser | None, reading: _Reading
+) -> list[CheckResult]:
+    """An angle check: the angle at its vertex datum between the other two, or with from its
+    change between the two poses."""
+
+    def measure(at: Built) -> float | None:
+        points = _datums(p, at, c)
+        return None if points is None else _datum_angle(p, c, points)
+
+    a, vertex, b = c["between"]
+    at = f"at {vertex} between {a} and {b}"
+    return _measured(p, built, c, placed, poser, reading, measure, (f"° {at}", f"° change {at}"))
+
+
+def _measured(
+    p: Project,
+    built: Built,
+    c: dict,
+    placed: Built,
+    poser: Poser | None,
+    reading: _Reading,
+    measure: Callable[[Built], float | None],
+    shown: tuple[str, str],
+) -> list[CheckResult]:
+    """Check c's result: what measure evaluates at placed, or with from its change between the two
+    poses, compared with its ledger value and shown after it as the first of shown, or the second
+    for a change; no result after a finding."""
     reading.at(placed)
-    points = _datums(p, placed, c)
-    measured = None if points is None else _datum_angle(p, c, points)
-    if measured is None:
+    start_pose = None
+    if "from" in c:
+        changed = _change(p, built, c, poser, reading, placed, measure)
+        if changed is None:
+            return []
+        measured, start_pose = changed
+    else:
+        measured = measure(placed)
+        if measured is None:
+            return []
+    ref = f"{c['evidence']}.{c['key']}"
+    result = _compared(p, c, c.get("id", "?"), ref, measured, shown["from" in c])
+    result.from_pose = start_pose
+    return [result]
+
+
+def _diameter(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckResult]:
+    """A diameter check: the diameter of the cylindrical face its datum at lies on, in its part's
+    frame. No result, after a [check-config] finding, where at is no part's datum or lies on no
+    cylindrical face, or on the edge of two of different diameters."""
+    reading.at(built)
+    cid, at = c.get("id", "?"), str(c["at"])
+    part = _owner(built, at)
+    if part is None or at not in built.datums:
+        p.error("check-config", f"check {cid}: {at} is not a datum of a part")
         return []
-    ref, (a, vertex, b) = f"{c['evidence']}.{c['key']}", c["between"]
-    shown = f"° at {vertex} between {a} and {b}"
-    return [_compared(p, c, c.get("id", "?"), ref, measured, shown)]
+    found = released.diameters_at(built.parts[part], built.datums[at], p.length_tol)
+    if len(found) != 1:
+        where = (
+            "no cylindrical face"
+            if not found
+            else "the edge of cylindrical faces of diameters "
+            + " and ".join(f"{d:.4g}" for d in found)
+        )
+        p.error(
+            "check-config",
+            f"check {cid}: {at} lies on {where} of part {part}; place it on the face whose "
+            "diameter the check compares",
+        )
+        return []
+    ref = f"{c['evidence']}.{c['key']}"
+    return [_compared(p, c, cid, ref, found[0], f" at {at}")]
 
 
 def _shape(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckResult]:
@@ -1584,9 +1677,11 @@ def run_checks(
         if kind == "bbox":
             evaluation = partial(_bbox, p, c, placed)
         elif kind == "distance":
-            evaluation = partial(_distance, p, c, placed)
+            evaluation = partial(_distance, p, built, c, placed, poser)
         elif kind == "angle":
-            evaluation = partial(_angle, p, c, placed)
+            evaluation = partial(_angle, p, built, c, placed, poser)
+        elif kind == "diameter":
+            evaluation = partial(_diameter, p, built, c)
         elif kind == "mass":
             evaluation = partial(_mass, p, built, c)
         elif kind == "stroke":

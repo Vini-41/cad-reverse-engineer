@@ -3074,6 +3074,10 @@ SWEPT = {
     "5-10 mm": "5-10 mm",
     "six turns": "six turns",
     "three degrees": "three degrees",
+    "Ø 32.5": "ø 32.5",
+    "Ø3": "ø3",
+    "Ø 32.5 mm": "ø 32.5 mm",
+    "⌀3": "⌀3",
 }
 
 
@@ -3141,6 +3145,17 @@ STILL_SWEPT = {
 @pytest.mark.parametrize("form", sorted(STILL_SWEPT))
 def test_guard_coverage_lists_the_near_miss_of_each_look_alike(proj_dir, tmp_path, capsys, form):
     assert swept(proj_dir, tmp_path, capsys, f"The part is {form} here.") == [STILL_SWEPT[form]]
+
+
+@pytest.mark.parametrize("form", ["32.5", "3"])
+def test_guard_coverage_lists_no_number_without_a_diameter_sign_or_unit(
+    proj_dir, tmp_path, capsys, form
+):
+    assert swept(proj_dir, tmp_path, capsys, f"The part is {form} here.") == []
+
+
+def test_guard_coverage_lists_no_diameter_sign_inside_a_word(proj_dir, tmp_path, capsys):
+    assert swept(proj_dir, tmp_path, capsys, "Built at Ørsted 3 and Søborg 2.") == []
 
 
 def test_guard_coverage_lists_no_number_word_without_a_unit(proj_dir, tmp_path, capsys):
@@ -7369,15 +7384,21 @@ def test_claim_check_configured_wrong_is_a_finding_and_not_evaluated(
 
 
 @pytest.mark.parametrize("kind", ["distance", "angle", "bbox"])
-@pytest.mark.parametrize("key", ["claim", "from"])
-def test_claim_or_from_on_a_check_of_another_kind_is_check_config(proj_dir, tmp_path, kind, key):
+def test_guard_claim_on_a_check_of_another_kind_is_check_config(proj_dir, tmp_path, kind):
     cabled(proj_dir, tmp_path)
     _only_posed_at_the_spool(kind)(proj_dir, tmp_path)
-    _check("posed", **{key: {"claim": "shortens", "from": {"spool": "half_turn"}}[key]})(
-        proj_dir, tmp_path
-    )
+    _check("posed", claim="shortens")(proj_dir, tmp_path)
     assert findings(proj_dir, "check-config") == [
-        f"check posed: {key} is for a stroke check; kind {kind} takes none"
+        f"check posed: claim is for a stroke check; kind {kind} takes none"
+    ]
+
+
+def test_from_on_a_bbox_check_is_check_config(proj_dir, tmp_path):
+    cabled(proj_dir, tmp_path)
+    _only_posed_at_the_spool("bbox")(proj_dir, tmp_path)
+    _check("posed", **{"from": {"spool": "half_turn"}})(proj_dir, tmp_path)
+    assert findings(proj_dir, "check-config") == [
+        "check posed: from is for a distance, angle or stroke check; kind bbox takes none"
     ]
 
 
@@ -7472,6 +7493,143 @@ def test_stroke_check_with_a_key_is_taken_from_its_from_pose(proj_dir, tmp_path)
     # From half the turn to the full turn: the full stroke less the half one, not the full stroke.
     assert _shortening(full) == pytest.approx(pull_stroke() - pull_stroke(0.5), abs=1e-3)
     assert full["from_pose"] == {"spool": {"from": "half_turn", "value": 60}}
+
+
+# A distance or angle check may take from, as a stroke check does: it then compares the change
+# between its from pose and its pose with its ledger value, as a slide's travel per screw turn.
+
+
+def slide_travel(root: Path, tmp_path: Path, check: dict | None = None) -> None:
+    """slide_driven with a distance check, travel, of how far the slider moves along x from as
+    built (from: {}) to slide's high end, compared with N1.hi (15); check changes its keys."""
+    slide_driven(root, tmp_path)
+    travel = {
+        "id": "travel",
+        "kind": "distance",
+        "instances": ["ground_1", "slider_1"],
+        "between": ["ground_1.a", "slider_1.a"],
+        "along": "x",
+        "evidence": "N1",
+        "key": "hi",
+        "from": {},
+        "pose": {"slide": "slide_max"},
+    }
+    _append("checks.yaml", "checks", travel | (check or {}))(root, tmp_path)
+
+
+def test_distance_check_with_from_compares_the_travel_between_its_two_poses(proj_dir, tmp_path):
+    slide_travel(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    travel = _by_id(report)["travel"]
+    assert code == 0, report["findings"]
+    assert travel["ok"]
+    # As built the slider pin sits sqrt(35² - 15²) from the crank pivot: the change is 15, not that.
+    assert travel["measured"] == "15 change in ground_1.a - slider_1.a"
+    assert travel["from_pose"] == {}
+    assert travel["pose"] == {"slide": {"from": "slide_max", "value": 15}}
+
+
+def test_distance_check_with_from_fails_where_the_travel_differs_naming_both_poses(
+    proj_dir, tmp_path
+):
+    slide_travel(proj_dir, tmp_path, {"from": {"slide": "slide_min"}})
+    code, report = verify(proj_dir)
+    assert code == 1 and not _by_id(report)["travel"]["ok"]
+    assert _by_id(report)["travel"]["from_pose"] == {"slide": {"from": "slide_min", "value": -10}}
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-failed"] == [
+        "travel: expected 15 (N1.hi), measured 25 change in ground_1.a - slider_1.a "
+        "from slide at -10 (slide_min) to slide at 15 (slide_max)"
+    ]
+
+
+@pytest.mark.parametrize(
+    "start, pose, ok, measured",
+    [
+        ({}, "S30.turn", True, 30),
+        ({"input": "S30.turn"}, "S60.turn", True, 30),
+        ({}, "S60.turn", False, 60),
+    ],
+    ids=["as-built-to-30", "30-to-60", "as-built-to-60"],
+)
+def test_angle_check_with_from_compares_the_change_in_angle_between_its_two_poses(
+    proj_dir, tmp_path, start, pose, ok, measured
+):
+    # The crank stands upright as built, 90° from the ground link; S30 states a 30° turn.
+    slider_crank(proj_dir, tmp_path)
+    turned = {
+        "id": "turned",
+        "kind": "angle",
+        "instances": ["ground_1", "crank_1"],
+        "between": ["ground_1.d", "ground_1.a", "crank_1.d"],
+        "evidence": "S30",
+        "key": "turn",
+        "from": start,
+        "pose": {"input": pose},
+    }
+    _append("checks.yaml", "checks", turned)(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    result = _by_id(report)["turned"]
+    assert result["ok"] is ok
+    assert float(result["measured"].split("°")[0]) == pytest.approx(measured, abs=1e-3)
+    assert result["measured"].endswith("° change at ground_1.a between ground_1.d and crank_1.d")
+
+
+# A from pose naming no joint, or a bare number, on each kind that takes one: the same finding.
+_FROM_FINDINGS = {
+    "unknown-joint": (
+        {"heel": "turn"},
+        "check-config",
+        "check {id}: from names heel, which is not a joint",
+    ),
+    "bare-number": (
+        {"spool": 3},
+        "schema",
+        "checks.yaml checks[{i}].from.spool: must be text, not 3",
+    ),
+}
+
+
+def _from_finding(root: Path, tmp_path: Path, kind: str, case: str) -> tuple[str, str]:
+    """cabled with a check of kind whose from is the case's: stroke check full, or a distance or
+    angle check posed at the spool's full turn; the rule and message it should raise."""
+    cabled(root, tmp_path)
+    if kind != "stroke":
+        _only_posed_at_the_spool(kind)(root, tmp_path)
+    cid = "full" if kind == "stroke" else "posed"
+    start, rule, says = _FROM_FINDINGS[case]
+    _check(cid, **{"from": start})(root, tmp_path)
+    checks = yaml.safe_load((root / "checks.yaml").read_text())["checks"]
+    i = next(n for n, c in enumerate(checks) if c["id"] == cid)
+    return rule, says.format(id=cid, i=i)
+
+
+# The rows of the table each kind raises a finding for only once it takes from; a bare number is
+# [schema] on any check.
+_FROM_TAKEN = [("distance", "unknown-joint"), ("angle", "unknown-joint")]
+
+
+@pytest.mark.parametrize("kind, case", _FROM_TAKEN)
+def test_from_naming_no_joint_on_a_distance_or_angle_check_is_the_finding_it_is_on_stroke(
+    proj_dir, tmp_path, kind, case
+):
+    rule, says = _from_finding(proj_dir, tmp_path, kind, case)
+    assert findings(proj_dir, rule) == [says]
+
+
+@pytest.mark.parametrize(
+    "kind, case",
+    [
+        (kind, case)
+        for kind in ("stroke", "distance", "angle")
+        for case in _FROM_FINDINGS
+        if (kind, case) not in _FROM_TAKEN
+    ],
+)
+def test_guard_from_on_a_stroke_check_or_naming_a_bare_number_is_a_finding(
+    proj_dir, tmp_path, kind, case
+):
+    rule, says = _from_finding(proj_dir, tmp_path, kind, case)
+    assert findings(proj_dir, rule) == [says]
 
 
 # Every rule beside its near miss. scripts/rule-coverage fails CI unless each rule the tool emits is
@@ -8231,6 +8389,92 @@ def test_file_of_several_bodies_names_each_by_its_place_in_the_file(proj_dir, tm
 def test_probe_recording_no_values_is_evidence_values_whatever_its_scope(proj_dir, tmp_path):
     probed(proj_dir, tmp_path, values=None)
     assert "evidence-values" in errors(proj_dir)
+
+
+# A diameter check: the link's hole a stated as a Ø callout, its datum wall on the hole's face and
+# top on the link's flat top face.
+_HOLE_DATUMS = swap(
+    MODEL,
+    '"link.b": (p.pitch / 2, 0, 0)}',
+    '"link.b": (p.pitch / 2, 0, 0), "link.wall": (-p.pitch / 2 + p.hole_d / 2, 0, 0), '
+    '"link.top": (0, 0, p.link_H / 2)}',
+)
+
+
+def diameter_checked(root: Path, tmp_path: Path, at: str = "link.wall", stated: float = 3) -> None:
+    """Ledger the link's hole as the callout "Ø 3" (N1.d, stated) and check it at datum at."""
+    add_quote(root, tmp_path, "The pivot holes are Ø 3 through.", "Ø 3", {"d": stated})
+    write(root, "model.py", _HOLE_DATUMS)
+    check = {"id": "bore", "kind": "diameter", "at": at, "evidence": "N1", "key": "d"}
+    edit(root, "checks.yaml", lambda d: d["checks"].append(check))
+
+
+def _bore(report: dict) -> list[dict]:
+    return [r for r in report["checks"] if r["id"] == "bore"]
+
+
+@pytest.mark.parametrize("stated, ok", [(3, True), (4, False)])
+def test_diameter_check_compares_the_cylindrical_face_its_datum_lies_on(
+    proj_dir, tmp_path, stated, ok
+):
+    diameter_checked(proj_dir, tmp_path, stated=stated)
+    code, report = verify(proj_dir)
+    (result,) = _bore(report)
+    assert result["ok"] == ok and result["measured"].startswith("3 ")
+    assert ("check-failed" in [f["rule"] for f in report["findings"]]) != ok
+    assert (code == 0) == ok
+
+
+def test_diameter_check_whose_datum_lies_on_no_cylindrical_face_is_check_config(proj_dir, tmp_path):
+    diameter_checked(proj_dir, tmp_path, at="link.top")
+    _, report = verify(proj_dir)
+    assert _bore(report) == []
+    assert any(
+        f["rule"] == "check-config" and "link.top lies on no cylindrical face" in f["message"]
+        for f in report["findings"]
+    )
+
+
+def test_guard_diameter_check_whose_datum_lies_on_a_cylindrical_face_raises_no_check_config(
+    proj_dir, tmp_path
+):
+    diameter_checked(proj_dir, tmp_path)
+    assert "check-config" not in rules(proj_dir)
+
+
+def test_diameter_check_whose_datum_lies_where_two_cylindrical_faces_meet_is_check_config(
+    proj_dir, tmp_path
+):
+    # A 1.5 mm cross hole along Y through hole a; link.wall moved onto the edge where its face
+    # meets the 3 mm hole's.
+    diameter_checked(proj_dir, tmp_path)
+    cross = (
+        "    link -= Pos(-p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2 / 2, p.link_W * 2, "
+        "rotation=(90, 0, 0))\n    return {"
+    )
+    edge = (
+        '"link.wall": (-p.pitch / 2 + p.hole_d / 2 / 2, '
+        "math.sqrt((p.hole_d / 2) ** 2 - (p.hole_d / 2 / 2) ** 2), 0)"
+    )
+    model = swap(_HOLE_DATUMS, "    return {", cross, 1)
+    model = swap(model, '"link.wall": (-p.pitch / 2 + p.hole_d / 2, 0, 0)', edge)
+    write(proj_dir, "model.py", "import math\n" + model)
+    _, report = verify(proj_dir)
+    assert _bore(report) == []
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-config"] == [
+        "check bore: link.wall lies on the edge of cylindrical faces of diameters 1.5 and 3 of "
+        "part link; place it on the face whose diameter the check compares"
+    ]
+
+
+@pytest.mark.parametrize("at", ["link.nowhere", "rotor.wall"])
+def test_diameter_check_at_no_datum_of_a_part_is_check_config(proj_dir, tmp_path, at):
+    diameter_checked(proj_dir, tmp_path, at=at)
+    _, report = verify(proj_dir)
+    assert _bore(report) == []
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-config"] == [
+        f"check bore: {at} is not a datum of a part"
+    ]
 
 
 # Cut files (ADR-0011): a laser-cut sheet drawn at half size, declared 600 mm wide over a 300-unit
