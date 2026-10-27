@@ -59,7 +59,8 @@ class CheckKind:
     check without between compares its joint's own value, so quantity and tolerance are its
     joint's: an angle for a revolute joint, a length for a slide. between_two, where set, is the
     quantity and tolerance of a check whose between names two datums rather than three: a
-    distance. claims, where set, lets a check of the kind take a from pose besides its pose, and a
+    distance. changes, where set, lets a check of the kind take a from pose besides its pose, and
+    then compare the change in what it evaluates between the two. claims, where set, lets it take a
     claim (one of CLAIMS) in place of a key: a direction of change between the two poses, passing
     only beyond its tolerance, with no tol of its own (ADR-0010). body_cap, where set, makes it
     compare a built part with a released body (its body), its tol capped at that fraction of the
@@ -72,6 +73,7 @@ class CheckKind:
     span_capped: bool = False
     joint_valued: bool = False
     between_two: str | None = None
+    changes: bool = False
     claims: bool = False
     body_cap: float | None = None
     names: Callable[[dict], list[tuple[str, str]]] | None = None
@@ -86,22 +88,24 @@ JOINT_QUANTITIES = ("angle", "length")
 # interference (OVERLAP_KINDS) compares with neither.
 CHECK_KINDS = {
     "bbox": CheckKind("length", "length"),
-    "distance": CheckKind("length", "length"),
-    "angle": CheckKind("angle", "angle"),
+    # With from, the change between two poses: a slide's travel, a carrier's turn.
+    "distance": CheckKind("length", "length", changes=True),
+    "angle": CheckKind("angle", "angle", changes=True),
     "mass": CheckKind("mass", None, reads=_mass_reads, names=_mass_names),
     # A joint's range: an angle at each end, or a slide's length, compared with a stated end that
     # is often 0.
     # Between two datums, a distance at each end, as a slide that sets a leg's width reaches it.
     "range": CheckKind("angle", "angle", span_capped=True, joint_valued=True, between_two="length"),
     # How far a cable shortens from as built, or a from pose, to a pose.
-    "stroke": CheckKind("length", "length", claims=True),
+    "stroke": CheckKind("length", "length", changes=True, claims=True),
     # A part against its released body: the largest distance between their surfaces, which no
     # ledger value states, its tol capped against the body's size.
     "shape": CheckKind("length", "length", body_cap=0.01),
 }
 # The kinds of check that compare how much instances overlap with an overlap limit.
 OVERLAP_KINDS = ("interference",)
-# The keys of a check that name a pose: a stroke check's from, then the pose it is evaluated at.
+# The keys of a check that name a pose: the from pose a change is taken from (CheckKind.changes),
+# then the pose it is evaluated at.
 POSES = ("from", "pose")
 # What a claim says its quantity does between a check's from pose and its pose: a stroke's
 # shortening is positive or negative.
@@ -999,19 +1003,28 @@ def cited_refs(p: Project, c: dict) -> list[str]:
     return check_refs(c) + [ref for ref in pose_refs(c) if ref not in p.params] + claimed
 
 
+def _kinds_taking(flag: str) -> str:
+    """The check kinds whose CheckKind sets flag, as a finding names them: `distance, angle or
+    stroke`."""
+    names = [name for name, kind in CHECK_KINDS.items() if getattr(kind, flag)]
+    return " or ".join(filter(None, [", ".join(names[:-1]), names[-1]]))
+
+
 def claim_config(p: Project, c: dict) -> list[str]:
-    """Why check c's claim or from pose cannot be evaluated: either on a kind that takes neither
-    (CheckKind.claims), or for one that does, a key and a claim, neither, a claim not in CLAIMS,
-    a tol or tol_rel beside a claim, or a claim citing no evidence item."""
+    """Why check c's claim or from pose cannot be evaluated: a claim on a kind that takes none
+    (CheckKind.claims), or a from pose (CheckKind.changes); or on a kind that takes a claim, a key
+    and a claim, neither, a claim not in CLAIMS, a tol or tol_rel beside a claim, or a claim citing
+    no evidence item."""
     kind = CHECK_KINDS.get(str(c.get("kind")))
     if kind is None:
         return []
-    if not kind.claims:
-        return [
-            f"{key} is for a stroke check; kind {c['kind']} takes none"
-            for key in ("claim", "from")
-            if key in c
-        ]
+    refused = [
+        f"{key} is for a {_kinds_taking(flag)} check; kind {c['kind']} takes none"
+        for key, flag in (("claim", "claims"), ("from", "changes"))
+        if key in c and not getattr(kind, flag)
+    ]
+    if refused or not kind.claims:
+        return refused
     if "claim" not in c:
         return (
             []
