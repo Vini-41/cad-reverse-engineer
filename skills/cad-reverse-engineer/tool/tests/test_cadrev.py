@@ -6842,7 +6842,7 @@ def test_guard_gear_ratio_derived_from_lengths_is_no_unit_quantity(proj_dir, tmp
     assert "unit-quantity" not in rules
 
 
-def test_gear_ratio_derived_from_diameter_callouts_reads_them_as_lengths(proj_dir, tmp_path):
+def test_guard_gear_ratio_derived_from_diameter_callouts_reads_them_as_lengths(proj_dir, tmp_path):
     row = "Its pulleys are Ø 25.5, Ø 65 and Ø 155"
     report = counted_gear(proj_dir, tmp_path, row, _TEETH | {"z_sun": 25.5})
     assert [f["message"] for f in report["findings"] if f["rule"] == "unit-quantity"] == []
@@ -8284,7 +8284,7 @@ def planetary(root: Path, tmp_path: Path, row: str = TABLE_I) -> None:
     write(root, "model.py", PLANETARY)
 
 
-def test_guard_carrier_of_a_planetary_train_turns_360_over_its_stated_ratio_per_sun_turn(
+def test_carrier_of_a_planetary_train_turns_360_over_its_stated_ratio_per_sun_turn(
     proj_dir, tmp_path
 ):
     planetary(proj_dir, tmp_path)
@@ -8302,7 +8302,7 @@ def test_guard_carrier_of_a_planetary_train_turns_360_over_its_stated_ratio_per_
     [(TABLE_I, "z_ring / z_sun"), ("SSPG [25, 65, 157, 0.5, 3]", "z_sun / (z_sun + z_ring)")],
     ids=["ratio-inverted", "ring-count-changed"],
 )
-def test_guard_carrier_turn_of_a_planetary_train_fails_with_a_wrong_ratio_or_a_changed_count(
+def test_carrier_turn_of_a_planetary_train_fails_with_a_wrong_ratio_or_a_changed_count(
     proj_dir, tmp_path, row, ratio
 ):
     planetary(proj_dir, tmp_path, row)
@@ -8331,7 +8331,7 @@ def _planet_turned(root: Path, tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("expr, ok", [("-z_ring / z_planet", True), ("z_ring / z_planet", False)])
-def test_guard_planet_turns_relative_to_its_carrier_at_minus_ring_over_planet_teeth(
+def test_planet_turns_relative_to_its_carrier_at_minus_ring_over_planet_teeth(
     proj_dir, tmp_path, expr, ok
 ):
     planetary(proj_dir, tmp_path)
@@ -8347,7 +8347,7 @@ def test_guard_planet_turns_relative_to_its_carrier_at_minus_ring_over_planet_te
         assert float(planet["measured"].split("°")[0]) == pytest.approx(turned, abs=0.05)
 
 
-def test_guard_tooth_counts_of_a_planetary_train_are_checked_through_its_derived_ratios(
+def test_tooth_counts_of_a_planetary_train_are_checked_through_its_derived_ratios(
     proj_dir, tmp_path
 ):
     planetary(proj_dir, tmp_path)
@@ -8357,7 +8357,7 @@ def test_guard_tooth_counts_of_a_planetary_train_are_checked_through_its_derived
     assert counts <= set(_unchecked(proj_dir))
 
 
-def test_guard_pitch_diameter_and_planet_axis_of_a_planetary_train_match_its_stated_counts(
+def test_pitch_diameter_and_planet_axis_of_a_planetary_train_match_its_stated_counts(
     proj_dir, tmp_path
 ):
     planetary(proj_dir, tmp_path)
@@ -8380,7 +8380,7 @@ def test_guard_pitch_diameter_and_planet_axis_of_a_planetary_train_match_its_sta
     assert expected == (12.5, 22.5)
 
 
-def test_guard_planet_axis_fails_where_the_ring_count_breaks_ring_equals_sun_plus_two_planets(
+def test_planet_axis_fails_where_the_ring_count_breaks_ring_equals_sun_plus_two_planets(
     proj_dir, tmp_path
 ):
     # 157 ≠ 25 + 2 × 65: the planet meshing the ring sits 23 from the sun axis, not 22.5.
@@ -8397,7 +8397,7 @@ def test_guard_planet_axis_fails_where_the_ring_count_breaks_ring_equals_sun_plu
     assert code == 1 and not _by_id(report)["orbit"]["ok"]
 
 
-def test_guard_planetary_train_exports_one_joint_equality_per_gear_in_its_chain(proj_dir, tmp_path):
+def test_planetary_train_exports_one_joint_equality_per_gear_in_its_chain(proj_dir, tmp_path):
     mujoco = importlib.import_module("mujoco")
 
     planetary(proj_dir, tmp_path)
