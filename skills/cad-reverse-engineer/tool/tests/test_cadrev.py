@@ -321,6 +321,29 @@ def test_quote_copied_across_a_hyphenated_line_break_matches(proj_dir, tmp_path,
     assert "quote-not-found" not in rules and "coverage" not in rules
 
 
+def test_quote_matched_across_a_word_the_text_breaks_with_a_space_covers_its_quantity(
+    proj_dir, tmp_path
+):
+    text = "Dashed li ne\nrepresents a baseline length of 25 mm."
+    add_quote(
+        proj_dir, tmp_path, text, "Dashed line represents a baseline length of 25 mm", {"L": 25}
+    )
+    rules = errors(proj_dir)
+    assert "quote-not-found" not in rules and "coverage" not in rules
+
+
+def test_guard_quantity_past_a_quote_matched_ignoring_whitespace_stays_unledgered(
+    proj_dir, tmp_path, capsys
+):
+    text = "Dashed li ne\nrepresents a baseline length of 25 mm and a stroke of 30 mm."
+    add_quote(
+        proj_dir, tmp_path, text, "Dashed line represents a baseline length of 25 mm", {"L": 25}
+    )
+    cli.main(["check", str(proj_dir), "--no-build"])
+    out = capsys.readouterr().out
+    assert "[coverage] notes p1: unledgered stated quantity 30 mm" in out
+
+
 def test_complete_project_verifies(proj_dir):
     assert cli.main(["check", str(proj_dir)]) == 0
     assert (proj_dir / "build" / "parts" / "link.step").exists()

@@ -1,0 +1,212 @@
+# Written by gen_cutfile.py from checks.src.yaml; edit checks.src.yaml, then rerun gen_cutfile.py.
+# Geometry checks. Expected values come from evidence.yaml, never from params.yaml.
+checks:
+  # ---------------------------------------------------------------- clamp (tracer part)
+  - {id: shape-clamp, kind: shape, part: stretch_clamp, body: clamp, tol: 0.03,
+     pairs: [[stretch_clamp.corner_l, clamp.corner_l], [stretch_clamp.corner_r, clamp.corner_r], [stretch_clamp.wall_top, clamp.wall_l], [stretch_clamp.hole_a_w, clamp.hole_a_w]],
+     interpretation: "tol 0.03 covers the STL's facet sag on the r4 lobes and r1.5 holes"}
+  - {id: env-clamp, kind: bbox, part: stretch_clamp, evidence: P-cl-env, axes: {L: x, W: y, H: z}}
+  - {id: clamp-hole, kind: distance, part: stretch_clamp, between: [stretch_clamp.hole_a_w, stretch_clamp.hole_a_e], evidence: P-cl-hole, key: d}
+  - {id: clamp-pitch, kind: distance, part: stretch_clamp, between: [stretch_clamp.hole_a_w, stretch_clamp.hole_b_w], evidence: P-cl-pitch, key: p}
+  - {id: clamp-plate, kind: distance, part: stretch_clamp, between: [stretch_clamp.corner_l, stretch_clamp.top_l], evidence: P-cl-plate, key: t}
+  - {id: clamp-notch-in, kind: distance, part: stretch_clamp, between: [stretch_clamp.inner_l, stretch_clamp.inner_r], evidence: P-cl-nin, key: w}
+  - {id: clamp-wall-out, kind: distance, part: stretch_clamp, between: [stretch_clamp.wall_top, stretch_clamp.wall_r], evidence: P-cl-nout, key: w}
+  - {id: clamp-notch-flat, kind: distance, part: stretch_clamp, between: [stretch_clamp.flat_l, stretch_clamp.flat_r], evidence: P-cl-flat, key: w}
+  # ---------------------------------------------------------------- mould frame (MoldFrame.stl) and mould
+  - {id: shape-moldframe, kind: shape, part: mould_frame, body: moldframe, tol: 0.005,
+     pairs: [[mould_frame.c1, moldframe.c1], [mould_frame.c2, moldframe.c2], [mould_frame.c3, moldframe.c3]],
+     interpretation: "tol 0.005 covers the STL's facet sag on the r5 lobes and r2 holes (0.5 degree facets)"}
+  - {id: env-moldframe, kind: bbox, part: mould_frame, evidence: P-mf-env, axes: {L: x, W: y}}
+  - {id: moldframe-height, kind: bbox, part: mould_frame, evidence: E-frame-h, axes: {h: z}}
+  - {id: moldframe-hole, kind: distance, part: mould_frame, between: [mould_frame.hole_w, mould_frame.hole_e], evidence: P-mf-hole, key: d}
+  - {id: moldframe-hole-pitch, kind: distance, part: mould_frame, between: [mould_frame.hole_w, mould_frame.hole2_e], evidence: P-mf-holep, key: p}
+  - {id: moldframe-window, kind: distance, part: mould_frame, between: [mould_frame.win_w, mould_frame.win_e], evidence: P-mf-win, key: w}
+  - {id: moldframe-lobe-pitch, kind: distance, part: mould_frame, between: [mould_frame.lobe_n1, mould_frame.lobe_n2], evidence: P-mf-lobep, key: p}
+  - {id: moldframe-lobe-span, kind: distance, part: mould_frame, between: [mould_frame.lobe_n1, mould_frame.lobe_s1], evidence: P-mf-lobespan, key: s}
+  - {id: substrate-bottom, kind: distance, instances: [mould_frame_1, platform_1], between: [mould_frame_1.top, platform_1.top_c], along: z, evidence: E-frame-h, key: bottom,
+     interpretation: "the substrate's floor: frame top above the raised platform's top, base to frame assembled for casting"}
+  - {id: mould-base-thickness, kind: bbox, part: mould_base, evidence: E-base, axes: {t: z}}
+  - {id: mould-posts, kind: count, part: straw_post, evidence: E-base, key: n_posts}
+  - {id: straw-diameter, kind: diameter, part: straw_post, at: straw_post.wall, evidence: E-straw, key: d}
+  - {id: platform-side, kind: distance, part: platform, between: [platform.edge_w, platform.edge_e], expect: "sqrt(E-area.a)",
+     interpretation: "the 4 cm2 culture area as a 20 mm square platform"}
+  # ---------------------------------------------------------------- stretcher, static
+  - {id: plate-thickness, kind: bbox, part: stat_bar, evidence: E-t6, axes: {t: z}}
+  - {id: env-profile-short, kind: bbox, part: profile_short, evidence: E-prof-short, axes: {L: x, w: y, h: z}}
+  - {id: env-profile-long, kind: bbox, part: profile_long, evidence: E-prof-long, axes: {w: x, L: y, h: z}}
+  - {id: profiles-short, kind: count, part: profile_short, evidence: E-prof-short, key: n}
+  - {id: profiles-long, kind: count, part: profile_long, evidence: E-prof-long, key: n}
+  - {id: motors, kind: count, part: stepper_motor, evidence: E-motors, key: n}
+  - {id: lead-screws, kind: count, part: lead_screw, evidence: E-actuators, key: n}
+  - {id: wells-wide-frames, kind: count, part: frame_wide, evidence: E-six, key: n, interpretation: "one wide stretch-holding frame per substrate"}
+  - {id: foot-height, kind: bbox, part: rubber_foot, evidence: E-feet, axes: {h: z}}
+  - {id: baseline, kind: distance, instances: [mount_stat_1, mount_mob_1], between: [mount_stat_1.post_a, mount_mob_1.post_b], along: y, evidence: E-baseline, key: L,
+     interpretation: "the substrate's post holes, stationary to mobile mounting, at zero stretch"}
+  # ---------------------------------------------------------------- motion
+  - {id: travel-per-turn-l, kind: distance, instances: [profile_long_1, carriage_back], between: [profile_long_1.end_a, carriage_back.brg_l], along: y,
+     evidence: E-lead, key: lead, from: {}, pose: {motor_l: one_turn},
+     interpretation: "one turn of the left motor and screw moves the carriage one lead along the rods"}
+  - {id: travel-per-turn-r, kind: distance, instances: [profile_long_1, carriage_back], between: [profile_long_1.end_a, carriage_back.brg_l], along: y,
+     evidence: E-lead, key: lead, from: {}, pose: {motor_r: one_turn},
+     interpretation: "one turn of the right motor and screw moves the carriage one lead along the rods"}
+  - {id: travel-speed-r, kind: distance, instances: [profile_long_1, carriage_back], between: [profile_long_1.end_a, carriage_back.brg_l], along: y,
+     expect: "E-vmax.v * 360 / E-rpm.rpm", from: {}, pose: {motor_r: one_turn},
+     interpretation: "the right screw's lead worked out from the stated top speed and motor speed: 133.33 mm/s at 1000 rpm is 8 mm per turn"}
+  - {id: substrate-stretch, kind: stroke, cable: substrate_1, from: {carriage: E-frames.hi}, pose: {carriage: E-frames.lo}, evidence: E-frames, key: hi,
+     interpretation: "a substrate between stationary and mobile posts lengthens by the carriage travel: 5 mm stretch from 0"}
+  - {id: carriage-range, kind: range, joint: carriage, ends: [E-T2.a],
+     interpretation: "the carriage's travel from zero stretch is Table 2's largest tested amplitude, 25 mm; the rail travel itself is not stated"}
+  - {id: carriage-clear, kind: interference, sweep: {joint: carriage, steps: sweep_steps},
+     pairs: [[carriage_front, end_motor_in_1], [carriage_front, switch_plate_1], [carriage_front, rod_flange_motor_1], [carriage_flange_1, stat_bar_1],
+             [carriage_flange_1, profile_short_motor], [mount_mob_1, mount_stat_1], [clamp_mob_1, clamp_stat_1], [carriage_back, guide_rod_1], [carriage_back, screw_l]]}
+  # cut-file shape checks (gen_cutfile.py)
+  - {id: shape-end_far_in-1, kind: shape, part: end_far_in, body: "acryl6mm@19.78,532.27", along: z, tol: 0.05,
+     pairs: [[end_far_in.m3_l, acryl6mm.end_far_in_1_m3_l], [end_far_in.screw_l, acryl6mm.end_far_in_1_screw_l], [end_far_in.rod_l, acryl6mm.end_far_in_1_rod_l]]}
+  - {id: shape-end_far_out-1, kind: shape, part: end_far_out, body: "acryl6mm@19.78,460.47", along: z, tol: 0.05,
+     pairs: [[end_far_out.m3_l, acryl6mm.end_far_out_1_m3_l], [end_far_out.m3_r, acryl6mm.end_far_out_1_m3_r], [end_far_out.m6_l, acryl6mm.end_far_out_1_m6_l]]}
+  - {id: shape-end_motor_in-1, kind: shape, part: end_motor_in, body: "acryl6mm@14.98,316.59", along: z, tol: 1.2,
+     pairs: [[end_motor_in.rod_l, acryl6mm.end_motor_in_1_rod_l], [end_motor_in.rod_r, acryl6mm.end_motor_in_1_rod_r], [end_motor_in.m3_l, acryl6mm.end_motor_in_1_m3_l]]}
+  - {id: shape-end_motor_out-1, kind: shape, part: end_motor_out, body: "acryl6mm@14.98,388.47", along: z, tol: 0.3,
+     pairs: [[end_motor_out.m3_l, acryl6mm.end_motor_out_1_m3_l], [end_motor_out.m3_r, acryl6mm.end_motor_out_1_m3_r], [end_motor_out.m5_l, acryl6mm.end_motor_out_1_m5_l]]}
+  - {id: shape-carriage_top-1, kind: shape, part: carriage_top, body: "acryl6mm@19.78,133.17", along: z, tol: 0.05,
+     pairs: [[carriage_top.p1, acryl6mm.carriage_top_1_p1], [carriage_top.p2, acryl6mm.carriage_top_1_p2], [carriage_top.p3, acryl6mm.carriage_top_1_p3]]}
+  - {id: shape-carriage_face-1, kind: shape, part: carriage_face, body: "acryl6mm@29.53,226.22", along: z, tol: 0.05,
+     pairs: [[carriage_face.brg_l, acryl6mm.carriage_face_1_brg_l], [carriage_face.nut_r, acryl6mm.carriage_face_1_nut_r], [carriage_face.mid, acryl6mm.carriage_face_1_mid]]}
+  - {id: shape-carriage_face-2, kind: shape, part: carriage_face, body: "acryl6mm@29.53,179.22", along: z, tol: 0.05,
+     pairs: [[carriage_face.brg_l, acryl6mm.carriage_face_2_brg_l], [carriage_face.nut_r, acryl6mm.carriage_face_2_nut_r], [carriage_face.mid, acryl6mm.carriage_face_2_mid]]}
+  - {id: shape-carriage_flange-1, kind: shape, part: carriage_flange, body: "acryl6mm@12.68,58.67", along: z, tol: 0.05,
+     pairs: [[carriage_flange.h1, acryl6mm.carriage_flange_1_h1], [carriage_flange.h12, acryl6mm.carriage_flange_1_h12], [carriage_flange.p_mid, acryl6mm.carriage_flange_1_p_mid]]}
+  - {id: shape-carriage_partition-1, kind: shape, part: carriage_partition, body: "acryl6mm@351.41,366.54", along: z, tol: 0.05,
+     pairs: [[carriage_partition.p1, acryl6mm.carriage_partition_1_p1], [carriage_partition.p2, acryl6mm.carriage_partition_1_p2], [carriage_partition.p3, acryl6mm.carriage_partition_1_p3]]}
+  - {id: shape-carriage_partition-2, kind: shape, part: carriage_partition, body: "acryl6mm@302.87,366.54", along: z, tol: 0.05,
+     pairs: [[carriage_partition.p1, acryl6mm.carriage_partition_2_p1], [carriage_partition.p2, acryl6mm.carriage_partition_2_p2], [carriage_partition.p3, acryl6mm.carriage_partition_2_p3]]}
+  - {id: shape-carriage_end-1, kind: shape, part: carriage_end, body: "acryl6mm@351.41,415.24", along: z, tol: 0.05,
+     pairs: [[carriage_end.p1, acryl6mm.carriage_end_1_p1], [carriage_end.p2, acryl6mm.carriage_end_1_p2], [carriage_end.p3, acryl6mm.carriage_end_1_p3]]}
+  - {id: shape-carriage_end-2, kind: shape, part: carriage_end, body: "acryl6mm@302.87,415.24", along: z, tol: 0.05,
+     pairs: [[carriage_end.p1, acryl6mm.carriage_end_2_p1], [carriage_end.p2, acryl6mm.carriage_end_2_p2], [carriage_end.p3, acryl6mm.carriage_end_2_p3]]}
+  - {id: shape-stat_bar-1, kind: shape, part: stat_bar, body: "acryl6mm@19.5,272.92", along: z, tol: 0.05,
+     pairs: [[stat_bar.m4_1, acryl6mm.stat_bar_1_m4_1], [stat_bar.m5_a, acryl6mm.stat_bar_1_m5_a], [stat_bar.m5_b, acryl6mm.stat_bar_1_m5_b]]}
+  - {id: shape-mount_plate-1, kind: shape, part: mount_plate, body: "acryl6mm@430.2,475.44", along: z, tol: 0.05,
+     pairs: [[mount_plate.post_a, acryl6mm.mount_plate_1_post_a], [mount_plate.post_b, acryl6mm.mount_plate_1_post_b], [mount_plate.m4_a, acryl6mm.mount_plate_1_m4_a]]}
+  - {id: shape-mount_plate-2, kind: shape, part: mount_plate, body: "acryl6mm@501.24,475.44", along: z, tol: 0.05,
+     pairs: [[mount_plate.post_a, acryl6mm.mount_plate_2_post_a], [mount_plate.post_b, acryl6mm.mount_plate_2_post_b], [mount_plate.m4_a, acryl6mm.mount_plate_2_m4_a]]}
+  - {id: shape-mount_plate-3, kind: shape, part: mount_plate, body: "acryl6mm@465.84,475.44", along: z, tol: 0.05,
+     pairs: [[mount_plate.post_a, acryl6mm.mount_plate_3_post_a], [mount_plate.post_b, acryl6mm.mount_plate_3_post_b], [mount_plate.m4_a, acryl6mm.mount_plate_3_m4_a]]}
+  - {id: shape-mount_plate-4, kind: shape, part: mount_plate, body: "acryl6mm@394.8,475.44", along: z, tol: 0.05,
+     pairs: [[mount_plate.post_a, acryl6mm.mount_plate_4_post_a], [mount_plate.post_b, acryl6mm.mount_plate_4_post_b], [mount_plate.m4_a, acryl6mm.mount_plate_4_m4_a]]}
+  - {id: shape-mount_plate-5, kind: shape, part: mount_plate, body: "acryl6mm@465.84,558.46", along: z, tol: 0.05,
+     pairs: [[mount_plate.post_a, acryl6mm.mount_plate_5_post_a], [mount_plate.post_b, acryl6mm.mount_plate_5_post_b], [mount_plate.m4_a, acryl6mm.mount_plate_5_m4_a]]}
+  - {id: shape-mount_plate-6, kind: shape, part: mount_plate, body: "acryl6mm@394.8,558.46", along: z, tol: 0.05,
+     pairs: [[mount_plate.post_a, acryl6mm.mount_plate_6_post_a], [mount_plate.post_b, acryl6mm.mount_plate_6_post_b], [mount_plate.m4_a, acryl6mm.mount_plate_6_m4_a]]}
+  - {id: shape-mount_plate-7, kind: shape, part: mount_plate, body: "acryl6mm@430.2,558.46", along: z, tol: 0.05,
+     pairs: [[mount_plate.post_a, acryl6mm.mount_plate_7_post_a], [mount_plate.post_b, acryl6mm.mount_plate_7_post_b], [mount_plate.m4_a, acryl6mm.mount_plate_7_m4_a]]}
+  - {id: shape-mount_plate-8, kind: shape, part: mount_plate, body: "acryl6mm@501.24,558.46", along: z, tol: 0.05,
+     pairs: [[mount_plate.post_a, acryl6mm.mount_plate_8_post_a], [mount_plate.post_b, acryl6mm.mount_plate_8_post_b], [mount_plate.m4_a, acryl6mm.mount_plate_8_m4_a]]}
+  - {id: shape-mount_plate-9, kind: shape, part: mount_plate, body: "acryl6mm@465.84,517.35", along: z, tol: 0.05,
+     pairs: [[mount_plate.post_a, acryl6mm.mount_plate_9_post_a], [mount_plate.post_b, acryl6mm.mount_plate_9_post_b], [mount_plate.m4_a, acryl6mm.mount_plate_9_m4_a]]}
+  - {id: shape-mount_plate-10, kind: shape, part: mount_plate, body: "acryl6mm@394.8,517.35", along: z, tol: 0.05,
+     pairs: [[mount_plate.post_a, acryl6mm.mount_plate_10_post_a], [mount_plate.post_b, acryl6mm.mount_plate_10_post_b], [mount_plate.m4_a, acryl6mm.mount_plate_10_m4_a]]}
+  - {id: shape-mount_plate-11, kind: shape, part: mount_plate, body: "acryl6mm@430.2,517.35", along: z, tol: 0.05,
+     pairs: [[mount_plate.post_a, acryl6mm.mount_plate_11_post_a], [mount_plate.post_b, acryl6mm.mount_plate_11_post_b], [mount_plate.m4_a, acryl6mm.mount_plate_11_m4_a]]}
+  - {id: shape-mount_plate-12, kind: shape, part: mount_plate, body: "acryl6mm@501.24,517.35", along: z, tol: 0.05,
+     pairs: [[mount_plate.post_a, acryl6mm.mount_plate_12_post_a], [mount_plate.post_b, acryl6mm.mount_plate_12_post_b], [mount_plate.m4_a, acryl6mm.mount_plate_12_m4_a]]}
+  - {id: shape-frame_wide-1, kind: shape, part: frame_wide, body: "acryl6mm@466.09,237.98", along: z, tol: 0.5,
+     pairs: [[frame_wide.s1, acryl6mm.frame_wide_1_s1], [frame_wide.s2, acryl6mm.frame_wide_1_s2], [frame_wide.s3, acryl6mm.frame_wide_1_s3]]}
+  - {id: shape-frame_wide-2, kind: shape, part: frame_wide, body: "acryl6mm@466.09,378.02", along: z, tol: 0.5,
+     pairs: [[frame_wide.s1, acryl6mm.frame_wide_2_s1], [frame_wide.s2, acryl6mm.frame_wide_2_s2], [frame_wide.s3, acryl6mm.frame_wide_2_s3]]}
+  - {id: shape-frame_wide-3, kind: shape, part: frame_wide, body: "acryl6mm@466.09,190.4", along: z, tol: 0.5,
+     pairs: [[frame_wide.s1, acryl6mm.frame_wide_3_s1], [frame_wide.s2, acryl6mm.frame_wide_3_s2], [frame_wide.s3, acryl6mm.frame_wide_3_s3]]}
+  - {id: shape-frame_wide-4, kind: shape, part: frame_wide, body: "acryl6mm@466.09,425.06", along: z, tol: 0.5,
+     pairs: [[frame_wide.s1, acryl6mm.frame_wide_4_s1], [frame_wide.s2, acryl6mm.frame_wide_4_s2], [frame_wide.s3, acryl6mm.frame_wide_4_s3]]}
+  - {id: shape-frame_wide-5, kind: shape, part: frame_wide, body: "acryl6mm@466.09,285.01", along: z, tol: 0.5,
+     pairs: [[frame_wide.s1, acryl6mm.frame_wide_5_s1], [frame_wide.s2, acryl6mm.frame_wide_5_s2], [frame_wide.s3, acryl6mm.frame_wide_5_s3]]}
+  - {id: shape-frame_wide-6, kind: shape, part: frame_wide, body: "acryl6mm@466.09,330.45", along: z, tol: 0.5,
+     pairs: [[frame_wide.s1, acryl6mm.frame_wide_6_s1], [frame_wide.s2, acryl6mm.frame_wide_6_s2], [frame_wide.s3, acryl6mm.frame_wide_6_s3]]}
+  - {id: shape-frame_narrow-1, kind: shape, part: frame_narrow, body: "acryl6mm@397.69,190.26", along: z, tol: 0.5,
+     pairs: [[frame_narrow.s1, acryl6mm.frame_narrow_1_s1], [frame_narrow.s2, acryl6mm.frame_narrow_1_s2], [frame_narrow.s3, acryl6mm.frame_narrow_1_s3]]}
+  - {id: shape-frame_narrow-2, kind: shape, part: frame_narrow, body: "acryl6mm@397.69,284.88", along: z, tol: 0.5,
+     pairs: [[frame_narrow.s1, acryl6mm.frame_narrow_2_s1], [frame_narrow.s2, acryl6mm.frame_narrow_2_s2], [frame_narrow.s3, acryl6mm.frame_narrow_2_s3]]}
+  - {id: shape-frame_narrow-3, kind: shape, part: frame_narrow, body: "acryl6mm@397.69,330.31", along: z, tol: 0.5,
+     pairs: [[frame_narrow.s1, acryl6mm.frame_narrow_3_s1], [frame_narrow.s2, acryl6mm.frame_narrow_3_s2], [frame_narrow.s3, acryl6mm.frame_narrow_3_s3]]}
+  - {id: shape-frame_narrow-4, kind: shape, part: frame_narrow, body: "acryl6mm@397.69,424.92", along: z, tol: 0.5,
+     pairs: [[frame_narrow.s1, acryl6mm.frame_narrow_4_s1], [frame_narrow.s2, acryl6mm.frame_narrow_4_s2], [frame_narrow.s3, acryl6mm.frame_narrow_4_s3]]}
+  - {id: shape-frame_narrow-5, kind: shape, part: frame_narrow, body: "acryl6mm@397.69,237.84", along: z, tol: 0.5,
+     pairs: [[frame_narrow.s1, acryl6mm.frame_narrow_5_s1], [frame_narrow.s2, acryl6mm.frame_narrow_5_s2], [frame_narrow.s3, acryl6mm.frame_narrow_5_s3]]}
+  - {id: shape-frame_narrow-6, kind: shape, part: frame_narrow, body: "acryl6mm@397.69,377.89", along: z, tol: 0.5,
+     pairs: [[frame_narrow.s1, acryl6mm.frame_narrow_6_s1], [frame_narrow.s2, acryl6mm.frame_narrow_6_s2], [frame_narrow.s3, acryl6mm.frame_narrow_6_s3]]}
+  - {id: shape-corner_plate-1, kind: shape, part: corner_plate, body: "acryl6mm@398.55,145.36", along: z, tol: 0.05,
+     pairs: [[corner_plate.a, acryl6mm.corner_plate_1_a], [corner_plate.b, acryl6mm.corner_plate_1_b], [corner_plate.c, acryl6mm.corner_plate_1_c]]}
+  - {id: shape-corner_plate-2, kind: shape, part: corner_plate, body: "acryl6mm@478.98,145.36", along: z, tol: 0.05,
+     pairs: [[corner_plate.a, acryl6mm.corner_plate_2_a], [corner_plate.b, acryl6mm.corner_plate_2_b], [corner_plate.c, acryl6mm.corner_plate_2_c]]}
+  - {id: shape-corner_plate-3, kind: shape, part: corner_plate, body: "acryl6mm@398.55,104.86", along: z, tol: 0.05,
+     pairs: [[corner_plate.a, acryl6mm.corner_plate_3_a], [corner_plate.b, acryl6mm.corner_plate_3_b], [corner_plate.c, acryl6mm.corner_plate_3_c]]}
+  - {id: shape-corner_plate-4, kind: shape, part: corner_plate, body: "acryl6mm@478.98,104.86", along: z, tol: 0.05,
+     pairs: [[corner_plate.a, acryl6mm.corner_plate_4_a], [corner_plate.b, acryl6mm.corner_plate_4_b], [corner_plate.c, acryl6mm.corner_plate_4_c]]}
+  - {id: shape-switch_plate-1, kind: shape, part: switch_plate, body: "acryl6mm@547.86,189.38", along: z, tol: 0.05,
+     pairs: [[switch_plate.sw_a, acryl6mm.switch_plate_1_sw_a], [switch_plate.m5_a, acryl6mm.switch_plate_1_m5_a], [switch_plate.m5_d, acryl6mm.switch_plate_1_m5_d]]}
+  - {id: shape-rod_flange-1, kind: shape, part: rod_flange, body: "acryl6mm@356.83,339.62", along: z, tol: 0.05,
+     pairs: [[rod_flange.c, acryl6mm.rod_flange_1_c], [rod_flange.a, acryl6mm.rod_flange_1_a], [rod_flange.top_pt, acryl6mm.rod_flange_1_top_pt]]}
+  - {id: shape-rod_flange-2, kind: shape, part: rod_flange, body: "acryl6mm@356.83,316.47", along: z, tol: 0.05,
+     pairs: [[rod_flange.c, acryl6mm.rod_flange_2_c], [rod_flange.a, acryl6mm.rod_flange_2_a], [rod_flange.top_pt, acryl6mm.rod_flange_2_top_pt]]}
+  - {id: shape-rod_flange-3, kind: shape, part: rod_flange, body: "acryl6mm@316.19,339.62", along: z, tol: 0.05,
+     pairs: [[rod_flange.c, acryl6mm.rod_flange_3_c], [rod_flange.a, acryl6mm.rod_flange_3_a], [rod_flange.top_pt, acryl6mm.rod_flange_3_top_pt]]}
+  - {id: shape-rod_flange-4, kind: shape, part: rod_flange, body: "acryl6mm@316.19,316.47", along: z, tol: 0.05,
+     pairs: [[rod_flange.c, acryl6mm.rod_flange_4_c], [rod_flange.a, acryl6mm.rod_flange_4_a], [rod_flange.top_pt, acryl6mm.rod_flange_4_top_pt]]}
+  - {id: shape-motor_face-1, kind: shape, part: motor_face, body: "acryl6mm@544.02,362.76", along: z, tol: 0.05,
+     pairs: [[motor_face.c, acryl6mm.motor_face_1_c], [motor_face.h1, acryl6mm.motor_face_1_h1], [motor_face.h2, acryl6mm.motor_face_1_h2]]}
+  - {id: shape-motor_face-2, kind: shape, part: motor_face, body: "acryl6mm@544.02,418.63", along: z, tol: 0.05,
+     pairs: [[motor_face.c, acryl6mm.motor_face_2_c], [motor_face.h1, acryl6mm.motor_face_2_h1], [motor_face.h2, acryl6mm.motor_face_2_h2]]}
+  - {id: shape-motor_base-1, kind: shape, part: motor_base, body: "acryl6mm@550.59,306.53", along: z, tol: 0.05,
+     pairs: [[motor_base.h1, acryl6mm.motor_base_1_h1], [motor_base.h2, acryl6mm.motor_base_1_h2], [motor_base.h3, acryl6mm.motor_base_1_h3]]}
+  - {id: shape-motor_base-2, kind: shape, part: motor_base, body: "acryl6mm@550.59,250.65", along: z, tol: 0.05,
+     pairs: [[motor_base.h1, acryl6mm.motor_base_2_h1], [motor_base.h2, acryl6mm.motor_base_2_h2], [motor_base.h3, acryl6mm.motor_base_2_h3]]}
+  - {id: shape-motor_gusset-1, kind: shape, part: motor_gusset, body: "acryl6mm@547.12,539.97", along: z, tol: 0.05,
+     pairs: [[motor_gusset.a, acryl6mm.motor_gusset_1_a], [motor_gusset.b, acryl6mm.motor_gusset_1_b], [motor_gusset.c, acryl6mm.motor_gusset_1_c]]}
+  - {id: shape-motor_gusset-2, kind: shape, part: motor_gusset, body: "acryl6mm@547.12,477.7", along: z, tol: 0.05,
+     pairs: [[motor_gusset.a, acryl6mm.motor_gusset_2_a], [motor_gusset.b, acryl6mm.motor_gusset_2_b], [motor_gusset.c, acryl6mm.motor_gusset_2_c]]}
+  - {id: shape-motor_gusset-3, kind: shape, part: motor_gusset, body: "acryl6mm@544.59,546.75", along: z, tol: 0.05,
+     pairs: [[motor_gusset.a, acryl6mm.motor_gusset_3_a], [motor_gusset.b, acryl6mm.motor_gusset_3_b], [motor_gusset.c, acryl6mm.motor_gusset_3_c]]}
+  - {id: shape-motor_gusset-4, kind: shape, part: motor_gusset, body: "acryl6mm@544.59,484.49", along: z, tol: 0.05,
+     pairs: [[motor_gusset.a, acryl6mm.motor_gusset_4_a], [motor_gusset.b, acryl6mm.motor_gusset_4_b], [motor_gusset.c, acryl6mm.motor_gusset_4_c]]}
+  - {id: shape-mould_base-1, kind: shape, part: mould_base, body: "acryl3mm@7.5,547.5", along: z, tol: 0.05,
+     pairs: [[mould_base.post_1, acryl3mm.mould_base_1_post_1], [mould_base.post_2, acryl3mm.mould_base_1_post_2], [mould_base.post_3, acryl3mm.mould_base_1_post_3]]}
+  - {id: shape-mould_base-2, kind: shape, part: mould_base, body: "acryl3mm@172.5,547.5", along: z, tol: 0.05,
+     pairs: [[mould_base.post_1, acryl3mm.mould_base_2_post_1], [mould_base.post_2, acryl3mm.mould_base_2_post_2], [mould_base.post_3, acryl3mm.mould_base_2_post_3]]}
+  - {id: shape-mould_base-3, kind: shape, part: mould_base, body: "acryl3mm@62.5,547.5", along: z, tol: 0.05,
+     pairs: [[mould_base.post_1, acryl3mm.mould_base_3_post_1], [mould_base.post_2, acryl3mm.mould_base_3_post_2], [mould_base.post_3, acryl3mm.mould_base_3_post_3]]}
+  - {id: shape-mould_base-4, kind: shape, part: mould_base, body: "acryl3mm@117.5,547.5", along: z, tol: 0.05,
+     pairs: [[mould_base.post_1, acryl3mm.mould_base_4_post_1], [mould_base.post_2, acryl3mm.mould_base_4_post_2], [mould_base.post_3, acryl3mm.mould_base_4_post_3]]}
+  - {id: shape-mould_base-5, kind: shape, part: mould_base, body: "acryl3mm@117.5,492.5", along: z, tol: 0.05,
+     pairs: [[mould_base.post_1, acryl3mm.mould_base_5_post_1], [mould_base.post_2, acryl3mm.mould_base_5_post_2], [mould_base.post_3, acryl3mm.mould_base_5_post_3]]}
+  - {id: shape-mould_base-6, kind: shape, part: mould_base, body: "acryl3mm@62.5,492.5", along: z, tol: 0.05,
+     pairs: [[mould_base.post_1, acryl3mm.mould_base_6_post_1], [mould_base.post_2, acryl3mm.mould_base_6_post_2], [mould_base.post_3, acryl3mm.mould_base_6_post_3]]}
+  - {id: shape-platform_jig-1, kind: shape, part: platform_jig, body: "acryl3mm@7.5,492.5", along: z, tol: 0.05,
+     pairs: [[platform_jig.h1, acryl3mm.platform_jig_1_h1], [platform_jig.h2, acryl3mm.platform_jig_1_h2], [platform_jig.h3, acryl3mm.platform_jig_1_h3]]}
+  - {id: shape-platform-1, kind: shape, part: platform, body: "acryl3mm@133.0,466.0", along: z, tol: 0.05,
+     pairs: [[platform.p_a, acryl3mm.platform_1_p_a], [platform.p_b, acryl3mm.platform_1_p_b], [platform.top_c, acryl3mm.platform_1_top_c]]}
+  - {id: shape-platform-2, kind: shape, part: platform, body: "acryl3mm@8.0,466.0", along: z, tol: 0.05,
+     pairs: [[platform.p_a, acryl3mm.platform_2_p_a], [platform.p_b, acryl3mm.platform_2_p_b], [platform.top_c, acryl3mm.platform_2_top_c]]}
+  - {id: shape-platform-3, kind: shape, part: platform, body: "acryl3mm@33.0,466.0", along: z, tol: 0.05,
+     pairs: [[platform.p_a, acryl3mm.platform_3_p_a], [platform.p_b, acryl3mm.platform_3_p_b], [platform.top_c, acryl3mm.platform_3_top_c]]}
+  - {id: shape-platform-4, kind: shape, part: platform, body: "acryl3mm@58.0,466.0", along: z, tol: 0.05,
+     pairs: [[platform.p_a, acryl3mm.platform_4_p_a], [platform.p_b, acryl3mm.platform_4_p_b], [platform.top_c, acryl3mm.platform_4_top_c]]}
+  - {id: shape-platform-5, kind: shape, part: platform, body: "acryl3mm@83.0,466.0", along: z, tol: 0.05,
+     pairs: [[platform.p_a, acryl3mm.platform_5_p_a], [platform.p_b, acryl3mm.platform_5_p_b], [platform.top_c, acryl3mm.platform_5_top_c]]}
+  - {id: shape-platform-6, kind: shape, part: platform, body: "acryl3mm@108.0,466.0", along: z, tol: 0.05,
+     pairs: [[platform.p_a, acryl3mm.platform_6_p_a], [platform.p_b, acryl3mm.platform_6_p_b], [platform.top_c, acryl3mm.platform_6_top_c]]}
+  - {id: shape-post_ring-1, kind: shape, part: post_ring, body: "acryl3mm@178.44,521.91", along: z, tol: 0.05,
+     pairs: [[post_ring.c, acryl3mm.post_ring_1_c], [post_ring.mid_e, acryl3mm.post_ring_1_mid_e], [post_ring.mid_n, acryl3mm.post_ring_1_mid_n]]}
+  - {id: shape-post_ring-2, kind: shape, part: post_ring, body: "acryl3mm@183.97,515.91", along: z, tol: 0.05,
+     pairs: [[post_ring.c, acryl3mm.post_ring_2_c], [post_ring.mid_e, acryl3mm.post_ring_2_mid_e], [post_ring.mid_n, acryl3mm.post_ring_2_mid_n]]}
+  - {id: shape-post_ring-3, kind: shape, part: post_ring, body: "acryl3mm@178.44,533.91", along: z, tol: 0.05,
+     pairs: [[post_ring.c, acryl3mm.post_ring_3_c], [post_ring.mid_e, acryl3mm.post_ring_3_mid_e], [post_ring.mid_n, acryl3mm.post_ring_3_mid_n]]}
+  - {id: shape-post_ring-4, kind: shape, part: post_ring, body: "acryl3mm@183.97,521.91", along: z, tol: 0.05,
+     pairs: [[post_ring.c, acryl3mm.post_ring_4_c], [post_ring.mid_e, acryl3mm.post_ring_4_mid_e], [post_ring.mid_n, acryl3mm.post_ring_4_mid_n]]}
+  - {id: shape-post_ring-5, kind: shape, part: post_ring, body: "acryl3mm@183.97,527.91", along: z, tol: 0.05,
+     pairs: [[post_ring.c, acryl3mm.post_ring_5_c], [post_ring.mid_e, acryl3mm.post_ring_5_mid_e], [post_ring.mid_n, acryl3mm.post_ring_5_mid_n]]}
+  - {id: shape-post_ring-6, kind: shape, part: post_ring, body: "acryl3mm@178.44,515.91", along: z, tol: 0.05,
+     pairs: [[post_ring.c, acryl3mm.post_ring_6_c], [post_ring.mid_e, acryl3mm.post_ring_6_mid_e], [post_ring.mid_n, acryl3mm.post_ring_6_mid_n]]}
+  - {id: shape-post_ring-7, kind: shape, part: post_ring, body: "acryl3mm@178.44,527.91", along: z, tol: 0.05,
+     pairs: [[post_ring.c, acryl3mm.post_ring_7_c], [post_ring.mid_e, acryl3mm.post_ring_7_mid_e], [post_ring.mid_n, acryl3mm.post_ring_7_mid_n]]}
+  - {id: shape-post_ring-8, kind: shape, part: post_ring, body: "acryl3mm@183.97,533.91", along: z, tol: 0.05,
+     pairs: [[post_ring.c, acryl3mm.post_ring_8_c], [post_ring.mid_e, acryl3mm.post_ring_8_mid_e], [post_ring.mid_n, acryl3mm.post_ring_8_mid_n]]}

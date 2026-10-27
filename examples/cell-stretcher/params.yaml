@@ -1,0 +1,227 @@
+# The only place numbers enter the model. basis: source | derived | measured | proposed.
+# Cut-file dimensions are proposed: the cut files (Acryl6MM.svg, Acryl3MM.svg) draw contours without
+# dimensions and a cut file cannot be probed, so each value is read off its region and the
+# region's shape check confirms the part reproduces it.
+params:
+  # ---------------------------------------------------------------- sheets
+  t6: {basis: source, from: E-t6.t, interpretation: "thickness of every Acryl6MM part, along each part's z"}
+  t3: {basis: source, from: E-base.t, interpretation: "thickness of every Acryl3MM mould part (base, platform, jig, rings), along z"}
+  # ---------------------------------------------------------------- shared hole sizes (Acryl6MM / Acryl3MM)
+  d_m3tap: {basis: proposed, value: 2.5, rationale: "M3 tap-drill holes as drawn in the cut files (end plates, carriage, mountings)", gap: G-acryl6}
+  d_m3clr: {basis: proposed, value: 3.1, rationale: "M3 clearance holes of the far outer end plate and the rod flanges, as drawn", gap: G-acryl6}
+  d_m3clr_c: {basis: proposed, value: 3.06, rationale: "M3 clearance holes of the motor-end outer plate, as drawn (3.06, not the far plate's 3.1)", gap: G-acryl6}
+  d_m4tap: {basis: proposed, value: 3.3, rationale: "M4 tap-drill holes (stationary bar, carriage flange, mountings, mould base), as drawn", gap: G-acryl6}
+  d_m4clr: {basis: proposed, value: 4, rationale: "M4 clearance holes (mountings, platform jig), as drawn", gap: G-acryl6}
+  d_m5: {basis: proposed, value: 5, rationale: "5 mm holes into the profiles (M6 tap or tight M5 clearance), as drawn", gap: G-acryl6}
+  d_m5clr: {basis: proposed, value: 5.3, rationale: "5.3 mm holes of the stationary bar, as drawn", gap: G-acryl6}
+  d_m6: {basis: proposed, value: 6, rationale: "6 mm holes into the long profiles' ends and the motor base, as drawn", gap: G-acryl6}
+  d_bore8: {basis: proposed, value: 8, rationale: "bores for the 8 mm lead screws and rods in the end plates, as drawn", gap: G-acryl6}
+  # ---------------------------------------------------------------- end plates
+  ep_h: {basis: proposed, value: 71, rationale: "end-plate height, Acryl6MM regions acryl6mm@195.28,558.3 and @49.28,342.62", gap: G-acryl6}
+  ep_m3_dx: {basis: proposed, value: 123.664, rationale: "M3 holes joining inner and outer end plates, from the plate centre", gap: G-acryl6}
+  ep_m3_y: {basis: proposed, value: 12, rationale: "M3 joining holes from the top edge", gap: G-acryl6}
+  ax_y: {basis: proposed, value: 24, rationale: "screw and rod bores from the end plates' top edge", gap: G-acryl6}
+  scr_x: {basis: proposed, value: 20, rationale: "lead-screw bore from the far end plate's side edge (also the carriage nut seat)", gap: G-acryl6}
+  rod_x: {basis: proposed, value: 60, rationale: "guide-rod bore from the far end plate's side edge (also the carriage bearing seat)", gap: G-acryl6}
+  row_off: {basis: proposed, value: 10, rationale: "profile fixing row from the end plates' bottom edge", gap: G-acryl6}
+  ep_h1: {basis: proposed, value: 10, rationale: "first profile-slot hole from a plate edge (end plates, stationary bar, corner and switch plates)", gap: G-acryl6}
+  ep_h2: {basis: proposed, value: 30, rationale: "second profile-slot hole from a plate edge", gap: G-acryl6}
+  ep_h3: {basis: proposed, value: 52.5, rationale: "far end plates: first short-profile hole from the side edge", gap: G-acryl6}
+  ep_h4: {basis: proposed, value: 72.5, rationale: "far end plates: second short-profile hole from the side edge", gap: G-acryl6}
+  slot_L: {basis: proposed, value: 90, rationale: "length of the end plates' profile slots", gap: G-acryl6}
+  slot_w: {basis: proposed, value: 6, rationale: "width of the end plates' profile slots", gap: G-acryl6}
+  slot_dx: {basis: proposed, value: 50, rationale: "profile slots' centres from the plate centre", gap: G-acryl6}
+  ec_w: {basis: proposed, value: 294, rationale: "width of the motor-end end plates, regions acryl6mm@49.28,342.62 and @49.28,414.51", gap: G-acryl6}
+  ec_h1: {basis: proposed, value: 132.5, rationale: "motor-end plates: outer profile holes from the centre", gap: G-acryl6}
+  ec_h2: {basis: proposed, value: 112.5, rationale: "motor-end plates: inner profile holes from the centre", gap: G-acryl6}
+  dsub_w: {basis: proposed, value: 28.81, rationale: "D-sub cut-out width; drawn as a trapezoid with rounded corners, modelled as a rounded rectangle (shape check tol 1.2)", gap: G-acryl6}
+  dsub_h: {basis: proposed, value: 11.118, rationale: "D-sub cut-out height", gap: G-acryl6}
+  dsub_r: {basis: proposed, value: 2.5, rationale: "D-sub cut-out corner radius, approximating the drawn trapezoid's rounded corners", gap: G-acryl6}
+  dsub_y: {basis: proposed, value: 24.274, rationale: "D-sub cut-out and connector window centre from the top edge", gap: G-acryl6}
+  dsub_dx: {basis: proposed, value: 16.7, rationale: "D-sub screw holes from the centre", gap: G-acryl6}
+  win_w: {basis: proposed, value: 50.266, rationale: "connector window width in the motor-end outer plate", gap: G-acryl6}
+  win_h: {basis: proposed, value: 20.225, rationale: "connector window height", gap: G-acryl6}
+  win_r: {basis: proposed, value: 2.3, rationale: "connector window corner radius (drawn slightly elliptical, 2.1 x 2.5)", gap: G-acryl6}
+  # ---------------------------------------------------------------- carriage
+  car_d: {basis: proposed, value: 45, rationale: "carriage depth: top wall and partitions, face plate to face plate over their tabs", gap: G-acryl6}
+  g_h: {basis: proposed, value: 46, rationale: "carriage face plate height over its tabs", gap: G-acryl6}
+  tab_w: {basis: proposed, value: 12, rationale: "finger-joint tab width, all Acryl6MM boxes", gap: G-acryl6}
+  tab_p: {basis: proposed, value: 24, rationale: "finger-joint tab pitch", gap: G-acryl6}
+  tab_o1: {basis: proposed, value: 8.5, rationale: "first tab of the carriage comb from the plate end", gap: G-acryl6}
+  tab_n_out: {basis: proposed, value: 3, rationale: "tabs in each end group of the carriage comb, counted on the cut file", gap: G-acryl6}
+  tab_m1: {basis: proposed, value: 81, rationale: "first tab of the comb's middle run from the plate end", gap: G-acryl6}
+  tab_n_mid: {basis: proposed, value: 10, rationale: "tabs in the comb's middle run, counted on the cut file", gap: G-acryl6}
+  o_x: {basis: proposed, value: 74, rationale: "partition slots' centre from the carriage end", gap: G-acryl6}
+  h_notch: {basis: proposed, value: 10.5, rationale: "depth of the top wall's partition notches", gap: G-acryl6}
+  g_ax: {basis: proposed, value: 19, rationale: "nut and bearing seats from the face plate's notched edge", gap: G-acryl6}
+  d_nut: {basis: proposed, value: 11, rationale: "lead-nut seat in the carriage face plates", gap: G-acryl6}
+  d_brg: {basis: proposed, value: 15.2, rationale: "linear-bearing seat in the carriage face plates", gap: G-acryl6}
+  nut_pcd: {basis: proposed, value: 16, rationale: "lead-nut flange screw circle", gap: G-acryl6}
+  brg_pcd: {basis: proposed, value: 25.5, rationale: "bearing flange screw circle", gap: G-acryl6}
+  hole_ang: {basis: proposed, value: 45, rationale: "flange screws sit on the diagonals of their seats", gap: G-acryl6}
+  e_w: {basis: proposed, value: 248, rationale: "carriage flange width, region acryl6mm@206.95,76.8", gap: G-acryl6}
+  e_h: {basis: proposed, value: 75, rationale: "carriage flange depth", gap: G-acryl6}
+  e_notch: {basis: proposed, value: 4, rationale: "small notches beside the flange's slot row", gap: G-acryl6}
+  e_hole_y: {basis: proposed, value: 67.5, rationale: "mounting-plate holes from the flange's tabbed edge", gap: G-acryl6}
+  # ---------------------------------------------------------------- stationary bar and wells
+  f_h: {basis: proposed, value: 40, rationale: "stationary bar depth, region acryl6mm@48.75,290.92", gap: G-acryl6}
+  f_m4_y: {basis: proposed, value: 7.5, rationale: "mounting-plate holes from the bar's edge", gap: G-acryl6}
+  f_c_off: {basis: proposed, value: 25, rationale: "outer 5.3 mm holes beyond the first and last well", gap: G-acryl6}
+  n_wells: {basis: source, from: E-six.n, interpretation: "six substrate positions: six mounting plates on each bar, six clamps each side, six frames of each width"}
+  well_x0: {basis: proposed, value: 95, rationale: "first well's centre from the bar's end", gap: G-acryl6}
+  well_p: {basis: proposed, value: 40, rationale: "well pitch along the bars", gap: G-acryl6}
+  q_m4_dx: {basis: proposed, value: 10, rationale: "a mounting plate's two M4 fixing holes from its centre line", gap: G-acryl6}
+  # ---------------------------------------------------------------- substrate mounting plates
+  q_w: {basis: proposed, value: 35, rationale: "mounting plate width, region acryl6mm@410.55,488.48", gap: G-acryl6}
+  q_h: {basis: proposed, value: 40.125, rationale: "mounting plate length", gap: G-acryl6}
+  q_lobe_r: {basis: proposed, value: 5.025, rationale: "radius of the lobes round the M3 post holes, which sit at the lobes' centres", gap: G-acryl6}
+  q_lobe_dx: {basis: proposed, value: 12.45, rationale: "M3 post holes from the centre line (24.9 apart)", gap: G-acryl6}
+  q_neck_y: {basis: proposed, value: 3.124, rationale: "straight edge between the two lobes", gap: G-acryl6}
+  q_c_dx: {basis: proposed, value: 12.5, rationale: "central M4 threads (frame spacer bolts) from the centre line", gap: G-acryl6}
+  q_c_y: {basis: proposed, value: 20.075, rationale: "central M4 threads from the lobed end", gap: G-acryl6}
+  q_b_y: {basis: proposed, value: 32.973, rationale: "M4 fixing holes from the lobed end", gap: G-acryl6}
+  # ---------------------------------------------------------------- stretch-holding frames
+  fw_w: {basis: proposed, value: 72.939, rationale: "wide frame length, region acryl6mm@468.52,206.74", gap: G-acryl6}
+  fn_w: {basis: proposed, value: 66.892, rationale: "narrow frame length, region acryl6mm@399.92,206.61", gap: G-acryl6}
+  fr_h: {basis: proposed, value: 44.572, rationale: "frame width", gap: G-acryl6}
+  fr_r: {basis: proposed, value: 4.6, rationale: "frame corners, drawn as Bezier corners 5.14 x 4.08, modelled as one radius (shape check tol 0.5)", gap: G-acryl6}
+  fr_win_h: {basis: proposed, value: 35, rationale: "frame window width", gap: G-acryl6}
+  fr_win_r: {basis: proposed, value: 4.4, rationale: "frame window corners, drawn as Bezier corners 5.0 x 3.89, modelled as one radius", gap: G-acryl6}
+  fw_win_w: {basis: proposed, value: 50.251, rationale: "wide frame window length", gap: G-acryl6}
+  fn_win_w: {basis: proposed, value: 44, rationale: "narrow frame window length", gap: G-acryl6}
+  fr_slot_L: {basis: proposed, value: 6.6, rationale: "frame slot length", gap: G-acryl6}
+  fr_slot_w: {basis: proposed, value: 4.1, rationale: "frame slot width", gap: G-acryl6}
+  fr_slot_dy: {basis: proposed, value: 25, rationale: "frame slots' spacing across the frame", gap: G-acryl6}
+  fw_slot_x: {basis: proposed, value: 4.67, rationale: "wide frame slots from its ends (drawn 4.638 and 4.700, made symmetric)", gap: G-acryl6}
+  fn_slot_x: {basis: proposed, value: 4.896, rationale: "narrow frame slots from its ends", gap: G-acryl6}
+  # ---------------------------------------------------------------- corner, switch and rod-flange plates
+  k_w: {basis: proposed, value: 80, rationale: "corner plate length, region acryl6mm@414.55,163.36", gap: G-acryl6}
+  k_h: {basis: proposed, value: 40, rationale: "corner plate width", gap: G-acryl6}
+  k_p: {basis: proposed, value: 20, rationale: "hole pitch of the corner and switch plates", gap: G-acryl6}
+  k_n: {basis: proposed, value: 4, rationale: "holes along a corner plate, counted on the cut file", gap: G-acryl6}
+  n_w: {basis: proposed, value: 40, rationale: "switch plate width, region acryl6mm@565.86,206.38", gap: G-acryl6}
+  n_h: {basis: proposed, value: 60, rationale: "switch plate length", gap: G-acryl6}
+  n_hy: {basis: proposed, value: 30, rationale: "switch plate's first fixing row from the switch end", gap: G-acryl6}
+  sw_x: {basis: proposed, value: 19.89, rationale: "limit-switch screw pair centre from the plate edge", gap: G-acryl6}
+  sw_dx: {basis: proposed, value: 4.75, rationale: "limit-switch screws from their centre (9.5 apart)", gap: G-acryl6}
+  sw_y: {basis: proposed, value: 7.75, rationale: "limit-switch screws from the plate end", gap: G-acryl6}
+  d_sw: {basis: proposed, value: 2, rationale: "limit-switch screw holes", gap: G-acryl6}
+  ov_rx: {basis: proposed, value: 18.177, rationale: "rod flange half-length (elliptical outline), region acryl6mm@331.64,344.59", gap: G-acryl6}
+  ov_ry: {basis: proposed, value: 10.294, rationale: "rod flange half-width", gap: G-acryl6}
+  d_ov: {basis: proposed, value: 10, rationale: "rod flange centre bore", gap: G-acryl6}
+  ov_hx: {basis: proposed, value: 12.75, rationale: "rod flange screw holes from its centre", gap: G-acryl6}
+  # ---------------------------------------------------------------- motor box
+  mb_w: {basis: proposed, value: 54, rationale: "motor box plates' size over their tabs, regions acryl6mm@575.07,424.93, @568.14,333.08, @558.09,577.8", gap: G-acryl6}
+  mb_n0: {basis: proposed, value: 9, rationale: "first finger-joint notch of the motor box plates from a corner", gap: G-acryl6}
+  d_pilot: {basis: proposed, value: 23, rationale: "motor face plate's pilot bore", gap: G-acryl6}
+  motor_hp: {basis: proposed, value: 31, rationale: "motor face plate's screw square", gap: G-acryl6}
+  d_motor_hole: {basis: proposed, value: 3, rationale: "motor screw holes", gap: G-acryl6}
+  mb_hx: {basis: proposed, value: 10, rationale: "motor base fixing holes from its centre line", gap: G-acryl6}
+  mb_hy: {basis: proposed, value: 15, rationale: "motor base's first fixing row from its tabbed edge", gap: G-acryl6}
+  mb_hp: {basis: proposed, value: 30, rationale: "motor base fixing rows' spacing", gap: G-acryl6}
+  # ---------------------------------------------------------------- profiles
+  prof_h: {basis: source, from: E-prof-short.h, interpretation: "20 x 40 profile read as 20 mm tall (z) by 40 mm wide, the frame lying flat"}
+  prof_w: {basis: source, from: E-prof-short.w, interpretation: "the profile's 40 mm side, horizontal"}
+  prof_short_L: {basis: source, from: E-prof-short.L, interpretation: "short profiles, across the frame between the long ones"}
+  prof_long_L: {basis: source, from: E-prof-long.L, interpretation: "long profiles, along the stretch direction"}
+  # ---------------------------------------------------------------- purchased drive parts
+  d_screw: {basis: proposed, value: 8, rationale: "Anet A8 Z lead screw, taken as 8 mm to match the end plates' 8 mm bores", gap: G-hw}
+  screw_L: {basis: proposed, value: 400, rationale: "lead screw long enough to reach from the far end plate into the coupler", gap: G-hw}
+  d_rod: {basis: proposed, value: 8, rationale: "guide rods, taken as 8 mm to match the 8 mm bores", gap: G-hw}
+  rod_L: {basis: proposed, value: 372, rationale: "guide rods from the far inner end plate through the motor-end inner plate", gap: G-layout}
+  coupler_d: {basis: proposed, value: 19, rationale: "flexible shaft coupler as in Fig. 2D", gap: G-hw}
+  coupler_L: {basis: proposed, value: 25, rationale: "flexible shaft coupler length", gap: G-hw}
+  cp_gap: {basis: proposed, value: 6, rationale: "coupler to motor face plate, so the shaft tip clears the screw end", gap: G-layout}
+  motor_w: {basis: proposed, value: 42, rationale: "NEMA 17 frame, 42SHDC3025-24B; 42 rather than 42.3 so it sits on the motor base", gap: G-motor}
+  motor_L: {basis: proposed, value: 40, rationale: "stepper body length", gap: G-motor}
+  pilot_d: {basis: proposed, value: 22, rationale: "NEMA 17 pilot boss", gap: G-motor}
+  pilot_h: {basis: proposed, value: 2, rationale: "pilot boss height", gap: G-motor}
+  d_shaft: {basis: proposed, value: 5, rationale: "NEMA 17 shaft", gap: G-motor}
+  shaft_L: {basis: proposed, value: 24, rationale: "shaft length from the face", gap: G-motor}
+  foot_d: {basis: proposed, value: 20, rationale: "rubber foot diameter", gap: G-feet}
+  foot_h: {basis: source, from: E-feet.h, interpretation: "M5 x 15 mm read as a 15 mm tall foot on an M5 stud"}
+  # ---------------------------------------------------------------- clamp (Clamp.stl)
+  cl_L: {basis: source, from: P-cl-env.L, interpretation: "clamp length over its two lobes, x"}
+  cl_W: {basis: source, from: P-cl-env.W, interpretation: "clamp depth, notch edge to lobe tops, y"}
+  cl_H: {basis: source, from: P-cl-env.H, interpretation: "height of the U wall, z"}
+  cl_hole: {basis: source, from: P-cl-hole.d, interpretation: "post-hole diameter"}
+  cl_pitch: {basis: source, from: P-cl-pitch.p, interpretation: "post-hole pitch, the lobes' centres"}
+  cl_t: {basis: source, from: P-cl-plate.t, interpretation: "plate thickness"}
+  cl_nin: {basis: source, from: P-cl-nin.w, interpretation: "notch width at the open edge, inside the wall"}
+  cl_nout: {basis: source, from: P-cl-nout.w, interpretation: "wall width at the open edge, outside"}
+  cl_nflat: {basis: source, from: P-cl-flat.w, interpretation: "straight run of the notch between its two arcs"}
+  cl_c: {basis: derived, expr: cl_nflat / 2, interpretation: "the notch arcs' centres sit at the ends of its straight run"}
+  cl_flat: {basis: proposed, value: 10, rationale: "straight back edge between the lobes, read from the STL's facet corners", gap: G-clamp}
+  cl_ang: {basis: proposed, value: 45, rationale: "the side chamfers run at 45 degrees, tangent to the lobes, read from the STL", gap: G-clamp}
+  # ---------------------------------------------------------------- mould
+  mb_side: {basis: proposed, value: 50, rationale: "mould base side, region acryl3mm@85,570", gap: G-acryl3}
+  mb_corner: {basis: proposed, value: 5, rationale: "mould base and jig corner holes from the edges", gap: G-acryl3}
+  post_half: {basis: proposed, value: 12.5, rationale: "straw post holes from the base centre", gap: G-acryl3}
+  straw_d: {basis: source, from: E-straw.d, interpretation: "straw diameter: the posts, the base's post holes and the rings' bores"}
+  straw_L: {basis: proposed, value: 10, rationale: "straw posts standing proud of the frame for the substrate's holes", gap: G-straw}
+  pf_w: {basis: derived, expr: sqrt(culture_area), interpretation: "the 4 cm2 culture area read as the raised platform's square, 20 x 20 mm, its rounded corners aside", gap: G-acryl3}
+  culture_area: {basis: source, from: E-area.a, interpretation: "culture area per substrate, the floor of the well the platform casts"}
+  pf_r: {basis: proposed, value: 5, rationale: "platform corner radius, region acryl3mm@140,475", gap: G-acryl3}
+  ring_od: {basis: proposed, value: 5, rationale: "the eight rings of acryl3mm@178.689,522 etc.", gap: G-ring}
+  ring_mid_r: {basis: derived, expr: (ring_od + straw_d) / 4, interpretation: "mid-radius of the ring, where its shape-check datums sit"}
+  mf_w: {basis: source, from: P-mf-env.L, interpretation: "mould frame side"}
+  mf_h: {basis: source, from: E-frame-h.h, interpretation: "mould frame height, z"}
+  mf_hole_d: {basis: source, from: P-mf-hole.d, interpretation: "frame screw holes"}
+  mf_hole_p: {basis: source, from: P-mf-holep.p, interpretation: "frame screw-hole pitch, both ways"}
+  mf_win: {basis: source, from: P-mf-win.w, interpretation: "the square window, flat to flat"}
+  mf_lobe_p: {basis: source, from: P-mf-lobep.p, interpretation: "the window's corner lobes round the posts, centre pitch"}
+  mf_lobe_span: {basis: source, from: P-mf-lobespan.s, interpretation: "lobe top to lobe bottom across the window"}
+  sub_t: {basis: source, from: E-frame-h.h, interpretation: "the cast substrate is as thick as the frame is tall; the clamps sit on it"}
+  # ---------------------------------------------------------------- layout
+  bar_y: {basis: proposed, value: 60, rationale: "stationary bar placed on the long profiles 60 mm from their far end", gap: G-layout}
+  baseline: {basis: source, from: E-baseline.L, interpretation: "the substrate's post holes, stationary to mobile, at zero stretch: the 25 mm baseline"}
+  kit_x: {basis: proposed, value: 450, rationale: "the frames and the mould are set beside the stretcher, not in it", gap: G-layout}
+  mould_y: {basis: proposed, value: 200, rationale: "the mould beside the frames", gap: G-layout}
+  # ---------------------------------------------------------------- motion
+  screw_lead: {basis: source, from: E-lead.lead, interpretation: "left screw: carriage travel per screw turn, + away from the stationary bar for + motor turn"}
+  screw_lead_r: {basis: source, from: E-lead.lead, interpretation: "right screw, the same Anet A8 screw"}
+  stretch_max: {basis: source, from: E-T2.a, interpretation: "the carriage's travel from zero stretch, the largest amplitude Table 2 runs; the rail travel itself is not stated"}
+  one_turn: {basis: proposed, value: 360, rationale: "one full screw turn, the turn the stated lead is per"}
+  sweep_steps: {basis: proposed, value: 6, rationale: "sweep resolution"}
+  # ---------------------------------------------------------------- mass model
+  rho_pmma: {basis: proposed, value: 0.00118, rationale: "acrylic glass, 1.18 g/cm3", gap: G-mass}
+  rho_al: {basis: proposed, value: 0.0027, rationale: "aluminium profile taken solid at 2.7 g/cm3 (a slotted profile weighs less)", gap: G-mass}
+  rho_steel: {basis: proposed, value: 0.00785, rationale: "steel screws and rods", gap: G-mass}
+  rho_pla: {basis: proposed, value: 0.00124, rationale: "printed clamps and mould frame, PLA", gap: G-mass}
+  rho_rubber: {basis: proposed, value: 0.0011, rationale: "rubber feet", gap: G-mass}
+  m_motor: {basis: proposed, value: 280, rationale: "a 40 mm NEMA 17 stepper", gap: G-motor}
+
+parts:
+  end_far_in: {density: rho_pmma}
+  end_far_out: {density: rho_pmma}
+  end_motor_in: {density: rho_pmma}
+  end_motor_out: {density: rho_pmma}
+  carriage_top: {density: rho_pmma}
+  carriage_face: {density: rho_pmma}
+  carriage_flange: {density: rho_pmma}
+  carriage_partition: {density: rho_pmma}
+  carriage_end: {density: rho_pmma}
+  stat_bar: {density: rho_pmma}
+  mount_plate: {density: rho_pmma}
+  frame_wide: {density: rho_pmma}
+  frame_narrow: {density: rho_pmma}
+  corner_plate: {density: rho_pmma}
+  switch_plate: {density: rho_pmma}
+  rod_flange: {density: rho_pmma}
+  motor_face: {density: rho_pmma}
+  motor_base: {density: rho_pmma}
+  motor_gusset: {density: rho_pmma}
+  profile_long: {density: rho_al}
+  profile_short: {density: rho_al}
+  lead_screw: {density: rho_steel}
+  guide_rod: {density: rho_steel}
+  coupler: {density: rho_al}
+  stepper_motor: {mass: m_motor}
+  rubber_foot: {density: rho_rubber}
+  stretch_clamp: {density: rho_pla}
+  mould_base: {density: rho_pmma}
+  platform: {density: rho_pmma}
+  platform_jig: {density: rho_pmma}
+  post_ring: {density: rho_pmma}
+  straw_post: {density: rho_pla}
+  mould_frame: {density: rho_pla}

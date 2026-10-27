@@ -24,3 +24,37 @@ Skill and tool at `97e4f67` (main, after #114). Project kept at `~/Documents/Pro
 | 6 | Nine scale bars were ledgered as image evidence though only one calibrates anything, and all ten readings hold the project at PENDING REVIEW. | skill | SKILL.md step 3: a scale bar is ledgered only where an overlay or a measured param calibrates from it. |
 | 7 | A sheet nesting the whole unit's plates means building 54 regions or narrowing the target; the run narrowed it to the drive, which the skill didn't guide. | skill | SKILL.md step 1: a target narrows by version and configuration and keeps every part; a sheet's regions of another unit are skipped. |
 | 8 | The tool's `stroke` kind reads a cable only, so the slide's travel is a `range` check. | no change | SKILL.md step 8 already confirms a stated range with a `range` check; the brief's "stroke check" named the value, not the kind. |
+
+## Run 12
+
+Skill and tool at `a3a699c` (main, after run 11's fixes). Project kept at `~/Documents/Projects/cadrev/dogfood/run-12`. 87 tool calls, about 47 minutes.
+
+**End state:** VERIFIED, not exact: 0 errors, 1 warning (`[param-gap]` on `one_turn`), 118/118 checks pass. 171 params, resting on 32 source, 0 measured and 139 proposed, with no physics values. No figure reading was needed, so none awaits confirmation. The target is the stretcher unit (aluminium frame, two lead-screw actuators, carriage, stationary bar, substrate mountings with the clamps, the stretch-holding frames) and the PDMS casting mould, at zero stretch with the clamps fitted; the electronics and controller unit is left out. It became `examples/cell-stretcher`.
+
+**Drive.** Each screw has its own motor: "Uniaxial stretch is realized by two spindle-driven linear actuators … operated by two linear stepper motors" (p. 3), "connected at the moving ends by a mobile bar, or carriage". Motor L (actuated) turns screw L, whose lead gear `lead_l` drives the carriage slide (passive); the carriage drives motor R through lead gear `lead_r`. Both leads are source params from E-lead, "lead screws of 8 mm per revolution" (p. 11). `travel-per-turn-l` and `travel-per-turn-r` are posed `distance` checks with `from`, one turn of each motor: the first against E-lead, the second against `expect: "E-vmax.v * 360 / E-rpm.rpm"` (7.9998). `build/model.mjcf` loads, with 2 hinges, 1 slide and 21 fixed joints, and the two gears as joint equalities.
+
+**Stroke.** `carriage-range`, a `range` check on the carriage slide, rests on Table 2's "0.5 Hz 25 mm" through `stretch_max`. A `stroke` check models a substrate as a cable between its two posts, lengthening 5 mm over the narrow frames' "0–5 mm".
+
+**Released geometry.** All four files are registered. Every region of `Acryl6MM.svg` (54) is shape-checked against 19 parts; the mould's regions of `Acryl3MM.svg` are shape-checked (6 bases, 6 platforms, a jig, 8 post rings), and the controller housing's are skipped by two `within` rectangles. `Clamp.stl` and `MoldFrame.stl` are shape-checked, at `tol` 0.03 and 0.005 for the facets' sag, and 14 probes of them feed the clamp's and the frame's params. One conflict, K-env: the stated 47 × 42 × 11 cm envelope against the 48.5 × 40.4 × 9.5 cm built, resolved as counting cables and motor boxes no source places.
+
+| # | Trip | Kind | Fix |
+|---|---|---|---|
+| 1 | A quote copied as "Dashed line represents … 25 mm" was found, but the 25 mm in it stayed `[coverage]`: the text reads "Dashed li ne", so the quote matched only ignoring whitespace, and coverage credited only exact matches. The run dropped the first two words. | tool bug | Coverage finds a quote's span as the quote check does, ignoring whitespace where no exact match is found. Test: `test_quote_matched_across_a_word_the_text_breaks_with_a_space_covers_its_quantity`. |
+| 2 | Every plate dimension of the cut files is proposed, 139 params in all. | filed | #122, as run 11's trip 1. |
+| 3 | `one_turn` = 360 is proposed, and with no gap raises `[param-gap]`; the lead checks rest on proposed. | filed | #121, as run 11's trip 2. |
+| 4 | project-format.md says a pose holds every other actuated joint as built, yet motor R moved through its gear. | no change | The same paragraph says a gear moves its other joint "whatever that joint's drive". |
+| 5 | A shape check's datum pairs must fit within `tolerance.length` even where it sets `tol`; `frame_wide` failed at 0.0013 on asymmetric slots, and the run moved its anchors. | doc | project-format.md's `shape` entry: a pair farther apart than `tolerance.length`, whatever the check's `tol`, fails. |
+| 6 | A clockwise `Polygon` extruded the wrong way, leaving `[part-invalid] motor_gusset: is 6 solids`. | no change | The run's own slip, caught by `[part-invalid]`. |
+| 7 | A datum at an obround slot's centre is `[datum-off-solid]`, on no cylinder's axis. | no change | The rule held as documented; the run used face points. |
+| 8 | The run renamed its part `clamp` to `stretch_clamp` in case it clashed with the body `clamp` in datum names. | no change | Not reproduced: the run renamed before trying. |
+| 9 | A full `cadrev check` takes about 3 minutes, 160 s of it the shape check against `MoldFrame.stl`'s 18,308 triangles. | filed | #123. Until it is fixed, the example's README says `Checked: nightly`: `scripts/check` leaves it out and `scripts/check --nightly`, which `.github/workflows/nightly.yml` runs, checks it. |
+| 10 | The run wrote the whole model at once, though it took the clamp through as the tracer part, 10/10 green, before adding the rest. | no change | A process slip the report shows. |
+
+**The example.** The run's project was copied without `build/` or its extracted figures. Two edits, recorded here, each one #115 asks for:
+
+- `carriage-range` and `stretch_max` say the rail travel itself is not stated.
+- `travel-per-turn-r` compares the right screw's travel with "8 mm per revolution" (E-lead), as `travel-per-turn-l` does; the run's comparison with the lead worked out from the top speed and motor speed is kept as a third check, `travel-speed-r`. The status moves to 119/119.
+
+The project's name is `cell-stretcher`.
+
+**CI.** About three minutes, so the example is checked nightly; `examples/legclaw-links` and `examples/centrifuge` stay on every push.

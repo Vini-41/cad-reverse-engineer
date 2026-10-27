@@ -4,14 +4,19 @@
 #
 #   scripts/check
 #   scripts/check --lint   # pyright and ruff alone, in seconds, for after an edit
+#   scripts/check --nightly   # only the examples whose README says `Checked: nightly`
+#
+# An example too slow for every push says `Checked: nightly` in its README: the plain check leaves
+# it out, naming it, and .github/workflows/nightly.yml checks it with --nightly.
 #
 # The plugin manifests are validated only where the `claude` CLI is installed; CI installs it.
 set -uo pipefail
 
 case "${1-}" in
-  "") lint=0 ;;
-  --lint) lint=1 ;;
-  *) echo "usage: scripts/check [--lint]" >&2; exit 2 ;;
+  "") mode=full ;;
+  --lint) mode=lint ;;
+  --nightly) mode=nightly ;;
+  *) echo "usage: scripts/check [--lint | --nightly]" >&2; exit 2 ;;
 esac
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -77,13 +82,15 @@ plugin_validate() {
   fi
 }
 
-step "pyright" uv run pyright
-step "ruff check" uv run ruff check ../../..
-step "ruff format" uv run ruff format --check ../../..
 left_out="$logs/left-out"
 red_count=""
-# --lint stops here, past the steps an edit most often fails.
-if [ "$lint" -eq 0 ]; then
+if [ "$mode" != nightly ]; then
+  step "pyright" uv run pyright
+  step "ruff check" uv run ruff check ../../..
+  step "ruff format" uv run ruff format --check ../../..
+fi
+# --lint stops here, past the steps an edit most often fails; --nightly checks only examples.
+if [ "$mode" = full ]; then
   step "tool tests" uv run pytest -q
   step "script tests" uv run pytest -q ../../../scripts/tests
   step "agent-facing docs point only at files that exist" ../../../scripts/check-doc-pointers
@@ -97,6 +104,8 @@ if [ "$lint" -eq 0 ]; then
     red_on_main_or_notice
   # Its count, repeated at the end, past the examples' output.
   red_count=$(grep -E '^[0-9]+ red \(holes\), [0-9]+ green$' "$logs/$steps" | tail -n 1)
+fi
+if [ "$mode" != lint ]; then
   # The examples as a clone after committing holds them: tracked and staged files at their staged text.
   # The last line repeats how many edits that left out, so a pass never hides that it checked older text.
   examples=$(../../../scripts/committed-examples 2>"$left_out")
@@ -107,6 +116,12 @@ if [ "$lint" -eq 0 ]; then
     for project in "$examples"/*/project.yaml; do
       [ -e "$project" ] || continue
       example=$(basename "$(dirname "$project")")
+      checked=full
+      grep -qx 'Checked: nightly' "$(dirname "$project")/README.md" 2>/dev/null && checked=nightly
+      if [ "$checked" != "$mode" ]; then
+        [ "$mode" = nightly ] || echo "examples/$example: checked nightly (scripts/check --nightly), not here"
+        continue
+      fi
       step "examples/$example reaches its documented status" \
         --rerun "scripts/cadrev check examples/$example" example_status "$examples/$example"
     done

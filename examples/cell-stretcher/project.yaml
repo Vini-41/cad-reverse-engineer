@@ -1,0 +1,43 @@
+# Reconstruction project. File formats: references/project-format.md in the cad-reverse-engineer skill.
+format: 1   # version of these file formats; set by cadrev init
+name: cell-stretcher
+target: "Six-well uniaxial cell stretcher of Kah et al. 2021 (HardwareX 9, e00162) as released in its design files: the stretcher unit (aluminium frame, two lead-screw actuators, carriage, stationary bar, substrate mountings with the 3D-printed clamps, the stretch-holding frames of Acryl6MM) and the PDMS casting mould (Acryl3MM base, platform and parts, MoldFrame), at zero stretch with clamps fitted; the electronics and controller unit is not built"
+units: {length: mm, angle: deg, mass: g}
+tolerance: {length: 0.001, angle: 0.01}   # model must realise source values to this; it is not a print tolerance
+# Register sources with `cadrev source`; it copies the file and pins its sha256. Keep this key last.
+sources:
+  - id: paper
+    kind: paper
+    path: sources/Kah2021_cell_stretcher.pdf
+    sha256: d84b69f16ec16278531dba8245d7a2dfa3b3e9cba3e95acad00c7971346ee544
+    citation: "Kah D, Winterl A, Prechova M, Schoeler U, Schneider W, Friedrich O, Gregor M, Fabry B. A low-cost uniaxial cell stretcher for six parallel wells. HardwareX 9 (2021) e00162"
+    url: https://doi.org/10.1016/j.ohx.2020.e00162
+    license: CC-BY-4.0
+  - id: acryl3mm
+    kind: geometry
+    path: sources/Acryl3MM.svg
+    sha256: 4f5dfe8e602ddc2cc916c0e22150802e538870c17e06a512e42e2d43ba047805
+    citation: "Kah et al. 2021, released design files (Mendeley Data, doi:10.17632/mgkbmytx63.1): Acryl3MM.svg"
+    url: https://doi.org/10.17632/mgkbmytx63.1
+    license: CC-BY-4.0
+  - id: acryl6mm
+    kind: geometry
+    path: sources/Acryl6MM.svg
+    sha256: 3ee09ea71bfa6517264dd6036f13de3692478b01e051e8281cdead9cd6c571fb
+    citation: "Kah et al. 2021, released design files (Mendeley Data, doi:10.17632/mgkbmytx63.1): Acryl6MM.svg"
+    url: https://doi.org/10.17632/mgkbmytx63.1
+    license: CC-BY-4.0
+  - id: clamp
+    kind: geometry
+    path: sources/Clamp.stl
+    sha256: 7d2c5fafd1b81d12ef5440782111b02dae7ea270101f1aacdccf91a943b90dd8
+    citation: "Kah et al. 2021, released design files (Mendeley Data, doi:10.17632/mgkbmytx63.1): Clamp.stl"
+    url: https://doi.org/10.17632/mgkbmytx63.1
+    license: CC-BY-4.0
+  - id: moldframe
+    kind: geometry
+    path: sources/MoldFrame.stl
+    sha256: 2d34d6ac32d679bc58c0358b2c6272cad478d3524162dea38ecc93eb1227ce9f
+    citation: "Kah et al. 2021, released design files (Mendeley Data, doi:10.17632/mgkbmytx63.1): MoldFrame.stl"
+    url: https://doi.org/10.17632/mgkbmytx63.1
+    license: CC-BY-4.0

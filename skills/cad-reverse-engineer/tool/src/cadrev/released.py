@@ -139,13 +139,13 @@ def _regions(path: Path, digest: str, scale: float) -> tuple:
     return tuple(out)
 
 
-def _holds(outer, inner, tol: float = 1e-6) -> bool:
-    """Whether bbox outer holds bbox inner in the sheet's plane, within tol."""
+def _holds(outer, inner) -> bool:
+    """Whether bbox outer holds bbox inner in the sheet's plane, within 1e-6."""
     return (
-        outer.min.X <= inner.min.X + tol
-        and outer.min.Y <= inner.min.Y + tol
-        and outer.max.X >= inner.max.X - tol
-        and outer.max.Y >= inner.max.Y - tol
+        outer.min.X <= inner.min.X + 1e-6
+        and outer.min.Y <= inner.min.Y + 1e-6
+        and outer.max.X >= inner.max.X - 1e-6
+        and outer.max.Y >= inner.max.Y - 1e-6
     )
 
 

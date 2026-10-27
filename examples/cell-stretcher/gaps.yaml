@@ -1,0 +1,12 @@
+# What the sources leave undefined, and how to close each gap (ask: authors | measure | datasheet | test).
+gaps:
+  - {id: G-acryl6, question: "The Acryl6MM cut file draws the stretcher plates without dimensions, and Fig. S2 (threads to cut) is not among the sources: what are the plates' design dimensions?", ask: authors}
+  - {id: G-acryl3, question: "What are the design dimensions of the mould's Acryl3MM parts (base, platform, platform jig)?", ask: authors}
+  - {id: G-ring, question: "What are the eight 5 mm rings on Acryl3MM for, and where do they sit in the mould?", ask: authors}
+  - {id: G-straw, question: "How far do the straw posts stand above the mould base?", ask: authors}
+  - {id: G-clamp, question: "What are the clamp's chamfer angle and the height of its straight back edge (Clamp.stl gives them only as facet corners)?", ask: authors}
+  - {id: G-layout, question: "Where do the acrylic plates, profiles, rods, couplers and motor boxes sit relative to each other (the supplement's step-by-step build guide)?", ask: authors}
+  - {id: G-hw, question: "What are the diameters and lengths of the Anet A8 Z-axis lead screws, guide rods and couplers used?", ask: datasheet}
+  - {id: G-motor, question: "What are the envelope, pilot, shaft and mass of the 42SHDC3025-24B stepper?", ask: datasheet}
+  - {id: G-feet, question: "What diameter are the rubber feet, and how many of the set of ten are fitted?", ask: authors}
+  - {id: G-mass, question: "What do the parts weigh (acrylic, profile, steel and PLA densities as used)?", ask: measure}

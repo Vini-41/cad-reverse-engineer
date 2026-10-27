@@ -129,7 +129,7 @@ def test_an_unknown_argument_runs_no_step(tmp_path):
     result, calls = check(tmp_path, args=["--fast"])
     assert result.returncode == 2
     assert calls == []
-    assert "usage: scripts/check [--lint]" in result.stderr
+    assert "usage: scripts/check [--lint | --nightly]" in result.stderr
 
 
 def test_every_example_the_copy_holds_is_checked_for_its_documented_status(tmp_path):
@@ -143,4 +143,37 @@ def test_every_example_the_copy_holds_is_checked_for_its_documented_status(tmp_p
     assert steps == [
         "== examples/alpha reaches its documented status",
         "== examples/beta reaches its documented status",
+    ]
+
+
+def examples_copy(tmp_path: Path, nightly: tuple[str, ...]) -> dict[str, str]:
+    """A committed-examples stub whose copy holds alpha and beta, those named in nightly marked
+    `Checked: nightly` in their README."""
+    copy = tmp_path / "copy" / "examples"
+    for name in ("alpha", "beta"):
+        (copy / name).mkdir(parents=True)
+        (copy / name / "project.yaml").write_text("format: 1\n")
+        marker = "Checked: nightly\n" if name in nightly else ""
+        (copy / name / "README.md").write_text(f"Expected status: `VERIFIED`\n{marker}")
+    return {"committed-examples": f"echo '{copy}'; exit 0"}
+
+
+def test_an_example_its_readme_marks_nightly_is_left_to_the_nightly_check(tmp_path):
+    result, _ = check(tmp_path, bodies=examples_copy(tmp_path, nightly=("beta",)))
+    steps = [line for line in result.stdout.splitlines() if line.startswith("== examples/")]
+    assert steps == ["== examples/alpha reaches its documented status"]
+    assert "examples/beta: checked nightly (scripts/check --nightly), not here" in result.stdout
+
+
+def test_nightly_checks_only_the_examples_marked_nightly(tmp_path):
+    result, calls = check(
+        tmp_path, bodies=examples_copy(tmp_path, nightly=("beta",)), args=["--nightly"]
+    )
+    steps = [line for line in result.stdout.splitlines() if line.startswith("== ")]
+    assert steps == ["== examples/beta reaches its documented status"]
+    copy = tmp_path / "copy" / "examples"
+    assert calls == [
+        "uv sync --locked --extra test",
+        "committed-examples ",
+        f"uv run cadrev check {copy}/beta",
     ]

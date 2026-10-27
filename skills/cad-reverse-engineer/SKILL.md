@@ -27,7 +27,7 @@ Each step ends on a criterion `cadrev` confirms: the rules named in brackets are
 
 ### 1. Scope the target
 
-Ask the user where the project directory goes if they have not said. `cadrev init <dir>`, then write `target:` in project.yaml: the object, the version or iteration, and the configuration. Papers often show earlier iterations next to the reported one; the target names which one the ledger describes. A target narrows the object by version and configuration (lid off), and keeps every part of it: a cut sheet nesting all of a unit's plates is that many parts to build and compare, while a sheet's regions of another unit (a controller housing, a mould) are skipped in step 4. When you choose a released variant later (step 4), rewrite the target to name it.
+Ask the user where the project directory goes if they have not said. `cadrev init <dir>`, then write `target:` in project.yaml: the object, the version or iteration, and the configuration. Papers often show earlier iterations next to the reported one; the target names which one the ledger describes. A target narrows the object by version and configuration (lid off), and keeps every part of it: a cut sheet nesting all of a unit's plates is that many parts to build and compare, while a sheet's regions of another unit (a controller's housing) are skipped in step 4. When you choose a released variant later (step 4), rewrite the target to name it.
 
 Done when `target` names one object in one version and `cadrev check <dir> --no-build` reports no `[target]`, `[format-*]` or `[units]`.
 

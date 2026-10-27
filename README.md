@@ -68,6 +68,8 @@ The example covers each kind of evidence: Table S2 envelopes from the DOCX suppl
 
 [`examples/legclaw`](examples/legclaw) is the full LegClaw from the same sources, both legs and their mounts with their motion, exported as `build/model.mjcf`. A fresh agent built it from the skill alone; it reads the sources from `examples/legclaw-links/sources/`, and CI runs it on every push too.
 
+[`examples/centrifuge`](examples/centrifuge) is the mini benchtop centrifuge of Soma Poór 2022, a static project checked against the authors' released STEP files, and [`examples/cell-stretcher`](examples/cell-stretcher) the uniaxial cell stretcher of Kah et al. 2021, two lead screws driving one carriage, checked against the authors' laser-cut SVG sheets and STL. Fresh agents built both from the skill alone; CI runs the centrifuge on every push and the cell stretcher nightly.
+
 ## Files
 
 ```

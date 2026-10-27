@@ -18,7 +18,7 @@ A run that ends VERIFIED PENDING REVIEW, or VERIFIED, becomes `examples/<object>
 1. Copy its project files and its registered sources, without `build/`.
 2. Correct any slip the log records, and record it there.
 3. Have the user confirm each figure reading against its crop, under their own name in `confirmed_by`.
-4. Write its README: what it shows, its sources and their credit, and the `Expected status:` line that `scripts/check` holds it to. `scripts/check` checks every example on every push, so the README's status line is all CI needs.
+4. Write its README: what it shows, its sources and their credit, and the `Expected status:` line that `scripts/check` holds it to. That line is all CI needs: `scripts/check` checks the example on every push, or, where the README says `Checked: nightly` on the line after it because its check takes minutes, the nightly job does (`scripts/check --nightly`).
 5. Keep the run's Python as the run wrote it: add the example to the `examples/legclaw` entries in `ruff.toml`, under both `[format] exclude` and `[lint.per-file-ignores]`.
 
 ---
