@@ -28,7 +28,7 @@ _Avoid_: geometry reading, measurement (for a value taken from released geometry
 Two ledger entries that disagree about the same feature; open until it carries a resolution.
 
 **Stated quantity**:
-A number a source prints with a unit, as an `a×b×c` product or as a thread size; each one is ledgered or skipped.
+A number a source prints with a unit, as an `a×b×c` product, as a diameter callout (`Ø 32.5`, a length) or as a thread size; each one is ledgered or skipped.
 _Avoid_: dimension (for anything that is not a size of the object's geometry), dimension candidate
 
 **Count**:

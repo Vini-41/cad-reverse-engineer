@@ -45,7 +45,7 @@ sources:
 
 **Units come from the quote.** A ledger value is written as printed (`values: {L: 4}` for "4 cm"), and cadrev reads the unit printed right after it, or after a hyphen (`2-in. plate`, `5-mm pin`), and converts the value to the project's units (40 mm) wherever a param `from:`, a check or an overlay uses it; a `value` written on that param is in project units (40). The numbers of a range or product share its last unit ("3–5 mm", "40×8×5 mm"). A value with no unit printed after it, such as a table cell (`37×6.5×5`), is already in project units. `in` and `"` read as inches, except `in` before a determiner ("4 in total", "2 in each leg").
 
-Each use expects one quantity: a `bbox` or `distance` check, an overlay calibration and a param `model.py` reads expect a length (the model may also read an angle or a count); an `angle` check's value expects an angle, in degrees or radians, and is compared in degrees; a mass check's `key` and `add` params expect a mass, its `density` a density, and so do a [mass model](#mass-model) entry's `mass` and `density`. A `count` check's value, a mass check's `counts` params and each param a gear's `ratio` is derived from (through its derived params, to those with a basis of their own) expect a **count**: a whole number, printed with no unit or a count unit, read as a pure number (COMPAct's `SSPG [25, 65, 155, 0.5, 3]` gives `z_sun` 25, not 25 mm); a param a gear's ratio is derived from may also be a length, as a belt's pulley diameters are. A value printed in a unit of another quantity, or a count that is not a whole number, is `[unit-quantity]`; a param traces to its quote through basis `source`, or through a `derived` expr that only scales one param by constants (`rho * 1000`). A value printed in two different units in one quote, or once with a unit and once without ("4 mm pins in 4 cm links"), is `[unit-ambiguous]`: quote only the part that states it.
+Each use expects one quantity: a `bbox` or `distance` check, an overlay calibration and a param `model.py` reads expect a length (the model may also read an angle or a count); an `angle` check's value expects an angle, in degrees or radians, and is compared in degrees; a mass check's `key` and `add` params expect a mass, its `density` a density, and so do a [mass model](#mass-model) entry's `mass` and `density`. A `count` check's value, a mass check's `counts` params and each param a gear's `ratio` is derived from (through its derived params, to those with a basis of their own) expect a **count**: a whole number, printed with no unit or a count unit, read as a pure number (COMPAct's `SSPG [25, 65, 155, 0.5, 3]` gives `z_sun` 25, not 25 mm); a param a gear's ratio is derived from may also be a length, printed in a length unit or as a diameter callout (`Ø 22.5`), as a belt's pulley diameters are. A value printed in a unit of another quantity, or a count that is not a whole number, is `[unit-quantity]`; a param traces to its quote through basis `source`, or through a `derived` expr that only scales one param by constants (`rho * 1000`). A value printed in two different units in one quote, or once with a unit and once without ("4 mm pins in 4 cm links"), is `[unit-ambiguous]`: quote only the part that states it.
 
 Recognised units, spelled-out names included (millimetre, inches, degrees, grams, seconds…):
 
@@ -338,12 +338,12 @@ No test or example project runs these two yet; they follow the rules above.
 "gears": {"rack_drive": {"driver": "pinion", "driven": "rack", "lead": "rack_lead"}},
 ```
 
-**A stepped planet** (COMPAct's CPG, 14:1: planets of 66 and 33 teeth, ring 117, module 0.6) is one instance with one joint, two gear steps on one body: its 66-tooth step meshes the sun, its 33-tooth step the fixed ring. The carrier → planet gear takes the step that meshes the ring, and the sun → carrier gear reads both steps:
+**A stepped planet** (COMPAct's CPG, 14:1; its Table I prints Stage-1 `[18, 66, 0, 0.6, 3]` and Stage-2 `[0, 33, 117, 0.6, 3]`: sun 18, planet steps of 66 and 33 teeth, ring 117, module 0.6) is one instance with one joint, two gear steps on one body: its 66-tooth step meshes the sun, its 33-tooth step the fixed ring. The carrier → planet gear takes the step that meshes the ring, and the sun → carrier gear reads both steps:
 
 ```yaml
 # params.yaml
-  carrier_ratio: {basis: derived, expr: z_sun * z_p2 / (z_sun * z_p2 + z_ring * z_p1)}   # 1/14 needs an 18-tooth sun
-  planet_ratio:  {basis: derived, expr: -z_ring / z_p2}                                  # the 33-tooth step
+  carrier_ratio: {basis: derived, expr: z_sun * z_p2 / (z_sun * z_p2 + z_ring * z_p1)}
+  planet_ratio:  {basis: derived, expr: -z_ring / z_p2}    # the 33-tooth step
 ```
 
 The carrier's turn is checked as in the single-stage train, `expect: "360 / R1.ratio"` against the stated 14:1, and each step's pitch diameter by its own `diameter` check.

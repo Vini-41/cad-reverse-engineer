@@ -2420,6 +2420,18 @@ DAMAGE = {
         _add_source(r, "g", "sources/g.step"),
         edit(r, "project.yaml", lambda d: d["sources"][-1].update(kind="geometry")),
     ),
+    "geometry source of a truncated STL": lambda r: (
+        # A binary STL header promising 1000 triangles, followed by half of one.
+        (r / "sources" / "g.stl").write_bytes(
+            b"\0" * 80 + (1000).to_bytes(4, "little") + b"\1" * 25
+        ),
+        _add_source(r, "g", "sources/g.stl"),
+        edit(r, "project.yaml", lambda d: d["sources"][-1].update(kind="geometry")),
+    ),
+    "geometry source without a path, with a datum": lambda r: (
+        edit(r, "project.yaml", lambda d: d["sources"].append({"id": "g", "kind": "geometry"})),
+        edit(r, "evidence.yaml", lambda d: d.update(datums={"g.a": [1, 2, 3]})),
+    ),
     "released datum of two numbers": lambda r: (
         released(r, r.parent),
         edit(r, "evidence.yaml", lambda d: d["datums"].update({"link_step.a": [1, 2]})),
@@ -6830,6 +6842,12 @@ def test_guard_gear_ratio_derived_from_lengths_is_no_unit_quantity(proj_dir, tmp
     assert "unit-quantity" not in rules
 
 
+def test_gear_ratio_derived_from_diameter_callouts_reads_them_as_lengths(proj_dir, tmp_path):
+    row = "Its pulleys are Ø 25.5, Ø 65 and Ø 155"
+    report = counted_gear(proj_dir, tmp_path, row, _TEETH | {"z_sun": 25.5})
+    assert [f["message"] for f in report["findings"] if f["rule"] == "unit-quantity"] == []
+
+
 def test_guard_model_py_reading_a_count_is_no_unit_quantity(proj_dir, tmp_path):
     add_quote(proj_dir, tmp_path, "The link has 4 teeth.", "4 teeth", {"z": 4})
     add_params(proj_dir, teeth={"basis": "source", "from": "N1.z"})
@@ -7922,16 +7940,18 @@ LEAD = "The screw moves the carriage 8 mm per revolution."
 TRAVEL = "A full revolution of the screw carries the carriage 8 mm."
 
 
-def lead_screw(root: Path, tmp_path: Path, model: str = LEAD_SCREW, text: str = LEAD) -> None:
+def lead_screw(
+    root: Path, tmp_path: Path, model: str = LEAD_SCREW, text: str = LEAD, lead: float = 8
+) -> None:
     """Replace the project with a lead screw: a frame, a screw turning on it about z (screw,
     actuated) and a carriage sliding on it along z (slide, passive), coupled by the gear drive at
-    the source param screw_lead, from N1.lead (8 mm per revolution in text). One check, travel:
-    how far the carriage moves along z from as built to the screw turned one_turn (proposed 360),
-    compared with N2.travel, the travel a turn gives stated apart from the lead."""
+    the source param screw_lead, from N1.lead (lead, 8 mm per revolution in text). One check,
+    travel: how far the carriage moves along z from as built to the screw turned one_turn
+    (proposed 360), compared with N2.travel, the travel a turn gives stated apart from the lead."""
     edit(root, "project.yaml", lambda d: d.update(sources=[]))
     (root / "sources" / "paper.txt").unlink()
     write(root, "evidence.yaml", {"evidence": [], "skipped": [], "conflicts": []})
-    add_quote(root, tmp_path, f"{text}\n{TRAVEL}\n", text.rstrip("."), {"lead": 8})
+    add_quote(root, tmp_path, f"{text}\n{TRAVEL}\n", text.rstrip("."), {"lead": lead})
     stated = {"id": "N2", "source": "notes", "locator": "Sec. 1", "quote": TRAVEL.rstrip(".")}
     _append("evidence.yaml", "evidence", stated | {"values": {"travel": 8}})(root, tmp_path)
     chosen = {"block_w": 10, "block_h": 4, "screw_r": 2, "screw_l": 20, "offset": 20}
@@ -8062,6 +8082,19 @@ def test_lead_of_0_is_model_gear(proj_dir, tmp_path):
     assert findings(proj_dir, "model-gear") == [
         "gear drive: lead screw_lead is 0, so the slide never moves"
     ]
+
+
+@pytest.mark.parametrize("lead", [-8, 0.01], ids=["negative", "small"])
+def test_guard_lead_negative_or_small_is_no_model_gear(proj_dir, tmp_path, lead):
+    lead_screw(proj_dir, tmp_path)
+    _proposed_lead(lead)(proj_dir, tmp_path)
+    assert findings(proj_dir, "model-gear") == []
+
+
+def test_guard_lead_that_is_not_whole_is_no_unit_quantity(proj_dir, tmp_path):
+    text = "The screw moves the carriage 1.25 mm per revolution."
+    lead_screw(proj_dir, tmp_path, text=text, lead=1.25)
+    assert findings(proj_dir, "unit-quantity") == []
 
 
 @pytest.mark.parametrize(

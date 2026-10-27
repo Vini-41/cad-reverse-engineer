@@ -178,6 +178,17 @@ def quantities_in(text: str) -> list[tuple[float, str | None]]:
     return [(t.value, t.unit) for t in _tokens(normalize(text)) if not t.labelled]
 
 
+def diameters_in(text: str) -> list[float]:
+    """The values a quote prints as a diameter callout (Ø 32.5): a length, whether or not a unit
+    follows."""
+    normalized = normalize(text)
+    return [
+        t.value
+        for t in _tokens(normalized)
+        if not t.labelled and _DIAMETER.search(normalized, max(0, t.start - 2), t.start)
+    ]
+
+
 def numbers_in(text: str) -> list[float]:
     """The values of quantities_in(text), without their units."""
     return [value for value, _ in quantities_in(text)]

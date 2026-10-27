@@ -238,11 +238,28 @@ def _names(value, count: int) -> bool:
     )
 
 
-GEAR_KEYS = ("driver", "driven", "ratio", "lead")
 CABLE_KEYS = ("path", "wheel", "closes")
-# What a gear is stated by: a ratio between two joints of one type, or a lead between a revolute
-# joint and a slide (ADR-0013).
-GEAR_BY = ("ratio", "lead")
+
+
+@dataclass(frozen=True)
+class GearBy:
+    """What a gear is stated by (ADR-0013): the quantity its param expects and the joints it
+    couples."""
+
+    quantity: str
+    across: bool  # couples a revolute joint and a slide, else two joints of one type
+    joins: str  # the joints it couples, as a finding says them
+    counted: bool = False  # its param may be derived from counts, as a ratio from tooth counts
+    at_zero: str | None = None  # why a param of 0 couples nothing, where it does not
+
+
+GEAR_BY = {
+    "ratio": GearBy("fraction", across=False, joins="two joints of one type", counted=True),
+    "lead": GearBy(
+        "length", across=True, joins="a revolute joint and a slide", at_zero="the slide never moves"
+    ),
+}
+GEAR_KEYS = ("driver", "driven", *GEAR_BY)
 
 
 def gear_by(gear: dict) -> tuple[str, str]:
@@ -441,9 +458,8 @@ def build(p: Project) -> Built | None:
     for name, gear in built.gears.items():
         key, param = gear_by(gear)
         if param in p.values:
-            quantity = "fraction" if key == "ratio" else "length"
-            expect_param_quantity(p, param, (quantity,), f"as gear {name}'s {key}")
-            if key == "ratio":
+            expect_param_quantity(p, param, (GEAR_BY[key].quantity,), f"as gear {name}'s {key}")
+            if GEAR_BY[key].counted:
                 for count in derived_from(p, param):
                     expect_param_count(p, count, f"in gear {name}'s ratio", lengths=True)
     for name, cable in built.cables.items():
@@ -704,20 +720,17 @@ def _gear_flaw(p: Project, built: Built, gear: dict) -> str | None:
         return f"driver and driven are both {gear['driver']}; a gear couples two joints"
     driver, driven = (built.joints[gear[key]]["type"] for key in ("driver", "driven"))
     key, param = gear_by(gear)
-    if key == "ratio" and driver != driven:
+    by = GEAR_BY[key]
+    if (driver != driven) != by.across:
+        other = next(k for k in GEAR_BY if k != key)
         return (
-            f"couples a {driver} joint with a {driven} one by a ratio; a ratio couples two joints "
-            "of one type, and a revolute joint and a slide take a lead"
-        )
-    if key == "lead" and {driver, driven} != {"revolute", "slide"}:
-        return (
-            f"couples a {driver} joint with a {driven} one by a lead; a lead couples a revolute "
-            "joint and a slide, and two joints of one type take a ratio"
+            f"couples a {driver} joint with a {driven} one by a {key}; a {key} couples {by.joins}, "
+            f"and {GEAR_BY[other].joins} take a {other}"
         )
     if param not in p.values:
         return f"{key} names {param}, which params.yaml does not define"
-    if key == "lead" and p.values[param] == 0:
-        return f"lead {param} is 0, so the slide never moves"
+    if by.at_zero is not None and p.values[param] == 0:
+        return f"{key} {param} is 0, so {by.at_zero}"
     return None
 
 
@@ -840,7 +853,7 @@ def _gear_coupling(p: Project, built: Built, name: str, gear: dict) -> Coupling:
     revolute joint in the project's angle unit, inverted where the slide drives."""
     key, param = gear_by(gear)
     driver, driven, value = gear["driver"], gear["driven"], p.values[param]
-    if key == "ratio":
+    if not GEAR_BY[key].across:
         law = f"moves {driven} {value:g} times {driver}"
         return Coupling("gear", name, driver, driven, value, law)
     turn = 2 * math.pi / units.size("angle", p.units)
@@ -1295,7 +1308,7 @@ def _count(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckRe
     """A count check: how many instances of its part the assembly places, compared exactly with
     the ledger value."""
     reading.at(built)
-    cid, part, ref = c.get("id", "?"), str(c["part"]), f"{c['evidence']}.{c['key']}"
+    cid, part, ref = c.get("id", "?"), str(c["part"]), compared_ref(c)
     if part not in built.parts:
         p.error("check-config", f"check {cid}: {part} is not a part model.build returns")
         return []
@@ -1474,15 +1487,15 @@ def _change(
     poser: Poser | None,
     reading: _Reading,
     placed: Built,
-    measure: Callable[[Built], float | None],
+    evaluate: Callable[[Built], float | None],
 ) -> tuple[float, dict | None] | None:
-    """How much what measure evaluates changes from check c's from pose to placed, reading what the
-    model gives the from pose, with that pose as report.json shows it: {} where from names no joint,
-    and the change is then taken from as built, as it is for a stroke check with no from (None).
-    None after a finding: a from pose that cannot be placed, or one measure raises at either pose.
-    The one code path a change between two poses is taken by, for every kind CheckKind.changes
-    names."""
-    after = measure(placed)
+    """How much the value evaluate returns changes from check c's from pose to placed, reading
+    what the model gives the from pose, with that pose as report.json shows it: {} where from names
+    no joint, and the change is then taken from as built, as it is for a stroke check with no from
+    (None). None after a finding: a from pose that cannot be placed, or evaluate raises at either
+    pose. The one code path a change between two poses is taken by, for every kind
+    CheckKind.changes names."""
+    after = evaluate(placed)
     if after is None:
         return None
     posed = _placed_for(p, built, c, poser, at="from")
@@ -1493,7 +1506,7 @@ def _change(
         start_pose = {} if "from" in c else None
     else:
         reading.at(start)
-    before = measure(start)
+    before = evaluate(start)
     return None if before is None else (after - before, start_pose)
 
 
@@ -1522,8 +1535,8 @@ def _bbox(p: Project, c: dict, placed: Built, reading: _Reading) -> Iterator[Che
     s = shape.bounding_box().size
     size = (s.X, s.Y, s.Z)
     for key, axis in c["axes"].items():
-        ref, measured = f"{c['evidence']}.{key}", size[AXES[axis]]
-        yield _compared(p, c, f"{cid}.{key}", ref, measured, f" along {axis}")
+        ref, value = f"{c['evidence']}.{key}", size[AXES[axis]]
+        yield _compared(p, c, f"{cid}.{key}", ref, value, f" along {axis}")
 
 
 def _distance(
@@ -1532,13 +1545,13 @@ def _distance(
     """A distance check: the distance between its two datums, or with from its change between the
     two poses."""
 
-    def measure(at: Built) -> float | None:
+    def evaluate(at: Built) -> float | None:
         points = _datums(p, at, c)
         return None if points is None else _datum_distance(c, points)
 
     between = " - ".join(c["between"])
     shown = (f" {between}", f" change in {between}")
-    return _measured(p, built, c, placed, poser, reading, measure, shown)
+    return _evaluated(p, built, c, placed, poser, reading, evaluate, shown)
 
 
 def _angle(
@@ -1547,41 +1560,41 @@ def _angle(
     """An angle check: the angle at its vertex datum between the other two, or with from its
     change between the two poses."""
 
-    def measure(at: Built) -> float | None:
+    def evaluate(at: Built) -> float | None:
         points = _datums(p, at, c)
         return None if points is None else _datum_angle(p, c, points)
 
     a, vertex, b = c["between"]
     at = f"at {vertex} between {a} and {b}"
-    return _measured(p, built, c, placed, poser, reading, measure, (f"° {at}", f"° change {at}"))
+    return _evaluated(p, built, c, placed, poser, reading, evaluate, (f"° {at}", f"° change {at}"))
 
 
-def _measured(
+def _evaluated(
     p: Project,
     built: Built,
     c: dict,
     placed: Built,
     poser: Poser | None,
     reading: _Reading,
-    measure: Callable[[Built], float | None],
+    evaluate: Callable[[Built], float | None],
     shown: tuple[str, str],
 ) -> list[CheckResult]:
-    """Check c's result: what measure evaluates at placed, or with from its change between the two
-    poses, compared with its ledger value and shown after it as the first of shown, or the second
-    for a change; no result after a finding."""
+    """Check c's result: the value evaluate returns at placed, or with from its change between the
+    two poses, compared with its ledger value and shown after it as the first of shown, or the
+    second for a change; no result after a finding."""
     reading.at(placed)
     start_pose = None
     if "from" in c:
-        changed = _change(p, built, c, poser, reading, placed, measure)
+        changed = _change(p, built, c, poser, reading, placed, evaluate)
         if changed is None:
             return []
-        measured, start_pose = changed
+        value, start_pose = changed
     else:
-        measured = measure(placed)
-        if measured is None:
+        value = evaluate(placed)
+        if value is None:
             return []
     ref = compared_ref(c)
-    result = _compared(p, c, c.get("id", "?"), ref, measured, shown["from" in c])
+    result = _compared(p, c, c.get("id", "?"), ref, value, shown["from" in c])
     result.from_pose = start_pose
     return [result]
 

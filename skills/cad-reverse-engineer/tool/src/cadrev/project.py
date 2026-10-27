@@ -213,7 +213,7 @@ class Project:
         return {s["id"]: s for s in self.meta.get("sources", [])}
 
     def source_path(self, source_id: str) -> Path:
-        return self.root / self.sources[source_id]["path"]
+        return self.root / self.sources[source_id].get("path", "")
 
     def solids(self, source_id: str) -> tuple:
         """The solids of geometry source source_id, in file order and the project's length unit;
@@ -365,6 +365,16 @@ class Project:
                 for v, unit in sources.quantities_in(text)
                 if math.isclose(v, value, rel_tol=1e-9)
             )
+        )
+
+    def prints_length(self, ref: str) -> bool:
+        """Whether an evidence value is printed as a length: in a length unit, or as a diameter
+        callout (Ø 22.5) with no unit."""
+        unit, ledgered = self.unit_of(ref), self._ledgered(ref)
+        if unit is not None:
+            return units.quantity(unit) == "length"
+        return ledgered is not None and any(
+            math.isclose(v, ledgered[0], rel_tol=1e-9) for v in sources.diameters_in(ledgered[1])
         )
 
     def unit_of(self, ref: str) -> str | None:
@@ -982,21 +992,25 @@ def _rectangle(within) -> tuple[tuple[float, float], tuple[float, float]] | None
     return (min(x0, x1), min(y0, y1)), (max(x0, x1), max(y0, y1))
 
 
+# What a derived param's expr or an expect is built from besides the names it reads: arithmetic,
+# numbers and calls of MATH_NAMES.
+_EXPR_SYNTAX = (
+    ast.Expression,
+    ast.BinOp,
+    ast.UnaryOp,
+    ast.Call,
+    ast.Name,
+    ast.Load,
+    ast.Constant,
+    ast.operator,
+    ast.unaryop,
+)
+
+
 def _evaluate(expr: str, names: dict[str, float]) -> float:
     tree = ast.parse(expr, mode="eval")
-    allowed = (
-        ast.Expression,
-        ast.BinOp,
-        ast.UnaryOp,
-        ast.Call,
-        ast.Name,
-        ast.Load,
-        ast.Constant,
-        ast.operator,
-        ast.unaryop,
-    )
     for node in ast.walk(tree):
-        if not isinstance(node, allowed):
+        if not isinstance(node, _EXPR_SYNTAX):
             raise ValueError(f"disallowed syntax {type(node).__name__}")
     return float(eval(compile(tree, "<expr>", "eval"), {"__builtins__": {}}, MATH_NAMES | names))
 
@@ -1159,19 +1173,6 @@ def check_refs(c: dict) -> list[str]:
 # A ledger value an expect names, <entry>.<key>: an evidence id, which may hold hyphens, then one
 # of its values' keys.
 _LEDGER_NAME = re.compile(r"(?<![\w.])([A-Za-z_][\w-]*)\.([A-Za-z_]\w*)")
-# What an expect is built from besides the ledger values it names: arithmetic, numbers and
-# MATH_NAMES.
-_EXPECT_SYNTAX = (
-    ast.Expression,
-    ast.BinOp,
-    ast.UnaryOp,
-    ast.Call,
-    ast.Name,
-    ast.Load,
-    ast.Constant,
-    ast.operator,
-    ast.unaryop,
-)
 
 
 def expect_refs(expr: str) -> list[str]:
@@ -1200,7 +1201,7 @@ def expect_value(p: Project, expr: str) -> float:
     except (RecursionError, MemoryError) as exc:  # the parser's stack overflowing
         raise ValueError("does not parse: nested too deep") from exc
     for node in ast.walk(tree):
-        if not isinstance(node, _EXPECT_SYNTAX):
+        if not isinstance(node, _EXPR_SYNTAX):
             raise ValueError(f"does not parse as arithmetic: {type(node).__name__}")
         if isinstance(node, ast.Constant):
             number = node.value
@@ -1528,10 +1529,11 @@ def check_released_datums(p: Project) -> None:
     """[datum-off-solid] for each datum declared on released geometry that names no body, or does
     not lie on its body's solid (ADR-0006), as a datum model.py returns must lie on its part's."""
     bodies, unread = p.bodies, _unread_geometry(p)
+    # every cut file, read or not, so an unread one's datums are still held to [x, y]
     sheets = [
         sid
         for sid, s in p.sources.items()
-        if s.get("kind") == "geometry" and released.is_sheet(Path(str(s.get("path", ""))))
+        if s.get("kind") == "geometry" and released.is_sheet(p.source_path(sid))
     ]
     for name, point in p.datums.items():
         sheet = next((s for s in sheets if name.startswith(f"{s}.")), None)
@@ -1686,10 +1688,11 @@ def expect_count(p: Project, ref: str, use: str) -> None:
 def expect_param_count(p: Project, name: str, use: str, lengths: bool = False) -> None:
     """expect_count for a param: [unit-quantity] unless the quote it traces to prints a count
     unit or none, and its value is a whole number. Where lengths, a param whose quote prints a
-    length is read as a length instead, as a belt's pulley diameters are (ADR-0012)."""
+    length, in a length unit or as a diameter callout (Ø 22.5), is read as a length instead, as a
+    belt's pulley diameters are (ADR-0012)."""
     traced = _traced(p, name)
     unit = None if traced is None else p.unit_of(traced[1])
-    if lengths and unit is not None and units.quantity(unit) == "length":
+    if lengths and traced is not None and p.prints_length(traced[1]):
         return
     expect_param_quantity(p, name, ("count", "length") if lengths else ("count",), use)
     if unit is not None and units.quantity(unit) != "count":
