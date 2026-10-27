@@ -83,6 +83,7 @@ SKIP = Record(
         "from": str,
         "to": str,
         "body": str,
+        "within": Items(Items(NUMBER)),
         "reason": str,
     }
 )

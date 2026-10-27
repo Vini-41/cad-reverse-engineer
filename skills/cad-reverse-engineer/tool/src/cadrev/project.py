@@ -13,6 +13,7 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -167,6 +168,8 @@ class Project:
     probes: list[dict] = field(default_factory=list)
     # Every body of a readable geometry source, read once a run asks for one.
     _bodies: dict | None = None
+    # The regions of each readable cut file, read once a run asks for one.
+    _regions: dict | None = None
     # The basis each resolved parameter rests on, one of RESTS_ON: its own, or for a derived one
     # the weakest among the parameters its expr references.
     rests_on: dict[str, str] = field(default_factory=dict)
@@ -213,9 +216,7 @@ class Project:
         if self._bodies is not None:
             return self._bodies
         out = {}
-        for sid, s in self.sources.items():
-            if s.get("kind") != "geometry" or not _available(self, sid):
-                continue
+        for sid in self._geometry(sheets=False):
             try:
                 found = self.solids(sid)
             except Exception:  # noqa: BLE001 - check_sources says why it cannot be read
@@ -224,12 +225,73 @@ class Project:
         self._bodies = out
         return out
 
+    def _geometry(self, sheets: bool) -> list[str]:
+        """The geometry sources whose file is there and not found unreadable: the cut files where
+        sheets, else the others."""
+        return [
+            sid
+            for sid, s in self.sources.items()
+            if s.get("kind") == "geometry"
+            and _available(self, sid)
+            and released.is_sheet(self.source_path(sid)) == sheets
+        ]
+
+    def read_regions(self, source_id: str) -> tuple:
+        """The regions of cut file source_id (released.regions), in the project's length unit;
+        raises when its file cannot be read as one."""
+        scale = units.convert(1.0, "mm", self.units)
+        return released.regions(self.source_path(source_id), scale)
+
+    @property
+    def regions(self) -> dict[str, tuple]:
+        """The regions of each readable cut file, by source id."""
+        if self._regions is not None:
+            return self._regions
+        out = {}
+        for sid in self._geometry(sheets=True):
+            try:
+                out[sid] = self.read_regions(sid)
+            except Exception:  # noqa: BLE001 - check_sources says why it cannot be read
+                continue
+        self._regions = out
+        return out
+
+    def region(self, name: str) -> tuple[str, int] | str:
+        """The cut file and the index of its region that a body name <source>@<x>,<y> names by a
+        point inside it; or why it names none: a point inside no region, or inside several."""
+        at = released.at_point(name)
+        if at is None or at[0] not in self.regions:
+            return f"{name} is not <source>@<x>,<y>, a point inside a region of a cut file"
+        sid, point = at
+        found = released.regions_at(self.regions[sid], point, self.length_tol)
+        if len(found) != 1:
+            count = f"{len(found)} regions" if found else "no region"
+            return f"{name} lies inside {count} of {sid}"
+        return sid, found[0]
+
+    def body(self, name: str) -> Any:
+        """The released body a name addresses: a region of a cut file by a point inside it
+        (region), else a solid of bodies; or, as text, why it addresses none."""
+        if released.at_point(name) is not None:
+            found = self.region(name)
+            return found if isinstance(found, str) else self.regions[found[0]][found[1]]
+        if name in self.regions:
+            return f"{name} is a cut file: name a region of it {name}@<x>,<y>, by a point inside it"
+        return self.bodies.get(name, f"{name} is not a body of a geometry source")
+
     def released_datum(self, name: str) -> tuple[str, tuple[float, float, float]] | None:
         """The body a datum declared on released geometry lies on, and its point in the body's
-        frame; None for a name declared on no body, or not as three numbers."""
+        frame; None for a name declared on no body, or not as three numbers. A datum on a cut file
+        lies on the sheet, not on one region: its body is the source, its point [x, y] on the
+        sheet (z 0)."""
         point = self.datums.get(name)
+        if not isinstance(point, list):
+            return None
+        sheet = next((s for s in self.regions if name.startswith(f"{s}.")), None)
+        if sheet is not None:
+            return (sheet, (float(point[0]), float(point[1]), 0.0)) if len(point) == 2 else None
         body = max((b for b in self.bodies if name.startswith(f"{b}.")), key=len, default=None)
-        if body is None or not isinstance(point, list) or len(point) != 3:
+        if body is None or len(point) != 3:
             return None
         return body, (float(point[0]), float(point[1]), float(point[2]))
 
@@ -433,8 +495,11 @@ def check_sources(p: Project) -> None:
                 p.error("source-hash", f"source {sid}: sha256 does not match {s.get('path')}")
             if s.get("kind") == "geometry":
                 try:
-                    p.solids(sid)
-                except Exception as exc:  # noqa: BLE001 - the STEP reader raises many types
+                    if released.is_sheet(path):
+                        p.read_regions(sid)
+                    else:
+                        p.solids(sid)
+                except Exception as exc:  # noqa: BLE001 - the STEP, STL and SVG readers raise many types
                     p.error(
                         "source-unreadable",
                         f"source {sid}: cannot read geometry from {s.get('path')}: "
@@ -655,6 +720,13 @@ def check_probe(p: Project, e: dict) -> None:
         return
     if sid in _unread_geometry(p):
         return  # check_sources says why its bodies cannot be read
+    if sid in p.regions:
+        p.error(
+            "evidence-anchor",
+            f"{eid}: {sid} is a cut file, whose regions a shape check compares; a probe reads a "
+            "solid",
+        )
+        return
     body = str(e.get("body", sid))
     names = [b for b in p.bodies if released.source_of(b) == sid]
     if body not in names:
@@ -753,7 +825,8 @@ def check_coverage(p: Project) -> list[tuple[str, str, str]]:
             )
             continue
         if geometry:
-            uncovered += _uncovered_bodies(p, sid)
+            sheet = sid in p.regions
+            uncovered += _uncovered_regions(p, sid) if sheet else _uncovered_bodies(p, sid)
             continue
         texts = sources.pages(p.source_path(sid))
         anchors = [e for e in p.evidence if e.get("source") == sid and "quote" in e]
@@ -829,11 +902,63 @@ def _uncovered_bodies(p: Project, sid: str) -> list[tuple[str, str, str]]:
                 f"{', '.join(names)}",
             )
         skipped.add(k.get("body"))
+    return [(sid, f"body {name}", _UNCOVERED) for name in names if name not in compared | skipped]
+
+
+# Why coverage lists a released body.
+_UNCOVERED = "no shape check compares it and no skip sets it aside"
+
+
+def _uncovered_regions(p: Project, sid: str) -> list[tuple[str, str, str]]:
+    """The regions of cut file sid that no shape check compares and no skip sets aside, each
+    named by a point inside it, as check_coverage lists them; a skip sets aside the region a
+    point inside it names (body), or every region inside a rectangle (within). [skip-reason],
+    [skip-anchor] and [skip-not-found] for its skips."""
+    found = p.regions[sid]
+    covered = set()
+    for c in p.checks:
+        named = p.region(str(c.get("body"))) if compares_body(c) else None
+        if isinstance(named, tuple) and named[0] == sid:
+            covered.add(named[1])
+    for k in (k for k in p.skipped if k.get("source") == sid):
+        if not k.get("reason"):
+            p.error("skip-reason", f"skip in {sid}: reason is required")
+        if "body" in k:
+            named = p.region(k["body"])
+            if isinstance(named, str) or named[0] != sid:
+                why = named if isinstance(named, str) else f"{k['body']} is not on {sid}"
+                p.error("skip-not-found", f"skip in {sid}: {why}")
+            else:
+                covered.add(named[1])
+        elif _rectangle(k.get("within")) is not None:
+            inside = released.regions_within(found, _rectangle(k["within"]), p.length_tol)
+            if not inside:
+                p.error(
+                    "skip-not-found",
+                    f"skip in {sid}: within {k['within']} holds no whole region of {sid}",
+                )
+            covered |= set(inside)
+        else:
+            p.error(
+                "skip-anchor",
+                f"skip in {sid}: a cut file's skip names a region by a point inside it, "
+                f"body: {sid}@<x>,<y>, or the regions inside a rectangle, "
+                "within: [[x, y], [x, y]] at two opposite corners",
+            )
     return [
-        (sid, f"body {name}", "no shape check compares it and no skip sets it aside")
-        for name in names
-        if name not in compared | skipped
+        (sid, f"body {released.point_name(sid, released.inner_point(region))}", _UNCOVERED)
+        for i, region in enumerate(found)
+        if i not in covered
     ]
+
+
+def _rectangle(within) -> tuple[tuple[float, float], tuple[float, float]] | None:
+    """The rectangle a skip's within gives by two opposite corners [[x, y], [x, y]], as its least
+    and greatest corner; None where within is not that."""
+    if not (isinstance(within, list) and len(within) == 2 and all(len(c) == 2 for c in within)):
+        return None
+    (x0, y0), (x1, y1) = within
+    return (min(x0, x1), min(y0, y1)), (max(x0, x1), max(y0, y1))
 
 
 def _evaluate(expr: str, names: dict[str, float]) -> float:
@@ -1233,8 +1358,8 @@ def check_tolerances(p: Project) -> None:
             continue
         where = "" if "tol" in c else f" (tolerance.{CHECK_KINDS[c['kind']].tolerance})"
         cap = CHECK_KINDS[c["kind"]].body_cap
-        body = p.bodies.get(str(c.get("body"))) if cap is not None else None
-        if cap is not None and body is not None:
+        body = p.body(str(c.get("body"))) if cap is not None else None
+        if cap is not None and body is not None and not isinstance(body, str):
             diagonal = body.bounding_box().diagonal
             if value > cap * diagonal * (1 + 1e-9):
                 p.error(
@@ -1254,7 +1379,7 @@ def check_tolerances(p: Project) -> None:
 
 def _unread_geometry(p: Project) -> set[str]:
     """The geometry sources whose bodies cannot be read: missing, or not readable as geometry."""
-    read = {released.source_of(name) for name in p.bodies}
+    read = {released.source_of(name) for name in p.bodies} | p.regions.keys()
     return {sid for sid, s in p.sources.items() if s.get("kind") == "geometry" and sid not in read}
 
 
@@ -1262,12 +1387,27 @@ def check_released_datums(p: Project) -> None:
     """[datum-off-solid] for each datum declared on released geometry that names no body, or does
     not lie on its body's solid (ADR-0006), as a datum model.py returns must lie on its part's."""
     bodies, unread = p.bodies, _unread_geometry(p)
+    sheets = [
+        sid
+        for sid, s in p.sources.items()
+        if s.get("kind") == "geometry" and released.is_sheet(Path(str(s.get("path", ""))))
+    ]
     for name, point in p.datums.items():
-        if len(point) != 3:
-            p.error("schema", f"evidence.yaml datums.{name}: must be [x, y, z], not {point}")
+        sheet = next((s for s in sheets if name.startswith(f"{s}.")), None)
+        if len(point) != (3 if sheet is None else 2):
+            shape = "[x, y, z]" if sheet is None else f"[x, y] on cut file {sheet}"
+            p.error("schema", f"evidence.yaml datums.{name}: must be {shape}, not {point}")
             continue
-        if released.source_of(name.partition(".")[0]) in unread:
+        if released.source_of(name.partition(".")[0]) in unread or sheet in unread:
             continue  # check_sources says why its body cannot be read
+        if sheet is not None:
+            if not released.outlines_at(p.regions[sheet], (point[0], point[1]), p.length_tol):
+                p.error(
+                    "datum-off-solid",
+                    f"datum {name} of cut file {sheet}: lies inside no region's outer contour; "
+                    "place it on a region, or at the centre of a hole in one",
+                )
+            continue
         named = p.released_datum(name)
         if named is None:
             p.error(
