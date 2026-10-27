@@ -15,6 +15,8 @@
 #
 # With no pytest args it runs the test functions new since BASE or edited in its diff. A row added
 # to a table (QUOTES, UNITS, FINDINGS) edits the table, not the test that reads it: pass -k for those.
+# pytest's -k rejects a row id holding * (19*12.5 mm), so name the function that reads the table
+# there; LIST=1 then names each row red or green.
 #
 # BASE is the commit before the fix: by default the upstream branch (origin/main), so unpushed
 # commits on main count as the fix. A branch with no upstream, such as a worktree's, compares

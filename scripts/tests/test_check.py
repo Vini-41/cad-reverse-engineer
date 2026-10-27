@@ -130,3 +130,17 @@ def test_an_unknown_argument_runs_no_step(tmp_path):
     assert result.returncode == 2
     assert calls == []
     assert "usage: scripts/check [--lint]" in result.stderr
+
+
+def test_every_example_the_copy_holds_is_checked_for_its_documented_status(tmp_path):
+    copy = tmp_path / "copy" / "examples"
+    for name in ("alpha", "beta"):
+        (copy / name).mkdir(parents=True)
+        (copy / name / "project.yaml").write_text("format: 1\n")
+    (copy / "notes").mkdir()  # not a project, so no example
+    result, _ = check(tmp_path, bodies={"committed-examples": f"echo '{copy}'; exit 0"})
+    steps = [line for line in result.stdout.splitlines() if line.startswith("== examples/")]
+    assert steps == [
+        "== examples/alpha reaches its documented status",
+        "== examples/beta reaches its documented status",
+    ]

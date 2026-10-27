@@ -103,7 +103,10 @@ if [ "$lint" -eq 0 ]; then
   code=$?
   cat "$left_out" >&2
   if [ "$code" -eq 0 ]; then
-    for example in legclaw-links legclaw centrifuge; do
+    # Every example is a project the copy holds; its README states the status it reaches.
+    for project in "$examples"/*/project.yaml; do
+      [ -e "$project" ] || continue
+      example=$(basename "$(dirname "$project")")
       step "examples/$example reaches its documented status" \
         --rerun "scripts/cadrev check examples/$example" example_status "$examples/$example"
     done

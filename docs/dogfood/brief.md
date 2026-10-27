@@ -6,7 +6,20 @@ The prompt a dogfood run's subagent gets, word for word, so every run is briefed
 2. Create the empty project directory `~/Documents/Projects/cadrev/dogfood/run-<n>`, numbered one past the highest run in any `*-run-log.md` here: run numbers are shared across objects.
 3. Fill `<checkout>`, `<n>` and the object's fields (`<goal>`, `<sources>`, `<report items>`) below, and dispatch a fresh general-purpose subagent with the text between the rules.
 
+An object's sources that no example holds yet are downloaded to `~/Documents/Projects/cadrev/<object>-sources`, and the object's `sources` field points there. Publisher pages often answer a script with a bot check. Open-access routes that serve files to scripts:
+
+- A paper in PubMed Central: find its PMC id with Europe PMC's search API (`https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=DOI:<doi>&format=json`), then fetch `https://pmc-oa-opendata.s3.amazonaws.com/PMC<id>.1/PMC<id>.1.pdf`.
+- A Mendeley Data dataset: `https://data.mendeley.com/public-api/datasets/<id>/files?folder_id=root&version=<v>` lists each file's `download_url` and `sha256_hash`; check each download against its hash.
+
 After the run, its report becomes the run's section in the object's log, and the checkout worktree is removed. An object's first run starts its log, headed as [legclaw-run-log.md](legclaw-run-log.md) is: the object, the spec and issue behind its runs, and how each run was briefed.
+
+A run that ends VERIFIED PENDING REVIEW, or VERIFIED, becomes `examples/<object>`:
+
+1. Copy its project files and its registered sources, without `build/`.
+2. Correct any slip the log records, and record it there.
+3. Have the user confirm each figure reading against its crop, under their own name in `confirmed_by`.
+4. Write its README: what it shows, its sources and their credit, and the `Expected status:` line that `scripts/check` holds it to. `scripts/check` checks every example on every push, so the README's status line is all CI needs.
+5. Keep the run's Python as the run wrote it: add the example to the `examples/legclaw` entries in `ruff.toml`, under both `[format] exclude` and `[lint.per-file-ignores]`.
 
 ---
 
