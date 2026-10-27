@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import ast
 import math
+import re
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -45,8 +47,10 @@ def _mass_reads(p: Project, c: dict, weighs: tuple[str, ...] | None = None) -> l
 
 
 def _mass_names(c: dict) -> list[tuple[str, str]]:
-    """The params a mass check names: its density, then each mass it adds."""
-    return [(c.get("density") or "", "density")] + [(n, "mass") for n in c.get("add", [])]
+    """The params a mass check names: its density, then each mass it adds, then each count of
+    instances it weighs."""
+    names = [(c.get("density") or "", "density")] + [(n, "mass") for n in c.get("add", [])]
+    return names + [(str(n), "count") for n in (c.get("counts") or {}).values()]
 
 
 @dataclass(frozen=True)
@@ -59,12 +63,16 @@ class CheckKind:
     check without between compares its joint's own value, so quantity and tolerance are its
     joint's: an angle for a revolute joint, a length for a slide. between_two, where set, is the
     quantity and tolerance of a check whose between names two datums rather than three: a
-    distance. claims, where set, lets a check of the kind take a from pose besides its pose, and a
+    distance. changes, where set, lets a check of the kind take a from pose besides its pose, and
+    then compare the change in what it evaluates between the two. claims, where set, lets it take a
     claim (one of CLAIMS) in place of a key: a direction of change between the two poses, passing
     only beyond its tolerance, with no tol of its own (ADR-0010). body_cap, where set, makes it
     compare a built part with a released body (its body), its tol capped at that fraction of the
     body's bbox diagonal, as it compares with no value. names, where set, gives the params a
-    check of the kind names by key, each with the quantity it must be in."""
+    check of the kind names by key, each with the quantity it must be in. exact, where set, makes
+    it compare exactly, so it has no tolerance and takes no tol or tol_rel. expects, unless False,
+    lets a check of the kind compare with a value worked out from the ledger (its expect) in place
+    of evidence and key: a kind that compares one value (ADR-0014)."""
 
     quantity: str
     tolerance: str | None
@@ -72,9 +80,12 @@ class CheckKind:
     span_capped: bool = False
     joint_valued: bool = False
     between_two: str | None = None
+    changes: bool = False
     claims: bool = False
     body_cap: float | None = None
     names: Callable[[dict], list[tuple[str, str]]] | None = None
+    exact: bool = False
+    expects: bool = True
 
 
 # The quantities a joint's value is in: a revolute joint's angle, a slide's length. Before the
@@ -85,23 +96,31 @@ JOINT_QUANTITIES = ("angle", "length")
 # The kinds of check that compare with a ledger value, or a shape check with a released body;
 # interference (OVERLAP_KINDS) compares with neither.
 CHECK_KINDS = {
-    "bbox": CheckKind("length", "length"),
-    "distance": CheckKind("length", "length"),
-    "angle": CheckKind("angle", "angle"),
+    "bbox": CheckKind("length", "length", expects=False),
+    # With from, the change between two poses: a slide's travel, a carrier's turn.
+    "distance": CheckKind("length", "length", changes=True),
+    "angle": CheckKind("angle", "angle", changes=True),
+    # The diameter of the cylindrical face a datum lies on: a bore, a hub, a pitch circle.
+    "diameter": CheckKind("length", "length"),
     "mass": CheckKind("mass", None, reads=_mass_reads, names=_mass_names),
     # A joint's range: an angle at each end, or a slide's length, compared with a stated end that
     # is often 0.
     # Between two datums, a distance at each end, as a slide that sets a leg's width reaches it.
-    "range": CheckKind("angle", "angle", span_capped=True, joint_valued=True, between_two="length"),
+    "range": CheckKind(
+        "angle", "angle", span_capped=True, joint_valued=True, between_two="length", expects=False
+    ),
     # How far a cable shortens from as built, or a from pose, to a pose.
-    "stroke": CheckKind("length", "length", claims=True),
+    "stroke": CheckKind("length", "length", changes=True, claims=True),
     # A part against its released body: the largest distance between their surfaces, which no
     # ledger value states, its tol capped against the body's size.
-    "shape": CheckKind("length", "length", body_cap=0.01),
+    "shape": CheckKind("length", "length", body_cap=0.01, expects=False),
+    # How many instances of a part the assembly places, against a stated count (ADR-0012).
+    "count": CheckKind("count", None, exact=True, expects=False),
 }
 # The kinds of check that compare how much instances overlap with an overlap limit.
 OVERLAP_KINDS = ("interference",)
-# The keys of a check that name a pose: a stroke check's from, then the pose it is evaluated at.
+# The keys of a check that name a pose: the from pose a change is taken from (CheckKind.changes),
+# then the pose it is evaluated at.
 POSES = ("from", "pose")
 # What a claim says its quantity does between a check's from pose and its pose: a stroke's
 # shortening is positive or negative.
@@ -161,6 +180,8 @@ class Project:
     probes: list[dict] = field(default_factory=list)
     # Every body of a readable geometry source, read once a run asks for one.
     _bodies: dict | None = None
+    # The regions of each readable cut file, read once a run asks for one.
+    _regions: dict | None = None
     # The basis each resolved parameter rests on, one of RESTS_ON: its own, or for a derived one
     # the weakest among the parameters its expr references.
     rests_on: dict[str, str] = field(default_factory=dict)
@@ -192,7 +213,7 @@ class Project:
         return {s["id"]: s for s in self.meta.get("sources", [])}
 
     def source_path(self, source_id: str) -> Path:
-        return self.root / self.sources[source_id]["path"]
+        return self.root / self.sources[source_id].get("path", "")
 
     def solids(self, source_id: str) -> tuple:
         """The solids of geometry source source_id, in file order and the project's length unit;
@@ -207,9 +228,7 @@ class Project:
         if self._bodies is not None:
             return self._bodies
         out = {}
-        for sid, s in self.sources.items():
-            if s.get("kind") != "geometry" or not _available(self, sid):
-                continue
+        for sid in self._geometry(sheets=False):
             try:
                 found = self.solids(sid)
             except Exception:  # noqa: BLE001 - check_sources says why it cannot be read
@@ -218,12 +237,73 @@ class Project:
         self._bodies = out
         return out
 
+    def _geometry(self, sheets: bool) -> list[str]:
+        """The geometry sources whose file is there and not found unreadable: the cut files where
+        sheets, else the others."""
+        return [
+            sid
+            for sid, s in self.sources.items()
+            if s.get("kind") == "geometry"
+            and _available(self, sid)
+            and released.is_sheet(self.source_path(sid)) == sheets
+        ]
+
+    def read_regions(self, source_id: str) -> tuple:
+        """The regions of cut file source_id (released.regions), in the project's length unit;
+        raises when its file cannot be read as one."""
+        scale = units.convert(1.0, "mm", self.units)
+        return released.regions(self.source_path(source_id), scale)
+
+    @property
+    def regions(self) -> dict[str, tuple]:
+        """The regions of each readable cut file, by source id."""
+        if self._regions is not None:
+            return self._regions
+        out = {}
+        for sid in self._geometry(sheets=True):
+            try:
+                out[sid] = self.read_regions(sid)
+            except Exception:  # noqa: BLE001 - check_sources says why it cannot be read
+                continue
+        self._regions = out
+        return out
+
+    def region(self, name: str) -> tuple[str, int] | str:
+        """The cut file and the index of its region that a body name <source>@<x>,<y> names by a
+        point inside it; or why it names none: a point inside no region, or inside several."""
+        at = released.at_point(name)
+        if at is None or at[0] not in self.regions:
+            return f"{name} is not <source>@<x>,<y>, a point inside a region of a cut file"
+        sid, point = at
+        found = released.regions_at(self.regions[sid], point, self.length_tol)
+        if len(found) != 1:
+            count = f"{len(found)} regions" if found else "no region"
+            return f"{name} lies inside {count} of {sid}"
+        return sid, found[0]
+
+    def body(self, name: str) -> Any:
+        """The released body a name addresses: a region of a cut file by a point inside it
+        (region), else a solid of bodies; or, as text, why it addresses none."""
+        if released.at_point(name) is not None:
+            found = self.region(name)
+            return found if isinstance(found, str) else self.regions[found[0]][found[1]]
+        if name in self.regions:
+            return f"{name} is a cut file: name a region of it {name}@<x>,<y>, by a point inside it"
+        return self.bodies.get(name, f"{name} is not a body of a geometry source")
+
     def released_datum(self, name: str) -> tuple[str, tuple[float, float, float]] | None:
         """The body a datum declared on released geometry lies on, and its point in the body's
-        frame; None for a name declared on no body, or not as three numbers."""
+        frame; None for a name declared on no body, or not as three numbers. A datum on a cut file
+        lies on the sheet, not on one region: its body is the source, its point [x, y] on the
+        sheet (z 0)."""
         point = self.datums.get(name)
+        if not isinstance(point, list):
+            return None
+        sheet = next((s for s in self.regions if name.startswith(f"{s}.")), None)
+        if sheet is not None:
+            return (sheet, (float(point[0]), float(point[1]), 0.0)) if len(point) == 2 else None
         body = max((b for b in self.bodies if name.startswith(f"{b}.")), key=len, default=None)
-        if body is None or not isinstance(point, list) or len(point) != 3:
+        if body is None or len(point) != 3:
             return None
         return body, (float(point[0]), float(point[1]), float(point[2]))
 
@@ -287,6 +367,16 @@ class Project:
             )
         )
 
+    def prints_length(self, ref: str) -> bool:
+        """Whether an evidence value is printed as a length: in a length unit, or as a diameter
+        callout (Ø 22.5) with no unit."""
+        unit, ledgered = self.unit_of(ref), self._ledgered(ref)
+        if unit is not None:
+            return units.quantity(unit) == "length"
+        return ledgered is not None and any(
+            math.isclose(v, ledgered[0], rel_tol=1e-9) for v in sources.diameters_in(ledgered[1])
+        )
+
     def unit_of(self, ref: str) -> str | None:
         """The unit an evidence value is printed in; None (the project's units) if none is
         printed."""
@@ -301,6 +391,15 @@ class Project:
             return None
         value, unit = ledgered[0], self.unit_of(ref)
         return value if unit is None else units.convert(value, unit, self.units)
+
+    def ledger_value(self, ref: str) -> float | None:
+        """An evidence value as an expect reads it: in the unit a check compares its printed
+        unit's quantity in, an angle in degrees and any other in the project's units, or as
+        printed where it is printed with no unit."""
+        value, unit = self.evidence_value(ref), self.unit_of(ref)
+        if value is None or unit is None:
+            return value
+        return value * self.compared_size(units.quantity(unit))
 
     def value_as(self, ref: str, quantity: str | None) -> float | None:
         """The evidence value at ref compared as quantity: an angle in degrees, else in the
@@ -427,8 +526,11 @@ def check_sources(p: Project) -> None:
                 p.error("source-hash", f"source {sid}: sha256 does not match {s.get('path')}")
             if s.get("kind") == "geometry":
                 try:
-                    p.solids(sid)
-                except Exception as exc:  # noqa: BLE001 - the STEP reader raises many types
+                    if released.is_sheet(path):
+                        p.read_regions(sid)
+                    else:
+                        p.solids(sid)
+                except Exception as exc:  # noqa: BLE001 - the STEP, STL and SVG readers raise many types
                     p.error(
                         "source-unreadable",
                         f"source {sid}: cannot read geometry from {s.get('path')}: "
@@ -611,10 +713,32 @@ def _probe_angle(p: Project, e: dict, body: str) -> dict[str, float] | str:
     return {key: angle}
 
 
+def _probe_diameter(p: Project, e: dict, body: str) -> dict[str, float] | str:
+    """The diameter of the cylindrical face of body that diameter probe e's datum at lies on."""
+    values = e.get("values") or {}
+    if "at" not in e:
+        return "a diameter probe names the datum it is taken at in at"
+    if len(values) != 1:
+        return f"a diameter probe records one value, not {len(values)}"
+    at, named = str(e["at"]), p.released_datum(str(e["at"]))
+    if named is None or named[0] != body:
+        return f"{at} is not a datum declared on body {body}"
+    found = released.diameter_at(p.bodies[body], named[1], p.length_tol)
+    if isinstance(found, str):
+        return f"{at} lies on {found} of body {body}"
+    (key,) = values
+    return {key: found}
+
+
 # The kinds of check a probe reads a released body as, each with what it evaluates there: each
 # value key's value in the project's units (an angle in degrees), or why it cannot be evaluated.
 # Each is compared in its CHECK_KINDS quantity.
-PROBE_KINDS = {"bbox": _probe_bbox, "distance": _probe_distance, "angle": _probe_angle}
+PROBE_KINDS = {
+    "bbox": _probe_bbox,
+    "distance": _probe_distance,
+    "angle": _probe_angle,
+    "diameter": _probe_diameter,
+}
 
 
 def check_probe(p: Project, e: dict) -> None:
@@ -627,6 +751,13 @@ def check_probe(p: Project, e: dict) -> None:
         return
     if sid in _unread_geometry(p):
         return  # check_sources says why its bodies cannot be read
+    if sid in p.regions:
+        p.error(
+            "evidence-anchor",
+            f"{eid}: {sid} is a cut file, whose regions a shape check compares; a probe reads a "
+            "solid",
+        )
+        return
     body = str(e.get("body", sid))
     names = [b for b in p.bodies if released.source_of(b) == sid]
     if body not in names:
@@ -725,7 +856,8 @@ def check_coverage(p: Project) -> list[tuple[str, str, str]]:
             )
             continue
         if geometry:
-            uncovered += _uncovered_bodies(p, sid)
+            sheet = sid in p.regions
+            uncovered += _uncovered_regions(p, sid) if sheet else _uncovered_bodies(p, sid)
             continue
         texts = sources.pages(p.source_path(sid))
         anchors = [e for e in p.evidence if e.get("source") == sid and "quote" in e]
@@ -801,28 +933,84 @@ def _uncovered_bodies(p: Project, sid: str) -> list[tuple[str, str, str]]:
                 f"{', '.join(names)}",
             )
         skipped.add(k.get("body"))
+    return [(sid, f"body {name}", _UNCOVERED) for name in names if name not in compared | skipped]
+
+
+# Why coverage lists a released body.
+_UNCOVERED = "no shape check compares it and no skip sets it aside"
+
+
+def _uncovered_regions(p: Project, sid: str) -> list[tuple[str, str, str]]:
+    """The regions of cut file sid that no shape check compares and no skip sets aside, each
+    named by a point inside it, as check_coverage lists them; a skip sets aside the region a
+    point inside it names (body), or every region inside a rectangle (within). [skip-reason],
+    [skip-anchor] and [skip-not-found] for its skips."""
+    found = p.regions[sid]
+    covered = set()
+    for c in p.checks:
+        named = p.region(str(c.get("body"))) if compares_body(c) else None
+        if isinstance(named, tuple) and named[0] == sid:
+            covered.add(named[1])
+    for k in (k for k in p.skipped if k.get("source") == sid):
+        if not k.get("reason"):
+            p.error("skip-reason", f"skip in {sid}: reason is required")
+        if "body" in k:
+            named = p.region(k["body"])
+            if isinstance(named, str) or named[0] != sid:
+                why = named if isinstance(named, str) else f"{k['body']} is not on {sid}"
+                p.error("skip-not-found", f"skip in {sid}: {why}")
+            else:
+                covered.add(named[1])
+        elif _rectangle(k.get("within")) is not None:
+            inside = released.regions_within(found, _rectangle(k["within"]), p.length_tol)
+            if not inside:
+                p.error(
+                    "skip-not-found",
+                    f"skip in {sid}: within {k['within']} holds no whole region of {sid}",
+                )
+            covered |= set(inside)
+        else:
+            p.error(
+                "skip-anchor",
+                f"skip in {sid}: a cut file's skip names a region by a point inside it, "
+                f"body: {sid}@<x>,<y>, or the regions inside a rectangle, "
+                "within: [[x, y], [x, y]] at two opposite corners",
+            )
     return [
-        (sid, f"body {name}", "no shape check compares it and no skip sets it aside")
-        for name in names
-        if name not in compared | skipped
+        (sid, f"body {released.point_name(sid, released.inner_point(region))}", _UNCOVERED)
+        for i, region in enumerate(found)
+        if i not in covered
     ]
+
+
+def _rectangle(within) -> tuple[tuple[float, float], tuple[float, float]] | None:
+    """The rectangle a skip's within gives by two opposite corners [[x, y], [x, y]], as its least
+    and greatest corner; None where within is not that."""
+    if not (isinstance(within, list) and len(within) == 2 and all(len(c) == 2 for c in within)):
+        return None
+    (x0, y0), (x1, y1) = within
+    return (min(x0, x1), min(y0, y1)), (max(x0, x1), max(y0, y1))
+
+
+# What a derived param's expr or an expect is built from besides the names it reads: arithmetic,
+# numbers and calls of MATH_NAMES.
+_EXPR_SYNTAX = (
+    ast.Expression,
+    ast.BinOp,
+    ast.UnaryOp,
+    ast.Call,
+    ast.Name,
+    ast.Load,
+    ast.Constant,
+    ast.operator,
+    ast.unaryop,
+)
 
 
 def _evaluate(expr: str, names: dict[str, float]) -> float:
     tree = ast.parse(expr, mode="eval")
-    allowed = (
-        ast.Expression,
-        ast.BinOp,
-        ast.UnaryOp,
-        ast.Call,
-        ast.Name,
-        ast.Load,
-        ast.Constant,
-        ast.operator,
-        ast.unaryop,
-    )
     for node in ast.walk(tree):
-        if not isinstance(node, allowed):
+        if not isinstance(node, _EXPR_SYNTAX):
             raise ValueError(f"disallowed syntax {type(node).__name__}")
     return float(eval(compile(tree, "<expr>", "eval"), {"__builtins__": {}}, MATH_NAMES | names))
 
@@ -972,13 +1160,108 @@ def resolve_params(p: Project) -> None:
 
 
 def check_refs(c: dict) -> list[str]:
-    """The evidence values a check compares with the geometry."""
+    """The evidence values a check compares with the geometry, those its expect names among them."""
     eid = c.get("evidence")
     return (
         [f"{eid}.{key}" for key in (c.get("axes") or {})]
         + ([f"{eid}.{c['key']}"] if c.get("key") else [])
         + [str(ref) for ref in c.get("ends") or []]
+        + expect_refs(str(c.get("expect", "")))
     )
+
+
+# A ledger value an expect names, <entry>.<key>: an evidence id, which may hold hyphens, then one
+# of its values' keys.
+_LEDGER_NAME = re.compile(r"(?<![\w.])([A-Za-z_][\w-]*)\.([A-Za-z_]\w*)")
+
+
+def expect_refs(expr: str) -> list[str]:
+    """The ledger values an expect names, <entry>.<key>, in order."""
+    return list(dict.fromkeys(f"{m[1]}.{m[2]}" for m in _LEDGER_NAME.finditer(expr)))
+
+
+def expect_value(p: Project, expr: str) -> float:
+    """The value an expect works out from the ledger values it names, each read as
+    Project.ledger_value reads it; raises ValueError saying why it cannot: it names a param, an
+    unknown name, entry or key, or does not parse or evaluate."""
+    refs, names = expect_refs(expr), {}
+    for i, ref in enumerate(refs):
+        entry, _, key = ref.partition(".")
+        item = p.item(entry)
+        if item is None:
+            raise ValueError(f"{entry} is not a ledger entry")
+        if key not in (item.get("values") or {}):
+            raise ValueError(f"{entry} records no {key}")
+        names[f"_ledger{i}"] = p.ledger_value(ref)
+    text = _LEDGER_NAME.sub(lambda m: f"_ledger{refs.index(f'{m[1]}.{m[2]}')}", expr)
+    try:
+        tree = ast.parse(text, mode="eval")
+    except SyntaxError as exc:
+        raise ValueError(f"does not parse: {exc.msg}") from exc
+    except (RecursionError, MemoryError) as exc:  # the parser's stack overflowing
+        raise ValueError("does not parse: nested too deep") from exc
+    for node in ast.walk(tree):
+        if not isinstance(node, _EXPR_SYNTAX):
+            raise ValueError(f"does not parse as arithmetic: {type(node).__name__}")
+        if isinstance(node, ast.Constant):
+            number = node.value
+            if type(number) is not int and type(number) is not float:
+                raise ValueError(f"does not parse as arithmetic: {number!r}")
+            node.value = float(number)  # so a power overflows rather than running on
+        if isinstance(node, ast.Name) and node.id not in names.keys() | MATH_NAMES.keys():
+            if node.id in p.params:
+                raise ValueError(
+                    f"names param {node.id}; an expect reads only ledger values, <entry>.<key>"
+                )
+            raise ValueError(f"names {node.id}, neither a ledger value <entry>.<key> nor math")
+    try:
+        code = compile(tree, "<expect>", "eval")
+        value = float(eval(code, {"__builtins__": {}}, MATH_NAMES | names))
+    except (ArithmeticError, ValueError, TypeError, RecursionError) as exc:
+        raise ValueError(f"does not evaluate: {exc}") from exc
+    if not math.isfinite(value):
+        raise ValueError(f"does not evaluate: it gives {value}")
+    return value
+
+
+def expect_config(p: Project, c: dict) -> list[str]:
+    """Why check c's expect, or its want of one, leaves it nothing to compare with: an expect on a
+    kind that compares no one value (CheckKind.expects), beside evidence, or that cannot be worked
+    out (expect_value); or a kind that takes one naming neither it nor evidence. An expect citing a
+    repeated evidence id is left to check_citations."""
+    kind = CHECK_KINDS.get(str(c.get("kind")))
+    if "expect" not in c:
+        # A claim citing no evidence is claim_config's to name.
+        missing = kind is not None and kind.expects and not {"evidence", "claim"} & c.keys()
+        return (
+            ["give evidence and key, or expect, the value it is compared with"] if missing else []
+        )
+    if kind is None or not kind.expects:
+        return [f"expect is for a check that compares one value; kind {c.get('kind')} takes none"]
+    if "evidence" in c:
+        return ["give expect or evidence, not both"]
+    expr = str(c["expect"])
+    if any(p.cites_repeated(ref) for ref in expect_refs(expr)):
+        return []
+    try:
+        expect_value(p, expr)
+    except ValueError as exc:
+        return [f"expect {expr!r}: {exc}"]
+    return []
+
+
+def check_expects(p: Project) -> None:
+    """[check-config] for each check whose expect cannot be compared with, or that names neither
+    an expect nor evidence, which the build then leaves unevaluated."""
+    for c in p.checks:
+        for problem in expect_config(p, c):
+            p.error("check-config", f"check {c.get('id', '?')}: {problem}")
+
+
+def compared_ref(c: dict) -> str:
+    """What check c compares with, as its result names it: its expect, else the ledger value at
+    its evidence and key; raises KeyError for a check naming neither."""
+    return str(c["expect"]) if "expect" in c else f"{c['evidence']}.{c['key']}"
 
 
 def pose_refs(c: dict) -> list[str]:
@@ -999,23 +1282,32 @@ def cited_refs(p: Project, c: dict) -> list[str]:
     return check_refs(c) + [ref for ref in pose_refs(c) if ref not in p.params] + claimed
 
 
+def _kinds_taking(flag: str) -> str:
+    """The check kinds whose CheckKind sets flag, as a finding names them: `distance, angle or
+    stroke`."""
+    names = [name for name, kind in CHECK_KINDS.items() if getattr(kind, flag)]
+    return " or ".join(filter(None, [", ".join(names[:-1]), names[-1]]))
+
+
 def claim_config(p: Project, c: dict) -> list[str]:
-    """Why check c's claim or from pose cannot be evaluated: either on a kind that takes neither
-    (CheckKind.claims), or for one that does, a key and a claim, neither, a claim not in CLAIMS,
-    a tol or tol_rel beside a claim, or a claim citing no evidence item."""
+    """Why check c's claim or from pose cannot be evaluated: a claim on a kind that takes none
+    (CheckKind.claims), or a from pose (CheckKind.changes); or on a kind that takes a claim, a key
+    and a claim, neither, a claim not in CLAIMS, a tol or tol_rel beside a claim, or a claim citing
+    no evidence item."""
     kind = CHECK_KINDS.get(str(c.get("kind")))
     if kind is None:
         return []
-    if not kind.claims:
-        return [
-            f"{key} is for a stroke check; kind {c['kind']} takes none"
-            for key in ("claim", "from")
-            if key in c
-        ]
+    refused = [
+        f"{key} is for a {_kinds_taking(flag)} check; kind {c['kind']} takes none"
+        for key, flag in (("claim", "claims"), ("from", "changes"))
+        if key in c and not getattr(kind, flag)
+    ]
+    if refused or not kind.claims:
+        return refused
     if "claim" not in c:
         return (
             []
-            if "key" in c
+            if "key" in c or "expect" in c
             else [
                 "give key, the ledger value its stroke is compared with, "
                 "or claim: shortens or lengthens"
@@ -1114,7 +1406,7 @@ def check_tolerance(p: Project, c: dict, quantity: str | None = None) -> tuple[s
     value, or a mass check missing its tol_rel. quantity, where given, is the one a joint_valued
     check compares in, its joint's."""
     kind = CHECK_KINDS.get(str(c.get("kind")))
-    if kind is None:
+    if kind is None or kind.exact:
         return None
     if kind.tolerance is None:
         return ("tol_rel", float(c["tol_rel"])) if "tol_rel" in c else None
@@ -1166,6 +1458,11 @@ def overlap_limit(p: Project, c: dict) -> float:
 def _tolerance_bases(p: Project, c: dict) -> list[tuple[str, float | None]]:
     """The values check c's tolerance is capped against, each with how it is named: each value it
     compares, or the span between its two for a span_capped kind."""
+    if "expect" in c:
+        try:
+            return [(f"expect {c['expect']}", expect_value(p, str(c["expect"])))]
+        except ValueError:
+            return []  # check_expects says why
     refs, quantity = check_refs(c), compared_quantity(c)
     if CHECK_KINDS[str(c.get("kind"))].span_capped and len(refs) == 2:
         low, high = (p.value_as(ref, quantity) for ref in refs)
@@ -1184,6 +1481,13 @@ def check_tolerances(p: Project) -> None:
     TOL_REL_CAP."""
     for c in p.checks:
         cid, tolerance = c.get("id", "?"), check_tolerance(p, c)
+        kind = CHECK_KINDS.get(str(c.get("kind")))
+        for key in ("tol", "tol_rel") if kind is not None and kind.exact else ():
+            if key in c:
+                p.error(
+                    "check-config",
+                    f"check {cid}: a {c['kind']} check compares exactly, so it takes no {key}",
+                )
         if tolerance is None:
             continue
         key, value = tolerance
@@ -1196,8 +1500,8 @@ def check_tolerances(p: Project) -> None:
             continue
         where = "" if "tol" in c else f" (tolerance.{CHECK_KINDS[c['kind']].tolerance})"
         cap = CHECK_KINDS[c["kind"]].body_cap
-        body = p.bodies.get(str(c.get("body"))) if cap is not None else None
-        if cap is not None and body is not None:
+        body = p.body(str(c.get("body"))) if cap is not None else None
+        if cap is not None and body is not None and not isinstance(body, str):
             diagonal = body.bounding_box().diagonal
             if value > cap * diagonal * (1 + 1e-9):
                 p.error(
@@ -1217,7 +1521,7 @@ def check_tolerances(p: Project) -> None:
 
 def _unread_geometry(p: Project) -> set[str]:
     """The geometry sources whose bodies cannot be read: missing, or not readable as geometry."""
-    read = {released.source_of(name) for name in p.bodies}
+    read = {released.source_of(name) for name in p.bodies} | p.regions.keys()
     return {sid for sid, s in p.sources.items() if s.get("kind") == "geometry" and sid not in read}
 
 
@@ -1225,12 +1529,28 @@ def check_released_datums(p: Project) -> None:
     """[datum-off-solid] for each datum declared on released geometry that names no body, or does
     not lie on its body's solid (ADR-0006), as a datum model.py returns must lie on its part's."""
     bodies, unread = p.bodies, _unread_geometry(p)
+    # every cut file, read or not, so an unread one's datums are still held to [x, y]
+    sheets = [
+        sid
+        for sid, s in p.sources.items()
+        if s.get("kind") == "geometry" and released.is_sheet(p.source_path(sid))
+    ]
     for name, point in p.datums.items():
-        if len(point) != 3:
-            p.error("schema", f"evidence.yaml datums.{name}: must be [x, y, z], not {point}")
+        sheet = next((s for s in sheets if name.startswith(f"{s}.")), None)
+        if len(point) != (3 if sheet is None else 2):
+            shape = "[x, y, z]" if sheet is None else f"[x, y] on cut file {sheet}"
+            p.error("schema", f"evidence.yaml datums.{name}: must be {shape}, not {point}")
             continue
-        if released.source_of(name.partition(".")[0]) in unread:
+        if released.source_of(name.partition(".")[0]) in unread or sheet in unread:
             continue  # check_sources says why its body cannot be read
+        if sheet is not None:
+            if not released.outlines_at(p.regions[sheet], (point[0], point[1]), p.length_tol):
+                p.error(
+                    "datum-off-solid",
+                    f"datum {name} of cut file {sheet}: lies inside no region's outer contour; "
+                    "place it on a region, or at the centre of a hole in one",
+                )
+            continue
         named = p.released_datum(name)
         if named is None:
             p.error(
@@ -1349,6 +1669,59 @@ def expect_param_quantity(p: Project, name: str, expected: tuple[str, ...], use:
         expect_quantity(p, ref, expected, f"param {source}{via} {use}")
 
 
+def _not_whole(value: float) -> bool:
+    return math.isfinite(value) and value != round(value)
+
+
+def expect_count(p: Project, ref: str, use: str) -> None:
+    """[unit-quantity] unless the evidence value at ref reads as a count (ADR-0012): printed in a
+    count unit or none, and a whole number."""
+    expect_quantity(p, ref, ("count",), use)
+    value = p.evidence_value(ref)
+    if value is not None and _not_whole(value):
+        p.error(
+            "unit-quantity",
+            f"{ref} = {value:g} is not a whole number, where a count is expected ({use})",
+        )
+
+
+def expect_param_count(p: Project, name: str, use: str, lengths: bool = False) -> None:
+    """expect_count for a param: [unit-quantity] unless the quote it traces to prints a count
+    unit or none, and its value is a whole number. Where lengths, a param whose quote prints a
+    length, in a length unit or as a diameter callout (Ø 22.5), is read as a length instead, as a
+    belt's pulley diameters are (ADR-0012)."""
+    traced = _traced(p, name)
+    unit = None if traced is None else p.unit_of(traced[1])
+    if lengths and traced is not None and p.prints_length(traced[1]):
+        return
+    expect_param_quantity(p, name, ("count", "length") if lengths else ("count",), use)
+    if unit is not None and units.quantity(unit) != "count":
+        return  # [unit-quantity] says what it is read as
+    value = p.values.get(name)
+    if value is not None and _not_whole(value):
+        p.error(
+            "unit-quantity",
+            f"param {name} = {value:g} is not a whole number, where a count is expected ({use})",
+        )
+
+
+def derived_from(p: Project, name: str, through: tuple[str, ...] = ()) -> list[str]:
+    """The params a derived param's value is worked out from, through every derived param its
+    expr references, in order: those with a basis of their own; none for a param not derived."""
+    spec = p.params.get(name) or {}
+    if spec.get("basis") != "derived" or name in through:
+        return []
+    try:
+        needs = sorted(expr_names(str(spec.get("expr", ""))) - MATH_NAMES.keys())
+    except (SyntaxError, ValueError):
+        return []  # already a param-derived finding
+    out = []
+    for n in (n for n in needs if n in p.params):
+        inner = derived_from(p, n, (*through, name))
+        out += inner if (p.params[n] or {}).get("basis") == "derived" else [n]
+    return list(dict.fromkeys(out))
+
+
 def expect_joint_value(p: Project, ref: str, quantity: str | None, use: str) -> None:
     """expect_quantity for a joint value, a param's traced quote or a ledger value: of
     JOINT_QUANTITIES before the build, or of quantity, its joint's, after it. check_units has
@@ -1378,14 +1751,21 @@ def check_units(p: Project) -> None:
             expected = (str(compared_quantity(c)),)
             if joint_valued(c):
                 expected = JOINT_QUANTITIES  # the build holds each to its joint's
-            for ref in check_refs(c):
-                expect_quantity(p, ref, expected, f"check {cid}")
+            # An expect's ledger values are of whatever quantities its arithmetic combines.
+            for ref in [] if "expect" in c else check_refs(c):
+                if expected == ("count",):
+                    expect_count(p, ref, f"check {cid}")
+                else:
+                    expect_quantity(p, ref, expected, f"check {cid}")
         for key in POSES:
             for ref in (c.get(key) or {}).values():
                 expect_joint_value(p, str(ref), None, f"in check {cid}'s {key}")
         named = CHECK_KINDS[kind].names if kind in CHECK_KINDS else None
         for name, quantity in named(c) if named else []:
-            expect_param_quantity(p, name, (quantity,), f"in check {cid}")
+            if quantity == "count":
+                expect_param_count(p, name, f"in check {cid}")
+            else:
+                expect_param_quantity(p, name, (quantity,), f"in check {cid}")
     for part, entry in p.parts.items():
         for by, name in entry.items():
             expect_param_quantity(p, name, (by,), f"in params.yaml parts.{part}")
@@ -1411,6 +1791,7 @@ def check_static(p: Project) -> None:
     check_conflicts(p)
     check_citations(p)
     check_claims(p)
+    check_expects(p)
     check_units(p)
     check_tolerances(p)
     lint.lint_model(p)

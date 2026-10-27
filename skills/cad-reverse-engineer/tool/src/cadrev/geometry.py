@@ -14,7 +14,7 @@ from functools import partial
 from pathlib import Path
 from typing import NamedTuple, Protocol
 
-from . import accounting, released
+from . import accounting, released, units
 from .project import (
     AXES,
     CLAIMS,
@@ -24,10 +24,15 @@ from .project import (
     check_params,
     cited_refs,
     claim_config,
+    derived_from,
     check_tolerance,
     compared_quantity,
+    compared_ref,
+    expect_config,
+    expect_value,
     expect_joint_value,
     joint_valued,
+    expect_param_count,
     expect_param_quantity,
     expr_names,
     mass_params,
@@ -72,8 +77,9 @@ class CheckResult:
     pairs: int | None = None
     # The joint values a posed check was evaluated at: joint -> {from, value}; None when unposed.
     pose: dict | None = None
-    # A stroke check's from pose, in the same form, which its stroke is taken from; None when
-    # taken from as built.
+    # The from pose a stroke, distance or angle check's change is taken from, in the same form:
+    # {} where it names as built; None for a check with no from (a stroke's then taken from as
+    # built).
     from_pose: dict | None = None
     # A swept interference check's joint, the range params it is swept between, their values and
     # how many poses it evaluated; None for a check not swept.
@@ -85,6 +91,9 @@ class CheckResult:
     # once they fit, the largest distance between the surfaces (distance) and where it occurs in
     # the body's frame (worst_point); None for other kinds.
     shape: dict | None = None
+    # A check compared with a value worked out from the ledger: its expect expression (expr) and
+    # the value it works out to (value); None for a check compared with a ledger value.
+    expect: dict | None = None
 
 
 @dataclass
@@ -100,7 +109,8 @@ class Built:
     loops: dict = field(default_factory=dict)
     # tendon name -> {path: [<instance>.<feature>, ...], stiffness: param, damping: param}
     tendons: dict = field(default_factory=dict)
-    # gear name -> {driver: joint, driven: joint, ratio: param}: driven moves ratio times driver
+    # gear name -> {driver: joint, driven: joint, ratio or lead: param}: driven moves ratio times
+    # driver, or a slide moves lead per full turn of a revolute joint
     gears: dict = field(default_factory=dict)
     # cable name -> {path: [<instance>.<feature>, ...], wheel: joint, closes: {joint: param}}: an
     # inextensible cord; its wheel's full turn moves each joint it closes to that param's value
@@ -148,8 +158,9 @@ class Poser(Protocol):
 
 
 def pose_text(pose: dict) -> str:
-    """A pose as findings and report.md name it: `input at 60 (turn_60)`."""
-    return ", ".join(f"{j} at {s['value']:g} ({s['from']})" for j, s in pose.items())
+    """A pose as findings and report.md name it: `input at 60 (turn_60)`, or `as built` where it
+    sets no joint."""
+    return ", ".join(f"{j} at {s['value']:g} ({s['from']})" for j, s in pose.items()) or "as built"
 
 
 DRIVES = ("actuated", "passive")
@@ -227,8 +238,34 @@ def _names(value, count: int) -> bool:
     )
 
 
-GEAR_KEYS = ("driver", "driven", "ratio")
 CABLE_KEYS = ("path", "wheel", "closes")
+
+
+@dataclass(frozen=True)
+class GearBy:
+    """What a gear is stated by (ADR-0013): the quantity its param expects and the joints it
+    couples."""
+
+    quantity: str
+    across: bool  # couples a revolute joint and a slide, else two joints of one type
+    joins: str  # the joints it couples, as a finding says them
+    counted: bool = False  # its param may be derived from counts, as a ratio from tooth counts
+    at_zero: str | None = None  # why a param of 0 couples nothing, where it does not
+
+
+GEAR_BY = {
+    "ratio": GearBy("fraction", across=False, joins="two joints of one type", counted=True),
+    "lead": GearBy(
+        "length", across=True, joins="a revolute joint and a slide", at_zero="the slide never moves"
+    ),
+}
+GEAR_KEYS = ("driver", "driven", *GEAR_BY)
+
+
+def gear_by(gear: dict) -> tuple[str, str]:
+    """What a gear is stated by, once the contract has held it: (ratio or lead, its param)."""
+    key = next(k for k in GEAR_BY if k in gear)
+    return key, gear[key]
 
 
 def _motion_breach(result) -> str | None:
@@ -269,9 +306,13 @@ def _motion_breach(result) -> str | None:
             return f"gear {name} must be a mapping, not {type(gear).__name__}"
         for key in sorted(set(gear) - set(GEAR_KEYS)):
             return f"gear {name}: unknown key {key!r}"
-        for key in GEAR_KEYS:
+        stated = [key for key in GEAR_BY if key in gear]
+        if len(stated) != 1:
+            named = "names both" if stated else "names neither"
+            return f"gear {name}: takes a ratio or a lead, and {named}"
+        for key in ("driver", "driven", *stated):
             if not isinstance(gear.get(key), str):
-                what = "a param name" if key == "ratio" else "a joint name"
+                what = "a param name" if key in GEAR_BY else "a joint name"
                 return f"gear {name}: {key} must be {what}, not {gear.get(key)!r}"
     for name, cable in result.get("cables", {}).items():
         if not isinstance(cable, dict):
@@ -405,18 +446,22 @@ def build(p: Project) -> Built | None:
         cables=result.get("cables", {}),
     )
     for name in sorted(built.used):
-        expect_param_quantity(p, name, ("length", "angle"), "in model.py")
+        expect_param_quantity(p, name, ("length", "angle", "count"), "in model.py")
     ranges = {n for joint in built.joints.values() for n in joint.get("range", [])}
     for joint in built.joints.values():
         quantity = joint_type(joint).quantity
         for name in joint.get("range", []):
             if name in p.values and quantity is not None:
                 expect_param_quantity(p, name, (quantity,), f"in a {joint['type']} joint's range")
-    # gear ratios and cables' closed poses, which the MJCF exports as joint equalities
-    ratios = {gear["ratio"] for gear in built.gears.values()}
+    # gear ratios and leads and cables' closed poses, which the MJCF exports as joint equalities
+    ratios = {gear_by(gear)[1] for gear in built.gears.values()}
     for name, gear in built.gears.items():
-        if gear["ratio"] in p.values:
-            expect_param_quantity(p, gear["ratio"], ("fraction",), f"as gear {name}'s ratio")
+        key, param = gear_by(gear)
+        if param in p.values:
+            expect_param_quantity(p, param, (GEAR_BY[key].quantity,), f"as gear {name}'s {key}")
+            if GEAR_BY[key].counted:
+                for count in derived_from(p, param):
+                    expect_param_count(p, count, f"in gear {name}'s ratio", lengths=True)
     for name, cable in built.cables.items():
         for joint, param in cable.get("closes", {}).items():
             quantity = joint_type(built.joints[joint]).quantity if joint in built.joints else None
@@ -674,16 +719,25 @@ def _gear_flaw(p: Project, built: Built, gear: dict) -> str | None:
     if gear["driver"] == gear["driven"]:
         return f"driver and driven are both {gear['driver']}; a gear couples two joints"
     driver, driven = (built.joints[gear[key]]["type"] for key in ("driver", "driven"))
-    if driver != driven:
-        return f"couples a {driver} joint with a {driven} one; a gear couples two of one type"
-    if gear["ratio"] not in p.values:
-        return f"ratio names {gear['ratio']}, which params.yaml does not define"
+    key, param = gear_by(gear)
+    by = GEAR_BY[key]
+    if (driver != driven) != by.across:
+        other = next(k for k in GEAR_BY if k != key)
+        return (
+            f"couples a {driver} joint with a {driven} one by a {key}; a {key} couples {by.joins}, "
+            f"and {GEAR_BY[other].joins} take a {other}"
+        )
+    if param not in p.values:
+        return f"{key} names {param}, which params.yaml does not define"
+    if by.at_zero is not None and p.values[param] == 0:
+        return f"{key} {param} is 0, so {by.at_zero}"
     return None
 
 
 def _gear_flaws(p: Project, built: Built) -> bool:
     """Add [model-gear] for each gear that cannot couple its joints (an unknown or fixed joint,
-    one joint twice, joints of two types, an undefined ratio param); True if there is any."""
+    one joint twice, a ratio across two types or a lead within one, an undefined ratio or lead
+    param, a lead of 0); True if there is any."""
     flawed = False
     for name, gear in built.gears.items():
         flaw = _gear_flaw(p, built, gear)
@@ -794,20 +848,25 @@ def cable_turn(built: Built, cable: dict) -> str:
     return built.joints[cable["wheel"]]["range"][0]
 
 
+def _gear_coupling(p: Project, built: Built, name: str, gear: dict) -> Coupling:
+    """A gear's two joints in proportion: at its ratio, or at its lead per full turn of its
+    revolute joint in the project's angle unit, inverted where the slide drives."""
+    key, param = gear_by(gear)
+    driver, driven, value = gear["driver"], gear["driven"], p.values[param]
+    if not GEAR_BY[key].across:
+        law = f"moves {driven} {value:g} times {driver}"
+        return Coupling("gear", name, driver, driven, value, law)
+    turn = 2 * math.pi / units.size("angle", p.units)
+    turns = joint_type(built.joints[driver]).quantity == "angle"
+    revolute, slide = (driver, driven) if turns else (driven, driver)
+    law = f"moves {slide} {value:g} per full turn of {revolute}"
+    return Coupling("gear", name, driver, driven, value / turn if turns else turn / value, law)
+
+
 def couplings(p: Project, built: Built) -> list[Coupling]:
     """Each pair of joints moving in proportion: a gear's, and a cable's wheel with each joint it
     closes, at its closed value over the wheel's full turn."""
-    found = [
-        Coupling(
-            "gear",
-            name,
-            g["driver"],
-            g["driven"],
-            ratio := p.values[g["ratio"]],
-            f"moves {g['driven']} {ratio:g} times {g['driver']}",
-        )
-        for name, g in built.gears.items()
-    ]
+    found = [_gear_coupling(p, built, name, g) for name, g in built.gears.items()]
     for name, cable in built.cables.items():
         if "wheel" not in cable:
             continue
@@ -887,11 +946,13 @@ def _compared(
     shown: str = "",
     quantity: str | None = None,
 ) -> CheckResult:
-    """The comparison of a value a check evaluates with the ledger value at ref: it passes within
-    the check's tolerance: tol, a length or for an angle check degrees, or for a mass check
-    tol_rel, a fraction of that value. quantity, where given, is the one a range check compares
-    its joint's own value in."""
-    expected = p.value_as(ref, quantity or compared_quantity(c))
+    """The comparison of a value a check evaluates with the ledger value at ref, or for a check
+    with an expect, ref, with the value it works out from the ledger: it passes within the check's
+    tolerance: tol, a length or for an angle check degrees, or for a mass check tol_rel, a
+    fraction of that value. quantity, where given, is the one a range check compares its joint's
+    own value in."""
+    worked = "expect" in c
+    expected = expect_value(p, ref) if worked else p.value_as(ref, quantity or compared_quantity(c))
     if expected is None:
         raise KeyError(f"evidence value {ref}")
     tolerance = check_tolerance(p, c, quantity)
@@ -908,6 +969,7 @@ def _compared(
         f"{expected:g}{band} ({ref})",
         f"{measured:.4g}{shown}",
         c.get("interpretation", ""),
+        expect={"expr": ref, "value": printed(expected)[0]} if worked else None,
     )
 
 
@@ -1042,10 +1104,13 @@ def _joint_name(c: dict) -> str | None:
 
 
 def _given(built: Built, c: dict, *placed: Built) -> tuple[str, ...]:
-    """The params the model gives check c: the range ends of a joint it names, and for each cable
-    whose wheel the pose of an assembly placed for it moves, the wheel's turn and closed values."""
+    """The params the model gives check c: the range ends of a joint it names, the ratio or lead
+    of each gear the pose of an assembly placed for it moves a joint through, and for each cable
+    whose wheel such a pose moves, the wheel's turn and closed values. A pose moves every joint a
+    chain of gears and cables couples to one it sets, so each gear along a chain is read."""
     given = list(built.joints.get(_joint_name(c) or "", {}).get("range", ()))
     moved = set().union(*(posed.moved for posed in placed))
+    given += (gear_by(g)[1] for g in built.gears.values() if g["driver"] in moved)
     for cable in built.cables.values():
         if cable.get("wheel") in moved:
             given += (cable_turn(built, cable), *cable["closes"].values())
@@ -1233,6 +1298,36 @@ def _weighed(p: Project, built: Built, c: dict) -> Counter | None:
     return None if missing else tally
 
 
+def counted(stated: float, placed: int) -> bool:
+    """Whether a stated count agrees with the instances the assembly places: exactly, as a count
+    check and a mass check's counts compare them (ADR-0012)."""
+    return stated == placed
+
+
+def _count(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckResult]:
+    """A count check: how many instances of its part the assembly places, compared exactly with
+    the ledger value."""
+    reading.at(built)
+    cid, part, ref = c.get("id", "?"), str(c["part"]), compared_ref(c)
+    if part not in built.parts:
+        p.error("check-config", f"check {cid}: {part} is not a part model.build returns")
+        return []
+    stated = p.value_as(ref, "count")
+    if stated is None:
+        raise KeyError(f"evidence value {ref}")
+    placed = sum(1 for name, _ in built.assembly.values() if name == part)
+    return [
+        CheckResult(
+            cid,
+            c["kind"],
+            counted(stated, placed),
+            f"{stated:g} ({ref})",
+            f"{placed} instance{'s' * (placed != 1)} of {part}",
+            c.get("interpretation", ""),
+        )
+    ]
+
+
 def _mass(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckResult]:
     """A mass check, reading the params of the parts it weighs, even where a finding then stops
     it, and the parts it weighs in several instances with no counts entry."""
@@ -1255,7 +1350,9 @@ def _weighed_mass(p: Project, built: Built, c: dict, tally: Counter) -> CheckRes
     params. None after a [check-config] finding: a counts param other than its part's instances
     in tally, or a part the mass model leaves unweighed."""
     cid, names, counts = c.get("id", "?"), list(tally), c.get("counts", {})
-    wrong = [(part, param) for part, param in counts.items() if p.values[param] != tally[part]]
+    wrong = [
+        (part, param) for part, param in counts.items() if not counted(p.values[param], tally[part])
+    ]
     for part, param in wrong:
         p.error(
             "check-config",
@@ -1278,7 +1375,7 @@ def _weighed_mass(p: Project, built: Built, c: dict, tally: Counter) -> CheckRes
             return None
         each = {n: built.masses[n].mass for n in names}
     measured = sum(each[n] * tally[n] for n in names) + sum(p.values[n] for n in c.get("add", []))
-    return _compared(p, c, cid, f"{c['evidence']}.{c['key']}", measured)
+    return _compared(p, c, cid, compared_ref(c), measured)
 
 
 def _interference(
@@ -1355,13 +1452,6 @@ def _stroke(
         if not built.dropped:  # else that finding says the cables were dropped
             p.error("check-config", f"check {cid}: {name} is not a cable")
         return []
-    start, start_pose = built, None
-    if c.get("from"):
-        posed = _placed_for(p, built, c, poser, at="from")
-        if posed is None:
-            return []
-        start, start_pose = posed
-        reading.at(start)
     if pose is None:
         if "wheel" not in cable:
             p.error(
@@ -1377,14 +1467,47 @@ def _stroke(
             return []
         placed, pose = posed
         reading.at(placed)
-    shortening = cable_length(start, cable) - cable_length(placed, cable)
+    changed = _change(p, built, c, poser, reading, placed, lambda at: -cable_length(at, cable))
+    if changed is None:
+        return []
+    shortening, start_pose = changed
     shown = f" shortening of {name}"
     if "claim" in c:
         result = _claimed(p, c, cid, shortening, shown)
     else:
-        result = _compared(p, c, cid, f"{c['evidence']}.{c['key']}", shortening, shown)
+        result = _compared(p, c, cid, compared_ref(c), shortening, shown)
     result.pose, result.from_pose = pose, start_pose
     return [result]
+
+
+def _change(
+    p: Project,
+    built: Built,
+    c: dict,
+    poser: Poser | None,
+    reading: _Reading,
+    placed: Built,
+    evaluate: Callable[[Built], float | None],
+) -> tuple[float, dict | None] | None:
+    """How much the value evaluate returns changes from check c's from pose to placed, reading
+    what the model gives the from pose, with that pose as report.json shows it: {} where from names
+    no joint, and the change is then taken from as built, as it is for a stroke check with no from
+    (None). None after a finding: a from pose that cannot be placed, or evaluate raises at either
+    pose. The one code path a change between two poses is taken by, for every kind
+    CheckKind.changes names."""
+    after = evaluate(placed)
+    if after is None:
+        return None
+    posed = _placed_for(p, built, c, poser, at="from")
+    if posed is None:
+        return None
+    start, start_pose = posed
+    if start_pose is None:
+        start_pose = {} if "from" in c else None
+    else:
+        reading.at(start)
+    before = evaluate(start)
+    return None if before is None else (after - before, start_pose)
 
 
 def _claimed(p: Project, c: dict, rid: str, change: float, shown: str = "") -> CheckResult:
@@ -1412,31 +1535,90 @@ def _bbox(p: Project, c: dict, placed: Built, reading: _Reading) -> Iterator[Che
     s = shape.bounding_box().size
     size = (s.X, s.Y, s.Z)
     for key, axis in c["axes"].items():
-        ref, measured = f"{c['evidence']}.{key}", size[AXES[axis]]
-        yield _compared(p, c, f"{cid}.{key}", ref, measured, f" along {axis}")
+        ref, value = f"{c['evidence']}.{key}", size[AXES[axis]]
+        yield _compared(p, c, f"{cid}.{key}", ref, value, f" along {axis}")
 
 
-def _distance(p: Project, c: dict, placed: Built, reading: _Reading) -> list[CheckResult]:
-    """A distance check: the distance between its two datums."""
+def _distance(
+    p: Project, built: Built, c: dict, placed: Built, poser: Poser | None, reading: _Reading
+) -> list[CheckResult]:
+    """A distance check: the distance between its two datums, or with from its change between the
+    two poses."""
+
+    def evaluate(at: Built) -> float | None:
+        points = _datums(p, at, c)
+        return None if points is None else _datum_distance(c, points)
+
+    between = " - ".join(c["between"])
+    shown = (f" {between}", f" change in {between}")
+    return _evaluated(p, built, c, placed, poser, reading, evaluate, shown)
+
+
+def _angle(
+    p: Project, built: Built, c: dict, placed: Built, poser: Poser | None, reading: _Reading
+) -> list[CheckResult]:
+    """An angle check: the angle at its vertex datum between the other two, or with from its
+    change between the two poses."""
+
+    def evaluate(at: Built) -> float | None:
+        points = _datums(p, at, c)
+        return None if points is None else _datum_angle(p, c, points)
+
+    a, vertex, b = c["between"]
+    at = f"at {vertex} between {a} and {b}"
+    return _evaluated(p, built, c, placed, poser, reading, evaluate, (f"° {at}", f"° change {at}"))
+
+
+def _evaluated(
+    p: Project,
+    built: Built,
+    c: dict,
+    placed: Built,
+    poser: Poser | None,
+    reading: _Reading,
+    evaluate: Callable[[Built], float | None],
+    shown: tuple[str, str],
+) -> list[CheckResult]:
+    """Check c's result: the value evaluate returns at placed, or with from its change between the
+    two poses, compared with its ledger value and shown after it as the first of shown, or the
+    second for a change; no result after a finding."""
     reading.at(placed)
-    points = _datums(p, placed, c)
-    if points is None:
-        return []
-    measured = _datum_distance(c, points)
-    ref, between = f"{c['evidence']}.{c['key']}", " - ".join(c["between"])
-    return [_compared(p, c, c.get("id", "?"), ref, measured, f" {between}")]
+    start_pose = None
+    if "from" in c:
+        changed = _change(p, built, c, poser, reading, placed, evaluate)
+        if changed is None:
+            return []
+        value, start_pose = changed
+    else:
+        value = evaluate(placed)
+        if value is None:
+            return []
+    ref = compared_ref(c)
+    result = _compared(p, c, c.get("id", "?"), ref, value, shown["from" in c])
+    result.from_pose = start_pose
+    return [result]
 
 
-def _angle(p: Project, c: dict, placed: Built, reading: _Reading) -> list[CheckResult]:
-    """An angle check: the angle at its vertex datum between the other two."""
-    reading.at(placed)
-    points = _datums(p, placed, c)
-    measured = None if points is None else _datum_angle(p, c, points)
-    if measured is None:
+def _diameter(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckResult]:
+    """A diameter check: the diameter of the cylindrical face its datum at lies on, in its part's
+    frame. No result, after a [check-config] finding, where at is no part's datum or lies on no
+    cylindrical face, or on the edge of two of different diameters."""
+    reading.at(built)
+    cid, at = c.get("id", "?"), str(c["at"])
+    part = _owner(built, at)
+    if part is None or at not in built.datums:
+        p.error("check-config", f"check {cid}: {at} is not a datum of a part")
         return []
-    ref, (a, vertex, b) = f"{c['evidence']}.{c['key']}", c["between"]
-    shown = f"° at {vertex} between {a} and {b}"
-    return [_compared(p, c, c.get("id", "?"), ref, measured, shown)]
+    found = released.diameter_at(built.parts[part], built.datums[at], p.length_tol)
+    if isinstance(found, str):
+        p.error(
+            "check-config",
+            f"check {cid}: {at} lies on {found} of part {part}; place it on the face whose "
+            "diameter the check compares",
+        )
+        return []
+    ref = compared_ref(c)
+    return [_compared(p, c, cid, ref, found, f" at {at}")]
 
 
 def _shape(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckResult]:
@@ -1447,10 +1629,31 @@ def _shape(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckRe
     unknown or its pairs are fewer than three off one line."""
     reading.at(built)
     cid, name, part = c.get("id", "?"), str(c["body"]), built.parts[c["part"]]
-    body = p.bodies.get(name)
-    if body is None:
-        p.error("check-config", f"check {cid}: {name} is not a body of a geometry source")
+    body = p.body(name)
+    if isinstance(body, str):
+        p.error("check-config", f"check {cid}: {body}")
         return []
+    # A region of a cut file is compared with the part's outline projected along an axis.
+    sheet, along = released.at_point(name), c.get("along")
+    if sheet is None and along is not None:
+        p.error(
+            "check-config",
+            f"check {cid}: along projects a part onto a region of a cut file, and {name} is a "
+            "solid",
+        )
+        return []
+    if sheet is not None and along not in AXES:
+        p.error(
+            "check-config",
+            f"check {cid}: "
+            + (
+                f"names no axis along which to project part {c['part']} onto region {name}"
+                if along is None
+                else f"along names no axis x, y or z of part {c['part']}: {along}"
+            ),
+        )
+        return []
+    on = name if sheet is None else sheet[0]
     pairs, ours, theirs = c.get("pairs") or [], [], []
     for pair in pairs:
         if len(pair) != 2:
@@ -1463,12 +1666,12 @@ def _shape(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckRe
             p.error("check-config", f"check {cid}: {pair[0]} is not a datum of part {c['part']}")
             return []
         named = p.released_datum(pair[1])
-        if named is None or named[0] != name:
-            p.error(
-                "check-config", f"check {cid}: {pair[1]} is not a datum declared on body {name}"
-            )
+        if named is None or named[0] != on:
+            where = f"body {name}" if sheet is None else f"cut file {on}"
+            p.error("check-config", f"check {cid}: {pair[1]} is not a datum declared on {where}")
             return []
-        ours.append(built.datums[pair[0]])
+        point = built.datums[pair[0]]
+        ours.append(point if sheet is None else released.projected(point, str(along)))
         theirs.append(named[1])
     if len(pairs) < 3 or released.collinear(theirs, p.length_tol):
         p.error(
@@ -1492,7 +1695,14 @@ def _shape(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckRe
                 shape=fitted,
             )
         ]
-    distance, at = released.surface_distance(part.moved(where), body)
+    if sheet is None:
+        compared = "surface"
+        distance, at = released.surface_distance(part.moved(where), body)
+    else:
+        compared = "outline"
+        distance, at = released.outline_distance(
+            released.outline(part, str(along)).moved(where), body
+        )
     tolerance = check_tolerance(p, c)
     assert tolerance is not None  # a shape check's kind has a tolerance
     shown = ", ".join(f"{v:.4g}" for v in at)
@@ -1501,8 +1711,8 @@ def _shape(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckRe
             cid,
             "shape",
             distance <= tolerance[1],
-            f"surfaces within {tolerance[1]:g} of body {name}",
-            f"{distance:.4g} largest surface distance, at ({shown}) on body {name}",
+            f"{compared}s within {tolerance[1]:g} of body {name}",
+            f"{distance:.4g} largest {compared} distance, at ({shown}) on body {name}",
             c.get("interpretation", ""),
             shape=fitted | {"distance": printed(distance)[0], "worst_point": list(printed(*at))},
         )
@@ -1546,8 +1756,8 @@ def run_checks(
         kind = c.get("kind")
         if any(p.cites_repeated(ref) for ref in cited_refs(p, c)):
             continue  # it compares with neither item; check_citations said so before the build
-        if claim_config(p, c):
-            continue  # check_claims said why before the build
+        if claim_config(p, c) or expect_config(p, c):
+            continue  # check_claims or check_expects said why before the build
         reached = _placed_for(p, built, c, poser)
         if reached is None:
             continue
@@ -1556,9 +1766,11 @@ def run_checks(
         if kind == "bbox":
             evaluation = partial(_bbox, p, c, placed)
         elif kind == "distance":
-            evaluation = partial(_distance, p, c, placed)
+            evaluation = partial(_distance, p, built, c, placed, poser)
         elif kind == "angle":
-            evaluation = partial(_angle, p, c, placed)
+            evaluation = partial(_angle, p, built, c, placed, poser)
+        elif kind == "diameter":
+            evaluation = partial(_diameter, p, built, c)
         elif kind == "mass":
             evaluation = partial(_mass, p, built, c)
         elif kind == "stroke":
@@ -1567,6 +1779,8 @@ def run_checks(
             evaluation = partial(_range, p, built, c, poser)
         elif kind == "shape":
             evaluation = partial(_shape, p, built, c)
+        elif kind == "count":
+            evaluation = partial(_count, p, built, c)
         elif kind == "interference":
             evaluation = partial(_interference, p, built, c, placed, poser)
         else:

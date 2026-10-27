@@ -8,7 +8,7 @@ from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 
-from .geometry import PHYSICS, Built, CheckResult, pose_text, printed, range_ends
+from .geometry import GEAR_BY, PHYSICS, Built, CheckResult, pose_text, printed, range_ends
 from .lint import MODEL_LITERALS
 from .project import (
     BASES,
@@ -144,7 +144,7 @@ def _valued(p: Project, entry: dict, keys) -> dict:
 
 def motion(p: Project, built: Built) -> dict:
     """How the model moves, as the MJCF exports it: each joint with its type, what it joins, its
-    drive, its range and its physics values, each loop, each gear with its joints and ratio,
+    drive, its range and its physics values, each loop, each gear with its joints and ratio or lead,
     each tendon with its path and physics values, and each cable with its path and, wound on a
     wheel, the closed value of each joint it closes; no joints means the model is static, unless a
     finding dropped them."""
@@ -159,7 +159,7 @@ def motion(p: Project, built: Built) -> dict:
         "joints": joints,
         "loops": {name: list(pair) for name, pair in built.loops.items()},
         "gears": {
-            name: {"driver": g["driver"], "driven": g["driven"]} | _valued(p, g, ("ratio",))
+            name: {"driver": g["driver"], "driven": g["driven"]} | _valued(p, g, GEAR_BY)
             for name, g in built.gears.items()
         },
         "tendons": {
@@ -277,6 +277,10 @@ def counts(p: Project, results: list[CheckResult]) -> dict[str, int]:
         }
         | {"physics_proposed": len(apart)}
     )
+
+
+# The keys of a check result report.json gives only the checks they apply to, left out as None.
+_LEFT_OUT_WHEN_NONE = ("pairs", "pose", "from_pose", "sweep", "uncounted", "shape", "expect")
 
 
 def write(
@@ -496,8 +500,7 @@ def write(
                     {
                         k: v
                         for k, v in asdict(r).items()
-                        if k not in ("pairs", "pose", "from_pose", "sweep", "uncounted", "shape")
-                        or v is not None
+                        if k not in _LEFT_OUT_WHEN_NONE or v is not None
                     }
                     for r in results
                 ],

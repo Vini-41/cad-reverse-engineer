@@ -15,7 +15,17 @@ from pathlib import Path
 
 import pytest
 import yaml
-from build123d import Axis, Box, Compound, Cylinder, Location, Pos, chamfer, export_step
+from build123d import (
+    Axis,
+    Box,
+    Compound,
+    Cylinder,
+    Location,
+    Pos,
+    chamfer,
+    export_step,
+    export_stl,
+)
 
 from cadrev import cli
 
@@ -2230,7 +2240,22 @@ def _replace(root: Path, name: str, old: str, new: str) -> None:
 
 # Damage that once crashed, or plausibly could crash, a verification run. Add a case for every
 # new way project input or user code enters the run.
+def _expect_instead(root: Path, expr) -> None:
+    """The pitch check compared with expect expr in place of its evidence and key."""
+
+    def change(d):
+        pitch = d["checks"][1]
+        del pitch["evidence"], pitch["key"]
+        pitch["expect"] = expr
+
+    edit(root, "checks.yaml", change)
+
+
 DAMAGE = {
+    "expect is a list": lambda r: _expect_instead(r, ["pitch.pitch"]),
+    "expect nested past the parser": lambda r: _expect_instead(r, "-" * 100_000 + "pitch.pitch"),
+    "expect raising a power past any float": lambda r: _expect_instead(r, "9 ** 9 ** 9"),
+    "expect calling a math function wrongly": lambda r: _expect_instead(r, "sqrt(x=pitch.pitch)"),
     "param named by a number": lambda r: edit(
         r,
         "params.yaml",
@@ -2395,6 +2420,18 @@ DAMAGE = {
         _add_source(r, "g", "sources/g.step"),
         edit(r, "project.yaml", lambda d: d["sources"][-1].update(kind="geometry")),
     ),
+    "geometry source of a truncated STL": lambda r: (
+        # A binary STL header promising 1000 triangles, followed by half of one.
+        (r / "sources" / "g.stl").write_bytes(
+            b"\0" * 80 + (1000).to_bytes(4, "little") + b"\1" * 25
+        ),
+        _add_source(r, "g", "sources/g.stl"),
+        edit(r, "project.yaml", lambda d: d["sources"][-1].update(kind="geometry")),
+    ),
+    "geometry source without a path, with a datum": lambda r: (
+        edit(r, "project.yaml", lambda d: d["sources"].append({"id": "g", "kind": "geometry"})),
+        edit(r, "evidence.yaml", lambda d: d.update(datums={"g.a": [1, 2, 3]})),
+    ),
     "released datum of two numbers": lambda r: (
         released(r, r.parent),
         edit(r, "evidence.yaml", lambda d: d["datums"].update({"link_step.a": [1, 2]})),
@@ -2415,6 +2452,33 @@ DAMAGE = {
     "shape check of a source that is no geometry": lambda r: (
         released(r, r.parent),
         edit(r, "checks.yaml", lambda d: d["checks"][-1].update(body="paper")),
+    ),
+    "cut file of malformed XML": lambda r: sheet(r, r.parent, svg="<svg><path d=", check=False),
+    "cut file path of malformed data": lambda r: sheet(
+        r, r.parent, svg=swap(SHEET, "M 50 0 h 10", "M 50 0 q !"), check=False
+    ),
+    "cut file of a single contour": lambda r: sheet(
+        r, r.parent, svg='<svg xmlns="http://www.w3.org/2000/svg"><circle r="5"/></svg>'
+    ),
+    "cut file skip within a list of numbers": lambda r: (
+        sheet(r, r.parent),
+        _skip_sheet(r, within=[1, 2]),
+    ),
+    "cut file skip within corners of text": lambda r: (
+        sheet(r, r.parent),
+        _skip_sheet(r, within=[["a", "b"], ["c", "d"]]),
+    ),
+    "shape check of a point on a released solid": lambda r: (
+        released(r, r.parent),
+        edit(r, "checks.yaml", lambda d: d["checks"][-1].update(body="link_step@1,2")),
+    ),
+    "shape check of a point on a cut file with no number": lambda r: sheet(
+        r, r.parent, body="sheet@a,b"
+    ),
+    "shape check along a number": lambda r: sheet(r, r.parent, along=3),
+    "cut file datum of text": lambda r: (
+        sheet(r, r.parent),
+        edit(r, "evidence.yaml", lambda d: d["datums"].update({"sheet.a": ["x", "y"]})),
     ),
     "source registered after a PyYAML re-dump": lambda r: (
         edit(r, "project.yaml", lambda d: None),
@@ -2561,6 +2625,7 @@ UNITS = {
     "spinning at 300 r/min": (300, 1800),
     "turning at 2 rad/s": (2, 114.59155902616465),
     "wound 3 turns": (3, 3),
+    "a sun of 25 teeth": (25, 25),
     "a 3300 mAh battery": (3300, 11880),
     "a spring of 0.25 N·m/rad": (0.25, 250),
     "a spring of 4 N·mm/rad": (4, 4),
@@ -3046,7 +3111,13 @@ SWEPT = {
     "5-mm": "5-mm",
     "5-10 mm": "5-10 mm",
     "six turns": "six turns",
+    "25 teeth": "25 teeth",
+    "1 tooth": "1 tooth",
     "three degrees": "three degrees",
+    "Ø 32.5": "ø 32.5",
+    "Ø3": "ø3",
+    "Ø 32.5 mm": "ø 32.5 mm",
+    "⌀3": "⌀3",
 }
 
 
@@ -3116,8 +3187,24 @@ def test_guard_coverage_lists_the_near_miss_of_each_look_alike(proj_dir, tmp_pat
     assert swept(proj_dir, tmp_path, capsys, f"The part is {form} here.") == [STILL_SWEPT[form]]
 
 
+@pytest.mark.parametrize("form", ["32.5", "3"])
+def test_guard_coverage_lists_no_number_without_a_diameter_sign_or_unit(
+    proj_dir, tmp_path, capsys, form
+):
+    assert swept(proj_dir, tmp_path, capsys, f"The part is {form} here.") == []
+
+
+def test_guard_coverage_lists_no_diameter_sign_inside_a_word(proj_dir, tmp_path, capsys):
+    assert swept(proj_dir, tmp_path, capsys, "Built at Ørsted 3 and Søborg 2.") == []
+
+
 def test_guard_coverage_lists_no_number_word_without_a_unit(proj_dir, tmp_path, capsys):
     assert swept(proj_dir, tmp_path, capsys, "Eight tension springs hold one of the links.") == []
+
+
+def test_guard_coverage_lists_no_open_ended_count_noun_or_bare_integer(proj_dir, tmp_path, capsys):
+    text = "Its 3 planets mesh with a ring; SSPG [25, 65, 155, 0.5, 3] lists each."
+    assert swept(proj_dir, tmp_path, capsys, text) == []
 
 
 def test_coverage_counts_a_number_word_with_a_unit_as_ledgered_by_its_value(proj_dir, tmp_path):
@@ -4073,6 +4160,136 @@ def test_mass_check_naming_what_it_weighs_none_of_is_check_config(
 ):
     report = _two_weighed_links(proj_dir, tmp_path, check)
     assert [f["message"] for f in report["findings"] if f["rule"] == "check-config"] == [message]
+
+
+# A count check: an instance count a source states, compared exactly with the instances the
+# assembly places (ADR-0012).
+
+
+def _counted_links(root: Path, tmp_path: Path, placed: int, stated="3") -> dict:
+    """placed links, and check links counting the link's instances against N1.n, stated as the
+    count of links; report.json."""
+    text = f"The leg carries {stated} links."
+    add_quote(root, tmp_path, text, text.rstrip("."), {"n": float(stated.split()[0])})
+    write(root, "model.py", _links(placed))
+    count = {"id": "links", "kind": "count", "part": "link", "evidence": "N1", "key": "n"}
+    edit(root, "checks.yaml", lambda d: d["checks"].append(count))
+    return verify(root)[1]
+
+
+def test_count_check_passes_when_the_assembly_places_the_stated_count(proj_dir, tmp_path):
+    report = _counted_links(proj_dir, tmp_path, placed=3)
+    assert report["status"] == "VERIFIED", report["findings"]
+    links = _by_id(report)["links"]
+    assert (links["ok"], links["kind"], links["rests_on"]) == (True, "count", "source")
+    assert (links["expected"], links["measured"]) == ("3 (N1.n)", "3 instances of link")
+
+
+def test_count_check_fails_when_the_assembly_places_one_more(proj_dir, tmp_path):
+    report = _counted_links(proj_dir, tmp_path, placed=4)
+    assert not _by_id(report)["links"]["ok"]
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-failed"] == [
+        "links: expected 3 (N1.n), measured 4 instances of link"
+    ]
+
+
+@pytest.mark.parametrize("stated", ["3 mm", "3 g"])
+def test_count_printed_in_a_unit_of_another_quantity_is_unit_quantity(proj_dir, tmp_path, stated):
+    report = _counted_links(proj_dir, tmp_path, placed=3, stated=stated)
+    messages = [f["message"] for f in report["findings"] if f["rule"] == "unit-quantity"]
+    assert len(messages) == 1
+    assert messages[0].startswith("N1.n is printed in ")
+    assert messages[0].endswith("where a count is expected (check links)")
+
+
+@pytest.mark.parametrize("stated", ["3", "3 teeth"])
+def test_guard_count_printed_with_no_unit_or_a_count_unit_is_no_unit_quantity(
+    proj_dir, tmp_path, stated
+):
+    report = _counted_links(proj_dir, tmp_path, placed=3, stated=stated)
+    assert [f for f in report["findings"] if f["rule"] == "unit-quantity"] == []
+
+
+def test_count_check_on_a_count_that_is_not_whole_is_unit_quantity(proj_dir, tmp_path):
+    report = _counted_links(proj_dir, tmp_path, placed=3, stated="2.5")
+    assert [f["message"] for f in report["findings"] if f["rule"] == "unit-quantity"] == [
+        "N1.n = 2.5 is not a whole number, where a count is expected (check links)"
+    ]
+
+
+def test_guard_count_check_on_a_whole_count_is_no_unit_quantity(proj_dir, tmp_path):
+    report = _counted_links(proj_dir, tmp_path, placed=3, stated="3")
+    assert [f for f in report["findings"] if f["rule"] == "unit-quantity"] == []
+
+
+def test_mass_checks_count_that_is_not_whole_is_unit_quantity(proj_dir, tmp_path):
+    _mass_of_two_links(proj_dir, tmp_path, "n_links")
+    add_params(
+        proj_dir,
+        n_links={"basis": "proposed", "value": 2.5, "rationale": "'two links'", "gap": "G1"},
+    )
+    assert findings(proj_dir, "unit-quantity") == [
+        "param n_links = 2.5 is not a whole number, where a count is expected (in check m)"
+    ]
+
+
+def test_mass_checks_count_printed_in_a_unit_of_another_quantity_is_unit_quantity(
+    proj_dir, tmp_path
+):
+    _mass_of_two_links(proj_dir, tmp_path, "n_links")
+    add_params(proj_dir, n_links={"basis": "source", "from": "N1.n"})
+    edit(proj_dir, "evidence.yaml", lambda d: d["evidence"][-1]["values"].update(n=1.2))
+    messages = findings(proj_dir, "unit-quantity")
+    assert len(messages) == 1
+    assert messages[0].startswith("N1.n is printed in g/cm³, a unit of density, where a count")
+
+
+def test_count_check_with_a_tol_is_check_config(proj_dir, tmp_path):
+    _counted_links(proj_dir, tmp_path, placed=3)
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"][-1].update(tol=1))
+    assert "check links: a count check compares exactly, so it takes no tol" in findings(
+        proj_dir, "check-config"
+    )
+
+
+def _off_by_one(root: Path, tmp_path: Path, kind: str) -> list[tuple[str, str]]:
+    """Four links placed where a source states three, compared by a count check or a mass check's
+    counts; the error findings, as (rule, message)."""
+    text = "The leg carries 3 links, together 7.2 g, printed in resin of 1.2 g/cm3."
+    add_quote(root, tmp_path, text, text.rstrip("."), {"n": 3, "m": 7.2, "rho": 1.2})
+    write(root, "model.py", _links(4))
+    add_params(
+        root, rho={"basis": "source", "from": "N1.rho"}, n_links={"basis": "source", "from": "N1.n"}
+    )
+    checks = {
+        "count": {"id": "c", "kind": "count", "part": "link", "evidence": "N1", "key": "n"},
+        "mass": {
+            "id": "c",
+            "kind": "mass",
+            "parts": ["link"],
+            "density": "rho",
+            "counts": {"link": "n_links"},
+            "evidence": "N1",
+            "key": "m",
+            "tol_rel": 0.05,
+        },
+    }
+    edit(root, "checks.yaml", lambda d: d["checks"].append(checks[kind]))
+    _, report = verify(root)
+    return [(f["rule"], f["message"]) for f in report["findings"] if f["level"] == "error"]
+
+
+def test_count_check_and_a_mass_checks_counts_each_reject_the_same_off_by_one(proj_dir, tmp_path):
+    assert ("check-failed", "c: expected 3 (N1.n), measured 4 instances of link") in _off_by_one(
+        proj_dir, tmp_path, "count"
+    )
+
+
+def test_guard_mass_checks_counts_rejects_the_off_by_one_a_count_check_rejects(proj_dir, tmp_path):
+    assert (
+        "check-config",
+        "check c: counts link as n_links (3), but it weighs 4 instances of it",
+    ) in _off_by_one(proj_dir, tmp_path, "mass")
 
 
 # What a check rests on: the weakest basis among the params it reads.
@@ -6520,7 +6737,8 @@ def test_joints_coupled_by_a_gear_move_in_its_ratio_and_the_mjcf_and_report_carr
         (
             '"driven": "wheel"',
             '"driven": "slide"',
-            "couples a revolute joint with a slide one; a gear couples two of one type",
+            "couples a revolute joint with a slide one by a ratio; a ratio couples two joints of "
+            "one type, and a revolute joint and a slide take a lead",
         ),
         (
             '"driven": "wheel"',
@@ -6560,6 +6778,83 @@ def test_gear_ratio_typed_into_model_py_is_model_return(proj_dir, tmp_path):
 def test_guard_gear_ratio_typed_into_model_py_is_a_model_literal(proj_dir, tmp_path):
     geared(proj_dir, tmp_path, swap(_MESH, '"gear_ratio"', "3"))
     assert "model-literal" in errors(proj_dir)
+
+
+# COMPAct's Table I row for its single-stage gearbox: sun, planet and ring teeth, module, planets.
+TABLE_I = "SSPG [25, 65, 155, 0.5, 3]"
+_TEETH = {"z_sun": 25, "z_planet": 65, "z_ring": 155}
+
+
+def counted_gear(root: Path, tmp_path: Path, row: str = TABLE_I, values=_TEETH) -> dict:
+    """The geared slider-crank with gear_ratio derived from the counts row states, ledgered as T1:
+    z_planet / (z_ring - z_sun), 65 / (155 - 25) = 0.5 as Table I states them; report.json."""
+    geared(root, tmp_path)
+    table = tmp_path / "table.txt"
+    table.write_text(f"Table I. Gear trains\n{row}\n")
+    register = ["source", str(root), str(table), "--id", "table", "--kind", "paper"]
+    assert cli.main([*register, "--citation", "Singh 2025"]) == 0
+    item = {"id": "T1", "source": "table", "locator": "Table I", "quote": row, "values": values}
+    _append("evidence.yaml", "evidence", item)(root, tmp_path)
+    for name in _TEETH:
+        _param(name, basis="source", **{"from": f"T1.{name}"})(root, tmp_path)
+    drop = {"value": None, "rationale": None, "gap": None}
+    _param("gear_ratio", basis="derived", expr="z_planet / (z_ring - z_sun)", **drop)(
+        root, tmp_path
+    )
+    return verify(root)[1]
+
+
+def test_guard_gear_ratio_derived_from_counts_in_a_table_cell_reads_them_as_numbers(
+    proj_dir, tmp_path
+):
+    report = counted_gear(proj_dir, tmp_path)
+    assert [f for f in report["findings"] if f["level"] == "error"] == []
+    assert {n: report["params"][n]["value"] for n in (*_TEETH, "gear_ratio")} == {
+        **_TEETH,
+        "gear_ratio": 0.5,
+    }
+    assert _by_id(report)["tips"]["ok"]
+
+
+def test_gear_ratio_derived_from_a_count_printed_in_a_unit_of_another_quantity_is_unit_quantity(
+    proj_dir, tmp_path
+):
+    row = "The sun has 25 g, the planet 65 teeth and the ring 155 teeth"
+    report = counted_gear(proj_dir, tmp_path, row)
+    assert [f["message"] for f in report["findings"] if f["rule"] == "unit-quantity"] == [
+        "T1.z_sun is printed in g, a unit of mass, where a count or a length is expected "
+        "(param z_sun in gear mesh's ratio)"
+    ]
+
+
+def test_gear_ratio_derived_from_a_count_that_is_not_whole_is_unit_quantity(proj_dir, tmp_path):
+    row = "The sun has 25.5 teeth, the planet 65 teeth and the ring 155 teeth"
+    report = counted_gear(proj_dir, tmp_path, row, _TEETH | {"z_sun": 25.5})
+    assert [f["message"] for f in report["findings"] if f["rule"] == "unit-quantity"] == [
+        "param z_sun = 25.5 is not a whole number, where a count is expected (in gear mesh's ratio)"
+    ]
+
+
+def test_guard_gear_ratio_derived_from_lengths_is_no_unit_quantity(proj_dir, tmp_path):
+    row = "Its pulleys are 25.5 mm, 65 mm and 155 mm across"
+    report = counted_gear(proj_dir, tmp_path, row, _TEETH | {"z_sun": 25.5})
+    rules = {f["rule"] for f in report["findings"]}
+    assert "unit-quantity" not in rules
+
+
+def test_guard_gear_ratio_derived_from_diameter_callouts_reads_them_as_lengths(proj_dir, tmp_path):
+    row = "Its pulleys are Ø 25.5, Ø 65 and Ø 155"
+    report = counted_gear(proj_dir, tmp_path, row, _TEETH | {"z_sun": 25.5})
+    assert [f["message"] for f in report["findings"] if f["rule"] == "unit-quantity"] == []
+
+
+def test_guard_model_py_reading_a_count_is_no_unit_quantity(proj_dir, tmp_path):
+    add_quote(proj_dir, tmp_path, "The link has 4 teeth.", "4 teeth", {"z": 4})
+    add_params(proj_dir, teeth={"basis": "source", "from": "N1.z"})
+    write(
+        proj_dir, "model.py", swap(MODEL, "    link = Box(", "    teeth = p.teeth\n    link = Box(")
+    )
+    assert findings(proj_dir, "unit-quantity") == []
 
 
 # A cable wound on a wheel closes the joints it names toward their closed pose, in proportion to the
@@ -6982,7 +7277,7 @@ def test_guard_run_without_the_build_leaves_source_closed_angles_unchecked_sourc
     assert _TURN_AND_CLOSED <= set(_unchecked_printed(_partial(proj_dir, "--no-build")))
 
 
-def test_stroke_check_posed_through_a_gear_on_its_wheel_rests_on_the_closed_angles(
+def test_stroke_check_posed_through_a_gear_on_its_wheel_rests_on_its_ratio_and_closed_angles(
     proj_dir, tmp_path
 ):
     mesh = (
@@ -6997,7 +7292,10 @@ def test_stroke_check_posed_through_a_gear_on_its_wheel_rests_on_the_closed_angl
     _check("half", pose={"input": "S30.turn"}, tol=0.5)(proj_dir, tmp_path)
     _, report = verify(proj_dir)
     half = _by_id(report)["half"]
-    assert (half["rests_on"], half["rests_on_params"]) == ("proposed", ["turn", "c1", "c2"])
+    assert (half["rests_on"], half["rests_on_params"]) == (
+        "proposed",
+        ["spool_ratio", "turn", "c1", "c2"],
+    )
 
 
 # A check of each kind posed at the spool's full turn, besides a stroke check.
@@ -7342,15 +7640,21 @@ def test_claim_check_configured_wrong_is_a_finding_and_not_evaluated(
 
 
 @pytest.mark.parametrize("kind", ["distance", "angle", "bbox"])
-@pytest.mark.parametrize("key", ["claim", "from"])
-def test_claim_or_from_on_a_check_of_another_kind_is_check_config(proj_dir, tmp_path, kind, key):
+def test_guard_claim_on_a_check_of_another_kind_is_check_config(proj_dir, tmp_path, kind):
     cabled(proj_dir, tmp_path)
     _only_posed_at_the_spool(kind)(proj_dir, tmp_path)
-    _check("posed", **{key: {"claim": "shortens", "from": {"spool": "half_turn"}}[key]})(
-        proj_dir, tmp_path
-    )
+    _check("posed", claim="shortens")(proj_dir, tmp_path)
     assert findings(proj_dir, "check-config") == [
-        f"check posed: {key} is for a stroke check; kind {kind} takes none"
+        f"check posed: claim is for a stroke check; kind {kind} takes none"
+    ]
+
+
+def test_from_on_a_bbox_check_is_check_config(proj_dir, tmp_path):
+    cabled(proj_dir, tmp_path)
+    _only_posed_at_the_spool("bbox")(proj_dir, tmp_path)
+    _check("posed", **{"from": {"spool": "half_turn"}})(proj_dir, tmp_path)
+    assert findings(proj_dir, "check-config") == [
+        "check posed: from is for a distance, angle or stroke check; kind bbox takes none"
     ]
 
 
@@ -7445,6 +7749,678 @@ def test_stroke_check_with_a_key_is_taken_from_its_from_pose(proj_dir, tmp_path)
     # From half the turn to the full turn: the full stroke less the half one, not the full stroke.
     assert _shortening(full) == pytest.approx(pull_stroke() - pull_stroke(0.5), abs=1e-3)
     assert full["from_pose"] == {"spool": {"from": "half_turn", "value": 60}}
+
+
+# A distance or angle check may take from, as a stroke check does: it then compares the change
+# between its from pose and its pose with its ledger value, as a slide's travel per screw turn.
+
+
+def slide_travel(root: Path, tmp_path: Path, check: dict | None = None) -> None:
+    """slide_driven with a distance check, travel, of how far the slider moves along x from as
+    built (from: {}) to slide's high end, compared with N1.hi (15); check changes its keys."""
+    slide_driven(root, tmp_path)
+    travel = {
+        "id": "travel",
+        "kind": "distance",
+        "instances": ["ground_1", "slider_1"],
+        "between": ["ground_1.a", "slider_1.a"],
+        "along": "x",
+        "evidence": "N1",
+        "key": "hi",
+        "from": {},
+        "pose": {"slide": "slide_max"},
+    }
+    _append("checks.yaml", "checks", travel | (check or {}))(root, tmp_path)
+
+
+def test_distance_check_with_from_compares_the_travel_between_its_two_poses(proj_dir, tmp_path):
+    slide_travel(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    travel = _by_id(report)["travel"]
+    assert code == 0, report["findings"]
+    assert travel["ok"]
+    # As built the slider pin sits sqrt(35² - 15²) from the crank pivot: the change is 15, not that.
+    assert travel["measured"] == "15 change in ground_1.a - slider_1.a"
+    assert travel["from_pose"] == {}
+    assert travel["pose"] == {"slide": {"from": "slide_max", "value": 15}}
+
+
+def test_distance_check_with_from_fails_where_the_travel_differs_naming_both_poses(
+    proj_dir, tmp_path
+):
+    slide_travel(proj_dir, tmp_path, {"from": {"slide": "slide_min"}})
+    code, report = verify(proj_dir)
+    assert code == 1 and not _by_id(report)["travel"]["ok"]
+    assert _by_id(report)["travel"]["from_pose"] == {"slide": {"from": "slide_min", "value": -10}}
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-failed"] == [
+        "travel: expected 15 (N1.hi), measured 25 change in ground_1.a - slider_1.a "
+        "from slide at -10 (slide_min) to slide at 15 (slide_max)"
+    ]
+
+
+@pytest.mark.parametrize(
+    "start, pose, ok, measured",
+    [
+        ({}, "S30.turn", True, 30),
+        ({"input": "S30.turn"}, "S60.turn", True, 30),
+        ({}, "S60.turn", False, 60),
+    ],
+    ids=["as-built-to-30", "30-to-60", "as-built-to-60"],
+)
+def test_angle_check_with_from_compares_the_change_in_angle_between_its_two_poses(
+    proj_dir, tmp_path, start, pose, ok, measured
+):
+    # The crank stands upright as built, 90° from the ground link; S30 states a 30° turn.
+    slider_crank(proj_dir, tmp_path)
+    turned = {
+        "id": "turned",
+        "kind": "angle",
+        "instances": ["ground_1", "crank_1"],
+        "between": ["ground_1.d", "ground_1.a", "crank_1.d"],
+        "evidence": "S30",
+        "key": "turn",
+        "from": start,
+        "pose": {"input": pose},
+    }
+    _append("checks.yaml", "checks", turned)(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    result = _by_id(report)["turned"]
+    assert result["ok"] is ok
+    assert float(result["measured"].split("°")[0]) == pytest.approx(measured, abs=1e-3)
+    assert result["measured"].endswith("° change at ground_1.a between ground_1.d and crank_1.d")
+
+
+# A from pose naming no joint, or a bare number, on each kind that takes one: the same finding.
+_FROM_FINDINGS = {
+    "unknown-joint": (
+        {"heel": "turn"},
+        "check-config",
+        "check {id}: from names heel, which is not a joint",
+    ),
+    "bare-number": (
+        {"spool": 3},
+        "schema",
+        "checks.yaml checks[{i}].from.spool: must be text, not 3",
+    ),
+}
+
+
+def _from_finding(root: Path, tmp_path: Path, kind: str, case: str) -> tuple[str, str]:
+    """cabled with a check of kind whose from is the case's: stroke check full, or a distance or
+    angle check posed at the spool's full turn; the rule and message it should raise."""
+    cabled(root, tmp_path)
+    if kind != "stroke":
+        _only_posed_at_the_spool(kind)(root, tmp_path)
+    cid = "full" if kind == "stroke" else "posed"
+    start, rule, says = _FROM_FINDINGS[case]
+    _check(cid, **{"from": start})(root, tmp_path)
+    checks = yaml.safe_load((root / "checks.yaml").read_text())["checks"]
+    i = next(n for n, c in enumerate(checks) if c["id"] == cid)
+    return rule, says.format(id=cid, i=i)
+
+
+# The rows of the table each kind raises a finding for only once it takes from; a bare number is
+# [schema] on any check.
+_FROM_TAKEN = [("distance", "unknown-joint"), ("angle", "unknown-joint")]
+
+
+@pytest.mark.parametrize("kind, case", _FROM_TAKEN)
+def test_from_naming_no_joint_on_a_distance_or_angle_check_is_the_finding_it_is_on_stroke(
+    proj_dir, tmp_path, kind, case
+):
+    rule, says = _from_finding(proj_dir, tmp_path, kind, case)
+    assert findings(proj_dir, rule) == [says]
+
+
+@pytest.mark.parametrize(
+    "kind, case",
+    [
+        (kind, case)
+        for kind in ("stroke", "distance", "angle")
+        for case in _FROM_FINDINGS
+        if (kind, case) not in _FROM_TAKEN
+    ],
+)
+def test_guard_from_on_a_stroke_check_or_naming_a_bare_number_is_a_finding(
+    proj_dir, tmp_path, kind, case
+):
+    rule, says = _from_finding(proj_dir, tmp_path, kind, case)
+    assert findings(proj_dir, rule) == [says]
+
+
+# A lead screw is a gear between a revolute joint and a slide, stated by a lead: how far the slide
+# moves per full turn of the revolute joint (ADR-0013).
+
+LEAD_SCREW = """\
+from build123d import *
+
+
+def build(p):
+    w, h = p.block_w, p.block_h
+    return {
+        "parts": {
+            "frame": Box(w, w, h),
+            "screw": Cylinder(p.screw_r, p.screw_l),
+            "carriage": Box(w, w, h),
+        },
+        "datums": {
+            "frame.a": (0, 0, h / 2),
+            "screw.a": (0, 0, 0),
+            "screw.b": (0, 0, p.screw_l / 2),
+            "carriage.a": (0, 0, h / 2),
+            "carriage.e": (0, 0, -h / 2),
+            "carriage.x": (w / 2, 0, 0),
+        },
+        "assembly": {
+            "frame_1": ("frame", Location()),
+            "screw_1": ("screw", Location((0, 0, p.screw_l))),
+            "carriage_1": ("carriage", Location((p.offset, 0, p.screw_l))),
+        },
+        "joints": {
+            "screw": {
+                "type": "revolute",
+                "parent": "frame_1",
+                "child": "screw_1",
+                "axis": ["screw_1.a", "screw_1.b"],
+                "drive": "actuated",
+            },
+            "slide": {
+                "type": "slide",
+                "parent": "frame_1",
+                "child": "carriage_1",
+                "axis": ["carriage_1.e", "carriage_1.a"],
+                "drive": "passive",
+            },
+        },
+        "gears": {"drive": {"driver": "screw", "driven": "slide", "lead": "screw_lead"}},
+    }
+"""
+
+LEAD = "The screw moves the carriage 8 mm per revolution."
+TRAVEL = "A full revolution of the screw carries the carriage 8 mm."
+
+
+def lead_screw(
+    root: Path, tmp_path: Path, model: str = LEAD_SCREW, text: str = LEAD, lead: float = 8
+) -> None:
+    """Replace the project with a lead screw: a frame, a screw turning on it about z (screw,
+    actuated) and a carriage sliding on it along z (slide, passive), coupled by the gear drive at
+    the source param screw_lead, from N1.lead (lead, 8 mm per revolution in text). One check,
+    travel: how far the carriage moves along z from as built to the screw turned one_turn
+    (proposed 360), compared with N2.travel, the travel a turn gives stated apart from the lead."""
+    edit(root, "project.yaml", lambda d: d.update(sources=[]))
+    (root / "sources" / "paper.txt").unlink()
+    write(root, "evidence.yaml", {"evidence": [], "skipped": [], "conflicts": []})
+    add_quote(root, tmp_path, f"{text}\n{TRAVEL}\n", text.rstrip("."), {"lead": lead})
+    stated = {"id": "N2", "source": "notes", "locator": "Sec. 1", "quote": TRAVEL.rstrip(".")}
+    _append("evidence.yaml", "evidence", stated | {"values": {"travel": 8}})(root, tmp_path)
+    chosen = {"block_w": 10, "block_h": 4, "screw_r": 2, "screw_l": 20, "offset": 20}
+    chosen |= {"one_turn": 360, "density": 1.2}
+    params = {
+        name: {"basis": "proposed", "value": value, "rationale": "a test part", "gap": "G1"}
+        for name, value in chosen.items()
+    }
+    params["screw_lead"] = {"basis": "source", "from": "N1.lead"}
+    parts = {name: {"density": "density"} for name in ("frame", "screw", "carriage")}
+    write(root, "params.yaml", {"params": params, "parts": parts})
+    write(root, "gaps.yaml", {"gaps": [{"id": "G1", "question": "part size?", "ask": "authors"}]})
+    travel = {
+        "id": "travel",
+        "kind": "distance",
+        "instances": ["frame_1", "carriage_1"],
+        "between": ["frame_1.a", "carriage_1.a"],
+        "along": "z",
+        "evidence": "N2",
+        "key": "travel",
+        "from": {},
+        "pose": {"screw": "one_turn"},
+    }
+    write(root, "checks.yaml", {"checks": [travel]})
+    write(root, "model.py", model)
+
+
+def test_distance_check_from_as_built_to_a_screw_turn_moves_the_carriage_its_lead(
+    proj_dir, tmp_path
+):
+    lead_screw(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    travel = _by_id(report)["travel"]
+    assert travel["ok"]
+    assert travel["measured"] == "8 change in frame_1.a - carriage_1.a"
+
+
+_DRIVE = '"driver": "screw", "driven": "slide", "lead": "screw_lead"'
+
+
+def test_lead_screw_driven_by_its_slide_turns_the_screw_once_per_lead(proj_dir, tmp_path):
+    mujoco = importlib.import_module("mujoco")
+
+    driven = '"driver": "slide", "driven": "screw", "lead": "screw_lead"'
+    lead_screw(proj_dir, tmp_path, swap(LEAD_SCREW, _DRIVE, driven))
+    code, report = verify(proj_dir)
+    # Posing the screw a full turn sets the slide that drives it to the lead, 8 mm.
+    assert code == 0, report["findings"]
+    assert _by_id(report)["travel"]["measured"] == "8 change in frame_1.a - carriage_1.a"
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    drive = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_EQUALITY, "drive")
+    assert list(m.eq_data[drive][:5]) == pytest.approx([0, 2 * math.pi / 8, 0, 0, 0])
+
+
+def _proposed_lead(value: float):
+    """Make screw_lead a proposed value in place of the stated 8 mm."""
+    spec = {"basis": "proposed", "value": value, "rationale": "x", "gap": "G1", "from": None}
+    return lambda r, t: _param("screw_lead", **spec)(r, t)
+
+
+def _slide_across(r: Path, t: Path) -> None:
+    axis = '"axis": ["carriage_1.e", "carriage_1.a"]'
+    write(r, "model.py", swap(LEAD_SCREW, axis, '"axis": ["carriage_1.a", "carriage_1.x"]'))
+
+
+@pytest.mark.parametrize(
+    "change", [_proposed_lead(-8), _slide_across], ids=["lead-sign-flipped", "slide-off-screw-axis"]
+)
+def test_distance_check_across_a_lead_screw_fails_with_the_lead_flipped_or_the_slide_off_its_axis(
+    proj_dir, tmp_path, change
+):
+    lead_screw(proj_dir, tmp_path)
+    change(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 1 and not _by_id(report)["travel"]["ok"]
+    assert [m.split(":")[0] for m in findings(proj_dir, "check-failed")] == ["travel"]
+
+
+def test_lead_gear_exports_its_lead_per_radian_and_report_shows_the_lead(proj_dir, tmp_path):
+    mujoco = importlib.import_module("mujoco")
+
+    lead_screw(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    drive = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_EQUALITY, "drive")
+    joint = mujoco.mjtObj.mjOBJ_JOINT
+    assert (m.eq_obj1id[drive], m.eq_obj2id[drive]) == (
+        mujoco.mj_name2id(m, joint, "slide"),
+        mujoco.mj_name2id(m, joint, "screw"),
+    )
+    # 8 mm per full turn is 8 / 2π mm per radian.
+    assert list(m.eq_data[drive][:5]) == pytest.approx([0, 8 / (2 * math.pi), 0, 0, 0])
+    assert report["motion"]["gears"] == {
+        "drive": {"driver": "screw", "driven": "slide", "lead": {"from": "screw_lead", "value": 8}}
+    }
+
+
+@pytest.mark.parametrize(
+    "old, new, says",
+    [
+        (
+            '"type": "slide"',
+            '"type": "revolute"',
+            "couples a revolute joint with a revolute one by a lead; a lead couples a revolute "
+            "joint and a slide, and two joints of one type take a ratio",
+        ),
+        (
+            '"lead": "screw_lead"',
+            '"ratio": "screw_lead"',
+            "couples a revolute joint with a slide one by a ratio; a ratio couples two joints of "
+            "one type, and a revolute joint and a slide take a lead",
+        ),
+    ],
+    ids=["lead-on-one-type", "ratio-across-types"],
+)
+def test_gear_stated_by_the_other_of_ratio_and_lead_than_its_joints_take_is_model_gear(
+    proj_dir, tmp_path, old, new, says
+):
+    lead_screw(proj_dir, tmp_path, swap(LEAD_SCREW, old, new))
+    assert findings(proj_dir, "model-gear") == [f"gear drive: {says}"]
+
+
+def test_lead_of_0_is_model_gear(proj_dir, tmp_path):
+    lead_screw(proj_dir, tmp_path)
+    _proposed_lead(0)(proj_dir, tmp_path)
+    assert findings(proj_dir, "model-gear") == [
+        "gear drive: lead screw_lead is 0, so the slide never moves"
+    ]
+
+
+@pytest.mark.parametrize("lead", [-8, 0.01], ids=["negative", "small"])
+def test_guard_lead_negative_or_small_is_no_model_gear(proj_dir, tmp_path, lead):
+    lead_screw(proj_dir, tmp_path)
+    _proposed_lead(lead)(proj_dir, tmp_path)
+    assert findings(proj_dir, "model-gear") == []
+
+
+def test_guard_lead_that_is_not_whole_is_no_unit_quantity(proj_dir, tmp_path):
+    text = "The screw moves the carriage 1.25 mm per revolution."
+    lead_screw(proj_dir, tmp_path, text=text, lead=1.25)
+    assert findings(proj_dir, "unit-quantity") == []
+
+
+@pytest.mark.parametrize(
+    "old, new, says",
+    [
+        ('"lead"', '"ratio": "screw_lead", "lead"', "names both"),
+        (', "lead": "screw_lead"', "", "names neither"),
+    ],
+    ids=["both", "neither"],
+)
+def test_gear_with_both_or_neither_of_ratio_and_lead_is_model_return(
+    proj_dir, tmp_path, old, new, says
+):
+    lead_screw(proj_dir, tmp_path, swap(LEAD_SCREW, old, new))
+    assert findings(proj_dir, "model-return") == [
+        f"model.build gear drive: takes a ratio or a lead, and {says}"
+    ]
+
+
+def test_lead_quoted_in_a_unit_other_than_a_length_is_unit_quantity(proj_dir, tmp_path):
+    lead_screw(proj_dir, tmp_path, text="The screw moves the carriage 8° per revolution.")
+    messages = findings(proj_dir, "unit-quantity")
+    assert any("as gear drive's lead" in m and "where a length is expected" in m for m in messages)
+
+
+def test_lead_a_posed_check_moves_through_is_in_its_reads_and_so_checked(proj_dir, tmp_path):
+    lead_screw(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    assert "param screw_lead" not in _unchecked_in(report)
+    # Unposed, the same distance check moves no joint, so it reads no lead.
+    edit(proj_dir, "checks.yaml", lambda d: [d["checks"][0].pop(k) for k in ("pose", "from")])
+    assert "param screw_lead" in _unchecked(proj_dir)
+
+
+_MOTOR = """\
+            "motor": {
+                "type": "revolute",
+                "parent": "frame_1",
+                "child": "motor_1",
+                "axis": ["motor_1.a", "motor_1.b"],
+                "drive": "actuated",
+            },
+"""
+
+
+def test_posed_check_through_a_belt_then_a_lead_screw_reads_both_gears(proj_dir, tmp_path):
+    model = swap(LEAD_SCREW, '"drive": "actuated"', '"drive": "passive"')  # the screw's
+    model = swap(model, '        "joints": {\n', '        "joints": {\n' + _MOTOR)
+    model = swap(
+        model,
+        '"frame_1": ("frame", Location()),',
+        '"frame_1": ("frame", Location()),\n'
+        '            "motor_1": ("screw", Location((-p.offset, 0, p.screw_l))),',
+    )
+    belt = '"belt": {"driver": "motor", "driven": "screw", "ratio": "belt_ratio"}, "drive": {'
+    model = swap(model, '"drive": {', belt)
+    lead_screw(proj_dir, tmp_path, model)
+    # The motor turns half a turn at a belt ratio of 2: the screw one turn, the carriage 8 mm.
+    for name, value in (("belt_ratio", 2), ("half_turn", 180)):
+        _param(name, basis="proposed", value=value, rationale="a test belt", gap="G1")(
+            proj_dir, tmp_path
+        )
+    _proposed_lead(8)(proj_dir, tmp_path)
+    _check("travel", pose={"motor": "half_turn"})(proj_dir, tmp_path)
+    edit(proj_dir, "params.yaml", lambda d: d["params"].pop("one_turn"))
+    code, report = verify(proj_dir)
+    travel = _by_id(report)["travel"]
+    assert travel["ok"], report["findings"]
+    assert travel["rests_on"] == "proposed"
+    assert set(travel["rests_on_params"]) == {"half_turn", "belt_ratio", "screw_lead"}
+
+
+# A planetary train with one member fixed is a chain of gears: sun to carrier, carrier to each
+# planet, each ratio derived from the stated tooth counts (ADR-0014).
+
+PLANETARY = """\
+from build123d import *
+
+
+def build(p):
+    h = p.face_w
+    sun_r, planet_r, ring_r = p.m * p.z_sun / 2, p.m * p.z_planet / 2, p.m * p.z_ring / 2
+    # The planet meshes the fixed ring inside it, so its axis lies the planet's radius in from it.
+    orbit = ring_r - planet_r
+    return {
+        "parts": {
+            "ring": Cylinder(ring_r + p.rim, h) - Cylinder(ring_r, h),
+            "sun": Cylinder(sun_r, h),
+            "carrier": Cylinder(orbit + p.rim, h) - Pos(orbit, 0, 0) * Cylinder(p.pin_r, h),
+            "planet": Cylinder(planet_r, h),
+        },
+        "datums": {
+            "ring.a": (0, 0, 0),
+            "ring.d": (0, -ring_r, 0),
+            "sun.a": (0, 0, 0),
+            "sun.a_up": (0, 0, h / 2),
+            "sun.p": (sun_r, 0, 0),
+            "carrier.a": (0, 0, 0),
+            "carrier.a_up": (0, 0, h / 2),
+            "carrier.d": (orbit, 0, 0),
+            "planet.a": (0, 0, 0),
+            "planet.a_up": (0, 0, h / 2),
+            "planet.d": (planet_r, 0, 0),
+        },
+        "assembly": {
+            "ring_1": ("ring", Location()),
+            "sun_1": ("sun", Location()),
+            "carrier_1": ("carrier", Location()),
+            "planet_1": ("planet", Location((orbit, 0, 0), (0, 0, p.rim_at))),
+        },
+        "joints": {
+            "sun": {
+                "type": "revolute",
+                "parent": "ring_1",
+                "child": "sun_1",
+                "axis": ["sun_1.a", "sun_1.a_up"],
+                "drive": "actuated",
+            },
+            "carrier": {
+                "type": "revolute",
+                "parent": "ring_1",
+                "child": "carrier_1",
+                "axis": ["carrier_1.a", "carrier_1.a_up"],
+                "drive": "passive",
+            },
+            "planet": {
+                "type": "revolute",
+                "parent": "carrier_1",
+                "child": "planet_1",
+                "axis": ["planet_1.a", "planet_1.a_up"],
+                "drive": "passive",
+            },
+        },
+        "gears": {
+            "sun_carrier": {"driver": "sun", "driven": "carrier", "ratio": "carrier_ratio"},
+            "carrier_planet": {"driver": "carrier", "driven": "planet", "ratio": "planet_ratio"},
+        },
+    }
+"""
+
+# Table I's SSPG row and the reduction Sec. II-A states.
+PLANETARY_TEXT = "Table I. Gear trains\n{row}\nThe gearbox reduces 7.2:1 overall.\n"
+
+
+def planetary(root: Path, tmp_path: Path, row: str = TABLE_I) -> None:
+    """Replace the project with a planetary train: a fixed ring, a sun (actuated), a carrier
+    (passive) and one planet (passive, on the carrier), the gears sun_carrier and carrier_planet
+    at ratios derived from the tooth counts and module row states (T1), as Table I's SSPG row
+    does. One check, carrier: the carrier's turn about the sun axis from as built to the sun
+    turned one_turn (proposed 360), compared with 360 / R1.ratio, the stated 7.2:1."""
+    edit(root, "project.yaml", lambda d: d.update(sources=[]))
+    (root / "sources" / "paper.txt").unlink()
+    table = tmp_path / "compact.txt"
+    table.write_text(PLANETARY_TEXT.format(row=row))
+    register = ["source", str(root), str(table), "--id", "compact", "--kind", "paper"]
+    assert cli.main([*register, "--citation", "Singh 2025"]) == 0
+    sun, planet, ring, module = (float(n) for n in row.split("[")[1].split(",")[:4])
+    counts = {"z_sun": int(sun), "z_planet": int(planet), "z_ring": int(ring), "m": module}
+    stated = {"source": "compact", "locator": "Sec. II-A", "quote": "reduces 7.2:1"}
+    evidence = [
+        {"id": "T1", "source": "compact", "locator": "Table I", "quote": row, "values": counts},
+        {"id": "R1", **stated, "values": {"ratio": 7.2}},
+    ]
+    write(root, "evidence.yaml", {"evidence": evidence, "skipped": [], "conflicts": []})
+    params: dict = {name: {"basis": "source", "from": f"T1.{name}"} for name in counts}
+    params["carrier_ratio"] = {"basis": "derived", "expr": "z_sun / (z_sun + z_ring)"}
+    params["planet_ratio"] = {"basis": "derived", "expr": "-z_ring / z_planet"}
+    chosen = {"face_w": 4, "rim": 3, "pin_r": 1, "rim_at": -30, "one_turn": 360, "density": 1.2}
+    params |= {
+        name: {"basis": "proposed", "value": value, "rationale": "a test train", "gap": "G1"}
+        for name, value in chosen.items()
+    }
+    parts = {name: {"density": "density"} for name in ("ring", "sun", "carrier", "planet")}
+    write(root, "params.yaml", {"params": params, "parts": parts})
+    write(root, "gaps.yaml", {"gaps": [{"id": "G1", "question": "part size?", "ask": "authors"}]})
+    carrier = {
+        "id": "carrier",
+        "kind": "angle",
+        "instances": ["ring_1", "carrier_1"],
+        "between": ["ring_1.d", "ring_1.a", "carrier_1.d"],
+        "expect": "360 / R1.ratio",
+        "from": {},
+        "pose": {"sun": "one_turn"},
+    }
+    write(root, "checks.yaml", {"checks": [carrier]})
+    write(root, "model.py", PLANETARY)
+
+
+def test_carrier_of_a_planetary_train_turns_360_over_its_stated_ratio_per_sun_turn(
+    proj_dir, tmp_path
+):
+    planetary(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    carrier = _by_id(report)["carrier"]
+    assert carrier["ok"]
+    assert carrier["expect"] == {"expr": "360 / R1.ratio", "value": 50}
+    # 25 / (25 + 155) of a turn, 50°, as 360° / 7.2: one ratio from the counts, one stated.
+    assert float(carrier["measured"].split("°")[0]) == pytest.approx(50, abs=1e-3)
+
+
+@pytest.mark.parametrize(
+    "row, ratio",
+    [(TABLE_I, "z_ring / z_sun"), ("SSPG [25, 65, 157, 0.5, 3]", "z_sun / (z_sun + z_ring)")],
+    ids=["ratio-inverted", "ring-count-changed"],
+)
+def test_carrier_turn_of_a_planetary_train_fails_with_a_wrong_ratio_or_a_changed_count(
+    proj_dir, tmp_path, row, ratio
+):
+    planetary(proj_dir, tmp_path, row)
+    _param("carrier_ratio", expr=ratio)(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 1 and not _by_id(report)["carrier"]["ok"]
+    assert [m.split(":")[0] for m in findings(proj_dir, "check-failed")] == ["carrier"]
+
+
+# The planet's turn relative to the carrier over one sun turn: the carrier's 50°, times the
+# carrier_planet gear's -z_ring / z_planet, worked out from the ledgered counts.
+_PLANET_TURN = "-360 * T1.z_sun * T1.z_ring / (T1.z_planet * (T1.z_sun + T1.z_ring))"
+
+
+def _planet_turned(root: Path, tmp_path: Path) -> None:
+    turned = {
+        "id": "planet",
+        "kind": "angle",
+        "instances": ["carrier_1", "planet_1"],
+        "between": ["carrier_1.a", "planet_1.a", "planet_1.d"],
+        "expect": _PLANET_TURN,
+        "from": {},
+        "pose": {"sun": "one_turn"},
+    }
+    _append("checks.yaml", "checks", turned)(root, tmp_path)
+
+
+@pytest.mark.parametrize("expr, ok", [("-z_ring / z_planet", True), ("z_ring / z_planet", False)])
+def test_planet_turns_relative_to_its_carrier_at_minus_ring_over_planet_teeth(
+    proj_dir, tmp_path, expr, ok
+):
+    planetary(proj_dir, tmp_path)
+    _planet_turned(proj_dir, tmp_path)
+    _param("planet_ratio", expr=expr)(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    planet = _by_id(report)["planet"]
+    assert planet["ok"] is ok and (code == 0) is ok, report["findings"]
+    # 50° × -155 / 65: as built the planet's datum lies 150° round from the carrier's centre.
+    turned = -50 * 155 / 65
+    assert planet["expect"]["value"] == pytest.approx(turned)
+    if ok:  # report.json shows 4 significant figures
+        assert float(planet["measured"].split("°")[0]) == pytest.approx(turned, abs=0.05)
+
+
+def test_tooth_counts_of_a_planetary_train_are_checked_through_its_derived_ratios(
+    proj_dir, tmp_path
+):
+    planetary(proj_dir, tmp_path)
+    counts = {"param z_sun", "param z_planet", "param z_ring"}
+    assert counts.isdisjoint(_unchecked(proj_dir))
+    write(proj_dir, "checks.yaml", {"checks": []})
+    assert counts <= set(_unchecked(proj_dir))
+
+
+def test_pitch_diameter_and_planet_axis_of_a_planetary_train_match_its_stated_counts(
+    proj_dir, tmp_path
+):
+    planetary(proj_dir, tmp_path)
+    pitch = {"id": "sun-pitch", "kind": "diameter", "at": "sun.p", "expect": "T1.m * T1.z_sun"}
+    orbit = {
+        "id": "orbit",
+        "kind": "distance",
+        "instances": ["sun_1", "planet_1"],
+        "between": ["sun_1.a", "planet_1.a"],
+        "expect": "T1.m * (T1.z_sun + T1.z_planet) / 2",
+    }
+    for check in (pitch, orbit):
+        _append("checks.yaml", "checks", check)(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    checks = _by_id(report)
+    assert checks["sun-pitch"]["ok"] and checks["orbit"]["ok"]
+    # 0.5 × 25 and 0.5 × (25 + 65) / 2.
+    expected = (checks["sun-pitch"]["expect"]["value"], checks["orbit"]["expect"]["value"])
+    assert expected == (12.5, 22.5)
+
+
+def test_planet_axis_fails_where_the_ring_count_breaks_ring_equals_sun_plus_two_planets(
+    proj_dir, tmp_path
+):
+    # 157 ≠ 25 + 2 × 65: the planet meshing the ring sits 23 from the sun axis, not 22.5.
+    planetary(proj_dir, tmp_path, "SSPG [25, 65, 157, 0.5, 3]")
+    orbit = {
+        "id": "orbit",
+        "kind": "distance",
+        "instances": ["sun_1", "planet_1"],
+        "between": ["sun_1.a", "planet_1.a"],
+        "expect": "T1.m * (T1.z_sun + T1.z_planet) / 2",
+    }
+    write(proj_dir, "checks.yaml", {"checks": [orbit]})
+    code, report = verify(proj_dir)
+    assert code == 1 and not _by_id(report)["orbit"]["ok"]
+
+
+def test_planetary_train_exports_one_joint_equality_per_gear_in_its_chain(proj_dir, tmp_path):
+    mujoco = importlib.import_module("mujoco")
+
+    planetary(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    assert m.neq == 2
+    joint = mujoco.mjtObj.mjOBJ_JOINT
+    for gear, driven, driver, ratio in (
+        ("sun_carrier", "carrier", "sun", 25 / 180),
+        ("carrier_planet", "planet", "carrier", -155 / 65),
+    ):
+        eq = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_EQUALITY, gear)
+        assert m.eq_type[eq] == mujoco.mjtEq.mjEQ_JOINT
+        assert (m.eq_obj1id[eq], m.eq_obj2id[eq]) == (
+            mujoco.mj_name2id(m, joint, driven),
+            mujoco.mj_name2id(m, joint, driver),
+        )
+        assert list(m.eq_data[eq][:5]) == pytest.approx([0, ratio, 0, 0, 0])
+    # The planet's joint is on the carrier's body, so its angle is relative to the carrier.
+    planet = mujoco.mj_name2id(m, joint, "planet")
+    carrier_body = m.jnt_bodyid[mujoco.mj_name2id(m, joint, "carrier")]
+    assert m.body_parentid[m.jnt_bodyid[planet]] == carrier_body
 
 
 # Every rule beside its near miss. scripts/rule-coverage fails CI unless each rule the tool emits is
@@ -8088,7 +9064,7 @@ def test_distance_and_angle_probes_compare_the_datums_declared_on_the_body(
     [
         ({"source": "paper"}, "a probe reads a geometry source, and paper is not one"),
         ({"body": "link_step#2"}, "link_step#2 is not a body of link_step"),
-        ({"probe": "volume"}, "probe must be bbox, distance, angle, not 'volume'"),
+        ({"probe": "volume"}, "probe must be bbox, distance, angle, diameter, not 'volume'"),
         ({"axes": {"L": "y", "W": "x"}}, "H names no axis x, y or z in axes"),
         (
             _PITCH_PROBE | {"between": ["link_step.a", "link_step.d"], "values": {"v": 30}},
@@ -8201,6 +9177,786 @@ def test_file_of_several_bodies_names_each_by_its_place_in_the_file(proj_dir, tm
     assert _shape_result(report)["ok"] and (code, report["status"]) == (0, "VERIFIED")
 
 
+def _two_bodies(root: Path, tmp_path: Path) -> None:
+    """The link, then a 4 mm cube beside it, released as link_step#1 and link_step#2, with the
+    link's datums declared on link_step#1."""
+    both = Compound(children=[link_body(), Pos(0, 20, 0) * Box(4, 4, 4)])
+    released(root, tmp_path, body=both, at=Location(), check=False)
+    first = {f"link_step#1.{k}": list(v) for k, v in LINK_DATUMS.items()}
+    edit(root, "evidence.yaml", lambda d: d.update(datums=first))
+
+
+def test_guard_probe_of_a_body_past_the_last_in_its_file_is_evidence_anchor(proj_dir, tmp_path):
+    _two_bodies(proj_dir, tmp_path)
+    past = PROBE | {"body": "link_step#3", "axes": {"s": "x"}, "values": {"s": 4}}
+    edit(proj_dir, "evidence.yaml", lambda d: d["evidence"].append(past))
+    anchors = [
+        f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "evidence-anchor"
+    ]
+    assert anchors == [
+        "P-link: link_step#3 is not a body of link_step; its bodies are link_step#1, link_step#2"
+    ]
+
+
+def test_guard_coverage_over_several_bodies_names_each_neither_compared_nor_skipped(
+    proj_dir, tmp_path
+):
+    _two_bodies(proj_dir, tmp_path)
+    found = _coverage(verify(proj_dir)[1])
+    assert found == [
+        f"link_step body link_step#{n}: no shape check compares it and no skip sets it aside"
+        for n in (1, 2)
+    ]
+    pairs = [[f"link.{k}", f"link_step#1.{k}"] for k in LINK_DATUMS]
+    shape = {"id": "shape", "kind": "shape", "part": "link", "body": "link_step#1", "pairs": pairs}
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].append(shape))
+    assert _coverage(verify(proj_dir)[1]) == [found[1]]
+
+
+def test_guard_probe_restating_a_quote_is_context_and_the_quote_stays_in_scope(proj_dir, tmp_path):
+    probed(proj_dir, tmp_path)  # context, restates T1-link
+    code, report = verify(proj_dir)
+    assert report["params"]["link_L"]["value"] == 40
+    assert report["params"]["link_L"]["rests_on"] == "source"
+    assert [q["ok"] for q in report["probes"]] == [True] * 3
+    assert "evidence-unused" not in [f["rule"] for f in report["findings"]]
+    assert (code, report["status"]) == (0, "VERIFIED")
+    edit(proj_dir, "evidence.yaml", lambda d: d["evidence"][-1].pop("reason"))
+    assert "evidence-scope" in errors(proj_dir)
+
+
+def _pitch_in_conflict(root: Path, tmp_path: Path, resolution: str | None = None) -> dict:
+    """The link released with its holes 32 mm apart, the paper's 30 mm pitch, and a probe of the
+    file's 32 set beside it as a conflict, open unless resolution is given."""
+    released(root, tmp_path, body=link_body(pitch=32), at=Location(), check=False)
+    wide = {"link_step.a": [-16, 0, 0], "link_step.b": [16, 0, 0]}
+    probe = PROBE | _PITCH_PROBE | {"id": "P-pitch", "values": {"v": 32}}
+    probe |= {"reason": "differs from pitch, see C1"}
+    skip = {"source": "link_step", "body": "link_step", "reason": "probed only"}
+    conflict = {"id": "C1", "evidence": ["pitch", "P-pitch"], "summary": "pitch 30 or 32"}
+    if resolution:
+        conflict["resolution"] = resolution
+    edit(
+        root,
+        "evidence.yaml",
+        lambda d: (
+            d.update(datums=wide),
+            d["evidence"].append({k: v for k, v in probe.items() if v is not None}),
+            d["skipped"].append(skip),
+            d["conflicts"].append(conflict),
+        ),
+    )
+    return verify(root)[1]
+
+
+def test_guard_probe_differing_from_a_quote_is_a_conflict_open_as_a_warning(proj_dir, tmp_path):
+    report = _pitch_in_conflict(proj_dir, tmp_path)
+    assert [q["ok"] for q in report["probes"]] == [True]
+    found = [(f["level"], f["rule"]) for f in report["findings"]]
+    assert ("warning", "conflict-open") in found
+    assert [f for f in report["findings"] if f["level"] == "error"] == []
+
+
+def test_guard_probe_conflict_with_a_resolution_raises_no_conflict_open(proj_dir, tmp_path):
+    report = _pitch_in_conflict(proj_dir, tmp_path, resolution="the paper's 30 is the pitch built")
+    assert "conflict-open" not in [f["rule"] for f in report["findings"]]
+
+
 def test_probe_recording_no_values_is_evidence_values_whatever_its_scope(proj_dir, tmp_path):
     probed(proj_dir, tmp_path, values=None)
     assert "evidence-values" in errors(proj_dir)
+
+
+# A diameter check: the link's hole a stated as a Ø callout, its datum wall on the hole's face and
+# top on the link's flat top face.
+_HOLE_DATUMS = swap(
+    MODEL,
+    '"link.b": (p.pitch / 2, 0, 0)}',
+    '"link.b": (p.pitch / 2, 0, 0), "link.wall": (-p.pitch / 2 + p.hole_d / 2, 0, 0), '
+    '"link.top": (0, 0, p.link_H / 2)}',
+)
+
+
+def diameter_checked(root: Path, tmp_path: Path, at: str = "link.wall", stated: float = 3) -> None:
+    """Ledger the link's hole as the callout "Ø 3" (N1.d, stated) and check it at datum at."""
+    add_quote(root, tmp_path, "The pivot holes are Ø 3 through.", "Ø 3", {"d": stated})
+    write(root, "model.py", _HOLE_DATUMS)
+    check = {"id": "bore", "kind": "diameter", "at": at, "evidence": "N1", "key": "d"}
+    edit(root, "checks.yaml", lambda d: d["checks"].append(check))
+
+
+def _bore(report: dict) -> list[dict]:
+    return [r for r in report["checks"] if r["id"] == "bore"]
+
+
+@pytest.mark.parametrize("stated, ok", [(3, True), (4, False)])
+def test_diameter_check_compares_the_cylindrical_face_its_datum_lies_on(
+    proj_dir, tmp_path, stated, ok
+):
+    diameter_checked(proj_dir, tmp_path, stated=stated)
+    code, report = verify(proj_dir)
+    (result,) = _bore(report)
+    assert result["ok"] == ok and result["measured"].startswith("3 ")
+    assert ("check-failed" in [f["rule"] for f in report["findings"]]) != ok
+    assert (code == 0) == ok
+
+
+def test_diameter_check_whose_datum_lies_on_no_cylindrical_face_is_check_config(proj_dir, tmp_path):
+    diameter_checked(proj_dir, tmp_path, at="link.top")
+    _, report = verify(proj_dir)
+    assert _bore(report) == []
+    assert any(
+        f["rule"] == "check-config" and "link.top lies on no cylindrical face" in f["message"]
+        for f in report["findings"]
+    )
+
+
+def test_guard_diameter_check_whose_datum_lies_on_a_cylindrical_face_raises_no_check_config(
+    proj_dir, tmp_path
+):
+    diameter_checked(proj_dir, tmp_path)
+    assert "check-config" not in rules(proj_dir)
+
+
+def test_diameter_check_whose_datum_lies_where_two_cylindrical_faces_meet_is_check_config(
+    proj_dir, tmp_path
+):
+    # A 1.5 mm cross hole along Y through hole a; link.wall moved onto the edge where its face
+    # meets the 3 mm hole's.
+    diameter_checked(proj_dir, tmp_path)
+    cross = (
+        "    link -= Pos(-p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2 / 2, p.link_W * 2, "
+        "rotation=(90, 0, 0))\n    return {"
+    )
+    edge = (
+        '"link.wall": (-p.pitch / 2 + p.hole_d / 2 / 2, '
+        "math.sqrt((p.hole_d / 2) ** 2 - (p.hole_d / 2 / 2) ** 2), 0)"
+    )
+    model = swap(_HOLE_DATUMS, "    return {", cross, 1)
+    model = swap(model, '"link.wall": (-p.pitch / 2 + p.hole_d / 2, 0, 0)', edge)
+    write(proj_dir, "model.py", "import math\n" + model)
+    _, report = verify(proj_dir)
+    assert _bore(report) == []
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-config"] == [
+        "check bore: link.wall lies on the edge of cylindrical faces of diameters 1.5 and 3 of "
+        "part link; place it on the face whose diameter the check compares"
+    ]
+
+
+# A diameter probe of the released link's hole a, whose diameter the paper does not state: datum
+# wall on the hole's face, top on the link's flat top face, both where RELEASED_AT puts them.
+HOLE_PROBE = {
+    "id": "P-hole",
+    "source": "link_step",
+    "locator": "the released link, hole a",
+    "probe": "diameter",
+    "at": "link_step.wall",
+    "values": {"d": 3},
+}
+
+
+def hole_probed(root: Path, tmp_path: Path, **entry) -> None:
+    """The link released and its hole a probed by HOLE_PROBE with entry's changes, hole_d taking
+    the probe's value."""
+    released(root, tmp_path)
+    wall, top = placed_at(RELEASED_AT, (-13.5, 0, 0)), placed_at(RELEASED_AT, (0, 0, 4))
+    edit(
+        root,
+        "evidence.yaml",
+        lambda d: (
+            d["datums"].update({"link_step.wall": wall, "link_step.top": top}),
+            d["evidence"].append({k: v for k, v in (HOLE_PROBE | entry).items() if v is not None}),
+        ),
+    )
+    hole_d = {"basis": "source", "from": "P-hole.d"}
+    edit(root, "params.yaml", lambda d: d["params"].update(hole_d=hole_d))
+
+
+@pytest.mark.parametrize("recorded, mismatched", [(3, False), (3.1, True)])
+def test_diameter_probe_compares_the_cylindrical_face_its_datum_lies_on(
+    proj_dir, tmp_path, recorded, mismatched
+):
+    hole_probed(proj_dir, tmp_path, values={"d": recorded})
+    code, report = verify(proj_dir)
+    assert [(q["probe"], q["value"]) for q in report["probes"]] == [("diameter", pytest.approx(3))]
+    assert _mismatches(report) == (
+        ["probe P-hole.d: evaluates to 3 on body link_step, but records 3.1 (tolerance 0.001)"]
+        if mismatched
+        else []
+    )
+    assert "evidence-anchor" not in [f["rule"] for f in report["findings"]]
+    assert (code == 0) != mismatched
+
+
+def test_probe_of_a_value_no_quote_states_is_in_scope(proj_dir, tmp_path):
+    hole_probed(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert report["params"]["hole_d"]["rests_on"] == "source"
+    assert (code, report["status"]) == (0, "VERIFIED")
+    # hole_d proposed again: the probe's in-scope value is then unused.
+    proposed = {"basis": "proposed", "value": 3, "rationale": "M3 pin", "gap": "G1"}
+    edit(proj_dir, "params.yaml", lambda d: d["params"].update(hole_d=proposed))
+    unused = [
+        f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "evidence-unused"
+    ]
+    assert [m.split(" ")[0] for m in unused] == ["P-hole.d"]
+
+
+@pytest.mark.parametrize(
+    "at, why",
+    [
+        ("link_step.top", "link_step.top lies on no cylindrical face of body link_step"),
+        ("link_step.d", "link_step.d is not a datum declared on body link_step"),
+        (None, "a diameter probe names the datum it is taken at in at"),
+    ],
+    ids=["flat face", "unknown datum", "no at"],
+)
+def test_diameter_probe_that_cannot_be_evaluated_is_evidence_anchor(proj_dir, tmp_path, at, why):
+    hole_probed(proj_dir, tmp_path, at=at)
+    anchors = [
+        f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "evidence-anchor"
+    ]
+    assert anchors == [f"P-hole: {why}"]
+
+
+@pytest.mark.parametrize("at", ["link.nowhere", "rotor.wall"])
+def test_diameter_check_at_no_datum_of_a_part_is_check_config(proj_dir, tmp_path, at):
+    diameter_checked(proj_dir, tmp_path, at=at)
+    _, report = verify(proj_dir)
+    assert _bore(report) == []
+    assert [f["message"] for f in report["findings"] if f["rule"] == "check-config"] == [
+        f"check bore: {at} is not a datum of a part"
+    ]
+
+
+# An STL: the released link as a mesh of flat triangles, which a probe reads as it reads a STEP.
+
+
+def released_stl(root: Path, tmp_path: Path, body=None, skipped=True) -> Path:
+    """Register body (the link by default), placed at RELEASED_AT, as the STL link_stl, and with
+    skipped set its one body aside so coverage holds without a shape check. Returns the STL."""
+    path = tmp_path / "link.stl"
+    export_stl((link_body() if body is None else body).moved(RELEASED_AT), str(path))
+    register = ["source", str(root), str(path), "--id", "link_stl", "--kind", "geometry"]
+    assert cli.main([*register, "--citation", "Doe 2026, link.stl"]) == 0
+    if skipped:
+        skip = {"source": "link_stl", "body": "link_stl", "reason": "the link, probed only"}
+        edit(root, "evidence.yaml", lambda d: d["skipped"].append(skip))
+    return path
+
+
+@pytest.mark.parametrize("recorded, mismatched", [(40, False), (40.002, True)])
+def test_released_stl_is_probed_like_a_step(proj_dir, tmp_path, recorded, mismatched):
+    released_stl(proj_dir, tmp_path)
+    probe = PROBE | {"source": "link_stl", "values": {"L": recorded, "W": 5, "H": 8}}
+    edit(proj_dir, "evidence.yaml", lambda d: d["evidence"].append(probe))
+    code, report = verify(proj_dir)
+    assert [(q["body"], q["ok"]) for q in report["probes"] if q["key"] == "L"] == [
+        ("link_stl", not mismatched)
+    ]
+    assert "source-unreadable" not in [f["rule"] for f in report["findings"]]
+    assert bool(_mismatches(report)) == mismatched and (code == 0) != mismatched
+
+
+def test_stl_of_several_bodies_names_each_by_its_place_in_the_file(proj_dir, tmp_path):
+    # A 4 mm cube, then the link: link_stl#1 and link_stl#2.
+    both = Compound(children=[Pos(0, 40, 0) * Box(4, 4, 4), link_body()])
+    released_stl(proj_dir, tmp_path, body=both, skipped=False)
+    cube = PROBE | {"id": "P-cube", "body": "link_stl#1", "axes": {"s": "z"}, "values": {"s": 4}}
+    link = PROBE | {"body": "link_stl#2"}
+    entries = [entry | {"source": "link_stl"} for entry in (cube, link)]
+    skips = [{"source": "link_stl", "body": f"link_stl#{n}", "reason": "probed"} for n in (1, 2)]
+    edit(
+        proj_dir,
+        "evidence.yaml",
+        lambda d: (d["evidence"].extend(entries), d["skipped"].extend(skips)),
+    )
+    code, report = verify(proj_dir)
+    assert [(q["body"], q["ok"]) for q in report["probes"]] == [("link_stl#1", True)] + [
+        ("link_stl#2", True)
+    ] * 3
+    assert (code, report["status"]) == (0, "VERIFIED")
+
+
+@pytest.mark.parametrize(
+    "content, why",
+    [("not an STL\n", "the file holds no triangle"), (None, "the mesh does not close into solids")],
+    ids=["text", "open mesh"],
+)
+def test_stl_that_holds_no_closed_mesh_is_source_unreadable(proj_dir, tmp_path, content, why):
+    stl = released_stl(proj_dir, tmp_path, skipped=False)
+    stl = proj_dir / "sources" / stl.name
+    if content is None:
+        export_stl(Box(4, 4, 4).faces()[0], str(stl))
+    else:
+        stl.write_text(content)
+    edit(proj_dir, "project.yaml", lambda d: d["sources"][1].update(sha256=sha256(stl)))
+    found = [
+        f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "source-unreadable"
+    ]
+    assert len(found) == 1 and why in found[0]
+
+
+# Cut files (ADR-0011): a laser-cut sheet drawn at half size, declared 600 mm wide over a 300-unit
+# viewBox, so each length doubles. Its group moves its two filled paths by (10, 20): the link's
+# outline with its two holes, which the sheet puts at (20..60, 40..45) mm with holes at x 25 and
+# 55, and a 10 mm square plate at (120..140, 40..60) mm.
+SHEET = """\
+<svg xmlns="http://www.w3.org/2000/svg" width="600mm" height="400mm" viewBox="0 0 300 200">
+  <g transform="translate(10, 20)">
+    <path fill="black" fill-rule="evenodd" d="M 0 0 H 20 V 2.5 H 0 Z
+      M 1.75 1.25 a 0.75 0.75 0 1 0 1.5 0 a 0.75 0.75 0 1 0 -1.5 0 Z
+      M 16.75 1.25 a 0.75 0.75 0 1 0 1.5 0 a 0.75 0.75 0 1 0 -1.5 0 Z"/>
+    <path fill="black" d="M 50 0 h 10 v 10 h -10 Z"/>
+  </g>
+</svg>
+"""
+# Points inside the link's region and the plate's, on the sheet at its declared scale.
+LINK_AT, PLATE_AT = "sheet@30,41", "sheet@130,50"
+# Datums on the sheet, in its frame: the link's hole centres and the middle of its long edge at
+# y 45, where the built link's datums a, b and d (on its face at +Y) project along Z.
+SHEET_DATUMS = {"sheet.a": [25, 42.5], "sheet.b": [55, 42.5], "sheet.d": [40, 45]}
+_FOUR_DATUMS = swap(
+    MODEL,
+    '"link.b": (p.pitch / 2, 0, 0)}',
+    '"link.b": (p.pitch / 2, 0, 0), "link.d": (0, p.link_W / 2, 0)}',
+)
+
+
+def sheet(root: Path, tmp_path: Path, svg: str = SHEET, check=True, **shape) -> Path:
+    """Register svg as geometry source sheet, declare SHEET_DATUMS on it, give the built link datum
+    d, and with check compare the built link with its region by a shape check projected along Z
+    (shape gives its other keys, None dropping one), skipping the regions in 110..150 × 30..70,
+    the plate's. Returns the SVG."""
+    path = tmp_path / "sheet.svg"
+    path.write_text(svg)
+    register = ["source", str(root), str(path), "--id", "sheet", "--kind", "geometry"]
+    assert cli.main([*register, "--citation", "Doe 2026, sheet.svg"]) == 0
+    edit(root, "evidence.yaml", lambda d: d.update(datums=SHEET_DATUMS))
+    write(root, "model.py", _FOUR_DATUMS)
+    if check:
+        pairs = [["link.a", "sheet.a"], ["link.b", "sheet.b"], ["link.d", "sheet.d"]]
+        entry = {"id": "shape", "kind": "shape", "part": "link", "body": LINK_AT, "along": "z"}
+        entry = {k: v for k, v in (entry | {"pairs": pairs} | shape).items() if v is not None}
+        edit(root, "checks.yaml", lambda d: d["checks"].append(entry))
+        _skip_sheet(root, within=[[110, 30], [150, 70]])
+    return path
+
+
+def _skip_sheet(root: Path, **skip) -> None:
+    entry = {"source": "sheet", "reason": "a plate of another device"} | skip
+    edit(root, "evidence.yaml", lambda d: d["skipped"].append(entry))
+
+
+def test_cut_file_regions_are_bodies_found_by_a_point_inside_each_at_the_declared_scale(
+    proj_dir, tmp_path
+):
+    sheet(proj_dir, tmp_path, check=False)
+    _skip_sheet(proj_dir, body=LINK_AT)
+    _skip_sheet(proj_dir, body=PLATE_AT)
+    code, report = verify(proj_dir)
+    assert (code, report["status"]) == (0, "VERIFIED")
+
+
+def test_cut_file_region_neither_shape_checked_nor_skipped_is_coverage_named_by_a_point(
+    proj_dir, tmp_path
+):
+    sheet(proj_dir, tmp_path, check=False)
+    _skip_sheet(proj_dir, body=LINK_AT)
+    (uncovered,) = _coverage(verify(proj_dir)[1])
+    named = re.fullmatch(
+        r"sheet body sheet@([\d.]+),([\d.]+): no shape check compares it and no skip sets it aside",
+        uncovered,
+    )
+    assert named and 120 < float(named[1]) < 140 and 40 < float(named[2]) < 60
+
+
+# The plate's two halves, 10 mm squares side by side on the sheet: x 120..130 and 130..140.
+_HALVES = swap(
+    SHEET,
+    '<path fill="black" d="M 50 0 h 10 v 10 h -10 Z"/>',
+    '<path fill="black" d="M 50 0 h 5 v 10 h -5 Z"/>\n'
+    '    <path fill="black" d="M 55 0 h 5 v 10 h -5 Z"/>',
+)
+
+
+@pytest.mark.parametrize(
+    "svg, point, why",
+    [
+        (SHEET, "sheet@100,50", "sheet@100,50 lies inside no region of sheet"),
+        (SHEET, "sheet@65,25", "sheet@65,25 lies inside no region of sheet"),
+        (_HALVES, "sheet@130,50", "sheet@130,50 lies inside 2 regions of sheet"),
+    ],
+    ids=["between regions", "unscaled", "on two regions' common edge"],
+)
+def test_point_inside_no_region_or_inside_two_is_a_named_finding(
+    proj_dir, tmp_path, svg, point, why
+):
+    sheet(proj_dir, tmp_path, svg=svg, body=point)
+    found = [
+        (f["rule"], f["message"]) for f in verify(proj_dir)[1]["findings"] if why in f["message"]
+    ]
+    assert found == [("check-config", f"check shape: {why}")]
+
+
+@pytest.mark.parametrize(
+    "point, why",
+    [("sheet@100,50", "no region"), ("sheet@130,50", "2 regions")],
+    ids=["no region", "two regions"],
+)
+def test_skip_naming_a_point_inside_no_region_or_inside_two_is_skip_not_found(
+    proj_dir, tmp_path, point, why
+):
+    sheet(proj_dir, tmp_path, svg=_HALVES, check=False)
+    _skip_sheet(proj_dir, body=point)
+    found = [f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "skip-not-found"]
+    assert found == [f"skip in sheet: {point} lies inside {why} of sheet"]
+
+
+def _sheet_shape(report: dict) -> dict:
+    (result,) = [r for r in report["checks"] if r["id"] == "shape"]
+    return result
+
+
+def test_shape_check_of_a_built_plate_against_its_cut_file_region_passes(proj_dir, tmp_path):
+    sheet(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    result = _sheet_shape(report)
+    assert result["ok"] and result["shape"]["distance"] < 1e-4
+    assert (code, report["status"]) == (0, "VERIFIED")
+
+
+def test_shape_check_of_a_plate_projected_along_x_compares_its_outline_seen_along_x(
+    proj_dir, tmp_path
+):
+    # Seen along X, the link is its 5 × 8 end: a plate the sheet cuts as a 2.5 × 4 rectangle.
+    end = swap(
+        SHEET,
+        '<path fill="black" d="M 50 0 h 10 v 10 h -10 Z"/>',
+        ('<path fill="black" d="M 50 0 h 2.5 v 4 h -2.5 Z"/>'),
+    )
+    corners = {"sheet.e": [120, 40], "sheet.f": [125, 40], "sheet.g": [120, 48]}
+    sheet(
+        proj_dir,
+        tmp_path,
+        svg=end,
+        body="sheet@122,44",
+        along="x",
+        pairs=[["link.e", "sheet.e"], ["link.f", "sheet.f"], ["link.g", "sheet.g"]],
+    )
+    edit(proj_dir, "evidence.yaml", lambda d: d["datums"].update(corners))
+    edit(
+        proj_dir,
+        "evidence.yaml",
+        lambda d: d["skipped"].append({"source": "sheet", "body": LINK_AT, "reason": "r"}),
+    )
+    x, y, z = "p.link_L / 2", "p.link_W / 2", "p.link_H / 2"
+    ends = (
+        f', "link.e": ({x}, -{y}, -{z}), "link.f": ({x}, {y}, -{z}), "link.g": ({x}, -{y}, {z})}}'
+    )
+    write(proj_dir, "model.py", swap(_FOUR_DATUMS, ", 0)}", ", 0)" + ends))
+    code, report = verify(proj_dir)
+    assert _sheet_shape(report)["ok"] and (code, report["status"]) == (0, "VERIFIED")
+
+
+def test_shape_check_of_a_plate_missing_a_hole_its_region_has_fails_at_its_worst_point(
+    proj_dir, tmp_path
+):
+    # A third hole, 3 mm across at the link's middle, (40, 42.5) on the sheet.
+    holed = swap(
+        SHEET,
+        '-1.5 0 Z"/>',
+        ('-1.5 0 Z\n      M 9.25 1.25 a 0.75 0.75 0 1 0 1.5 0 a 0.75 0.75 0 1 0 -1.5 0 Z"/>'),
+        count=1,
+    )
+    sheet(proj_dir, tmp_path, svg=holed)
+    code, report = verify(proj_dir)
+    result = _sheet_shape(report)
+    x, y = result["shape"]["worst_point"]
+    # The worst point lies on the hole the built link lacks, 2.5 mm from the link's long edges.
+    assert not result["ok"] and math.hypot(x - 40, y - 42.5) == pytest.approx(1.5, abs=1e-4)
+    assert result["shape"]["distance"] == pytest.approx(2.5, abs=1e-4)
+    assert code == 1 and any(
+        f["rule"] == "check-failed" and "largest outline distance" in f["message"]
+        for f in report["findings"]
+    )
+
+
+@pytest.mark.parametrize(
+    "along, why",
+    [
+        (None, "names no axis along which to project part link onto region sheet@30,41"),
+        ("w", "along names no axis x, y or z of part link: w"),
+    ],
+    ids=["unnamed", "not one of the part's axes"],
+)
+def test_shape_check_on_a_cut_file_without_a_projection_axis_of_the_part_is_check_config(
+    proj_dir, tmp_path, along, why
+):
+    sheet(proj_dir, tmp_path, along=along)
+    _, report = verify(proj_dir)
+    configs = [f["message"] for f in report["findings"] if f["rule"] == "check-config"]
+    assert configs == [f"check shape: {why}"] and "shape" not in [r["id"] for r in report["checks"]]
+
+
+def test_shape_check_projected_along_an_axis_of_the_part_is_no_check_config(proj_dir, tmp_path):
+    sheet(proj_dir, tmp_path, along="z")
+    assert "check-config" not in rules(proj_dir)
+
+
+def test_shape_check_on_a_released_solid_naming_a_projection_axis_is_check_config(
+    proj_dir, tmp_path
+):
+    released(proj_dir, tmp_path, along="z")
+    configs = [f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "check-config"]
+    assert configs == [
+        "check shape: along projects a part onto a region of a cut file, and link_step is a solid"
+    ]
+
+
+@pytest.mark.parametrize(
+    "point, off",
+    [([25, 42.5], False), ([40, 42.5], False), ([90, 42.5], True)],
+    ids=["hole centre", "on the region", "between regions"],
+)
+def test_datum_on_a_cut_file_lies_inside_a_regions_outer_contour(proj_dir, tmp_path, point, off):
+    sheet(proj_dir, tmp_path, check=False)
+    edit(proj_dir, "evidence.yaml", lambda d: d["datums"].update({"sheet.x": point}))
+    found = [f["rule"] for f in verify(proj_dir)[1]["findings"] if "sheet.x" in f["message"]]
+    assert found == (["datum-off-solid"] if off else [])
+
+
+def test_datum_on_a_cut_file_of_three_numbers_is_schema(proj_dir, tmp_path):
+    sheet(proj_dir, tmp_path)
+    edit(proj_dir, "evidence.yaml", lambda d: d["datums"].update({"sheet.a": [25, 42.5, 0]}))
+    schema = [f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "schema"]
+    assert schema == [
+        "evidence.yaml datums.sheet.a: must be [x, y] on cut file sheet, not [25, 42.5, 0]"
+    ]
+
+
+def test_coverage_skip_naming_a_rectangle_covers_every_region_inside_it(proj_dir, tmp_path):
+    # The link and both plate halves lie inside 0..150 × 0..100; the halves alone in 110..150.
+    sheet(proj_dir, tmp_path, svg=_HALVES, check=False)
+    _skip_sheet(proj_dir, within=[[0, 0], [150, 100]])
+    code, report = verify(proj_dir)
+    assert _coverage(report) == [] and (code, report["status"]) == (0, "VERIFIED")
+
+
+def test_region_outside_a_skipped_rectangle_stays_a_coverage_finding(proj_dir, tmp_path):
+    sheet(proj_dir, tmp_path, svg=_HALVES, check=False)
+    _skip_sheet(proj_dir, within=[[150, 100], [110, 30]])
+    (uncovered,) = _coverage(verify(proj_dir)[1])
+    assert (
+        uncovered.startswith("sheet body sheet@")
+        and float(uncovered.split("@")[1].split(",")[0]) < 60
+    )
+
+
+def test_region_partly_inside_a_skipped_rectangle_is_not_covered_by_it(proj_dir, tmp_path):
+    sheet(proj_dir, tmp_path, check=False)
+    _skip_sheet(proj_dir, body=LINK_AT)
+    _skip_sheet(proj_dir, within=[[125, 30], [150, 70]])
+    found = rules(proj_dir)
+    assert "coverage" in found and "skip-not-found" in found
+
+
+@pytest.mark.parametrize(
+    "skip",
+    [{}, {"within": [[0, 0]]}, {"within": [[0, 0, 0], [1, 1, 1]]}],
+    ids=["neither", "one corner", "three numbers a corner"],
+)
+def test_skip_of_a_cut_file_naming_neither_a_point_nor_a_rectangle_is_skip_anchor(
+    proj_dir, tmp_path, skip
+):
+    sheet(proj_dir, tmp_path)
+    _skip_sheet(proj_dir, **skip)
+    assert "skip-anchor" in errors(proj_dir)
+
+
+def test_probe_of_a_cut_file_is_evidence_anchor(proj_dir, tmp_path):
+    sheet(proj_dir, tmp_path)
+    entry = PROBE | {"source": "sheet", "body": LINK_AT}
+    edit(proj_dir, "evidence.yaml", lambda d: d["evidence"].append(entry))
+    anchors = [
+        f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "evidence-anchor"
+    ]
+    assert anchors == [
+        "P-link: sheet is a cut file, whose regions a shape check compares; a probe reads a solid"
+    ]
+
+
+def test_guard_cut_file_that_is_no_svg_is_source_unreadable(proj_dir, tmp_path):
+    sheet(proj_dir, tmp_path, svg="not an SVG\n", check=False)
+    assert "source-unreadable" in errors(proj_dir)
+
+
+def test_cut_file_drawing_no_closed_contour_is_source_unreadable(proj_dir, tmp_path):
+    lines = '<svg xmlns="http://www.w3.org/2000/svg"><path d="M 0 0 L 10 0"/></svg>\n'
+    sheet(proj_dir, tmp_path, svg=lines, check=False)
+    assert any(
+        f["rule"] == "source-unreadable" and "draws no closed contour" in f["message"]
+        for f in verify(proj_dir)[1]["findings"]
+    )
+
+
+# A check compares with a value worked out from the ledger: expect (ADR-0014).
+
+GEAR_QUOTE = "a module of 1.5 mm and 20 teeth"
+PITCH_CHECK = {"kind": "distance", "between": ["link.a", "link.b"]}
+
+
+def expecting(root: Path, tmp_path: Path, expr: str, quote: str = GEAR_QUOTE, **check) -> None:
+    """Ledger quote as N1, its module m and teeth z, and add check pitch-expect, a distance
+    check of the link's pitch against expr."""
+    values = {"m": 1.5, "z": int(re.findall(r"(\d+) teeth", quote)[0])}
+    add_quote(root, tmp_path, f"The gear has {quote}.", quote, values)
+    pitch = {"id": "pitch-expect", **PITCH_CHECK, "expect": expr, **check}
+    edit(root, "checks.yaml", lambda d: d["checks"].append(pitch))
+
+
+def _result(report: dict, cid: str) -> dict:
+    return next(r for r in report["checks"] if r["id"] == cid)
+
+
+def _config(root: Path, cid: str) -> list[str]:
+    """The [check-config] messages a fresh verification run gives check cid."""
+    return [m for m in findings(root, "check-config") if m.startswith(f"check {cid}:")]
+
+
+@pytest.mark.parametrize(
+    "quote, ok", [(GEAR_QUOTE, True), ("a module of 1.5 mm and 21 teeth", False)]
+)
+def test_expect_multiplying_two_ledger_values_passes_only_on_geometry_matching_the_product(
+    proj_dir, tmp_path, quote, ok
+):
+    # The link's pivots are 30 mm apart: 1.5 × 20, not 1.5 × 21.
+    expecting(proj_dir, tmp_path, "N1.m * N1.z", quote)
+    code, report = verify(proj_dir)
+    assert _result(report, "pitch-expect")["ok"] == ok
+    assert (code, report["status"]) == ((0, "VERIFIED") if ok else (1, "NOT VERIFIED"))
+    failed = [f["message"] for f in report["findings"] if f["rule"] == "check-failed"]
+    measured = "measured 30 link.a - link.b"
+    assert failed == ([] if ok else [f"pitch-expect: expected 31.5 (N1.m * N1.z), {measured}"])
+
+
+@pytest.mark.parametrize("teeth, ok", [(12, True), (13, False)])
+def test_diameter_check_compares_a_pitch_diameter_worked_out_as_module_times_teeth(
+    proj_dir, tmp_path, teeth, ok
+):
+    # The link's 3 mm hole stands in for a pitch circle: 0.25 × 12, not 0.25 × 13.
+    quote = f"a module of 0.25 mm and {teeth} teeth"
+    add_quote(proj_dir, tmp_path, f"The gear has {quote}.", quote, {"m": 0.25, "z": teeth})
+    write(proj_dir, "model.py", _HOLE_DATUMS)
+    check = {"id": "bore", "kind": "diameter", "at": "link.wall", "expect": "N1.m * N1.z"}
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].append(check))
+    code, report = verify(proj_dir)
+    assert _result(report, "bore")["ok"] == ok and (code == 0) == ok
+
+
+@pytest.mark.parametrize("expr, ok", [("N1.hi * 3 / 3", True), ("N1.hi * 2", False)])
+def test_distance_check_with_from_compares_its_travel_with_an_expect(proj_dir, tmp_path, expr, ok):
+    # The slider travels 15 between as built and slide's high end.
+    slide_travel(proj_dir, tmp_path, {"expect": expr})
+
+    def keyless(d):
+        travel = next(c for c in d["checks"] if c["id"] == "travel")
+        del travel["evidence"], travel["key"]
+
+    edit(proj_dir, "checks.yaml", keyless)
+    code, report = verify(proj_dir)
+    assert _result(report, "travel")["ok"] == ok and (code == 0) == ok
+
+
+def test_report_json_shows_each_checks_expect_expression_and_its_value(proj_dir, tmp_path):
+    expecting(proj_dir, tmp_path, "N1.m * N1.z")
+    _, report = verify(proj_dir)
+    assert _result(report, "pitch-expect")["expect"] == {"expr": "N1.m * N1.z", "value": 30}
+    assert "expect" not in _result(report, "pitch")
+
+
+def test_entry_an_expect_names_counts_as_compared_so_its_source_param_is_checked(proj_dir):
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].pop(1))  # the pitch check
+    assert "param pitch" in _unchecked(proj_dir)
+    pitch = {"id": "pitch-2", **PITCH_CHECK, "expect": "pitch.pitch"}
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].append(pitch))
+    code, report = verify(proj_dir)
+    assert _unchecked_in(report) == [] and (code, report["status"]) == (0, "VERIFIED")
+    assert _result(report, "pitch-2")["rests_on"] == "source"
+
+
+@pytest.mark.parametrize(
+    "expr, reason",
+    [
+        ("hole_d * 10", "names param hole_d"),
+        ("N9.m * N1.z", "N9 is not a ledger entry"),
+        ("N1.d * N1.z", "N1 records no d"),
+        ("N1.m * * N1.z", "does not parse"),
+        ("N1.m.x", "does not parse"),
+        ("N1.m * N1.z / 0", "does not evaluate"),
+        ("sqrt(N1.m - N1.z)", "does not evaluate"),
+        ("open(N1.m)", "names open"),
+    ],
+)
+def test_expect_that_cannot_be_evaluated_is_check_config_naming_why(
+    proj_dir, tmp_path, expr, reason
+):
+    expecting(proj_dir, tmp_path, expr)
+    messages = _config(proj_dir, "pitch-expect")
+    assert len(messages) == 1 and reason in messages[0], messages
+
+
+def test_expect_naming_a_ledger_entry_that_shares_a_params_name_reads_the_entry(proj_dir, tmp_path):
+    # pitch is both a param and an evidence id; pitch.pitch is the ledger value.
+    expecting(proj_dir, tmp_path, "pitch.pitch * N1.m * N1.z / (N1.m * N1.z)")
+    _, report = verify(proj_dir)
+    assert _result(report, "pitch-expect")["ok"] and report["status"] == "VERIFIED"
+
+
+def test_run_without_the_build_reports_an_expect_naming_an_unknown_entry(proj_dir, tmp_path):
+    expecting(proj_dir, tmp_path, "N9.m * N1.z")
+    _, printed = run("check", str(proj_dir), "--no-build")
+    assert "[check-config] check pitch-expect: expect 'N9.m * N1.z': N9 is not a ledger entry" in (
+        printed
+    )
+
+
+@pytest.mark.parametrize("check", [{"evidence": "pitch", "key": "pitch"}, {"evidence": "pitch"}])
+def test_check_naming_both_expect_and_evidence_is_check_config(proj_dir, tmp_path, check):
+    expecting(proj_dir, tmp_path, "N1.m * N1.z", **check)
+    messages = _config(proj_dir, "pitch-expect")
+    assert len(messages) == 1 and "give expect or evidence, not both" in messages[0], messages
+
+
+def test_check_naming_neither_expect_nor_evidence_is_check_config(proj_dir):
+    edit(proj_dir, "checks.yaml", lambda d: [d["checks"][1].pop(k) for k in ("evidence", "key")])
+    messages = _config(proj_dir, "pitch")
+    assert len(messages) == 1 and "give evidence and key, or expect" in messages[0], messages
+
+
+@pytest.mark.parametrize("kind", ["bbox", "range", "shape", "count", "interference"])
+def test_expect_on_a_kind_that_compares_no_one_value_is_check_config(proj_dir, kind):
+    check = {"id": "other", "kind": kind, "expect": "pitch.pitch"}
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].append(check))
+    assert any(f"kind {kind} takes none" in m for m in _config(proj_dir, "other"))
+
+
+def test_guard_ratio_printed_n_to_1_ledgers_as_a_fraction(proj_dir, tmp_path):
+    # "7.2:1" is ledgered as {ratio: 7.2}, with no unit, and the sweep lists nothing in it.
+    text = "The gearbox reduces 7.2:1 overall."
+    add_quote(proj_dir, tmp_path, text, "reduces 7.2:1", {"ratio": 7.2})
+    add_params(proj_dir, ratio={"basis": "source", "from": "N1.ratio"})
+    _, report = verify(proj_dir)
+    assert report["params"]["ratio"]["value"] == 7.2
+    rules = {f["rule"] for f in report["findings"] if f["level"] == "error"}
+    assert not rules & {"value-not-in-quote", "unit-quantity", "coverage"}, rules
+
+
+def test_expect_reads_a_ratio_printed_n_to_1_as_a_fraction(proj_dir, tmp_path):
+    # 30 = 7.2 × 25 / 6, so the check passes only where "7.2:1" reads as 7.2.
+    text = "The gearbox reduces 7.2:1 overall."
+    add_quote(proj_dir, tmp_path, text, "reduces 7.2:1", {"ratio": 7.2})
+    pitch = {"id": "pitch-ratio", **PITCH_CHECK, "expect": "N1.ratio * 25 / 6"}
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].append(pitch))
+    code, report = verify(proj_dir)
+    assert _result(report, "pitch-ratio")["ok"] and (code, report["status"]) == (0, "VERIFIED")
