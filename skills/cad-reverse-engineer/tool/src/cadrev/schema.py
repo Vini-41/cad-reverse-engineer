@@ -69,6 +69,7 @@ EVIDENCE = Record(
         "axes": Table(str),
         "between": Items(str),
         "along": str,
+        "at": str,
         "tol": NUMBER,
     },
     required=("id",),
@@ -82,6 +83,7 @@ SKIP = Record(
         "from": str,
         "to": str,
         "body": str,
+        "within": Items(Items(NUMBER)),
         "reason": str,
     }
 )
@@ -113,6 +115,7 @@ CHECK = Record(
         "axes": Table(str),
         "between": Items(str),
         "along": str,
+        "at": str,
         "density": str,
         "counts": Table(str),
         "add": Items(str),

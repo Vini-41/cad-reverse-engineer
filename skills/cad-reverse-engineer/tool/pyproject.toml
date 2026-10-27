@@ -10,6 +10,9 @@ dependencies = [
     "pypdf>=4",
     "matplotlib>=3.8",
     "mujoco>=3.3",
+    # A cut file's SVG: svgelements reads it, ocpsvg turns its contours into wires.
+    "ocpsvg>=0.6",
+    "svgelements>=1.9",
 ]
 
 [project.optional-dependencies]

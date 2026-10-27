@@ -347,6 +347,9 @@ def _write_viewable(target: Path, data: bytes) -> Path:
 
 # Thread and fastener sizes (M3, M2.5x0.45): stated sizes the unit table cannot read.
 _THREAD = re.compile(r"(?<![a-z0-9.])m\d+(?:\.\d+)?(?:x\d+(?:\.\d+)?)?(?![a-z0-9])")
+# A diameter sign right before a number (Ø 32.5, Ø3, ⌀3; ∅ as some PDFs extract it), not a letter
+# of a word: a diameter callout, a length in the project's unit unless a unit follows.
+_DIAMETER = re.compile(r"(?<!\w)[ø⌀∅] ?$")
 # A moment, when something happens (t = 2 s, a video frame's T=0s), not how long it lasts (Δt).
 _MOMENT = re.compile(r"(?<!\w)t ?= ?$")
 # Units whose spelling, hyphened to a number, names a thing instead: a four-bar or 4-bar linkage
@@ -368,7 +371,8 @@ def _capital_symbol(t: _Token, as_printed: str) -> bool:
 
 def stated_quantities(text: str, as_printed: str | None = None) -> list[tuple[int, int, str]]:
     """Spans in normalized text that state a quantity: a number the quote reader would read with
-    a unit (a whole range such as 3-5 mm), an a×b×c product, or a thread size; never digits
+    a unit (a whole range such as 3-5 mm), an a×b×c product, a diameter callout (Ø 32.5), or a
+    thread size; never digits
     inside a name or a figure, table, equation or section number, a moment (t = 2 s), or, where
     as_printed gives text normalized but for case, a one-letter unit printed as another symbol's
     capital (8G, 2S).
@@ -386,15 +390,20 @@ def stated_quantities(text: str, as_printed: str | None = None) -> list[tuple[in
         product = len(group) > 1 and all(
             text[a.end : b.start] == "x" for a, b in zip(group, group[1:])
         )
-        glued = group[0].start > 0 and text[group[0].start - 1].isalnum()  # in a name: ada2cc, L14
+        start = group[0].start
+        callout = _DIAMETER.search(text, max(0, start - 2), start)
+        if callout is not None:
+            start = callout.start()
+        glued = start > 0 and text[start - 1].isalnum()  # in a name: ada2cc, L14
         moment = (
             t.unit is not None
             and units.quantity(t.unit) == "time"
             and _MOMENT.search(text, max(0, group[0].start - 4), group[0].start) is not None
         )
         misread = moment or (len(group) == 1 and _capital_symbol(t, as_printed))
-        if (t.unit or product) and not glued and not misread and not any(g.labelled for g in group):
-            spans.append((group[0].start, t.end))
+        stated = t.unit or product or callout
+        if stated and not glued and not misread and not any(g.labelled for g in group):
+            spans.append((start, t.end))
         group = []
     spans += [m.span() for m in _THREAD.finditer(text)]
     whole = [
