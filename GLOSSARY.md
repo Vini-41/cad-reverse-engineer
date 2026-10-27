@@ -81,8 +81,12 @@ How one instance moves relative to another: revolute (turning about an axis thro
 _Avoid_: pivot (for the joint itself; a pivot is its datum), prismatic, weld, DOF
 
 **Gear**:
-A coupling of two joints of one type, so one moves a stated ratio times as far as the other: meshed gears or a belt.
-_Avoid_: transmission, mimic joint
+A coupling of two joints, so one moves in step with the other: of one type at a stated ratio (meshed gears, a belt), or a revolute joint and a slide at a stated lead (a lead screw, a rack and pinion).
+_Avoid_: transmission, mimic joint, screw joint
+
+**Lead**:
+How far a gear's slide moves per full turn of its revolute joint, a length; negative where the slide moves toward its axis's first datum as the revolute joint turns positive. A rack and pinion's is its pitch circumference.
+_Avoid_: pitch (for a lead; a screw with several starts has a lead several times its thread pitch), ratio (for a lead)
 
 **Cable**:
 An inextensible cord laid through datums on several instances, whose length the posed assembly gives; one wound on a wheel joint drives the joints it closes, each moving in proportion to the wheel's turn toward its closed pose. Unlike a tendon, a cable does not stretch.
@@ -109,7 +113,7 @@ One comparison between the built geometry and a ledger value: an envelope, a dis
 _Avoid_: test, assertion
 
 **Reads**:
-What a check's evaluation read, shared by all its results: the params it reads itself (its pose, its sweep's steps, its kind's own, a mass check's only for the parts it weighs), the params the model gives it (its joint's range ends, the wheel's turn and the closed values a pose moves through a cable), the parts it weighs and those it weighs in several instances with no stated count. A check reads both its own params and those the model gives it; its rests on is judged from its Reads.
+What a check's evaluation read, shared by all its results: the params it reads itself (its pose, its sweep's steps, its kind's own, a mass check's only for the parts it weighs), the params the model gives it (its joint's range ends, the ratio or lead of each gear a pose moves a joint through, the wheel's turn and the closed values a pose moves through a cable), the parts it weighs and those it weighs in several instances with no stated count. A check reads both its own params and those the model gives it; its rests on is judged from its Reads.
 _Avoid_: dependencies, inputs (of a check)
 
 **Claim**:
