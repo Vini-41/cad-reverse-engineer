@@ -46,8 +46,10 @@ def _mass_reads(p: Project, c: dict, weighs: tuple[str, ...] | None = None) -> l
 
 
 def _mass_names(c: dict) -> list[tuple[str, str]]:
-    """The params a mass check names: its density, then each mass it adds."""
-    return [(c.get("density") or "", "density")] + [(n, "mass") for n in c.get("add", [])]
+    """The params a mass check names: its density, then each mass it adds, then each count of
+    instances it weighs."""
+    names = [(c.get("density") or "", "density")] + [(n, "mass") for n in c.get("add", [])]
+    return names + [(str(n), "count") for n in (c.get("counts") or {}).values()]
 
 
 @dataclass(frozen=True)
@@ -66,7 +68,8 @@ class CheckKind:
     only beyond its tolerance, with no tol of its own (ADR-0010). body_cap, where set, makes it
     compare a built part with a released body (its body), its tol capped at that fraction of the
     body's bbox diagonal, as it compares with no value. names, where set, gives the params a
-    check of the kind names by key, each with the quantity it must be in."""
+    check of the kind names by key, each with the quantity it must be in. exact, where set, makes
+    it compare exactly, so it has no tolerance and takes no tol or tol_rel."""
 
     quantity: str
     tolerance: str | None
@@ -78,6 +81,7 @@ class CheckKind:
     claims: bool = False
     body_cap: float | None = None
     names: Callable[[dict], list[tuple[str, str]]] | None = None
+    exact: bool = False
 
 
 # The quantities a joint's value is in: a revolute joint's angle, a slide's length. Before the
@@ -104,6 +108,8 @@ CHECK_KINDS = {
     # A part against its released body: the largest distance between their surfaces, which no
     # ledger value states, its tol capped against the body's size.
     "shape": CheckKind("length", "length", body_cap=0.01),
+    # How many instances of a part the assembly places, against a stated count (ADR-0012).
+    "count": CheckKind("count", None, exact=True),
 }
 # The kinds of check that compare how much instances overlap with an overlap limit.
 OVERLAP_KINDS = ("interference",)
@@ -1276,7 +1282,7 @@ def check_tolerance(p: Project, c: dict, quantity: str | None = None) -> tuple[s
     value, or a mass check missing its tol_rel. quantity, where given, is the one a joint_valued
     check compares in, its joint's."""
     kind = CHECK_KINDS.get(str(c.get("kind")))
-    if kind is None:
+    if kind is None or kind.exact:
         return None
     if kind.tolerance is None:
         return ("tol_rel", float(c["tol_rel"])) if "tol_rel" in c else None
@@ -1346,6 +1352,13 @@ def check_tolerances(p: Project) -> None:
     TOL_REL_CAP."""
     for c in p.checks:
         cid, tolerance = c.get("id", "?"), check_tolerance(p, c)
+        kind = CHECK_KINDS.get(str(c.get("kind")))
+        for key in ("tol", "tol_rel") if kind is not None and kind.exact else ():
+            if key in c:
+                p.error(
+                    "check-config",
+                    f"check {cid}: a {c['kind']} check compares exactly, so it takes no {key}",
+                )
         if tolerance is None:
             continue
         key, value = tolerance
@@ -1526,6 +1539,58 @@ def expect_param_quantity(p: Project, name: str, expected: tuple[str, ...], use:
         expect_quantity(p, ref, expected, f"param {source}{via} {use}")
 
 
+def _not_whole(value: float) -> bool:
+    return math.isfinite(value) and value != round(value)
+
+
+def expect_count(p: Project, ref: str, use: str) -> None:
+    """[unit-quantity] unless the evidence value at ref reads as a count (ADR-0012): printed in a
+    count unit or none, and a whole number."""
+    expect_quantity(p, ref, ("count",), use)
+    value = p.evidence_value(ref)
+    if value is not None and _not_whole(value):
+        p.error(
+            "unit-quantity",
+            f"{ref} = {value:g} is not a whole number, where a count is expected ({use})",
+        )
+
+
+def expect_param_count(p: Project, name: str, use: str, lengths: bool = False) -> None:
+    """expect_count for a param: [unit-quantity] unless the quote it traces to prints a count
+    unit or none, and its value is a whole number. Where lengths, a param whose quote prints a
+    length is read as a length instead, as a belt's pulley diameters are (ADR-0012)."""
+    traced = _traced(p, name)
+    unit = None if traced is None else p.unit_of(traced[1])
+    if lengths and unit is not None and units.quantity(unit) == "length":
+        return
+    expect_param_quantity(p, name, ("count", "length") if lengths else ("count",), use)
+    if unit is not None and units.quantity(unit) != "count":
+        return  # [unit-quantity] says what it is read as
+    value = p.values.get(name)
+    if value is not None and _not_whole(value):
+        p.error(
+            "unit-quantity",
+            f"param {name} = {value:g} is not a whole number, where a count is expected ({use})",
+        )
+
+
+def derived_from(p: Project, name: str, through: tuple[str, ...] = ()) -> list[str]:
+    """The params a derived param's value is worked out from, through every derived param its
+    expr references, in order: those with a basis of their own; none for a param not derived."""
+    spec = p.params.get(name) or {}
+    if spec.get("basis") != "derived" or name in through:
+        return []
+    try:
+        needs = sorted(expr_names(str(spec.get("expr", ""))) - MATH_NAMES.keys())
+    except (SyntaxError, ValueError):
+        return []  # already a param-derived finding
+    out = []
+    for n in (n for n in needs if n in p.params):
+        inner = derived_from(p, n, (*through, name))
+        out += inner if (p.params[n] or {}).get("basis") == "derived" else [n]
+    return list(dict.fromkeys(out))
+
+
 def expect_joint_value(p: Project, ref: str, quantity: str | None, use: str) -> None:
     """expect_quantity for a joint value, a param's traced quote or a ledger value: of
     JOINT_QUANTITIES before the build, or of quantity, its joint's, after it. check_units has
@@ -1556,13 +1621,19 @@ def check_units(p: Project) -> None:
             if joint_valued(c):
                 expected = JOINT_QUANTITIES  # the build holds each to its joint's
             for ref in check_refs(c):
-                expect_quantity(p, ref, expected, f"check {cid}")
+                if expected == ("count",):
+                    expect_count(p, ref, f"check {cid}")
+                else:
+                    expect_quantity(p, ref, expected, f"check {cid}")
         for key in POSES:
             for ref in (c.get(key) or {}).values():
                 expect_joint_value(p, str(ref), None, f"in check {cid}'s {key}")
         named = CHECK_KINDS[kind].names if kind in CHECK_KINDS else None
         for name, quantity in named(c) if named else []:
-            expect_param_quantity(p, name, (quantity,), f"in check {cid}")
+            if quantity == "count":
+                expect_param_count(p, name, f"in check {cid}")
+            else:
+                expect_param_quantity(p, name, (quantity,), f"in check {cid}")
     for part, entry in p.parts.items():
         for by, name in entry.items():
             expect_param_quantity(p, name, (by,), f"in params.yaml parts.{part}")
