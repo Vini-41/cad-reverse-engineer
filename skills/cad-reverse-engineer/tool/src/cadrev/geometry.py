@@ -1447,10 +1447,31 @@ def _shape(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckRe
     unknown or its pairs are fewer than three off one line."""
     reading.at(built)
     cid, name, part = c.get("id", "?"), str(c["body"]), built.parts[c["part"]]
-    body = p.bodies.get(name)
-    if body is None:
-        p.error("check-config", f"check {cid}: {name} is not a body of a geometry source")
+    body = p.body(name)
+    if isinstance(body, str):
+        p.error("check-config", f"check {cid}: {body}")
         return []
+    # A region of a cut file is compared with the part's outline projected along an axis.
+    sheet, along = released.at_point(name), c.get("along")
+    if sheet is None and along is not None:
+        p.error(
+            "check-config",
+            f"check {cid}: along projects a part onto a region of a cut file, and {name} is a "
+            "solid",
+        )
+        return []
+    if sheet is not None and along not in AXES:
+        p.error(
+            "check-config",
+            f"check {cid}: "
+            + (
+                f"names no axis along which to project part {c['part']} onto region {name}"
+                if along is None
+                else f"along names no axis x, y or z of part {c['part']}: {along}"
+            ),
+        )
+        return []
+    on = name if sheet is None else sheet[0]
     pairs, ours, theirs = c.get("pairs") or [], [], []
     for pair in pairs:
         if len(pair) != 2:
@@ -1463,12 +1484,12 @@ def _shape(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckRe
             p.error("check-config", f"check {cid}: {pair[0]} is not a datum of part {c['part']}")
             return []
         named = p.released_datum(pair[1])
-        if named is None or named[0] != name:
-            p.error(
-                "check-config", f"check {cid}: {pair[1]} is not a datum declared on body {name}"
-            )
+        if named is None or named[0] != on:
+            where = f"body {name}" if sheet is None else f"cut file {on}"
+            p.error("check-config", f"check {cid}: {pair[1]} is not a datum declared on {where}")
             return []
-        ours.append(built.datums[pair[0]])
+        point = built.datums[pair[0]]
+        ours.append(point if sheet is None else released.projected(point, str(along)))
         theirs.append(named[1])
     if len(pairs) < 3 or released.collinear(theirs, p.length_tol):
         p.error(
@@ -1492,7 +1513,14 @@ def _shape(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckRe
                 shape=fitted,
             )
         ]
-    distance, at = released.surface_distance(part.moved(where), body)
+    if sheet is None:
+        compared = "surface"
+        distance, at = released.surface_distance(part.moved(where), body)
+    else:
+        compared = "outline"
+        distance, at = released.outline_distance(
+            released.outline(part, str(along)).moved(where), body
+        )
     tolerance = check_tolerance(p, c)
     assert tolerance is not None  # a shape check's kind has a tolerance
     shown = ", ".join(f"{v:.4g}" for v in at)
@@ -1501,8 +1529,8 @@ def _shape(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckRe
             cid,
             "shape",
             distance <= tolerance[1],
-            f"surfaces within {tolerance[1]:g} of body {name}",
-            f"{distance:.4g} largest surface distance, at ({shown}) on body {name}",
+            f"{compared}s within {tolerance[1]:g} of body {name}",
+            f"{distance:.4g} largest {compared} distance, at ({shown}) on body {name}",
             c.get("interpretation", ""),
             shape=fitted | {"distance": printed(distance)[0], "worst_point": list(printed(*at))},
         )

@@ -2416,6 +2416,33 @@ DAMAGE = {
         released(r, r.parent),
         edit(r, "checks.yaml", lambda d: d["checks"][-1].update(body="paper")),
     ),
+    "cut file of malformed XML": lambda r: sheet(r, r.parent, svg="<svg><path d=", check=False),
+    "cut file path of malformed data": lambda r: sheet(
+        r, r.parent, svg=swap(SHEET, "M 50 0 h 10", "M 50 0 q !"), check=False
+    ),
+    "cut file of a single contour": lambda r: sheet(
+        r, r.parent, svg='<svg xmlns="http://www.w3.org/2000/svg"><circle r="5"/></svg>'
+    ),
+    "cut file skip within a list of numbers": lambda r: (
+        sheet(r, r.parent),
+        _skip_sheet(r, within=[1, 2]),
+    ),
+    "cut file skip within corners of text": lambda r: (
+        sheet(r, r.parent),
+        _skip_sheet(r, within=[["a", "b"], ["c", "d"]]),
+    ),
+    "shape check of a point on a released solid": lambda r: (
+        released(r, r.parent),
+        edit(r, "checks.yaml", lambda d: d["checks"][-1].update(body="link_step@1,2")),
+    ),
+    "shape check of a point on a cut file with no number": lambda r: sheet(
+        r, r.parent, body="sheet@a,b"
+    ),
+    "shape check along a number": lambda r: sheet(r, r.parent, along=3),
+    "cut file datum of text": lambda r: (
+        sheet(r, r.parent),
+        edit(r, "evidence.yaml", lambda d: d["datums"].update({"sheet.a": ["x", "y"]})),
+    ),
     "source registered after a PyYAML re-dump": lambda r: (
         edit(r, "project.yaml", lambda d: None),
         (r / "notes.txt").write_text("No dimensions.\n"),
@@ -8204,3 +8231,306 @@ def test_file_of_several_bodies_names_each_by_its_place_in_the_file(proj_dir, tm
 def test_probe_recording_no_values_is_evidence_values_whatever_its_scope(proj_dir, tmp_path):
     probed(proj_dir, tmp_path, values=None)
     assert "evidence-values" in errors(proj_dir)
+
+
+# Cut files (ADR-0011): a laser-cut sheet drawn at half size, declared 600 mm wide over a 300-unit
+# viewBox, so each length doubles. Its group moves its two filled paths by (10, 20): the link's
+# outline with its two holes, which the sheet puts at (20..60, 40..45) mm with holes at x 25 and
+# 55, and a 10 mm square plate at (120..140, 40..60) mm.
+SHEET = """\
+<svg xmlns="http://www.w3.org/2000/svg" width="600mm" height="400mm" viewBox="0 0 300 200">
+  <g transform="translate(10, 20)">
+    <path fill="black" fill-rule="evenodd" d="M 0 0 H 20 V 2.5 H 0 Z
+      M 1.75 1.25 a 0.75 0.75 0 1 0 1.5 0 a 0.75 0.75 0 1 0 -1.5 0 Z
+      M 16.75 1.25 a 0.75 0.75 0 1 0 1.5 0 a 0.75 0.75 0 1 0 -1.5 0 Z"/>
+    <path fill="black" d="M 50 0 h 10 v 10 h -10 Z"/>
+  </g>
+</svg>
+"""
+# Points inside the link's region and the plate's, on the sheet at its declared scale.
+LINK_AT, PLATE_AT = "sheet@30,41", "sheet@130,50"
+# Datums on the sheet, in its frame: the link's hole centres and the middle of its long edge at
+# y 45, where the built link's datums a, b and d (on its face at +Y) project along Z.
+SHEET_DATUMS = {"sheet.a": [25, 42.5], "sheet.b": [55, 42.5], "sheet.d": [40, 45]}
+_FOUR_DATUMS = swap(
+    MODEL,
+    '"link.b": (p.pitch / 2, 0, 0)}',
+    '"link.b": (p.pitch / 2, 0, 0), "link.d": (0, p.link_W / 2, 0)}',
+)
+
+
+def sheet(root: Path, tmp_path: Path, svg: str = SHEET, check=True, **shape) -> Path:
+    """Register svg as geometry source sheet, declare SHEET_DATUMS on it, give the built link datum
+    d, and with check compare the built link with its region by a shape check projected along Z
+    (shape gives its other keys, None dropping one), skipping the regions in 110..150 × 30..70,
+    the plate's. Returns the SVG."""
+    path = tmp_path / "sheet.svg"
+    path.write_text(svg)
+    register = ["source", str(root), str(path), "--id", "sheet", "--kind", "geometry"]
+    assert cli.main([*register, "--citation", "Doe 2026, sheet.svg"]) == 0
+    edit(root, "evidence.yaml", lambda d: d.update(datums=SHEET_DATUMS))
+    write(root, "model.py", _FOUR_DATUMS)
+    if check:
+        pairs = [["link.a", "sheet.a"], ["link.b", "sheet.b"], ["link.d", "sheet.d"]]
+        entry = {"id": "shape", "kind": "shape", "part": "link", "body": LINK_AT, "along": "z"}
+        entry = {k: v for k, v in (entry | {"pairs": pairs} | shape).items() if v is not None}
+        edit(root, "checks.yaml", lambda d: d["checks"].append(entry))
+        _skip_sheet(root, within=[[110, 30], [150, 70]])
+    return path
+
+
+def _skip_sheet(root: Path, **skip) -> None:
+    entry = {"source": "sheet", "reason": "a plate of another device"} | skip
+    edit(root, "evidence.yaml", lambda d: d["skipped"].append(entry))
+
+
+def test_cut_file_regions_are_bodies_found_by_a_point_inside_each_at_the_declared_scale(
+    proj_dir, tmp_path
+):
+    sheet(proj_dir, tmp_path, check=False)
+    _skip_sheet(proj_dir, body=LINK_AT)
+    _skip_sheet(proj_dir, body=PLATE_AT)
+    code, report = verify(proj_dir)
+    assert (code, report["status"]) == (0, "VERIFIED")
+
+
+def test_cut_file_region_neither_shape_checked_nor_skipped_is_coverage_named_by_a_point(
+    proj_dir, tmp_path
+):
+    sheet(proj_dir, tmp_path, check=False)
+    _skip_sheet(proj_dir, body=LINK_AT)
+    (uncovered,) = _coverage(verify(proj_dir)[1])
+    named = re.fullmatch(
+        r"sheet body sheet@([\d.]+),([\d.]+): no shape check compares it and no skip sets it aside",
+        uncovered,
+    )
+    assert named and 120 < float(named[1]) < 140 and 40 < float(named[2]) < 60
+
+
+# The plate's two halves, 10 mm squares side by side on the sheet: x 120..130 and 130..140.
+_HALVES = swap(
+    SHEET,
+    '<path fill="black" d="M 50 0 h 10 v 10 h -10 Z"/>',
+    '<path fill="black" d="M 50 0 h 5 v 10 h -5 Z"/>\n'
+    '    <path fill="black" d="M 55 0 h 5 v 10 h -5 Z"/>',
+)
+
+
+@pytest.mark.parametrize(
+    "svg, point, why",
+    [
+        (SHEET, "sheet@100,50", "sheet@100,50 lies inside no region of sheet"),
+        (SHEET, "sheet@65,25", "sheet@65,25 lies inside no region of sheet"),
+        (_HALVES, "sheet@130,50", "sheet@130,50 lies inside 2 regions of sheet"),
+    ],
+    ids=["between regions", "unscaled", "on two regions' common edge"],
+)
+def test_point_inside_no_region_or_inside_two_is_a_named_finding(
+    proj_dir, tmp_path, svg, point, why
+):
+    sheet(proj_dir, tmp_path, svg=svg, body=point)
+    found = [
+        (f["rule"], f["message"]) for f in verify(proj_dir)[1]["findings"] if why in f["message"]
+    ]
+    assert found == [("check-config", f"check shape: {why}")]
+
+
+@pytest.mark.parametrize(
+    "point, why",
+    [("sheet@100,50", "no region"), ("sheet@130,50", "2 regions")],
+    ids=["no region", "two regions"],
+)
+def test_skip_naming_a_point_inside_no_region_or_inside_two_is_skip_not_found(
+    proj_dir, tmp_path, point, why
+):
+    sheet(proj_dir, tmp_path, svg=_HALVES, check=False)
+    _skip_sheet(proj_dir, body=point)
+    found = [f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "skip-not-found"]
+    assert found == [f"skip in sheet: {point} lies inside {why} of sheet"]
+
+
+def _sheet_shape(report: dict) -> dict:
+    (result,) = [r for r in report["checks"] if r["id"] == "shape"]
+    return result
+
+
+def test_shape_check_of_a_built_plate_against_its_cut_file_region_passes(proj_dir, tmp_path):
+    sheet(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    result = _sheet_shape(report)
+    assert result["ok"] and result["shape"]["distance"] < 1e-4
+    assert (code, report["status"]) == (0, "VERIFIED")
+
+
+def test_shape_check_of_a_plate_projected_along_x_compares_its_outline_seen_along_x(
+    proj_dir, tmp_path
+):
+    # Seen along X, the link is its 5 × 8 end: a plate the sheet cuts as a 2.5 × 4 rectangle.
+    end = swap(
+        SHEET,
+        '<path fill="black" d="M 50 0 h 10 v 10 h -10 Z"/>',
+        ('<path fill="black" d="M 50 0 h 2.5 v 4 h -2.5 Z"/>'),
+    )
+    corners = {"sheet.e": [120, 40], "sheet.f": [125, 40], "sheet.g": [120, 48]}
+    sheet(
+        proj_dir,
+        tmp_path,
+        svg=end,
+        body="sheet@122,44",
+        along="x",
+        pairs=[["link.e", "sheet.e"], ["link.f", "sheet.f"], ["link.g", "sheet.g"]],
+    )
+    edit(proj_dir, "evidence.yaml", lambda d: d["datums"].update(corners))
+    edit(
+        proj_dir,
+        "evidence.yaml",
+        lambda d: d["skipped"].append({"source": "sheet", "body": LINK_AT, "reason": "r"}),
+    )
+    x, y, z = "p.link_L / 2", "p.link_W / 2", "p.link_H / 2"
+    ends = (
+        f', "link.e": ({x}, -{y}, -{z}), "link.f": ({x}, {y}, -{z}), "link.g": ({x}, -{y}, {z})}}'
+    )
+    write(proj_dir, "model.py", swap(_FOUR_DATUMS, ", 0)}", ", 0)" + ends))
+    code, report = verify(proj_dir)
+    assert _sheet_shape(report)["ok"] and (code, report["status"]) == (0, "VERIFIED")
+
+
+def test_shape_check_of_a_plate_missing_a_hole_its_region_has_fails_at_its_worst_point(
+    proj_dir, tmp_path
+):
+    # A third hole, 3 mm across at the link's middle, (40, 42.5) on the sheet.
+    holed = swap(
+        SHEET,
+        '-1.5 0 Z"/>',
+        ('-1.5 0 Z\n      M 9.25 1.25 a 0.75 0.75 0 1 0 1.5 0 a 0.75 0.75 0 1 0 -1.5 0 Z"/>'),
+        count=1,
+    )
+    sheet(proj_dir, tmp_path, svg=holed)
+    code, report = verify(proj_dir)
+    result = _sheet_shape(report)
+    x, y = result["shape"]["worst_point"]
+    # The worst point lies on the hole the built link lacks, 2.5 mm from the link's long edges.
+    assert not result["ok"] and math.hypot(x - 40, y - 42.5) == pytest.approx(1.5, abs=1e-4)
+    assert result["shape"]["distance"] == pytest.approx(2.5, abs=1e-4)
+    assert code == 1 and any(
+        f["rule"] == "check-failed" and "largest outline distance" in f["message"]
+        for f in report["findings"]
+    )
+
+
+@pytest.mark.parametrize(
+    "along, why",
+    [
+        (None, "names no axis along which to project part link onto region sheet@30,41"),
+        ("w", "along names no axis x, y or z of part link: w"),
+    ],
+    ids=["unnamed", "not one of the part's axes"],
+)
+def test_shape_check_on_a_cut_file_without_a_projection_axis_of_the_part_is_check_config(
+    proj_dir, tmp_path, along, why
+):
+    sheet(proj_dir, tmp_path, along=along)
+    _, report = verify(proj_dir)
+    configs = [f["message"] for f in report["findings"] if f["rule"] == "check-config"]
+    assert configs == [f"check shape: {why}"] and "shape" not in [r["id"] for r in report["checks"]]
+
+
+def test_shape_check_projected_along_an_axis_of_the_part_is_no_check_config(proj_dir, tmp_path):
+    sheet(proj_dir, tmp_path, along="z")
+    assert "check-config" not in rules(proj_dir)
+
+
+def test_shape_check_on_a_released_solid_naming_a_projection_axis_is_check_config(
+    proj_dir, tmp_path
+):
+    released(proj_dir, tmp_path, along="z")
+    configs = [f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "check-config"]
+    assert configs == [
+        "check shape: along projects a part onto a region of a cut file, and link_step is a solid"
+    ]
+
+
+@pytest.mark.parametrize(
+    "point, off",
+    [([25, 42.5], False), ([40, 42.5], False), ([90, 42.5], True)],
+    ids=["hole centre", "on the region", "between regions"],
+)
+def test_datum_on_a_cut_file_lies_inside_a_regions_outer_contour(proj_dir, tmp_path, point, off):
+    sheet(proj_dir, tmp_path, check=False)
+    edit(proj_dir, "evidence.yaml", lambda d: d["datums"].update({"sheet.x": point}))
+    found = [f["rule"] for f in verify(proj_dir)[1]["findings"] if "sheet.x" in f["message"]]
+    assert found == (["datum-off-solid"] if off else [])
+
+
+def test_datum_on_a_cut_file_of_three_numbers_is_schema(proj_dir, tmp_path):
+    sheet(proj_dir, tmp_path)
+    edit(proj_dir, "evidence.yaml", lambda d: d["datums"].update({"sheet.a": [25, 42.5, 0]}))
+    schema = [f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "schema"]
+    assert schema == [
+        "evidence.yaml datums.sheet.a: must be [x, y] on cut file sheet, not [25, 42.5, 0]"
+    ]
+
+
+def test_coverage_skip_naming_a_rectangle_covers_every_region_inside_it(proj_dir, tmp_path):
+    # The link and both plate halves lie inside 0..150 × 0..100; the halves alone in 110..150.
+    sheet(proj_dir, tmp_path, svg=_HALVES, check=False)
+    _skip_sheet(proj_dir, within=[[0, 0], [150, 100]])
+    code, report = verify(proj_dir)
+    assert _coverage(report) == [] and (code, report["status"]) == (0, "VERIFIED")
+
+
+def test_region_outside_a_skipped_rectangle_stays_a_coverage_finding(proj_dir, tmp_path):
+    sheet(proj_dir, tmp_path, svg=_HALVES, check=False)
+    _skip_sheet(proj_dir, within=[[150, 100], [110, 30]])
+    (uncovered,) = _coverage(verify(proj_dir)[1])
+    assert (
+        uncovered.startswith("sheet body sheet@")
+        and float(uncovered.split("@")[1].split(",")[0]) < 60
+    )
+
+
+def test_region_partly_inside_a_skipped_rectangle_is_not_covered_by_it(proj_dir, tmp_path):
+    sheet(proj_dir, tmp_path, check=False)
+    _skip_sheet(proj_dir, body=LINK_AT)
+    _skip_sheet(proj_dir, within=[[125, 30], [150, 70]])
+    found = rules(proj_dir)
+    assert "coverage" in found and "skip-not-found" in found
+
+
+@pytest.mark.parametrize(
+    "skip",
+    [{}, {"within": [[0, 0]]}, {"within": [[0, 0, 0], [1, 1, 1]]}],
+    ids=["neither", "one corner", "three numbers a corner"],
+)
+def test_skip_of_a_cut_file_naming_neither_a_point_nor_a_rectangle_is_skip_anchor(
+    proj_dir, tmp_path, skip
+):
+    sheet(proj_dir, tmp_path)
+    _skip_sheet(proj_dir, **skip)
+    assert "skip-anchor" in errors(proj_dir)
+
+
+def test_probe_of_a_cut_file_is_evidence_anchor(proj_dir, tmp_path):
+    sheet(proj_dir, tmp_path)
+    entry = PROBE | {"source": "sheet", "body": LINK_AT}
+    edit(proj_dir, "evidence.yaml", lambda d: d["evidence"].append(entry))
+    anchors = [
+        f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "evidence-anchor"
+    ]
+    assert anchors == [
+        "P-link: sheet is a cut file, whose regions a shape check compares; a probe reads a solid"
+    ]
+
+
+def test_guard_cut_file_that_is_no_svg_is_source_unreadable(proj_dir, tmp_path):
+    sheet(proj_dir, tmp_path, svg="not an SVG\n", check=False)
+    assert "source-unreadable" in errors(proj_dir)
+
+
+def test_cut_file_drawing_no_closed_contour_is_source_unreadable(proj_dir, tmp_path):
+    lines = '<svg xmlns="http://www.w3.org/2000/svg"><path d="M 0 0 L 10 0"/></svg>\n'
+    sheet(proj_dir, tmp_path, svg=lines, check=False)
+    assert any(
+        f["rule"] == "source-unreadable" and "draws no closed contour" in f["message"]
+        for f in verify(proj_dir)[1]["findings"]
+    )
