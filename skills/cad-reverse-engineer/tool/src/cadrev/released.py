@@ -4,6 +4,7 @@ and the distances and angles between datums."""
 
 from __future__ import annotations
 
+import importlib
 import math
 import re
 from functools import cache
@@ -11,36 +12,211 @@ from pathlib import Path
 
 from . import sources
 
-# The file formats a geometry source is read from.
-GEOMETRY_FORMATS = {".step", ".stp"}
+# The file formats a cut file is read from: a laser-cut sheet, whose bodies are its regions.
+SHEET_FORMATS = {".svg"}
+# A length an SVG gives in no physical unit is in CSS pixels, 96 to the inch.
+_PX_PER_INCH = 96
+_MM_PER_PX = 25.4 / _PX_PER_INCH
+# A region of a cut file named by a point inside it: <source>@<x>,<y> on the sheet.
+_NUMBER = r"[-+]?(?:\d+\.?\d*|\.\d+)"
+_AT = re.compile(rf"(?P<source>[^@]+)@\s*(?P<x>{_NUMBER})\s*,\s*(?P<y>{_NUMBER})")
+# For a projection along each axis, the axes a point's sheet x and y and the projection axis
+# are, in turn: a rotation carrying the axis onto z.
+_TURNS = {"x": (1, 2, 0), "y": (2, 0, 1), "z": (0, 1, 2)}
+# How finely inner_point searches a region's bbox for a point to name it by (a grid of n × n).
+_GRID = 24
 # How finely a shape check samples each face (an n × n grid of its parameters) and each edge.
 SAMPLES = 8
 # How finely off_solid samples each edge of a cylindrical face to find the face's axial extent.
 _EDGE_SAMPLES = 16
+# How far apart, in millimetres, two triangle corners of an STL may be and still be sewn as one.
+_SEWING_TOL = 1e-6
+
+
+def _step_solids(path: Path) -> list:
+    """The solids of the STEP at path, in file order, in millimetres."""
+    from build123d import import_step
+
+    return import_step(str(path)).solids()
+
+
+def _stl_solids(path: Path) -> list:
+    """The solids of the STL at path, in file order, in millimetres: its triangles sewn into
+    closed shells, each one solid of flat faces. Raises where the file holds no triangle, or a
+    shell does not close."""
+    from build123d import Shell, Solid
+    from build123d.topology import Shape
+
+    # OCP's modules re-export a compiled module whose names pyright cannot see, so they are
+    # looked up at run time.
+    ocp = {name: importlib.import_module(f"OCP.{name}") for name in ("BRepBuilderAPI", "StlAPI")}
+    mesh = importlib.import_module("OCP.TopoDS").TopoDS_Shape()
+    if not ocp["StlAPI"].StlAPI_Reader().Read(mesh, str(path)) or mesh.IsNull():
+        raise ValueError("the file holds no triangle")
+    sewing = ocp["BRepBuilderAPI"].BRepBuilderAPI_Sewing(_SEWING_TOL)
+    sewing.Add(mesh)
+    sewing.Perform()
+    sewn = Shape.cast(sewing.SewedShape())
+    shells = [sewn] if isinstance(sewn, Shell) else list(sewn.shells())
+    if not shells or not all(s.is_manifold for s in shells):
+        raise ValueError("the mesh does not close into solids")
+    return [Solid(s) for s in shells]
+
+
+# The file formats a geometry source is read from, each with its reader.
+GEOMETRY_FORMATS = {".step": _step_solids, ".stp": _step_solids, ".stl": _stl_solids}
 
 
 @cache
 def _solids(path: Path, digest: str, scale: float) -> tuple:
-    """The solids of the STEP at path, in file order, scaled from millimetres, which the reader
-    gives, to the project's length unit; digest keys the cache to the file's content."""
-    from build123d import import_step
-
+    """The solids of the geometry file at path, in file order, scaled from millimetres, which
+    the readers give, to the project's length unit; digest keys the cache to the file's content."""
     del digest
-    solids = import_step(str(path)).solids()
+    solids = GEOMETRY_FORMATS[path.suffix.lower()](path)
     return tuple(s if scale == 1 else s.scale(scale) for s in solids)
 
 
 def solids(path: Path, scale: float) -> tuple:
     """The solids of the geometry source at path, in file order, in the project's length unit
-    (scale project units to a millimetre). Raises when the file cannot be read as STEP."""
+    (scale project units to a millimetre). Raises when the file cannot be read as STEP or STL."""
     if path.suffix.lower() not in GEOMETRY_FORMATS:
         raise ValueError(
-            f"a geometry source is read as STEP ({', '.join(sorted(GEOMETRY_FORMATS))})"
+            f"a geometry source is read as STEP or STL ({', '.join(sorted(GEOMETRY_FORMATS))}), "
+            f"or as a cut file ({', '.join(sorted(SHEET_FORMATS))})"
         )
     found = _solids(path.resolve(), sources.sha256(path), scale)
     if not found:
         raise ValueError("the file holds no solid")
     return found
+
+
+def is_sheet(path: Path) -> bool:
+    """Whether the geometry source at path is a cut file, whose bodies are regions of a sheet."""
+    return path.suffix.lower() in SHEET_FORMATS
+
+
+@cache
+def _regions(path: Path, digest: str, scale: float) -> tuple:
+    """The regions of the cut file at path (regions), keyed to its content by digest."""
+    import svgelements
+    from build123d import Face, Wire
+    from ocpsvg.svg import wires_from_svg_element
+
+    del digest
+    # svgelements applies the viewBox and every transform, reading lengths in CSS pixels.
+    drawing = svgelements.SVG.parse(str(path), ppi=_PX_PER_INCH)
+    contours = [
+        Wire(wire).scale(_MM_PER_PX * scale)
+        for element in drawing.elements()
+        if isinstance(element, svgelements.Shape)
+        for wire in wires_from_svg_element(element)
+    ]
+    contours = [w for w in contours if w.is_closed]
+    filled = [Face(w) for w in contours]
+    # Each contour lies inside those that enclose it; one inside an even number bounds a region
+    # (its outer contour), one inside an odd number a hole of the smallest that encloses it.
+    within = [
+        [j for j, f in enumerate(filled) if f.area > filled[i].area and _encloses(f, w)]
+        for i, w in enumerate(contours)
+    ]
+    out = []
+    for i, outer in enumerate(contours):
+        if len(within[i]) % 2:
+            continue
+        holes = [
+            contours[j]
+            for j in range(len(contours))
+            if len(within[j]) == len(within[i]) + 1
+            and min(within[j], key=lambda k: filled[k].area) == i
+        ]
+        out.append(Face(outer, holes))
+    return tuple(out)
+
+
+def _encloses(filled, contour) -> bool:
+    """Whether contour lies inside the filled contour filled: no point of it outside, and some
+    point off its edge, so two contours that share an edge enclose neither."""
+    points = [contour.position_at(i / SAMPLES) for i in range(SAMPLES)]
+    edge = filled.outer_wire()
+    return all(filled.is_inside(at) for at in points) and any(
+        edge.distance_to(at) > 1e-6 for at in points
+    )
+
+
+def regions(path: Path, scale: float) -> tuple:
+    """The regions of the cut file at path, each one filled region (an outer contour plus its
+    holes) as a face in the sheet's frame: from the page's top-left corner, x right and y down,
+    at the scale the file declares with its transforms applied, in the project's length unit
+    (scale project units to a millimetre). Raises when the file cannot be read as SVG or draws
+    no closed contour."""
+    found = _regions(path.resolve(), sources.sha256(path), scale)
+    if not found:
+        raise ValueError("the file draws no closed contour")
+    return found
+
+
+def at_point(name: str) -> tuple[str, tuple[float, float]] | None:
+    """The source and point a body name gives as <source>@<x>,<y>: a region of a cut file named by
+    a point inside it; None for any other name."""
+    named = _AT.fullmatch(name)
+    if named is None:
+        return None
+    return named["source"], (float(named["x"]), float(named["y"]))
+
+
+def point_name(source_id: str, point: tuple[float, float]) -> str:
+    """The body name of the region of cut file source_id with point inside it (at_point)."""
+    return f"{source_id}@{point[0]:g},{point[1]:g}"
+
+
+def regions_at(found: tuple, point: tuple[float, float], tol: float) -> list[int]:
+    """The indices of the regions in found that point lies inside, or within tol of."""
+    from build123d import Vector
+
+    at = Vector(point[0], point[1], 0)
+    return [i for i, region in enumerate(found) if region.distance_to(at) <= tol]
+
+
+def regions_within(found: tuple, rectangle, tol: float) -> list[int]:
+    """The indices of the regions in found that lie wholly inside rectangle, given by its least
+    and greatest corner, or within tol of it."""
+    (x0, y0), (x1, y1) = rectangle
+    out = []
+    for i, region in enumerate(found):
+        box = region.bounding_box()
+        if box.min.X >= x0 - tol and box.min.Y >= y0 - tol:
+            if box.max.X <= x1 + tol and box.max.Y <= y1 + tol:
+                out.append(i)
+    return out
+
+
+def outlines_at(found: tuple, point: tuple[float, float], tol: float) -> list[int]:
+    """The indices of the regions in found whose outer contour point lies inside, or within tol
+    of: on the region or in one of its holes."""
+    from build123d import Face, Vector
+
+    at = Vector(point[0], point[1], 0)
+    return [i for i, r in enumerate(found) if Face(r.outer_wire()).distance_to(at) <= tol]
+
+
+def inner_point(region) -> tuple[float, float]:
+    """A point well inside region, to name it by: of a grid over its bbox, the one inside it
+    farthest from its edges, rounded to 0.01."""
+    from build123d import Compound, Vector
+
+    box, edges = region.bounding_box(), Compound(region.edges())
+    best, deepest = (round(box.center().X, 2), round(box.center().Y, 2)), -1.0
+    for i in range(1, _GRID):
+        for j in range(1, _GRID):
+            x = round(box.min.X + box.size.X * i / _GRID, 2)
+            y = round(box.min.Y + box.size.Y * j / _GRID, 2)
+            at = Vector(x, y, 0)
+            if region.distance_to(at) > 0:
+                continue
+            depth = edges.distance_to(at)
+            if depth > deepest:
+                best, deepest = (x, y), depth
+    return best
 
 
 def source_of(body: str) -> str:
@@ -93,6 +269,18 @@ def diameters_at(shape, point: tuple[float, float, float], tol: float) -> list[f
             if all(abs(diameter - d) > tol for d in found):
                 found.append(diameter)
     return sorted(found)
+
+
+def diameter_at(shape, point: tuple[float, float, float], tol: float) -> float | str:
+    """The diameter of the one cylindrical face of shape that point lies on within tol
+    (diameters_at), else where point lies instead: on no cylindrical face, or on the edge of
+    several."""
+    found = diameters_at(shape, point, tol)
+    if len(found) == 1:
+        return found[0]
+    if not found:
+        return "no cylindrical face"
+    return "the edge of cylindrical faces of diameters " + " and ".join(f"{d:.4g}" for d in found)
 
 
 def datum_distance(a, b, along: str | None = None) -> float:
@@ -165,6 +353,53 @@ def _samples(shape) -> list:
     for edge in shape.edges():
         points += [edge.position_at(i / SAMPLES) for i in range(SAMPLES + 1)]
     return points
+
+
+def projected(point: tuple[float, float, float], along: str) -> tuple[float, float, float]:
+    """Where point projects along the axis x, y or z onto the plane of a cut file's sheet (z 0),
+    the other two axes in turn as its x and y."""
+    i, j, _ = _TURNS[along]
+    return point[i], point[j], 0.0
+
+
+def outline(part, along: str):
+    """part's outline projected along the axis x, y or z onto the plane of a cut file's sheet, as
+    projected maps a point: the union of its plane faces square to that axis, as a cut part's
+    are. Raises where it has none."""
+    from build123d import GeomType, Location, Plane, Vector
+
+    turn = [[1.0 if k == i else 0.0 for k in range(3)] for i in _TURNS[along]]
+    columns = [tuple(row[c] for row in turn) for c in (0, 2)]
+    turned = part.moved(Location(Plane(origin=(0, 0, 0), x_dir=columns[0], z_dir=columns[1])))
+    across = [
+        face.moved(Location((0, 0, -face.center().Z)))
+        for face in turned.faces()
+        if face.geom_type == GeomType.PLANE
+        and abs(abs(face.normal_at().dot(Vector(0, 0, 1))) - 1) < 1e-9
+    ]
+    if not across:
+        raise ValueError(f"the part has no plane face square to {along}, so no outline along it")
+    found = across[0]
+    for face in across[1:]:
+        found = found.fuse(face)
+    return found.clean()
+
+
+def outline_distance(a, b) -> tuple[float, tuple[float, float]]:
+    """The largest distance from a point on either outline's edges to the other's edges, sampled
+    along each edge, and the point on the sheet where it occurs."""
+    from build123d import Compound
+
+    worst: tuple[float, tuple[float, float]] = (0.0, (0.0, 0.0))
+    for ours, theirs in ((a, b), (b, a)):
+        edges = Compound(theirs.edges())
+        for edge in ours.edges():
+            for i in range(SAMPLES + 1):
+                point = edge.position_at(i / SAMPLES)
+                gap = edges.distance_to(point)
+                if gap > worst[0]:
+                    worst = (gap, (point.X, point.Y))
+    return worst
 
 
 def surface_distance(a, b) -> tuple[float, tuple[float, float, float]]:
