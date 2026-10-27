@@ -109,7 +109,7 @@ A configuration of the assembly given by joint values measured from the assembly
 _Avoid_: state, configuration (for the values themselves)
 
 **Check**:
-One comparison between the built geometry and a ledger value: an envelope, a distance or an angle between datums, a diameter, a mass, a count of instances, an interference, or a whole part against its released body (a shape check).
+One comparison between the built geometry and a ledger value, or a value worked out from ledger values alone (an expect, such as module × teeth): an envelope, a distance or an angle between datums, a diameter, a mass, a count of instances, an interference, or a whole part against its released body (a shape check).
 _Avoid_: test, assertion
 
 **Reads**:

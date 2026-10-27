@@ -8135,6 +8135,261 @@ def test_posed_check_through_a_belt_then_a_lead_screw_reads_both_gears(proj_dir,
     assert set(travel["rests_on_params"]) == {"half_turn", "belt_ratio", "screw_lead"}
 
 
+# A planetary train with one member fixed is a chain of gears: sun to carrier, carrier to each
+# planet, each ratio derived from the stated tooth counts (ADR-0014).
+
+PLANETARY = """\
+from build123d import *
+
+
+def build(p):
+    h = p.face_w
+    sun_r, planet_r, ring_r = p.m * p.z_sun / 2, p.m * p.z_planet / 2, p.m * p.z_ring / 2
+    # The planet meshes the fixed ring inside it, so its axis lies the planet's radius in from it.
+    orbit = ring_r - planet_r
+    return {
+        "parts": {
+            "ring": Cylinder(ring_r + p.rim, h) - Cylinder(ring_r, h),
+            "sun": Cylinder(sun_r, h),
+            "carrier": Cylinder(orbit + p.rim, h) - Pos(orbit, 0, 0) * Cylinder(p.pin_r, h),
+            "planet": Cylinder(planet_r, h),
+        },
+        "datums": {
+            "ring.a": (0, 0, 0),
+            "ring.d": (0, -ring_r, 0),
+            "sun.a": (0, 0, 0),
+            "sun.a_up": (0, 0, h / 2),
+            "sun.p": (sun_r, 0, 0),
+            "carrier.a": (0, 0, 0),
+            "carrier.a_up": (0, 0, h / 2),
+            "carrier.d": (orbit, 0, 0),
+            "planet.a": (0, 0, 0),
+            "planet.a_up": (0, 0, h / 2),
+            "planet.d": (planet_r, 0, 0),
+        },
+        "assembly": {
+            "ring_1": ("ring", Location()),
+            "sun_1": ("sun", Location()),
+            "carrier_1": ("carrier", Location()),
+            "planet_1": ("planet", Location((orbit, 0, 0), (0, 0, p.rim_at))),
+        },
+        "joints": {
+            "sun": {
+                "type": "revolute",
+                "parent": "ring_1",
+                "child": "sun_1",
+                "axis": ["sun_1.a", "sun_1.a_up"],
+                "drive": "actuated",
+            },
+            "carrier": {
+                "type": "revolute",
+                "parent": "ring_1",
+                "child": "carrier_1",
+                "axis": ["carrier_1.a", "carrier_1.a_up"],
+                "drive": "passive",
+            },
+            "planet": {
+                "type": "revolute",
+                "parent": "carrier_1",
+                "child": "planet_1",
+                "axis": ["planet_1.a", "planet_1.a_up"],
+                "drive": "passive",
+            },
+        },
+        "gears": {
+            "sun_carrier": {"driver": "sun", "driven": "carrier", "ratio": "carrier_ratio"},
+            "carrier_planet": {"driver": "carrier", "driven": "planet", "ratio": "planet_ratio"},
+        },
+    }
+"""
+
+# Table I's SSPG row and the reduction Sec. II-A states.
+PLANETARY_TEXT = "Table I. Gear trains\n{row}\nThe gearbox reduces 7.2:1 overall.\n"
+
+
+def planetary(root: Path, tmp_path: Path, row: str = TABLE_I) -> None:
+    """Replace the project with a planetary train: a fixed ring, a sun (actuated), a carrier
+    (passive) and one planet (passive, on the carrier), the gears sun_carrier and carrier_planet
+    at ratios derived from the tooth counts and module row states (T1), as Table I's SSPG row
+    does. One check, carrier: the carrier's turn about the sun axis from as built to the sun
+    turned one_turn (proposed 360), compared with 360 / R1.ratio, the stated 7.2:1."""
+    edit(root, "project.yaml", lambda d: d.update(sources=[]))
+    (root / "sources" / "paper.txt").unlink()
+    table = tmp_path / "compact.txt"
+    table.write_text(PLANETARY_TEXT.format(row=row))
+    register = ["source", str(root), str(table), "--id", "compact", "--kind", "paper"]
+    assert cli.main([*register, "--citation", "Singh 2025"]) == 0
+    sun, planet, ring, module = (float(n) for n in row.split("[")[1].split(",")[:4])
+    counts = {"z_sun": int(sun), "z_planet": int(planet), "z_ring": int(ring), "m": module}
+    stated = {"source": "compact", "locator": "Sec. II-A", "quote": "reduces 7.2:1"}
+    evidence = [
+        {"id": "T1", "source": "compact", "locator": "Table I", "quote": row, "values": counts},
+        {"id": "R1", **stated, "values": {"ratio": 7.2}},
+    ]
+    write(root, "evidence.yaml", {"evidence": evidence, "skipped": [], "conflicts": []})
+    params: dict = {name: {"basis": "source", "from": f"T1.{name}"} for name in counts}
+    params["carrier_ratio"] = {"basis": "derived", "expr": "z_sun / (z_sun + z_ring)"}
+    params["planet_ratio"] = {"basis": "derived", "expr": "-z_ring / z_planet"}
+    chosen = {"face_w": 4, "rim": 3, "pin_r": 1, "rim_at": -30, "one_turn": 360, "density": 1.2}
+    params |= {
+        name: {"basis": "proposed", "value": value, "rationale": "a test train", "gap": "G1"}
+        for name, value in chosen.items()
+    }
+    parts = {name: {"density": "density"} for name in ("ring", "sun", "carrier", "planet")}
+    write(root, "params.yaml", {"params": params, "parts": parts})
+    write(root, "gaps.yaml", {"gaps": [{"id": "G1", "question": "part size?", "ask": "authors"}]})
+    carrier = {
+        "id": "carrier",
+        "kind": "angle",
+        "instances": ["ring_1", "carrier_1"],
+        "between": ["ring_1.d", "ring_1.a", "carrier_1.d"],
+        "expect": "360 / R1.ratio",
+        "from": {},
+        "pose": {"sun": "one_turn"},
+    }
+    write(root, "checks.yaml", {"checks": [carrier]})
+    write(root, "model.py", PLANETARY)
+
+
+def test_guard_carrier_of_a_planetary_train_turns_360_over_its_stated_ratio_per_sun_turn(
+    proj_dir, tmp_path
+):
+    planetary(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    carrier = _by_id(report)["carrier"]
+    assert carrier["ok"]
+    assert carrier["expect"] == {"expr": "360 / R1.ratio", "value": 50}
+    # 25 / (25 + 155) of a turn, 50°, as 360° / 7.2: one ratio from the counts, one stated.
+    assert float(carrier["measured"].split("°")[0]) == pytest.approx(50, abs=1e-3)
+
+
+@pytest.mark.parametrize(
+    "row, ratio",
+    [(TABLE_I, "z_ring / z_sun"), ("SSPG [25, 65, 157, 0.5, 3]", "z_sun / (z_sun + z_ring)")],
+    ids=["ratio-inverted", "ring-count-changed"],
+)
+def test_guard_carrier_turn_of_a_planetary_train_fails_with_a_wrong_ratio_or_a_changed_count(
+    proj_dir, tmp_path, row, ratio
+):
+    planetary(proj_dir, tmp_path, row)
+    _param("carrier_ratio", expr=ratio)(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 1 and not _by_id(report)["carrier"]["ok"]
+    assert [m.split(":")[0] for m in findings(proj_dir, "check-failed")] == ["carrier"]
+
+
+# The planet's turn relative to the carrier over one sun turn: the carrier's 50°, times the
+# carrier_planet gear's -z_ring / z_planet, worked out from the ledgered counts.
+_PLANET_TURN = "-360 * T1.z_sun * T1.z_ring / (T1.z_planet * (T1.z_sun + T1.z_ring))"
+
+
+def _planet_turned(root: Path, tmp_path: Path) -> None:
+    turned = {
+        "id": "planet",
+        "kind": "angle",
+        "instances": ["carrier_1", "planet_1"],
+        "between": ["carrier_1.a", "planet_1.a", "planet_1.d"],
+        "expect": _PLANET_TURN,
+        "from": {},
+        "pose": {"sun": "one_turn"},
+    }
+    _append("checks.yaml", "checks", turned)(root, tmp_path)
+
+
+@pytest.mark.parametrize("expr, ok", [("-z_ring / z_planet", True), ("z_ring / z_planet", False)])
+def test_guard_planet_turns_relative_to_its_carrier_at_minus_ring_over_planet_teeth(
+    proj_dir, tmp_path, expr, ok
+):
+    planetary(proj_dir, tmp_path)
+    _planet_turned(proj_dir, tmp_path)
+    _param("planet_ratio", expr=expr)(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    planet = _by_id(report)["planet"]
+    assert planet["ok"] is ok and (code == 0) is ok, report["findings"]
+    # 50° × -155 / 65: as built the planet's datum lies 150° round from the carrier's centre.
+    turned = -50 * 155 / 65
+    assert planet["expect"]["value"] == pytest.approx(turned)
+    if ok:  # report.json shows 4 significant figures
+        assert float(planet["measured"].split("°")[0]) == pytest.approx(turned, abs=0.05)
+
+
+def test_guard_tooth_counts_of_a_planetary_train_are_checked_through_its_derived_ratios(
+    proj_dir, tmp_path
+):
+    planetary(proj_dir, tmp_path)
+    counts = {"param z_sun", "param z_planet", "param z_ring"}
+    assert counts.isdisjoint(_unchecked(proj_dir))
+    write(proj_dir, "checks.yaml", {"checks": []})
+    assert counts <= set(_unchecked(proj_dir))
+
+
+def test_guard_pitch_diameter_and_planet_axis_of_a_planetary_train_match_its_stated_counts(
+    proj_dir, tmp_path
+):
+    planetary(proj_dir, tmp_path)
+    pitch = {"id": "sun-pitch", "kind": "diameter", "at": "sun.p", "expect": "T1.m * T1.z_sun"}
+    orbit = {
+        "id": "orbit",
+        "kind": "distance",
+        "instances": ["sun_1", "planet_1"],
+        "between": ["sun_1.a", "planet_1.a"],
+        "expect": "T1.m * (T1.z_sun + T1.z_planet) / 2",
+    }
+    for check in (pitch, orbit):
+        _append("checks.yaml", "checks", check)(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    checks = _by_id(report)
+    assert checks["sun-pitch"]["ok"] and checks["orbit"]["ok"]
+    # 0.5 × 25 and 0.5 × (25 + 65) / 2.
+    expected = (checks["sun-pitch"]["expect"]["value"], checks["orbit"]["expect"]["value"])
+    assert expected == (12.5, 22.5)
+
+
+def test_guard_planet_axis_fails_where_the_ring_count_breaks_ring_equals_sun_plus_two_planets(
+    proj_dir, tmp_path
+):
+    # 157 ≠ 25 + 2 × 65: the planet meshing the ring sits 23 from the sun axis, not 22.5.
+    planetary(proj_dir, tmp_path, "SSPG [25, 65, 157, 0.5, 3]")
+    orbit = {
+        "id": "orbit",
+        "kind": "distance",
+        "instances": ["sun_1", "planet_1"],
+        "between": ["sun_1.a", "planet_1.a"],
+        "expect": "T1.m * (T1.z_sun + T1.z_planet) / 2",
+    }
+    write(proj_dir, "checks.yaml", {"checks": [orbit]})
+    code, report = verify(proj_dir)
+    assert code == 1 and not _by_id(report)["orbit"]["ok"]
+
+
+def test_guard_planetary_train_exports_one_joint_equality_per_gear_in_its_chain(proj_dir, tmp_path):
+    mujoco = importlib.import_module("mujoco")
+
+    planetary(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
+    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    assert m.neq == 2
+    joint = mujoco.mjtObj.mjOBJ_JOINT
+    for gear, driven, driver, ratio in (
+        ("sun_carrier", "carrier", "sun", 25 / 180),
+        ("carrier_planet", "planet", "carrier", -155 / 65),
+    ):
+        eq = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_EQUALITY, gear)
+        assert m.eq_type[eq] == mujoco.mjtEq.mjEQ_JOINT
+        assert (m.eq_obj1id[eq], m.eq_obj2id[eq]) == (
+            mujoco.mj_name2id(m, joint, driven),
+            mujoco.mj_name2id(m, joint, driver),
+        )
+        assert list(m.eq_data[eq][:5]) == pytest.approx([0, ratio, 0, 0, 0])
+    # The planet's joint is on the carrier's body, so its angle is relative to the carrier.
+    planet = mujoco.mj_name2id(m, joint, "planet")
+    carrier_body = m.jnt_bodyid[mujoco.mj_name2id(m, joint, "carrier")]
+    assert m.body_parentid[m.jnt_bodyid[planet]] == carrier_body
+
+
 # Every rule beside its near miss. scripts/rule-coverage fails CI unless each rule the tool emits is
 # asserted present by one test and absent by another; a rule no other test covers both ways gets a
 # row here: the change to the fixture that raises it, and the closest changes it must accept.

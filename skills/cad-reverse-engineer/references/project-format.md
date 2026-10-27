@@ -289,6 +289,39 @@ Where a source states the numbers a value is worked out from rather than the val
 - The tolerance is capped at 5% of the value the expect works out to.
 - `[check-config]`, raised whether or not the model builds, and the check is not evaluated: an expect naming a param, a name that is neither a ledger value nor a function, an entry not in the ledger or a key its entry does not record, or one that does not parse or evaluate (a division by 0), each finding naming the reason; a check naming both `expect` and `evidence`; a check of a kind that takes one naming neither (a `stroke` check with a `claim` aside); `expect` on a kind that takes none.
 
+### Worked example: a planetary train
+
+A planetary train with one member fixed is a chain of [gears](modeling.md#joints-and-loops), each ratio derived from the stated tooth counts, and its checks compare with values `expect` works out from the ledger. COMPAct's single-stage gearbox ledgers Table I's `SSPG [25, 65, 155, 0.5, 3]` as `T1` (`{z_sun: 25, z_planet: 65, z_ring: 155, module: 0.5}`) and "7.2:1" as `R1` (`{ratio: 7.2}`). The ring is fixed (the root instance), the sun `actuated`, the carrier `passive` on the ring, and each planet a `passive` revolute joint on the carrier, so its angle is relative to the carrier:
+
+```yaml
+# params.yaml
+  z_sun:         {basis: source,  from: T1.z_sun}             # likewise z_planet, z_ring, module
+  carrier_ratio: {basis: derived, expr: z_sun / (z_sun + z_ring)}    # 25/180
+  planet_ratio:  {basis: derived, expr: -z_ring / z_planet}          # planet on the carrier
+```
+
+```python
+# model.py: the planet axis lies module * (z_ring - z_planet) / 2 from the sun's, meshing the ring
+"gears": {
+    "sun_carrier": {"driver": "sun", "driven": "carrier", "ratio": "carrier_ratio"},
+    "carrier_planet_1": {"driver": "carrier", "driven": "planet_1", "ratio": "planet_ratio"},
+},
+```
+
+```yaml
+# checks.yaml
+  - {id: carrier-turn, kind: angle, instances: [ring_1, carrier_1],
+     between: [ring_1.d, ring_1.a, carrier_1.d], from: {}, pose: {sun: one_turn},
+     expect: "360 / R1.ratio"}                                  # 50° per sun turn
+  - {id: sun-pitch, kind: diameter, at: sun.pitch, expect: "T1.module * T1.z_sun"}
+  - {id: sun-planet-1, kind: distance, instances: [sun_1, planet_1],
+     between: [sun_1.a, planet_1.a], expect: "T1.module * (T1.z_sun + T1.z_planet) / 2"}
+```
+
+- The carrier's turn reads both gears' ratios, so the tooth counts they derive from are checked, while its expected value comes from the stated ratio: a wrong formula, a misread count, a sign error or a unit slip fails it. Place `ring_1.d` a quarter turn from the carrier's datum, so the 0–180° angle the check evaluates stays on one side through the turn.
+- The pitch diameter and the planet axis together fail a ring count that breaks `z_ring = z_sun + 2 * z_planet`.
+- A stepped planet is one instance with one joint, coupled from the carrier through the step that meshes the ring (`-z_ring / z_p2`). A train with no member fixed (a differential) is out of reach: a gear ties only two joints.
+
 ## Poses and the MJCF export
 
 A model whose `build` returns `joints` and `loops` ([`modeling.md`](modeling.md)) moves. A check posed at joint values names them in `pose`, each joint mapped to a param or a ledger value `<evidence>.<key>`, never a bare number (`[schema]`):
