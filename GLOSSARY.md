@@ -31,6 +31,10 @@ Two ledger entries that disagree about the same feature; open until it carries a
 A number a source prints with a unit, as an `a×b×c` product or as a thread size; each one is ledgered or skipped.
 _Avoid_: dimension (for anything that is not a size of the object's geometry), dimension candidate
 
+**Count**:
+A whole number a source states of how many there are: a gear's teeth, a train's planets, a spring's turns. It is ledgered like any number and read as a pure number, not as a length; it is a stated quantity only when printed with a count unit (turns, teeth).
+_Avoid_: unitless quantity, integer (for a count)
+
 **Skip**:
 A stated quantity, or a body in released geometry, set aside with a reason because it is not about the object, such as a test load, a result or a fit tester.
 _Avoid_: exclusion, ignore
@@ -101,7 +105,7 @@ A configuration of the assembly given by joint values measured from the assembly
 _Avoid_: state, configuration (for the values themselves)
 
 **Check**:
-One comparison between the built geometry and a ledger value: an envelope, a distance or an angle between datums, a diameter, a mass, an interference, or a whole part against its released body (a shape check).
+One comparison between the built geometry and a ledger value: an envelope, a distance or an angle between datums, a diameter, a mass, a count of instances, an interference, or a whole part against its released body (a shape check).
 _Avoid_: test, assertion
 
 **Reads**:
