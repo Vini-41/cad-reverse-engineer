@@ -273,8 +273,8 @@ def cmd_coverage(args) -> int:
     if p is None:
         return 1
     missing = proj.check_coverage(p)
-    for sid, page, line in missing:
-        print(f"{sid} p{page}: {line}")
+    for sid, where, line in missing:
+        print(f"{sid} {where}: {line}")
     print(f"{len(missing)} unledgered stated quantities")
     return 1 if missing else 0
 

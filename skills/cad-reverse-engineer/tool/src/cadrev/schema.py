@@ -64,6 +64,12 @@ EVIDENCE = Record(
         "image_sha256": str,
         "reading": TEXT_OR_NUMBER,
         "confirmed_by": str,
+        "probe": str,
+        "body": str,
+        "axes": Table(str),
+        "between": Items(str),
+        "along": str,
+        "tol": NUMBER,
     },
     required=("id",),
 )
@@ -75,6 +81,7 @@ SKIP = Record(
         "quote": str,
         "from": str,
         "to": str,
+        "body": str,
         "reason": str,
     }
 )
@@ -117,6 +124,7 @@ CHECK = Record(
         "claim": str,
         "joint": str,
         "cable": str,
+        "body": str,
         "ends": Items(str),
         "sweep": Record({"joint": str, "steps": str}, required=("joint", "steps")),
         "interpretation": str,
@@ -154,6 +162,7 @@ FILES = {
         "evidence": (EVIDENCE, list),
         "skipped": (SKIP, list),
         "conflicts": (CONFLICT, list),
+        "datums": (Items(NUMBER), dict),
     },
     "params.yaml": {"params": (PARAM, dict), "parts": (PART, dict)},
     "checks.yaml": {"checks": (CHECK, list)},

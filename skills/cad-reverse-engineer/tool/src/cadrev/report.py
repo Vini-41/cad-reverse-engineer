@@ -420,6 +420,22 @@ def write(
         ],
     )
 
+    md += ["## Probes of released geometry", ""]
+    md += _table(
+        ["probe", "body", "kind", "records", "evaluates to", "result"],
+        [
+            [
+                f"{q['evidence']}.{q['key']}",
+                q["body"],
+                q["probe"],
+                f"{q['recorded']:g}",
+                f"{q['value']:.6g}",
+                "pass" if q["ok"] else "**MISMATCH**",
+            ]
+            for q in p.probes
+        ],
+    )
+
     if awaiting:
         md += ["## Figure readings awaiting human confirmation", ""]
         for a in awaiting:
@@ -479,7 +495,7 @@ def write(
                     {
                         k: v
                         for k, v in asdict(r).items()
-                        if k not in ("pairs", "pose", "from_pose", "sweep", "uncounted")
+                        if k not in ("pairs", "pose", "from_pose", "sweep", "uncounted", "shape")
                         or v is not None
                     }
                     for r in results
@@ -498,6 +514,7 @@ def write(
                 "rests_on_proposed": sorted(p.proposed),
                 "measured": measured_params(p),
                 "awaiting_confirmation": awaiting,
+                "probes": p.probes,
             },
             indent=2,
             default=str,

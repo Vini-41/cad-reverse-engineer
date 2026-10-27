@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from build123d import Axis, Box, Compound, Cylinder, Location, Pos, chamfer, export_step
 
 from cadrev import cli
 
@@ -2389,6 +2390,32 @@ DAMAGE = {
     ),
     "check without an id": lambda r: edit(r, "checks.yaml", lambda d: d["checks"][0].pop("id")),
     "duplicate gap ids": lambda r: write(r, "gaps.yaml", {"gaps": [{"id": "G1"}, {"id": "G1"}]}),
+    "geometry source of text": lambda r: (
+        (r / "sources" / "g.step").write_text("30 mm\n"),
+        _add_source(r, "g", "sources/g.step"),
+        edit(r, "project.yaml", lambda d: d["sources"][-1].update(kind="geometry")),
+    ),
+    "released datum of two numbers": lambda r: (
+        released(r, r.parent),
+        edit(r, "evidence.yaml", lambda d: d["datums"].update({"link_step.a": [1, 2]})),
+    ),
+    "datums is a list": lambda r: edit(r, "evidence.yaml", lambda d: d.update(datums=[1, 2])),
+    "probe of an unregistered source": lambda r: edit(
+        r, "evidence.yaml", lambda d: d["evidence"].append(PROBE | {"source": "nowhere"})
+    ),
+    "probe between one datum": lambda r: probed(
+        r, r.parent, probe="angle", between=["link_step.a"], values={"v": 1}
+    ),
+    "probe with values in words": lambda r: probed(r, r.parent, values={"L": "forty"}),
+    "shape check of an unknown part": lambda r: released(r, r.parent, part="pin"),
+    "shape check pairs of one datum": lambda r: released(r, r.parent, pairs=[["link.a"]] * 3),
+    "shape check without pairs or body": lambda r: edit(
+        r, "checks.yaml", lambda d: d["checks"].append({"id": "s", "kind": "shape", "part": "link"})
+    ),
+    "shape check of a source that is no geometry": lambda r: (
+        released(r, r.parent),
+        edit(r, "checks.yaml", lambda d: d["checks"][-1].update(body="paper")),
+    ),
     "source registered after a PyYAML re-dump": lambda r: (
         edit(r, "project.yaml", lambda d: None),
         (r / "notes.txt").write_text("No dimensions.\n"),
@@ -7783,3 +7810,397 @@ def test_change_raises_its_rule(proj_dir, tmp_path, rule):
 def test_guard_near_miss_raises_no_rule(proj_dir, tmp_path, rule, miss):
     FINDINGS[rule][1][miss](proj_dir, tmp_path)
     assert rule not in rules(proj_dir)
+
+
+# Released geometry (ADR-0011): the link as its authors released it, a STEP exported from a
+# build123d solid and placed where the file puts it, a quarter turn about Z and moved off the
+# origin, so a shape check must align it by its datum pairs.
+
+RELEASED_AT = Location((100, 50, 20), (0, 0, 1), 90)
+# The link's datums, a and b on its hole axes and c at the top of a's, where the built link and
+# the released one have them in the link's own frame.
+LINK_DATUMS = {"a": (-15, 0, 0), "b": (15, 0, 0), "c": (-15, 0, 4)}
+_THREE_DATUMS = swap(
+    MODEL,
+    '"link.b": (p.pitch / 2, 0, 0)}',
+    '"link.b": (p.pitch / 2, 0, 0), "link.c": (-p.pitch / 2, 0, p.link_H / 2)}',
+)
+
+
+def link_body(pitch: float = 30, extra_hole: bool = False):
+    """The link as released: 40×5×8 with its two 3 mm holes pitch apart, and with extra_hole a
+    2 mm hole at its middle that the built link lacks."""
+    body = Box(40, 5, 8)
+    for x in (-pitch / 2, pitch / 2) + ((0,) if extra_hole else ()):
+        body -= Pos(x, 0, 0) * Cylinder(1 if x == 0 else 1.5, 8)
+    return body
+
+
+def placed_at(at, point) -> list[float]:
+    return list((at * Location(point)).position)
+
+
+def released(root: Path, tmp_path: Path, body=None, at=RELEASED_AT, check=True, **shape) -> Path:
+    """Register body (the link by default), placed at at, as geometry source link_step, declare
+    its datums a, b and c where at puts the link's, give the built link datum c, and with check
+    compare the built link with it by a shape check (shape gives its other keys). Returns the
+    STEP."""
+    path = tmp_path / "link.step"
+    export_step((link_body() if body is None else body).moved(at), str(path))
+    register = ["source", str(root), str(path), "--id", "link_step", "--kind", "geometry"]
+    assert cli.main([*register, "--citation", "Doe 2026, link.step"]) == 0
+    datums = {f"link_step.{k}": placed_at(at, v) for k, v in LINK_DATUMS.items()}
+    edit(root, "evidence.yaml", lambda d: d.update(datums=datums))
+    write(root, "model.py", _THREE_DATUMS)
+    if check:
+        pairs = [[f"link.{k}", f"link_step.{k}"] for k in LINK_DATUMS]
+        entry = {"id": "shape", "kind": "shape", "part": "link", "body": "link_step"}
+        edit(root, "checks.yaml", lambda d: d["checks"].append(entry | {"pairs": pairs} | shape))
+    return path
+
+
+def test_released_step_registers_as_geometry_pinned_by_its_sha256(proj_dir, tmp_path):
+    path = released(proj_dir, tmp_path)
+    (entry,) = [s for s in _loaded_sources(proj_dir) if s["id"] == "link_step"]
+    assert (entry["kind"], entry["sha256"]) == ("geometry", sha256(path))
+    found = rules(proj_dir)
+    assert "source-kind" not in found and "source-unreadable" not in found
+
+
+def test_released_step_rewritten_after_registering_is_a_source_hash(proj_dir, tmp_path):
+    released(proj_dir, tmp_path)
+    export_step(link_body(pitch=32), str(proj_dir / "sources" / "link.step"))
+    assert "source-hash" in errors(proj_dir)
+
+
+def test_geometry_source_whose_file_is_no_step_is_unreadable(proj_dir, tmp_path):
+    released(proj_dir, tmp_path)
+    step = proj_dir / "sources" / "link.step"
+    step.write_text("not a STEP file\n")
+    edit(proj_dir, "project.yaml", lambda d: d["sources"][1].update(sha256=sha256(step)))
+    assert "source-unreadable" in errors(proj_dir)
+
+
+def _shape_result(report: dict) -> dict:
+    (result,) = [r for r in report["checks"] if r["id"] == "shape"]
+    return result
+
+
+def test_shape_check_on_a_part_built_to_match_its_released_body_passes(proj_dir, tmp_path):
+    released(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    result = _shape_result(report)
+    assert result["ok"] and result["shape"]["residual"] < 1e-9
+    assert result["shape"]["distance"] < 1e-9
+    assert (code, report["status"]) == (0, "VERIFIED")
+
+
+def test_shape_check_on_a_part_missing_a_feature_fails_at_its_worst_point(proj_dir, tmp_path):
+    released(proj_dir, tmp_path, body=link_body(extra_hole=True), at=Location())
+    code, report = verify(proj_dir)
+    result = _shape_result(report)
+    x, y, _ = result["shape"]["worst_point"]
+    # The worst point lies on the 2 mm hole the built link lacks, 2.5 mm from its nearest face.
+    assert not result["ok"] and math.hypot(x, y) == pytest.approx(1, abs=1e-6)
+    assert result["shape"]["distance"] == pytest.approx(2.5, abs=1e-6)
+    assert code == 1 and any(
+        f["rule"] == "check-failed" and "largest surface distance" in f["message"]
+        for f in report["findings"]
+    )
+
+
+def test_shape_check_whose_datum_pairs_fit_beyond_the_length_tolerance_fails(proj_dir, tmp_path):
+    # The released holes are 32 mm apart and the built ones 30, so a and b cannot both fit.
+    released(proj_dir, tmp_path, body=link_body(pitch=32), at=Location())
+    wide = {"link_step.a": [-16, 0, 0], "link_step.b": [16, 0, 0], "link_step.c": [-16, 0, 4]}
+    edit(proj_dir, "evidence.yaml", lambda d: d["datums"].update(wide))
+    _, report = verify(proj_dir)
+    result = _shape_result(report)
+    assert not result["ok"] and result["shape"]["residual"] > 0.5
+    assert "distance" not in result["shape"]
+    (failed,) = [f["message"] for f in report["findings"] if f["rule"] == "check-failed"]
+    assert "datum pairs fit within" in failed
+
+
+@pytest.mark.parametrize(
+    "pairs",
+    [
+        [["link.a", "link_step.a"], ["link.b", "link_step.b"]],
+        [["link.a", "link_step.a"], ["link.b", "link_step.b"], ["link.a", "link_step.a"]],
+    ],
+    ids=["two pairs", "three on one line"],
+)
+def test_shape_check_with_fewer_than_three_pairs_off_one_line_is_check_config(
+    proj_dir, tmp_path, pairs
+):
+    released(proj_dir, tmp_path, pairs=pairs)
+    assert any(
+        f["rule"] == "check-config" and "aligns by" in f["message"]
+        for f in verify(proj_dir)[1]["findings"]
+    )
+    assert "shape" not in [r["id"] for r in verify(proj_dir)[1]["checks"]]
+
+
+@pytest.mark.parametrize(
+    "name, point",
+    [("link_step.a", [-14, 0, 0]), ("other.a", [-15, 0, 0])],
+    ids=["off the body", "on no body"],
+)
+def test_datum_declared_off_its_released_body_is_datum_off_solid(proj_dir, tmp_path, name, point):
+    released(proj_dir, tmp_path, at=Location())
+    edit(proj_dir, "evidence.yaml", lambda d: d["datums"].update({name: point}))
+    assert any(
+        f["rule"] == "datum-off-solid" and name in f["message"]
+        for f in verify(proj_dir)[1]["findings"]
+    )
+
+
+def test_released_datum_of_two_numbers_is_schema(proj_dir, tmp_path):
+    released(proj_dir, tmp_path)
+    edit(proj_dir, "evidence.yaml", lambda d: d["datums"].update({"link_step.a": [1, 2]}))
+    found = [f for f in verify(proj_dir)[1]["findings"] if "link_step.a" in f["message"]]
+    assert [f["rule"] for f in found if f["rule"] in ("schema", "datum-off-solid")] == ["schema"]
+
+
+def test_datums_declared_on_the_axes_of_a_released_body_lie_on_its_solid(proj_dir, tmp_path):
+    released(proj_dir, tmp_path)
+    assert "datum-off-solid" not in rules(proj_dir)
+
+
+# The released link's bbox diagonal, √(40² + 5² + 8²) = 41.10 mm, caps a shape check's tol at 0.411.
+@pytest.mark.parametrize("tol, capped", [(0.5, True), (0.4, False)])
+def test_shape_check_tol_above_one_percent_of_its_bodys_diagonal_is_tolerance_cap(
+    proj_dir, tmp_path, tol, capped
+):
+    released(proj_dir, tmp_path, tol=tol)
+    found = [f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "tolerance-cap"]
+    capping = "check shape: tol 0.5 is above 1% of body link_step's bbox diagonal, 41.1"
+    assert found == ([capping] if capped else [])
+
+
+# The released link's envelope in the file's frame, where a quarter turn about Z lays its length
+# along Y: a probe that restates Table 1.
+PROBE = {
+    "id": "P-link",
+    "source": "link_step",
+    "locator": "the released link",
+    "probe": "bbox",
+    "axes": {"L": "y", "W": "x", "H": "z"},
+    "values": {"L": 40, "W": 5, "H": 8},
+    "scope": "context",
+    "reason": "restates T1-link",
+}
+
+
+def probed(root: Path, tmp_path: Path, **entry) -> None:
+    """The link released, and probed by PROBE with entry's changes."""
+    released(root, tmp_path)
+    edit(root, "evidence.yaml", lambda d: d["evidence"].append(PROBE | entry))
+
+
+def _mismatches(report: dict) -> list[str]:
+    return [f["message"] for f in report["findings"] if f["rule"] == "probe-mismatch"]
+
+
+def test_bbox_probe_whose_recorded_value_matches_the_file_passes(proj_dir, tmp_path):
+    probed(proj_dir, tmp_path)
+    code, report = verify(proj_dir)
+    assert "probe-mismatch" not in [f["rule"] for f in report["findings"]]
+    assert (code, report["status"]) == (0, "VERIFIED")
+
+
+def test_bbox_probe_off_by_more_than_the_length_tolerance_is_probe_mismatch(proj_dir, tmp_path):
+    probed(proj_dir, tmp_path, values={"L": 40.002, "W": 5, "H": 8})
+    code, report = verify(proj_dir)
+    assert _mismatches(report) == [
+        "probe P-link.L: evaluates to 40 on body link_step, but records 40.002 (tolerance 0.001)"
+    ]
+    assert "probe-mismatch" in [f["rule"] for f in report["findings"]] and code == 1
+
+
+def test_bbox_probe_mismatch_is_raised_without_the_build(proj_dir, tmp_path, capsys):
+    probed(proj_dir, tmp_path, values={"L": 41, "W": 5, "H": 8})
+    cli.main(["check", str(proj_dir), "--no-build"])
+    assert "[probe-mismatch] probe P-link.L" in capsys.readouterr().out
+
+
+def test_project_whose_only_released_value_is_a_probe_is_verified_not_pending_review(
+    proj_dir, tmp_path
+):
+    probed(proj_dir, tmp_path)
+    _, report = verify(proj_dir)
+    assert report["status"] == "VERIFIED" and report["awaiting_confirmation"] == []
+
+
+def test_param_from_a_probe_takes_its_value_and_rests_on_source(proj_dir, tmp_path):
+    probed(proj_dir, tmp_path, axes={"L": "y"}, values={"L": 40}, scope=None, reason=None)
+    edit(proj_dir, "params.yaml", lambda d: d["params"]["link_L"].update({"from": "P-link.L"}))
+    code, report = verify(proj_dir)
+    assert report["params"]["link_L"]["value"] == 40
+    assert report["params"]["link_L"]["rests_on"] == "source"
+    assert (code, report["status"]) == (0, "VERIFIED")
+
+
+def test_report_json_lists_each_probe_with_its_evaluated_value(proj_dir, tmp_path):
+    probed(proj_dir, tmp_path, values={"L": 40, "W": 5.0004, "H": 8})
+    _, report = verify(proj_dir)
+    by_key = {p["key"]: p for p in report["probes"]}
+    assert by_key["W"] == {
+        "evidence": "P-link",
+        "key": "W",
+        "body": "link_step",
+        "probe": "bbox",
+        "recorded": 5.0004,
+        "value": pytest.approx(5),
+        "tol": 0.001,
+        "ok": True,
+    }
+    assert sorted(by_key) == ["H", "L", "W"]
+
+
+_PITCH_PROBE = {"probe": "distance", "between": ["link_step.a", "link_step.b"], "axes": None}
+_SQUARE_PROBE = {"probe": "angle", "between": ["link_step.b", "link_step.a", "link_step.c"]}
+
+
+@pytest.mark.parametrize(
+    "entry, recorded, mismatched",
+    [
+        (_PITCH_PROBE, 30, False),
+        (_PITCH_PROBE, 30.01, True),
+        (_PITCH_PROBE | {"along": "y"}, 30, False),
+        (_PITCH_PROBE | {"along": "x"}, 30, True),
+        (_SQUARE_PROBE | {"axes": None}, 90, False),
+        (_SQUARE_PROBE | {"axes": None}, 90.1, True),
+    ],
+    ids=["distance", "distance off", "along", "along another axis", "angle", "angle off"],
+)
+def test_distance_and_angle_probes_compare_the_datums_declared_on_the_body(
+    proj_dir, tmp_path, entry, recorded, mismatched
+):
+    probed(proj_dir, tmp_path, **entry, values={"v": recorded})
+    _, report = verify(proj_dir)
+    assert bool(_mismatches(report)) == mismatched
+    assert "evidence-anchor" not in [f["rule"] for f in report["findings"]]
+
+
+@pytest.mark.parametrize(
+    "entry, why",
+    [
+        ({"source": "paper"}, "a probe reads a geometry source, and paper is not one"),
+        ({"body": "link_step#2"}, "link_step#2 is not a body of link_step"),
+        ({"probe": "volume"}, "probe must be bbox, distance, angle, not 'volume'"),
+        ({"axes": {"L": "y", "W": "x"}}, "H names no axis x, y or z in axes"),
+        (
+            _PITCH_PROBE | {"between": ["link_step.a", "link_step.d"], "values": {"v": 30}},
+            "link_step.d is not a datum",
+        ),
+    ],
+    ids=["paper", "body", "kind", "axis", "datum"],
+)
+def test_probe_that_cannot_be_evaluated_is_evidence_anchor(proj_dir, tmp_path, entry, why):
+    probed(proj_dir, tmp_path, **entry)
+    anchors = [
+        f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "evidence-anchor"
+    ]
+    assert len(anchors) == 1 and why in anchors[0]
+
+
+@pytest.mark.parametrize("tol, capped", [(0.3, True), (0.25, False)])
+def test_probe_tol_above_five_percent_of_its_value_is_tolerance_cap(
+    proj_dir, tmp_path, tol, capped
+):
+    probed(proj_dir, tmp_path, tol=tol)
+    found = [f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "tolerance-cap"]
+    assert found == (["probe P-link: tol 0.3 is above 5% of P-link.W, 5"] if capped else [])
+
+
+def _coverage(report: dict) -> list[str]:
+    return [f["message"] for f in report["findings"] if f["rule"] == "coverage"]
+
+
+def test_released_body_neither_shape_checked_nor_skipped_is_coverage(proj_dir, tmp_path):
+    released(proj_dir, tmp_path, check=False)
+    assert _coverage(verify(proj_dir)[1]) == [
+        "link_step body link_step: no shape check compares it and no skip sets it aside"
+    ]
+
+
+def test_released_body_skipped_with_a_reason_is_covered_and_its_file_is_not_swept(
+    proj_dir, tmp_path
+):
+    released(proj_dir, tmp_path, check=False)
+    skip = {"source": "link_step", "body": "link_step", "reason": "a fit tester, not the link"}
+    edit(proj_dir, "evidence.yaml", lambda d: d["skipped"].append(skip))
+    code, report = verify(proj_dir)
+    assert _coverage(report) == [] and (code, report["status"]) == (0, "VERIFIED")
+
+
+@pytest.mark.parametrize(
+    "skip, rule",
+    [
+        ({"body": "link_step"}, "skip-reason"),
+        ({"reason": "a fit tester"}, "skip-anchor"),
+        ({"body": "link_step#2", "reason": "a fit tester"}, "skip-not-found"),
+    ],
+    ids=["no reason", "no body", "unknown body"],
+)
+def test_skip_of_a_released_body_needs_a_reason_and_a_body_of_its_source(
+    proj_dir, tmp_path, skip, rule
+):
+    released(proj_dir, tmp_path)
+    edit(proj_dir, "evidence.yaml", lambda d: d["skipped"].append({"source": "link_step"} | skip))
+    assert rule in errors(proj_dir)
+
+
+def test_passing_shape_check_rests_on_source_and_checks_none_of_its_parts_params(
+    proj_dir, tmp_path
+):
+    released(proj_dir, tmp_path)
+    # The envelope and pitch checks go, leaving the shape check the only one on the link.
+    edit(proj_dir, "checks.yaml", lambda d: d.update(checks=d["checks"][2:]))
+    edit(
+        proj_dir,
+        "evidence.yaml",
+        lambda d: [e.update(scope="context", reason="r") for e in d["evidence"]],
+    )
+    _, report = verify(proj_dir)
+    result = _shape_result(report)
+    assert result["ok"] and (result["rests_on"], result["rests_on_params"]) == ("source", [])
+    unchecked = [
+        f["message"].split(":")[0] for f in report["findings"] if f["rule"] == "unchecked-source"
+    ]
+    assert unchecked == ["param link_L", "param link_H", "param link_W", "param pitch"]
+
+
+# A 0.05 mm chamfer on the released link's outer edges lies about 0.035 from the built link's
+# corners: inside a tol of 0.1, outside tolerance.length.
+@pytest.mark.parametrize("tol, ok", [(0.1, True), (None, False)])
+def test_shape_check_passes_on_a_surface_distance_within_its_tol(proj_dir, tmp_path, tol, ok):
+    chamfered = chamfer(link_body().edges().filter_by(Axis.Z), 0.05)
+    released(proj_dir, tmp_path, body=chamfered, **({"tol": tol} if tol else {}))
+    result = _shape_result(verify(proj_dir)[1])
+    assert result["ok"] == ok and 0.02 < result["shape"]["distance"] < 0.05
+
+
+def test_file_of_several_bodies_names_each_by_its_place_in_the_file(proj_dir, tmp_path):
+    # The link, then a 4 mm cube beside it: link_step#1 and link_step#2.
+    both = Compound(children=[link_body(), Pos(0, 20, 0) * Box(4, 4, 4)])
+    released(proj_dir, tmp_path, body=both, at=Location(), check=False)
+    first = {f"link_step#1.{k}": list(v) for k, v in LINK_DATUMS.items()}
+    edit(proj_dir, "evidence.yaml", lambda d: d.update(datums=first))
+    pairs = [[f"link.{k}", f"link_step#1.{k}"] for k in LINK_DATUMS]
+    shape = {"id": "shape", "kind": "shape", "part": "link", "body": "link_step#1"}
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].append(shape | {"pairs": pairs}))
+    cube = PROBE | {"body": "link_step#2", "axes": {"s": "x"}, "values": {"s": 4}}
+    skip = {"source": "link_step", "body": "link_step#2", "reason": "a spacer, not the link"}
+    edit(
+        proj_dir, "evidence.yaml", lambda d: (d["evidence"].append(cube), d["skipped"].append(skip))
+    )
+    code, report = verify(proj_dir)
+    assert [(q["body"], q["ok"]) for q in report["probes"]] == [("link_step#2", True)]
+    assert _shape_result(report)["ok"] and (code, report["status"]) == (0, "VERIFIED")
+
+
+def test_probe_recording_no_values_is_evidence_values_whatever_its_scope(proj_dir, tmp_path):
+    probed(proj_dir, tmp_path, values=None)
+    assert "evidence-values" in errors(proj_dir)

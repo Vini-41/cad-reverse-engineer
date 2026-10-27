@@ -14,8 +14,9 @@ from functools import partial
 from pathlib import Path
 from typing import NamedTuple, Protocol
 
-from . import accounting
+from . import accounting, released
 from .project import (
+    AXES,
     CLAIMS,
     POSES,
     Project,
@@ -33,8 +34,6 @@ from .project import (
     overlap_limit,
     resolution_params,
 )
-
-AXES = {"x": 0, "y": 1, "z": 2}
 
 
 class Params:
@@ -82,6 +81,10 @@ class CheckResult:
     # A mass check's parts weighed in several instances with no counts entry: part -> how many,
     # which make it rest on proposed; None for other kinds.
     uncounted: dict | None = None
+    # A shape check's fit: the largest distance its datum pairs are left apart (residual), and,
+    # once they fit, the largest distance between the surfaces (distance) and where it occurs in
+    # the body's frame (worst_point); None for other kinds.
+    shape: dict | None = None
 
 
 @dataclass
@@ -445,7 +448,7 @@ def build(p: Project) -> Built | None:
     for name, point in built.datums.items():
         part = _owner(built, name)
         if part is not None:
-            gap = _off_solid(built.parts[part], point, p.length_tol)
+            gap = released.off_solid(built.parts[part], point, p.length_tol)
             if gap is not None:
                 p.error(
                     "datum-off-solid",
@@ -841,35 +844,6 @@ def _physics_unfit(p: Project, built: Built) -> str | None:
     return None
 
 
-# How finely _off_solid samples each edge of a cylindrical face to find the face's axial extent.
-_EDGE_SAMPLES = 16
-
-
-def _off_solid(part, point: tuple[float, float, float], tol: float) -> float | None:
-    """How far point is from part's solid, or None if it lies on it within tol: on the axis of a
-    cylindrical face between that face's axial bounds, or on a face. The distance to an axis is
-    to the segment the face spans along it."""
-    from build123d import GeomType, Vector
-
-    at = Vector(*point)
-    nearest = math.inf
-    for face in part.faces():
-        nearest = min(nearest, face.distance_to(at))
-        if face.geom_type == GeomType.CYLINDER:
-            axis = face.axis_of_rotation
-            origin, direction = axis.position, axis.direction.normalized()
-            spans = [  # the face's extent along its axis, from points along its edges
-                (edge.position_at(i / _EDGE_SAMPLES) - origin).dot(direction)
-                for edge in face.edges()
-                for i in range(_EDGE_SAMPLES + 1)
-            ]
-            if not spans:
-                continue
-            along = min(max((at - origin).dot(direction), min(spans)), max(spans))
-            nearest = min(nearest, (at - (origin + direction * along)).length)
-    return None if nearest <= tol else nearest
-
-
 def _used_by_derived(p: Project) -> set[str]:
     names = set()
     for spec in p.params.values():
@@ -1034,11 +1008,10 @@ def _instance_datums(p: Project, built: Built, c: dict) -> list[tuple[float, flo
 
 def _datum_distance(c: dict, points: list) -> float:
     """The distance between a check's two datums, along its axis where it names one."""
-    a, b = points
-    if c.get("along"):
-        i = AXES[c["along"]]
-        return abs(a[i] - b[i])
-    return math.dist(a, b)
+    along = c.get("along")
+    if along and along not in AXES:
+        raise KeyError(f"axis {along}")
+    return released.datum_distance(points[0], points[1], along or None)
 
 
 def _datum_angle(p: Project, c: dict, points: list) -> float | None:
@@ -1051,20 +1024,16 @@ def _datum_angle(p: Project, c: dict, points: list) -> float | None:
             "check-config", f"check {cid}: between names {len(points)} datums, not [a, vertex, b]"
         )
         return None
-    a, vertex, b = points
-    u, w = ([x - v for x, v in zip(end, vertex)] for end in (a, b))
-    for end, d in ((names[0], u), (names[2], w)):
-        # Zero-length within tolerance.length, not exactly: a direction that short has no angle
-        # the check could confirm.
-        if math.hypot(*d) <= p.length_tol:
-            p.error(
-                "check-config",
-                f"check {cid}: {end} coincides with the vertex {names[1]}, "
-                "so the angle is undefined",
-            )
-            return None
-    cross = (u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0])
-    return math.degrees(math.atan2(math.hypot(*cross), sum(x * y for x, y in zip(u, w))))
+    # Zero-length within tolerance.length, not exactly: a direction that short has no angle the
+    # check could confirm.
+    angle = released.angle_at(points[0], points[1], points[2], p.length_tol)
+    if angle is None:
+        p.error(
+            "check-config",
+            f"check {cid}: {names[0]} or {names[2]} coincides with the vertex {names[1]}, "
+            "so the angle is undefined",
+        )
+    return angle
 
 
 def _joint_name(c: dict) -> str | None:
@@ -1470,6 +1439,76 @@ def _angle(p: Project, c: dict, placed: Built, reading: _Reading) -> list[CheckR
     return [_compared(p, c, c.get("id", "?"), ref, measured, shown)]
 
 
+def _shape(p: Project, built: Built, c: dict, reading: _Reading) -> list[CheckResult]:
+    """A shape check: its part carried onto its released body by the rigid motion that best fits
+    its datum pairs, then the largest distance between their surfaces, compared with its
+    tolerance; failed, without that distance, where the pairs fit no closer than
+    tolerance.length. No result, after a [check-config] finding, where its body or a datum is
+    unknown or its pairs are fewer than three off one line."""
+    reading.at(built)
+    cid, name, part = c.get("id", "?"), str(c["body"]), built.parts[c["part"]]
+    body = p.bodies.get(name)
+    if body is None:
+        p.error("check-config", f"check {cid}: {name} is not a body of a geometry source")
+        return []
+    pairs, ours, theirs = c.get("pairs") or [], [], []
+    for pair in pairs:
+        if len(pair) != 2:
+            p.error(
+                "check-config",
+                f"check {cid}: pair {pair} is not [<part>.<feature>, <body>.<feature>]",
+            )
+            return []
+        if _owner(built, pair[0]) != c["part"] or pair[0] not in built.datums:
+            p.error("check-config", f"check {cid}: {pair[0]} is not a datum of part {c['part']}")
+            return []
+        named = p.released_datum(pair[1])
+        if named is None or named[0] != name:
+            p.error(
+                "check-config", f"check {cid}: {pair[1]} is not a datum declared on body {name}"
+            )
+            return []
+        ours.append(built.datums[pair[0]])
+        theirs.append(named[1])
+    if len(pairs) < 3 or released.collinear(theirs, p.length_tol):
+        p.error(
+            "check-config",
+            f"check {cid}: aligns by {len(pairs)} datum pair{'s' * (len(pairs) != 1)}; name three "
+            "or more whose datums on the body are not on one line",
+        )
+        return []
+    where, residual, worst = released.fit(ours, theirs)
+    fitted = {"residual": printed(residual)[0]}
+    if residual > p.length_tol:
+        return [
+            CheckResult(
+                cid,
+                "shape",
+                False,
+                f"datum pairs fit within {p.length_tol:g} (tolerance.length)",
+                f"datum pairs fit within {residual:.4g}, {pairs[worst][0]} to {pairs[worst][1]} "
+                "the farthest apart",
+                c.get("interpretation", ""),
+                shape=fitted,
+            )
+        ]
+    distance, at = released.surface_distance(part.moved(where), body)
+    tolerance = check_tolerance(p, c)
+    assert tolerance is not None  # a shape check's kind has a tolerance
+    shown = ", ".join(f"{v:.4g}" for v in at)
+    return [
+        CheckResult(
+            cid,
+            "shape",
+            distance <= tolerance[1],
+            f"surfaces within {tolerance[1]:g} of body {name}",
+            f"{distance:.4g} largest surface distance, at ({shown}) on body {name}",
+            c.get("interpretation", ""),
+            shape=fitted | {"distance": printed(distance)[0], "worst_point": list(printed(*at))},
+        )
+    ]
+
+
 def _unknown_kind(p: Project, c: dict, reading: _Reading) -> list[CheckResult]:
     """A check of a kind with no evaluation: a [check-kind] finding, reading only what it names
     and the range ends of a joint it names."""
@@ -1526,6 +1565,8 @@ def run_checks(
             evaluation = partial(_stroke, p, built, c, reached, poser)
         elif kind == "range":
             evaluation = partial(_range, p, built, c, poser)
+        elif kind == "shape":
+            evaluation = partial(_shape, p, built, c)
         elif kind == "interference":
             evaluation = partial(_interference, p, built, c, placed, poser)
         else:

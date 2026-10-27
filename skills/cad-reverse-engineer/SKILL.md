@@ -33,7 +33,7 @@ Done when `target` names one object in one version and `cadrev check <dir> --no-
 
 ### 2. Register sources
 
-`cadrev source <dir> <file> --id … --kind … --citation …` for the paper, its supplement, and the datasheet of every purchased part the paper names (servos, bearings, springs). Supplements carry the tables; look for them. Videos and drawings are sources too.
+`cadrev source <dir> <file> --id … --kind … --citation …` for the paper, its supplement, and the datasheet of every purchased part the paper names (servos, bearings, springs). Supplements carry the tables; look for them. Videos and drawings are sources too, and so is a STEP the authors released, as `--kind geometry`.
 
 Format: `project.yaml` in [`references/project-format.md`](references/project-format.md).
 
@@ -47,12 +47,13 @@ Read every page with `cadrev text <dir> <source>` and every figure with `cadrev 
 - Numbers printed inside figures about the object (dimension labels, scale bars, inset annotations) become image evidence: `cadrev crop` the label with `--name <name>`, which writes the crop to `figures/crops/<name>.png` and prints the `image` and `image_sha256` the evidence item takes; view the crop, write the `reading` exactly as printed. `crop` takes pixels of the extracted file; when the Read tool shows an image downscaled, multiply by the factor it reports, and confirm in the crop that the whole label is inside.
 - Ledger each stated range or angle of motion (a toe that opens 0–40°, a crank's 90° stroke) and each stated physics value (a spring's stiffness) with its `values`, in scope: step 7 reads them into params and checks them.
 - Ledger a value stated in several places at each place, with one statement in scope and the rest restatements (`scope` in project-format.md).
+- Take each value a released body settles with a probe (Probes in project-format.md), and compare each body with its built part by a `shape` check or skip it.
 - Record each disagreement between sources under `conflicts`.
 - Skip, with a reason, the stated quantities that are about something else: test objects, loads, test rigs, results.
 
 Format: `evidence.yaml` in [`references/project-format.md`](references/project-format.md).
 
-Done when every figure has been viewed with its labels ledgered, and `cadrev check <dir> --no-build` reports no `[coverage]`, `[quote-not-found]`, `[value-not-in-*]`, `[image-*]`, `[unit-ambiguous]`, `[number-ambiguous]`, `[skip-*]`, `[conflict-ref]` or `[evidence-*]` other than `[evidence-unused]`. The coverage sweep lists only numbers printed with a unit, so the figure pass and the unitless cells of tables are yours.
+Done when every figure has been viewed with its labels ledgered, and `cadrev check <dir> --no-build` reports no `[coverage]`, `[quote-not-found]`, `[value-not-in-*]`, `[image-*]`, `[unit-ambiguous]`, `[number-ambiguous]`, `[probe-mismatch]`, `[skip-*]`, `[conflict-ref]` or `[evidence-*]` other than `[evidence-unused]`. The coverage sweep lists only numbers printed with a unit, so the figure pass and the unitless cells of tables are yours.
 
 ### 4. Parameterise
 

@@ -6,7 +6,7 @@ Before any rule runs, every file is read against the shapes shown here. A file t
 
 ```
 project.yaml    format, sources, units, tolerance, target
-evidence.yaml   the ledger: evidence, skipped, conflicts
+evidence.yaml   the ledger: evidence, skipped, conflicts, datums on released bodies
 params.yaml     every number the model uses, with its basis
 checks.yaml     geometry checks against evidence
 gaps.yaml       what the sources leave undefined
@@ -28,7 +28,7 @@ tolerance: {length: 0.001, angle: 0.01}
 model_literals: [0, 1, 2, -1, 0.5, 90, 180, 270, 360]   # optional; numbers model.py may contain (modeling.md)
 sources:
   - id: paper
-    kind: paper            # paper | supplement | datasheet | video | drawing | other
+    kind: paper            # paper | supplement | datasheet | video | drawing | geometry | other
     path: sources/x.pdf
     sha256: …              # written by `cadrev source`
     citation: …
@@ -75,11 +75,13 @@ A source's `kind` outside the list above is `[source-kind]`, and an empty `citat
 
 Text formats (quote-checked and swept): PDF, DOCX, TXT, MD, HTML. An HTML source is read as its rendered text, scripts and styles dropped. A text source whose file cannot be read as text is `[source-unreadable]`. Save a web datasheet as HTML or TXT to make it quotable. Video and image files are sources for image evidence only.
 
+Geometry the authors released is `kind: geometry`: a STEP file (.step, .stp), read in the project's length unit; one that cannot be read as STEP is `[source-unreadable]`. Where a part ships as both STEP and STL, register the STEP. Its ledger entries are [probes](#probes-released-geometry), and coverage runs over its bodies. A body is the source's id where the file holds one solid, else `<source>#<n>`, the nth solid in file order from 1.
+
 ## evidence.yaml
 
 ### `evidence`: the ledger
 
-One item per statement in a source. Two anchor types:
+One item per statement in a source. Three anchor types: a quote and a figure reading, shown here, and a [probe](#probes-released-geometry) of released geometry.
 
 ```yaml
 - id: T1-finger-link          # unique; referenced as T1-finger-link.L
@@ -106,9 +108,31 @@ One item per statement in a source. Two anchor types:
   - `not-modeled` + `reason`: a real statement about something the reconstruction does not build: what lies outside the device (a test rig, the electronics), or a part whose motion cadrev's joint types cannot model (a flexure); the `reason` says which. A part the sources' parts tables list, and a mechanism they state (a linkage and its loops), are built. It keeps its `values`, so the report shows what was left unbuilt.
   - `context` + `reason`: a statement that informs interpretation but is not a dimension of any modelled feature (masses in conflict, a kinematic length of uncertain identity). `values` may be omitted. A restatement is context too: a value stated in several places is ledgered at each and checked once. The statement a param's `from` or a check reads stays in scope, a quote rather than a figure reading where both exist, since the matcher confirms a quote; each other statement of the same value is `context`, keeps its `values`, and its `reason` names the item it restates (`restates P2-toe-range`). Statements whose values differ are a conflict, not a restatement.
 
-Each item has an `id` no other item shares; a repeated one is `[evidence-id]`, naming it. Every item under a repeated id is still checked, counts toward coverage and is listed in the report, but a citation of that id reads neither item and is an error naming the id as repeated, raised whether or not the model builds: `[param-from]` for a param's `from`, `[check-config]` for a check's ledger value or pose, `[conflict-ref]` for a conflict's `evidence` and `[overlay-config]` for an overlay's `calibration.evidence`. A check or overlay citing it is not evaluated. Each item has a registered `source` (`[evidence-source]`) and a `locator` (`[evidence-locator]`), and is anchored by a quote from a text source or by an image + reading (`[evidence-anchor]`). A quote not found in its source, or not on its `page`, is `[quote-not-found]`; a quote from a source of several pages that gives no `page` raises the warning `[quote-page]`, which names the page it was found on. A quoted item needs `values` unless it is `scope: context` or only [claim checks](#poses-and-the-mjcf-export) cite it (`[evidence-values]`). An image item needs its crop (`[image-missing]`), unchanged since `image_sha256` was printed (`[image-hash]`), and a `reading` (`[image-reading]`). A value that is not a number in its quote is `[value-not-in-quote]`; in its reading, `[value-not-in-reading]`. A `scope` needs a `reason` (`[evidence-scope]`).
+Each item has an `id` no other item shares; a repeated one is `[evidence-id]`, naming it. Every item under a repeated id is still checked, counts toward coverage and is listed in the report, but a citation of that id reads neither item and is an error naming the id as repeated, raised whether or not the model builds: `[param-from]` for a param's `from`, `[check-config]` for a check's ledger value or pose, `[conflict-ref]` for a conflict's `evidence` and `[overlay-config]` for an overlay's `calibration.evidence`. A check or overlay citing it is not evaluated. Each item has a registered `source` (`[evidence-source]`) and a `locator` (`[evidence-locator]`), and is anchored by a quote from a text source, an image + reading, or a probe of a geometry source (`[evidence-anchor]`). A quote not found in its source, or not on its `page`, is `[quote-not-found]`; a quote from a source of several pages that gives no `page` raises the warning `[quote-page]`, which names the page it was found on. A probed item needs `values`, and a quoted item does unless it is `scope: context` or only [claim checks](#poses-and-the-mjcf-export) cite it (`[evidence-values]`). An image item needs its crop (`[image-missing]`), unchanged since `image_sha256` was printed (`[image-hash]`), and a `reading` (`[image-reading]`). A value that is not a number in its quote is `[value-not-in-quote]`; in its reading, `[value-not-in-reading]`. A `scope` needs a `reason` (`[evidence-scope]`).
 
 Every value of an in-scope item must be used by a param `from:` or compared by a check (`[evidence-unused]`).
+
+### Probes: released geometry
+
+A probe takes a value from a body of a geometry source and records its design value (`32.5`, not the file's `32.4999`), in the project's units:
+
+```yaml
+evidence:
+  - {id: R-hub, source: rotor_step, locator: "rotor, hub bore axis", probe: distance,
+     between: [rotor_step.hub_top, rotor_step.hub_bottom], values: {h: 20}}
+  - {id: R-env, source: lid_step, body: "lid_step#2", locator: "lid, envelope", probe: bbox,
+     axes: {D: x, H: z}, values: {D: 130, H: 4}}
+datums:                        # on released bodies: <body>.<feature>: [x, y, z] in the file's frame
+  rotor_step.hub_top: [0, 0, 20]
+  rotor_step.hub_bottom: [0, 0, 0]
+  rotor_step.rim: [65, 0, 10]
+```
+
+- `probe` is `bbox` (with `axes`, one per value), `distance` (two datums in `between`, `along` optional) or `angle` (three, the angle at the middle one, in degrees), read as the check of that kind reads the built model, on the body. `body` names a body of its `source`, and may be left out where the file holds one solid.
+- Datums on a released body need no basis: each lies on its body's solid within `tolerance.length`, as a built part's does, else `[datum-off-solid]`, as is one naming no body. Name each `<body>.<feature>`.
+- cadrev evaluates every probe from its file on every run, `--no-build` included. A recorded value farther than `tolerance.length` (`tolerance.angle` for an angle) from what the body gives, or than the probe's own `tol`, is `[probe-mismatch]`, naming the probe, the evaluated value and the recorded one. `tol` is capped as a check's is (`[tolerance-cap]`). A probe that cannot be evaluated (a source that is not geometry, an unknown body, datum or axis) is `[evidence-anchor]`.
+- A probe needs no confirmation and never holds the project at VERIFIED PENDING REVIEW. A param takes its value with `from:` and basis `source`, like a quote's.
+- A probe that restates a quote is `context` (`restates T1-hub`), and the quote stays in scope; one that differs from a quote is a [conflict](#conflicts).
 
 ### `skipped`: stated quantities that are not about the object
 
@@ -120,6 +144,8 @@ skipped:
   - {source: supp, from: "Table S4.", to: "Movie S1.", reason: "grasp-test objects"}
   - {source: paper, pages: [12, 13], reason: "experimental methods and test rig"}
 ```
+
+A geometry source is not swept for stated quantities: each of its bodies is compared by a [shape check](#checksyaml) or skipped, `{source: lid_step, body: "lid_step#3", reason: "a fit tester"}`, else `[coverage]`. A geometry source's skip names one of its bodies (`[skip-anchor]`, and `[skip-not-found]` for a body the file lacks).
 
 Skip by quote for single lines, by `from`/`to` for tables and blocks, by `pages` only for pages that carry nothing about the object. Every skip needs a `reason` (`[skip-reason]`) and one of `quote`, `pages` or `from` + `to` (`[skip-anchor]`). A skip's quote, or its `from` and `to`, must be found together on one page (its `page`, when given), copied from `cadrev text` like a quote; a skip that matches nothing is `[skip-not-found]`. Split a block that runs onto the next page into one skip per page.
 
@@ -208,6 +234,9 @@ checks:
   - {id: gripper-mass, kind: mass, parts: [palm, finger_link], counts: {finger_link: n_links},
      density: resin_density, add: [servo_mass], evidence: fig3b-mass, key: m, tol_rel: 0.15}
   - {id: clear, kind: interference, pairs: [[palm_1, finger_link_1]], max_volume: 0.001}
+  - {id: rotor-shape, kind: shape, part: rotor, body: rotor_step,
+     pairs: [[rotor.hub_top, rotor_step.hub_top], [rotor.hub_bottom, rotor_step.hub_bottom],
+             [rotor.rim, rotor_step.rim]]}
 ```
 
 - `bbox`: the part's axis-aligned bounding-box size in its own frame; under `instances`, that of their union in the assembly frame.
@@ -215,6 +244,7 @@ checks:
 - `angle`: `between: [a, vertex, b]`, three datums of one part (the same rule as `distance`); the angle at `vertex` between the directions to `a` and to `b`, in degrees (0 to 180). A datum that coincides with the vertex (within `tolerance.length`) leaves the angle undefined and is `[check-config]`. An angle a source states at another configuration than the one `target` names is checked posed (see [Poses](#poses-and-the-mjcf-export)); a stated range of motion is ledgered as source values and confirmed by a `range` check (see [Ranges and sweeps](#ranges-and-sweeps)).
 - `mass`: Σ volume × density over the instances it weighs, plus any `add` params; `tol_rel` is required. It weighs the instances its `instances` lists, else every instance of the assembly, and `parts` narrows them to those parts' instances; an unknown instance, or a `parts` entry none of whose instances it weighs, is `[check-config]`. Give each part it weighs in several instances a `counts` entry naming the param that states how many, so a stated count is ledgered like any other number; a bare number there is `[schema]`. The check confirms each count against the part's instances it weighs, compared exactly: one that differs is `[check-config]` and the check is not evaluated. A part weighed in several instances without a `counts` entry makes the check rest on proposed (below), since how many there are is then the model's choice. Its `density` and `add` params take their units from the quote (see `units` above). The check reads its `density`, `add` and `counts` params, so they need no read in model.py and no other check. Without `density`, each part weighs what the [mass model](#mass-model) gives it, and the check reads those params: it confirms the mass model, as exported, against a stated total. A part it weighs that the mass model leaves unweighed is then `[check-config]`.
 - `interference`: overlap volume between assembly instances; all pairs when `pairs` is omitted. Needs no evidence. Its result gives the worst overlap, the pair that produced it, and how many pairs it evaluated: `0 over 2145 pairs (all)` when `pairs` is omitted, `0.31 palm_1 ∩ finger_link_1 over 2 pairs (listed)` from a `pairs` list. An interference check with `sweep` is evaluated across a joint's range (see [Ranges and sweeps](#ranges-and-sweeps)). It passes when the overlap is at most `max_volume`, which defaults to `tolerance.length`³. This overlap limit compares with no ledger value, so it is not a tolerance and has no cap, but the report lists beside its check each limit other than cadrev's default: the default `tolerance.length`, 0.001, cubed. A project-wide `tolerance.length` therefore lists every interference check that sets no `max_volume`.
+- `shape`: a built part against a body of a geometry source, as a whole. `pairs` lists datum pairs `[<part>.<feature>, <body>.<feature>]`, at least three whose body datums are not on one line, else `[check-config]`; cadrev carries the part onto the body by the rigid motion (no mirroring) that best fits them. A pair left farther apart than `tolerance.length` fails the check (`[check-failed]`, saying how far the pairs fit). Once they fit, it compares the largest distance between the two surfaces, sampled across every face and edge of both, with `tolerance.length` or its `tol`, and gives the worst point. `tol` is capped at 1% of the body's bbox diagonal (`[tolerance-cap]`). It compares with no ledger value: it rests on source, reads no params and so checks none of its part's, which still need their own checks.
 
 A dimension that spans several parts (an envelope of a subassembly, a spacing between parts) is checked over instances: a `bbox`, `distance` or `angle` check names `instances: [<instance>, ...]` in place of `part`, and is evaluated in the assembly frame, where the instances' `Location`s place them. Its datums are named `<instance>.<feature>`: the instance's part datum `<part>.<feature>`, moved by its `Location`. Under `instances` every name resolves against the assembly, so an instance named like its part is the instance. List each instance the check reads; there are no globs. An unknown instance, a feature its part has no datum for, or an empty list is `[check-config]`; a check naming both `part` and `instances` is `[schema]`. Each check has an `id` no other check shares, compared as the report prints it (`1` and `"1"` are one id); a repeated one is `[check-id]`. A check of another `kind` is `[check-kind]`; one naming a part, datum, axis or evidence value that does not exist is `[check-config]`. A check whose evaluated value strays from its ledger value by more than its tolerance is `[check-failed]`.
 
@@ -319,7 +349,7 @@ The machine-readable report `cadrev check` writes beside `report.md`, which rend
 | `exact` | whether the project is exact (see [Statuses](#statuses)) |
 | `counts` | `errors`, `warnings`, `checks`, `checks_passed`, `params`, the params resting on each basis: `source`, `measured`, `proposed`, and the proposed physics values counted apart from `proposed`: `physics_proposed` |
 | `findings` | every finding as `level`, `rule`, `message` |
-| `checks` | every geometry check with its result, expected and evaluated values, the basis it `rests_on`, and the params it reads resting on that basis (`rests_on_params`); for a mass check, each part it weighs in several instances with no `counts` entry and its instance count (`uncounted`); for an interference check, also the number of pairs it evaluated (`pairs`); for a posed check, its `pose`: each joint with the param or ledger value it is set `from` and that `value`; for a swept interference check, its `sweep` (`joint`, the range params it is swept `from`, their values as `range`, and the number of `poses`), and as `pose` the one with the worst overlap |
+| `checks` | every geometry check with its result, expected and evaluated values, the basis it `rests_on`, and the params it reads resting on that basis (`rests_on_params`); for a mass check, each part it weighs in several instances with no `counts` entry and its instance count (`uncounted`); for an interference check, also the number of pairs it evaluated (`pairs`); for a posed check, its `pose`: each joint with the param or ledger value it is set `from` and that `value`; for a swept interference check, its `sweep` (`joint`, the range params it is swept `from`, their values as `range`, and the number of `poses`), and as `pose` the one with the worst overlap; for a shape check, its `shape`: the `residual` its datum pairs fit within and, once they fit, the largest surface `distance` and the `worst_point` where it occurs, in the body's frame |
 | `tolerances` | each check with a non-default tolerance: its `check` id, `kind`, and `tol` or `tol_rel` |
 | `overlap_limits` | each interference check with a non-default overlap limit: its `check` id and `max_volume` |
 | `motion` | how the model moves, as `build/model.mjcf` exports it: its `joints`, each with its `type`, `parent`, `child` and `drive` (none for a fixed joint), its `range` as the params it is `from` (`as built` for a one-ended range's other end) and their `value`s in the joint's unit, low first, and each physics value it names (`damping`, `stiffness`, `spring_rest`, `friction`) as `{from, value}` in the project's units; its `loops`, each as its two datums; its `gears`, each with its `driver`, `driven` and `ratio` as `{from, value}`; its `tendons`, each with its `path` and physics values; its `cables`, each with its `path` and, wound on a wheel, its `wheel` and `closes` as `{joint: {from, value}}`, listed in report.md's motion section too; and `dropped`, true when a `[model-joint]`, `[model-loop]`, `[model-gear]`, `[model-cable]` or `[model-return]` dropped them. No joints and not dropped means static; null when no model was built |
@@ -330,3 +360,4 @@ The machine-readable report `cadrev check` writes beside `report.md`, which rend
 | `rests_on_proposed` | the params resting on a proposed value, a sweep's proposed `steps` among them though no check rests on it |
 | `measured` | each measured param with its `value`, `from`, `method` and `uncertainty` |
 | `awaiting_confirmation` | each unconfirmed figure reading with its `evidence`, `locator`, `reading` and `image` |
+| `probes` | each value a probe records: its `evidence` and `key`, the `body` and kind (`probe`) it reads, the `recorded` value, the `value` cadrev evaluates, its `tol`, and whether it is `ok` |

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import yaml
 
-from . import lint, schema, sources, units
+from . import lint, released, schema, sources, units
 
 FORMAT = 1  # the project.yaml format this cadrev reads
 # Findings after which nothing else in the project is read and every command refuses it.
@@ -56,7 +56,9 @@ class CheckKind:
     quantity and tolerance of a check whose between names two datums rather than three: a
     distance. claims, where set, lets a check of the kind take a from pose besides its pose, and a
     claim (one of CLAIMS) in place of a key: a direction of change between the two poses, passing
-    only beyond its tolerance, with no tol of its own (ADR-0010)."""
+    only beyond its tolerance, with no tol of its own (ADR-0010). body_cap, where set, makes it
+    compare a built part with a released body (its body), its tol capped at that fraction of the
+    body's bbox diagonal, as it compares with no value."""
 
     quantity: str
     tolerance: str | None
@@ -65,6 +67,7 @@ class CheckKind:
     joint_valued: bool = False
     between_two: str | None = None
     claims: bool = False
+    body_cap: float | None = None
 
 
 # The quantities a joint's value is in: a revolute joint's angle, a slide's length. Before the
@@ -72,7 +75,8 @@ class CheckKind:
 JOINT_QUANTITIES = ("angle", "length")
 
 
-# The kinds of check that compare with a ledger value; interference compares with none.
+# The kinds of check that compare with a ledger value, or a shape check with a released body;
+# interference compares with neither.
 CHECK_KINDS = {
     "bbox": CheckKind("length", "length"),
     "distance": CheckKind("length", "length"),
@@ -84,13 +88,19 @@ CHECK_KINDS = {
     "range": CheckKind("angle", "angle", span_capped=True, joint_valued=True, between_two="length"),
     # How far a cable shortens from as built, or a from pose, to a pose.
     "stroke": CheckKind("length", "length", claims=True),
+    # A part against its released body: the largest distance between their surfaces, which no
+    # ledger value states, its tol capped against the body's size.
+    "shape": CheckKind("length", "length", body_cap=0.01),
 }
 # The keys of a check that name a pose: a stroke check's from, then the pose it is evaluated at.
 POSES = ("from", "pose")
 # What a claim says its quantity does between a check's from pose and its pose: a stroke's
 # shortening is positive or negative.
 CLAIMS = {"shortens": 1, "lengthens": -1}
-SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "other")
+# The kinds of check a probe reads a released body as, each compared in its CHECK_KINDS quantity.
+PROBE_KINDS = ("bbox", "distance", "angle")
+AXES = {"x": 0, "y": 1, "z": 2}
+SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "geometry", "other")
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}
 MATH_NAMES = {
     name: getattr(math, name)
@@ -130,14 +140,20 @@ class Project:
     checks: list[dict]
     gaps: dict[str, dict]
     overlays: list[dict]
+    # Datums declared on released bodies: <body>.<feature> -> its point in the body's frame.
+    datums: dict[str, list] = field(default_factory=dict)
     # The mass model: part -> {mass: param} or {density: param}, from params.yaml's parts.
     parts: dict[str, dict] = field(default_factory=dict)
     # Params read only as a sweep's steps: a resolution the reconstruction chooses, which states
     # nothing about the object, so exact leaves them out. Set by the build.
     resolution: set[str] = field(default_factory=set)
     values: dict[str, float] = field(default_factory=dict)
-    # Text sources whose file exists but cannot be read as text.
+    # Text and geometry sources whose file exists but cannot be read as text or geometry.
     unreadable: set[str] = field(default_factory=set)
+    # Each probe's comparison, as report.json lists it under probes.
+    probes: list[dict] = field(default_factory=list)
+    # Every body of a readable geometry source, read once a run asks for one.
+    _bodies: dict | None = None
     # The basis each resolved parameter rests on, one of RESTS_ON: its own, or for a derived one
     # the weakest among the parameters its expr references.
     rests_on: dict[str, str] = field(default_factory=dict)
@@ -170,6 +186,39 @@ class Project:
 
     def source_path(self, source_id: str) -> Path:
         return self.root / self.sources[source_id]["path"]
+
+    def solids(self, source_id: str) -> tuple:
+        """The solids of geometry source source_id, in file order and the project's length unit;
+        raises when its file cannot be read as geometry."""
+        scale = units.convert(1.0, "mm", self.units)
+        return released.solids(self.source_path(source_id), scale)
+
+    @property
+    def bodies(self) -> dict:
+        """Every body of a readable geometry source by name (released.body_names), its solid in
+        the project's length unit."""
+        if self._bodies is not None:
+            return self._bodies
+        out = {}
+        for sid, s in self.sources.items():
+            if s.get("kind") != "geometry" or not _available(self, sid):
+                continue
+            try:
+                found = self.solids(sid)
+            except Exception:  # noqa: BLE001 - check_sources says why it cannot be read
+                continue
+            out |= dict(zip(released.body_names(sid, len(found)), found))
+        self._bodies = out
+        return out
+
+    def released_datum(self, name: str) -> tuple[str, tuple[float, float, float]] | None:
+        """The body a datum declared on released geometry lies on, and its point in the body's
+        frame; None for a name declared on no body, or not as three numbers."""
+        point = self.datums.get(name)
+        body = max((b for b in self.bodies if name.startswith(f"{b}.")), key=len, default=None)
+        if body is None or not isinstance(point, list) or len(point) != 3:
+            return None
+        return body, (float(point[0]), float(point[1]), float(point[2]))
 
     def tolerance(self, quantity: str) -> float:
         """project.yaml's tolerance.<quantity>, else cadrev's default; an angle's in degrees."""
@@ -342,6 +391,7 @@ def load(root: Path) -> Project:
         checks=files["checks.yaml"].get("checks", []),
         gaps={g["id"]: g for g in files["gaps.yaml"].get("gaps", [])},
         overlays=files["overlays.yaml"].get("overlays", []),
+        datums=files["evidence.yaml"].get("datums", {}),
         parts=files["params.yaml"].get("parts", {}),
         findings=findings,
     )
@@ -368,7 +418,17 @@ def check_sources(p: Project) -> None:
         else:
             if s.get("sha256") != sources.sha256(path):
                 p.error("source-hash", f"source {sid}: sha256 does not match {s.get('path')}")
-            if path.suffix.lower() in TEXT_FORMATS:
+            if s.get("kind") == "geometry":
+                try:
+                    p.solids(sid)
+                except Exception as exc:  # noqa: BLE001 - the STEP reader raises many types
+                    p.error(
+                        "source-unreadable",
+                        f"source {sid}: cannot read geometry from {s.get('path')}: "
+                        f"{type(exc).__name__}: {exc}",
+                    )
+                    p.unreadable.add(sid)
+            elif path.suffix.lower() in TEXT_FORMATS:
                 try:
                     sources.pages(path)
                 except Exception as exc:  # noqa: BLE001 - pypdf and zipfile raise many types
@@ -427,7 +487,8 @@ def check_evidence(p: Project) -> None:
             p.error("evidence-source", f"{eid}: unknown source {sid!r}")
             continue
         values = e.get("values") or {}
-        if not values and "quote" in e and e.get("scope") != "context" and eid not in directions:
+        stated = "quote" in e and e.get("scope") != "context" and eid not in directions
+        if not values and (stated or "probe" in e):
             p.error("evidence-values", f"{eid}: needs values (or scope: context)")
         if "quote" in e:
             if not _available(p, sid):
@@ -435,7 +496,8 @@ def check_evidence(p: Project) -> None:
             if Path(p.sources[sid]["path"]).suffix.lower() not in TEXT_FORMATS:
                 p.error(
                     "evidence-anchor",
-                    f"{eid}: {sid} is not a text source; use image + reading instead of quote",
+                    f"{eid}: {sid} is not a text source; use image + reading instead of quote, "
+                    "or probe for a geometry source",
                 )
                 continue
             match = sources.find_quote(p.source_path(sid), e["quote"], e.get("page"))
@@ -448,6 +510,8 @@ def check_evidence(p: Project) -> None:
             if not e.get("page") and len(sources.pages(p.source_path(sid))) > 1:
                 p.warn("quote-page", f"{eid}: add page: {match.page}")
             check_values(p, eid, e["quote"], "quote", values)
+        elif "probe" in e:
+            check_probe(p, e)
         elif "image" in e:
             image = p.root / e["image"]
             if not image.is_file():
@@ -463,7 +527,8 @@ def check_evidence(p: Project) -> None:
         else:
             p.error(
                 "evidence-anchor",
-                f"{eid}: needs quote (text sources) or image + reading (figures, video)",
+                f"{eid}: needs quote (text sources), image + reading (figures, video) or "
+                "probe (geometry sources)",
             )
         for key, value in values.items():
             printed = p.printed_units(f"{eid}.{key}")
@@ -480,6 +545,103 @@ def check_evidence(p: Project) -> None:
             p.error(
                 "evidence-locator",
                 f"{eid}: locator is required (e.g. 'Table S2', 'Fig. 2A', 'Sec. 4.2')",
+            )
+
+
+def _probed(p: Project, e: dict, body: str) -> dict[str, float] | str:
+    """What probe e evaluates on body, each value key's value in the project's units (an angle in
+    degrees), or why it cannot be evaluated."""
+    kind, values = e["probe"], e.get("values") or {}
+    if kind == "bbox":
+        axes = e.get("axes") or {}
+        for key in axes.keys() - values.keys():
+            return f"axes names {key}, which values does not record"
+        size = p.bodies[body].bounding_box().size
+        out = {}
+        for key in values:
+            if axes.get(key) not in AXES:
+                return f"{key} names no axis x, y or z in axes"
+            out[key] = (size.X, size.Y, size.Z)[AXES[axes[key]]]
+        return out
+    between, count = e.get("between") or [], 2 if kind == "distance" else 3
+    if len(between) != count:
+        return f"a {kind} probe names {count} datums in between, not {len(between)}"
+    if len(values) != 1:
+        return f"a {kind} probe records one value, not {len(values)}"
+    points = []
+    for name in between:
+        named = p.released_datum(name)
+        if named is None or named[0] != body:
+            return f"{name} is not a datum declared on body {body}"
+        points.append(named[1])
+    (key,) = values
+    if kind == "distance":
+        axis = e.get("along")
+        if axis is not None and axis not in AXES:
+            return f"along names no axis x, y or z: {axis}"
+        return {key: released.datum_distance(points[0], points[1], axis)}
+    angle = released.angle_at(points[0], points[1], points[2], p.length_tol)
+    if angle is None:
+        return f"{between[0]} or {between[2]} coincides with the vertex {between[1]}"
+    return {key: angle}
+
+
+def check_probe(p: Project, e: dict) -> None:
+    """Evaluate probe e on its released body (ADR-0011) and compare each value it records with
+    what the body gives: [probe-mismatch] beyond its tolerance, tolerance.length or .angle unless
+    it sets tol, capped as a check's is; [evidence-anchor] where it cannot be evaluated."""
+    eid, sid = e["id"], str(e.get("source"))
+    if p.sources[sid].get("kind") != "geometry":
+        p.error("evidence-anchor", f"{eid}: a probe reads a geometry source, and {sid} is not one")
+        return
+    if sid in _unread_geometry(p):
+        return  # check_sources says why its bodies cannot be read
+    body = str(e.get("body", sid))
+    names = [b for b in p.bodies if released.source_of(b) == sid]
+    if body not in names:
+        p.error(
+            "evidence-anchor",
+            f"{eid}: {body} is not a body of {sid}; its bodies are {', '.join(names)}",
+        )
+        return
+    if e["probe"] not in PROBE_KINDS:
+        p.error(
+            "evidence-anchor", f"{eid}: probe must be {', '.join(PROBE_KINDS)}, not {e['probe']!r}"
+        )
+        return
+    quantity = CHECK_KINDS[e["probe"]].quantity
+    evaluated = _probed(p, e, body)
+    if isinstance(evaluated, str):
+        p.error("evidence-anchor", f"{eid}: {evaluated}")
+        return
+    for key, value in evaluated.items():
+        recorded = p.value_as(f"{eid}.{key}", quantity)
+        if recorded is None:
+            continue  # a repeated id: [evidence-id] says so
+        tol = float(e.get("tol", p.tolerance(quantity)))
+        if _above_cap(tol, recorded):
+            p.error(
+                "tolerance-cap",
+                f"probe {eid}: tol {tol:g} is above {TOL_CAP:.0%} of {eid}.{key}, {recorded:g}",
+            )
+        ok = abs(value - recorded) <= tol
+        p.probes.append(
+            {
+                "evidence": eid,
+                "key": key,
+                "body": body,
+                "probe": e["probe"],
+                "recorded": recorded,
+                "value": float(f"{value:.12g}"),
+                "tol": tol,
+                "ok": ok,
+            }
+        )
+        if not ok:
+            p.error(
+                "probe-mismatch",
+                f"probe {eid}.{key}: evaluates to {value:.6g} on body {body}, but records "
+                f"{recorded:g} (tolerance {tol:g})",
             )
 
 
@@ -511,11 +673,18 @@ def _quote_spans(page: str, quote: str) -> list[tuple[int, int]]:
     return []
 
 
-def check_coverage(p: Project) -> list[tuple[str, int, str]]:
-    """The stated quantities in each source that no evidence or skip entry covers."""
+def check_coverage(p: Project) -> list[tuple[str, str, str]]:
+    """The stated quantities in each text source that no evidence or skip entry covers, each
+    where it is (p<page>), and the bodies of each geometry source that no shape check or skip
+    covers (body <name>)."""
     uncovered = []
     for sid, s in p.sources.items():
-        if not _available(p, sid) or Path(s["path"]).suffix.lower() not in TEXT_FORMATS:
+        geometry = s.get("kind") == "geometry"
+        if geometry and sid in _unread_geometry(p):
+            continue  # check_sources says why its bodies cannot be read
+        if not geometry and (
+            not _available(p, sid) or Path(s["path"]).suffix.lower() not in TEXT_FORMATS
+        ):
             continue
         if s.get("coverage") is False:
             p.warn(
@@ -523,6 +692,9 @@ def check_coverage(p: Project) -> list[tuple[str, int, str]]:
                 f"source {sid}: coverage: false, so the sweep does not read it; "
                 "any stated quantity in it may be unledgered",
             )
+            continue
+        if geometry:
+            uncovered += _uncovered_bodies(p, sid)
             continue
         texts = sources.pages(p.source_path(sid))
         anchors = [e for e in p.evidence if e.get("source") == sid and "quote" in e]
@@ -561,7 +733,7 @@ def check_coverage(p: Project) -> list[tuple[str, int, str]]:
             for start, end, snippet in sources.stated_quantities(text, as_printed):
                 if not any(a <= start and end <= b for a, b in spans):
                     context = text[max(0, start - 60) : end + 40]
-                    uncovered.append((sid, n, f"{snippet}  …{context}…"))
+                    uncovered.append((sid, f"p{n}", f"{snippet}  …{context}…"))
         for i, k in enumerate(skips):
             if i in matched or "pages" in k or not ("quote" in k or ("from" in k and "to" in k)):
                 continue
@@ -572,9 +744,37 @@ def check_coverage(p: Project) -> list[tuple[str, int, str]]:
                 f"skip in {sid}{where}: {what} matches no text of the source on any one page; "
                 "copy it from `cadrev text`, and split a block that runs onto the next page",
             )
-    for sid, n, line in uncovered:
-        p.error("coverage", f"{sid} p{n}: unledgered stated quantity {line}")
+    for sid, where, line in uncovered:
+        if where.startswith("body "):
+            p.error("coverage", f"{sid} {where}: {line}")
+        else:
+            p.error("coverage", f"{sid} {where}: unledgered stated quantity {line}")
     return uncovered
+
+
+def _uncovered_bodies(p: Project, sid: str) -> list[tuple[str, str, str]]:
+    """The bodies of geometry source sid that no shape check compares and no skip sets aside, as
+    check_coverage lists them; [skip-reason], [skip-anchor] and [skip-not-found] for its skips."""
+    names = [b for b in p.bodies if released.source_of(b) == sid]
+    compared = {str(c.get("body")) for c in p.checks if compares_body(c)}
+    skipped = set()
+    for k in (k for k in p.skipped if k.get("source") == sid):
+        if not k.get("reason"):
+            p.error("skip-reason", f"skip in {sid}: reason is required")
+        if "body" not in k:
+            p.error("skip-anchor", f"skip in {sid}: a geometry source's skip names its body")
+        elif k["body"] not in names:
+            p.error(
+                "skip-not-found",
+                f"skip in {sid}: body {k['body']} is not a body of {sid}; its bodies are "
+                f"{', '.join(names)}",
+            )
+        skipped.add(k.get("body"))
+    return [
+        (sid, f"body {name}", "no shape check compares it and no skip sets it aside")
+        for name in names
+        if name not in compared | skipped
+    ]
 
 
 def _evaluate(expr: str, names: dict[str, float]) -> float:
@@ -871,6 +1071,12 @@ def resolution_params(p: Project) -> set[str]:
     return steps - {n for c in p.checks for n in params_read_by(p, c, steps=False)}
 
 
+def compares_body(c: dict) -> bool:
+    """Whether check c compares a built part with a released body: a kind with a body_cap."""
+    kind = CHECK_KINDS.get(str(c.get("kind")))
+    return kind is not None and kind.body_cap is not None
+
+
 def check_tolerance(p: Project, c: dict, quantity: str | None = None) -> tuple[str, float] | None:
     """The tolerance a check compares with, as (key, value): tol, in its quantity's project units
     (degrees for an angle), or tol_rel, a fraction; None for a kind that compares with no ledger
@@ -937,6 +1143,11 @@ def _tolerance_bases(p: Project, c: dict) -> list[tuple[str, float | None]]:
     return [(ref, p.value_as(ref, quantity)) for ref in refs]
 
 
+def _above_cap(tol: float, value: float) -> bool:
+    """Whether tol is looser than TOL_CAP of value, the most a check or probe may stray by."""
+    return tol > TOL_CAP * abs(value) * (1 + 1e-9)
+
+
 def check_tolerances(p: Project) -> None:
     """No check is loosened past the cap: tol to TOL_CAP of each value it compares, tol_rel to
     TOL_REL_CAP."""
@@ -953,14 +1164,58 @@ def check_tolerances(p: Project) -> None:
                 )
             continue
         where = "" if "tol" in c else f" (tolerance.{CHECK_KINDS[c['kind']].tolerance})"
+        cap = CHECK_KINDS[c["kind"]].body_cap
+        body = p.bodies.get(str(c.get("body"))) if cap is not None else None
+        if cap is not None and body is not None:
+            diagonal = body.bounding_box().diagonal
+            if value > cap * diagonal * (1 + 1e-9):
+                p.error(
+                    "tolerance-cap",
+                    f"check {cid}: tol {value:g}{where} is above {cap:.0%} of body "
+                    f"{c['body']}'s bbox diagonal, {diagonal:.4g}",
+                )
         for ref, expected in _tolerance_bases(p, c):
-            if expected is not None and value > TOL_CAP * abs(expected) * (1 + 1e-9):
+            if expected is not None and _above_cap(value, expected):
                 p.error(
                     "tolerance-cap",
                     f"check {cid}: tol {value:g}{where} is above {TOL_CAP:.0%} "
                     f"of {ref}, {expected:g}",
                 )
                 break
+
+
+def _unread_geometry(p: Project) -> set[str]:
+    """The geometry sources whose bodies cannot be read: missing, or not readable as geometry."""
+    read = {released.source_of(name) for name in p.bodies}
+    return {sid for sid, s in p.sources.items() if s.get("kind") == "geometry" and sid not in read}
+
+
+def check_released_datums(p: Project) -> None:
+    """[datum-off-solid] for each datum declared on released geometry that names no body, or does
+    not lie on its body's solid (ADR-0006), as a datum model.py returns must lie on its part's."""
+    bodies, unread = p.bodies, _unread_geometry(p)
+    for name, point in p.datums.items():
+        if len(point) != 3:
+            p.error("schema", f"evidence.yaml datums.{name}: must be [x, y, z], not {point}")
+            continue
+        if released.source_of(name.partition(".")[0]) in unread:
+            continue  # check_sources says why its body cannot be read
+        named = p.released_datum(name)
+        if named is None:
+            p.error(
+                "datum-off-solid",
+                f"datum {name}: names no body of a geometry source, so it lies on no solid; "
+                "name it <body>.<feature>, its body a geometry source's id or <source>#<n>",
+            )
+            continue
+        body, point = named
+        gap = released.off_solid(bodies[body], point, p.length_tol)
+        if gap is not None:
+            p.error(
+                "datum-off-solid",
+                f"datum {name} of body {body}: is {gap:.4g} from the nearest axis or face; "
+                "place it on a hole's, pin's or pivot's axis, or on a face",
+            )
 
 
 def check_evidence_used(p: Project) -> None:
@@ -1119,6 +1374,7 @@ def check_static(p: Project) -> None:
         )
     check_sources(p)
     check_evidence(p)
+    check_released_datums(p)
     resolve_params(p)
     check_evidence_used(p)
     check_gaps(p)
