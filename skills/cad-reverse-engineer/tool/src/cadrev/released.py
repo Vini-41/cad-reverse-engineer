@@ -356,21 +356,6 @@ def fit(ours: list, theirs: list) -> tuple[object, float, int]:
     return where, float(left[worst]), worst
 
 
-def _samples(shape) -> list:
-    """Points on shape's surface: an SAMPLES × SAMPLES grid over each face's parameters, kept where
-    it falls on the face rather than in a hole of it, and points along each edge."""
-    points = []
-    for face in shape.faces():
-        for i in range(SAMPLES + 1):
-            for j in range(SAMPLES + 1):
-                point = face.position_at(i / SAMPLES, j / SAMPLES)
-                if face.distance_to(point) <= 1e-7:
-                    points.append(point)
-    for edge in shape.edges():
-        points += [edge.position_at(i / SAMPLES) for i in range(SAMPLES + 1)]
-    return points
-
-
 def projected(point: tuple[float, float, float], along: str) -> tuple[float, float, float]:
     """Where point projects along the axis x, y or z onto the plane of a cut file's sheet (z 0),
     the other two axes in turn as its x and y."""
@@ -420,14 +405,8 @@ def outline_distance(a, b) -> tuple[float, tuple[float, float]]:
 
 def surface_distance(a, b) -> tuple[float, tuple[float, float, float]]:
     """The largest distance from a point on either shape's surface to the other's surface, as
-    sampled (_samples), and the point where it occurs."""
-    from build123d import Compound
+    sampled (an SAMPLES × SAMPLES grid over each face's parameters, kept where it falls on the face
+    rather than in a hole of it, and points along each edge), and the point where it occurs."""
+    from . import distance
 
-    worst: tuple[float, tuple[float, float, float]] = (0.0, (0.0, 0.0, 0.0))
-    for points, other in ((_samples(a), b), (_samples(b), a)):
-        surface = Compound(other.faces())
-        for point in points:
-            gap = surface.distance_to(point)
-            if gap > worst[0]:
-                worst = (gap, (point.X, point.Y, point.Z))
-    return worst
+    return distance.surface_distance(a, b, SAMPLES)

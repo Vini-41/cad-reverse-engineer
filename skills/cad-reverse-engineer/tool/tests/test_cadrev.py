@@ -25,6 +25,8 @@ from build123d import (
     chamfer,
     export_step,
     export_stl,
+    fillet,
+    import_step,
 )
 
 from cadrev import cli
@@ -9568,6 +9570,137 @@ def test_stl_that_holds_no_closed_mesh_is_source_unreadable(proj_dir, tmp_path, 
         f["message"] for f in verify(proj_dir)[1]["findings"] if f["rule"] == "source-unreadable"
     ]
     assert len(found) == 1 and why in found[0]
+
+
+# A shape check against an STL (#123): a real body's flat triangles give hundreds of thousands of
+# sample points, and computing every one's distance in OCC took minutes. Its datums lie on flat
+# faces, where an STL keeps them: the middles of the part's two ends and of its +Y side.
+_FACE_DATUMS = swap(
+    MODEL,
+    '"link.b": (p.pitch / 2, 0, 0)}',
+    '"link.b": (p.pitch / 2, 0, 0), "link.e": (-p.link_L / 2, 0, 0), '
+    '"link.f": (p.link_L / 2, 0, 0), "link.g": (0, p.link_W / 2, 0)}',
+)
+
+
+def _rounded_box():
+    """A 40×5×8 box like the link, its every edge rounded to 1 mm."""
+    return fillet(Box(40, 5, 8).edges(), 1)
+
+
+_ROUNDED = swap(
+    _FACE_DATUMS,
+    "    link -= Pos(-p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2, p.link_H)\n"
+    "    link -= Pos(p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2, p.link_H)\n",
+    "    link = fillet(link.edges(), 1)\n",
+)
+
+
+def shape_checked(root: Path, tmp_path: Path, body, model: str = _FACE_DATUMS, stl=True) -> Path:
+    """Build the link with model, register body as the STL (or STEP) geometry source body, its
+    datums where the link's e, f and g are, and compare the link with it by a shape check.
+    Returns the source file. The STL's facets lie within 0.01 of body, few enough to compute
+    every sample point's distance in a test."""
+    path = tmp_path / ("body.stl" if stl else "body.step")
+    if stl:
+        export_stl(body, str(path), tolerance=0.01, angular_tolerance=0.5)
+    else:
+        export_step(body, str(path))
+    register = ["source", str(root), str(path), "--id", "body", "--kind", "geometry"]
+    assert cli.main([*register, "--citation", "Doe 2026, body"]) == 0
+    at = {"e": (-20, 0, 0), "f": (20, 0, 0), "g": (0, 2.5, 0)}
+    edit(
+        root,
+        "evidence.yaml",
+        lambda d: d.update(datums={f"body.{k}": list(v) for k, v in at.items()}),
+    )
+    write(root, "model.py", model)
+    pairs = [[f"link.{k}", f"body.{k}"] for k in at]
+    shape = {"id": "shape", "kind": "shape", "part": "link", "body": "body", "pairs": pairs}
+    edit(root, "checks.yaml", lambda d: d["checks"].append(shape | {"tol": 0.1}))
+    return root / "sources" / path.name
+
+
+def test_shape_check_against_an_stl_computes_few_points_distances_in_occ(
+    proj_dir, tmp_path, monkeypatch
+):
+    shape_checked(proj_dir, tmp_path, link_body())
+    computed = []
+    distance_to = Compound.distance_to
+    monkeypatch.setattr(
+        Compound, "distance_to", lambda self, other: computed.append(1) or distance_to(self, other)
+    )
+    result = _shape_result(verify(proj_dir)[1])
+    # The link's two holes are faceted, so a facet's sag between its corners is the largest.
+    assert result["ok"] and 1e-3 < result["shape"]["distance"] < 0.1
+    # Of some 11,000 sample points, all of which OCC computed before, only those near the largest.
+    assert len(computed) < 1500
+
+
+def _stl_solid(path: Path):
+    """The STL at path as cadrev reads one: its triangles sewn into one closed solid."""
+    from build123d import Solid
+    from build123d.topology import Shape
+
+    mesh = importlib.import_module("OCP.TopoDS").TopoDS_Shape()
+    assert importlib.import_module("OCP.StlAPI").StlAPI_Reader().Read(mesh, str(path))
+    sewing = importlib.import_module("OCP.BRepBuilderAPI").BRepBuilderAPI_Sewing(1e-6)
+    sewing.Add(mesh)
+    sewing.Perform()
+    return Solid(Shape.cast(sewing.SewedShape()))
+
+
+def _every_point_distance(a, b) -> tuple[float, tuple[float, float, float]]:
+    """A shape check's distance as it was before #123: OCC computes every sample point's
+    distance, on an 8 × 8 grid over each face's parameters, kept where it falls on the face, and
+    along each edge."""
+    n = 8
+
+    def samples(shape) -> list:
+        points = []
+        for face in shape.faces():
+            for i in range(n + 1):
+                for j in range(n + 1):
+                    point = face.position_at(i / n, j / n)
+                    if face.distance_to(point) <= 1e-7:
+                        points.append(point)
+        for edge in shape.edges():
+            points += [edge.position_at(i / n) for i in range(n + 1)]
+        return points
+
+    worst: tuple[float, tuple[float, float, float]] = (0.0, (0.0, 0.0, 0.0))
+    for points, other in ((samples(a), b), (samples(b), a)):
+        surface = Compound(other.faces())
+        for point in points:
+            gap = surface.distance_to(point)
+            if gap > worst[0]:
+                worst = (gap, (point.X, point.Y, point.Z))
+    return worst
+
+
+@pytest.mark.parametrize(
+    "part, body, model, stl",
+    [
+        (link_body, link_body, _FACE_DATUMS, True),
+        (_rounded_box, _rounded_box, _ROUNDED, True),
+        (
+            link_body,
+            lambda: chamfer(link_body().edges().filter_by(Axis.Z), 0.05),
+            _FACE_DATUMS,
+            False,
+        ),
+    ],
+    ids=["faceted holes", "faceted fillets", "chamfered"],
+)
+def test_guard_shape_check_finds_the_distance_computing_every_point_gives(
+    proj_dir, tmp_path, part, body, model, stl
+):
+    source = shape_checked(proj_dir, tmp_path, body(), model, stl)
+    released_body = _stl_solid(source) if stl else import_step(str(source))
+    gap, at = _every_point_distance(part(), released_body)
+    shape = _shape_result(verify(proj_dir)[1])["shape"]
+    assert shape["distance"] == pytest.approx(gap, rel=1e-9, abs=1e-12)
+    assert shape["worst_point"] == pytest.approx(at, abs=1e-6)
 
 
 # Cut files (ADR-0011): a laser-cut sheet drawn at half size, declared 600 mm wide over a 300-unit
