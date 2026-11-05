@@ -9578,7 +9578,7 @@ def test_stl_that_holds_no_closed_mesh_is_source_unreadable(proj_dir, tmp_path, 
 # corner pairs 7.63e-6 mm apart, one float32 step at x ≈ 80 mm. cadrev sews corners within 1e-4 mm.
 
 
-def _gapped_cube(root: Path, tmp_path: Path, gap: float) -> dict:
+def _verify_gapped_cube(root: Path, tmp_path: Path, gap: float) -> dict:
     """Register a 4 mm cube STL, one triangle's corner moved gap mm along x, its one body probed
     for its 4 mm height. Returns the check's report."""
     import struct
@@ -9596,13 +9596,15 @@ def _gapped_cube(root: Path, tmp_path: Path, gap: float) -> dict:
     return verify(root)[1]
 
 
-def test_stl_whose_corners_are_7_6e_6_mm_apart_reads_as_one_solid(proj_dir, tmp_path):
-    report = _gapped_cube(proj_dir, tmp_path, 7.6e-6)
+@pytest.mark.parametrize("gap", [7.6e-6, 9e-5], ids=["one float32 step", "just under 1e-4"])
+def test_stl_whose_corners_are_this_close_reads_as_one_solid(proj_dir, tmp_path, gap):
+    report = _verify_gapped_cube(proj_dir, tmp_path, gap)
     assert [(q["body"], q["ok"]) for q in report["probes"]] == [("link_stl", True)]
 
 
-def test_guard_stl_whose_corners_are_0_001_mm_apart_is_source_unreadable(proj_dir, tmp_path):
-    findings = _gapped_cube(proj_dir, tmp_path, 0.001)["findings"]
+@pytest.mark.parametrize("gap", [2e-4, 1e-3], ids=["just over 1e-4", "0.001 mm"])
+def test_guard_stl_whose_corners_are_this_far_apart_is_source_unreadable(proj_dir, tmp_path, gap):
+    findings = _verify_gapped_cube(proj_dir, tmp_path, gap)["findings"]
     found = [f["message"] for f in findings if f["rule"] == "source-unreadable"]
     assert len(found) == 1 and "the mesh does not close into solids" in found[0]
 
