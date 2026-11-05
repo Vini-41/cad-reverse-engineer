@@ -5,7 +5,7 @@ points. A point's distance to a flat surface, whose faces are all plane faces bo
 triangles those faces are exactly made of, which numpy computes. To any other surface OCC computes
 it, and since almost every point lies far closer than the largest distance, numpy first bounds
 each point's distance from above, and OCC computes the distance of only the points whose bound
-reaches the largest distance yet found, giving the result computing every point's would."""
+reaches the largest distance yet found: the result computing every point's distance gives."""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ def surface_distance(a, b, samples: int) -> tuple[float, tuple[float, float, flo
             bounds.append(_bound(points, other, slack))
             continue
         # Every point's distance, exactly; a grid point off its own triangle has none.
-        gaps = np.where(surfaces[k].on, _triangles_bound(points, other.mesh), -np.inf)
+        gaps = np.where(surfaces[k].on_face, _triangles_bound(points, other.mesh), -np.inf)
         if len(gaps) and gaps.max() > worst[0]:
             n = int(np.argmax(gaps))
             x, y, z = (float(v) for v in points[n])
@@ -154,7 +154,12 @@ class _Surface:
         self.kinds = [a.GetType() for a in self._adapted]
         self.triangles = [_triangle(f, kind) for f, kind in zip(self.faces, self.kinds)]
         self.mesh = self._mesh()
-        self.points, self._places, self._given, self.on = self._sample()
+        self.points, self._places, self._given, own_distance = self._sample()
+        # Whether each point lies on its face: numpy settles a grid point near its triangle, and
+        # OCC (point) the few that lie farther, as it does where numpy bounds the distance.
+        self.on_face = own_distance <= _ON_FACE
+        for n in np.flatnonzero(~self.on_face):
+            self.on_face[n] = self.point(int(n)) is not None
         # How far the faces' bounds may stray from where OCC puts them: a vertex or an edge
         # holds within its tolerance.
         self.tolerance = (
@@ -170,10 +175,7 @@ class _Surface:
             if corners is not None:
                 out.append(corners[None])
                 continue
-            lines = (
-                _OCP["BRepAdaptor"].BRepAdaptor_Curve(e).GetType() for e in _edges(face.wrapped)
-            )
-            if kind != _PLANE or any(k != _LINE for k in lines):
+            if kind != _PLANE or any(_curve(e)[1] != _LINE for e in _edges(face.wrapped)):
                 return None
             # A flat face's triangulation has only its corners as vertices, so it covers the face
             # exactly, whatever the tolerance.
@@ -183,8 +185,8 @@ class _Surface:
 
     def _sample(self):
         """The sample points, each with its place: (face, i, j) for a triangle's grid point,
-        (-1, n) for the n-th point OCC gave, (-2, edge, i) for a line's i-th point; and whether
-        each lies on its face as numpy finds it (point, which asks OCC)."""
+        (-1, n) for the n-th point OCC gave, (-2, edge, i) for a line's i-th point; and each
+        one's distance from its triangle as numpy finds it, 0 where it has none."""
         s = self.samples
         steps = np.arange(s + 1) / s
         grid = np.array([(u, v) for u in steps for v in steps])
@@ -222,16 +224,16 @@ class _Surface:
                 blocks.append(np.array([tuple(p) for p in along]))
             triangles.append(np.full((len(blocks[-1]), 3, 3), np.nan))
         if not blocks:
-            return np.zeros((0, 3)), [], given, np.zeros(0, bool)
+            return np.zeros((0, 3)), [], given, np.zeros(0)
         points, corners = np.concatenate(blocks), np.concatenate(triangles)
         # A triangle's grid point that numpy finds off it is off it; OCC tests the rest (point).
         gridded = ~np.isnan(corners[:, 0, 0])
-        own = np.zeros(len(points))
+        own_distance = np.zeros(len(points))
         near = corners[gridded]
-        own[gridded] = _triangle_distance(points[gridded], *near.transpose(1, 0, 2))
-        off = own > _NEAR_FACE
+        own_distance[gridded] = _triangle_distance(points[gridded], *near.transpose(1, 0, 2))
+        off = own_distance > _NEAR_FACE
         places = [p for p, o in zip(places, off) if not o]
-        return points[~off], places, given, own[~off] <= _ON_FACE
+        return points[~off], places, given, own_distance[~off]
 
     def point(self, n: int):
         """The n-th sample point as OCC gives it, or None where it falls off its face."""

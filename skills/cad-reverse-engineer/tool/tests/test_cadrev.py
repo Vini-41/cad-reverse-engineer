@@ -9782,14 +9782,32 @@ SHAPE_BODIES = {
     # Flat triangles, an STL's sag mid-facet the largest.
     "faceted holes": _Body(link_body, link_body),
     "faceted fillets": _Body(_rounded_box, _rounded_box, _ROUNDED),
-    # Flat faces bounded by lines, a notch across the top making the body concave: a point over
-    # one face lies nearer another's line. Points along the notch tie: x and z only.
+    # Flat faces bounded by lines, split into the triangles they are made of: a notch across the
+    # top leaves the faces at ±Y U-shaped, not convex. Points along the notch tie: x and z only.
     "notch in a flat body": _Body(
         lambda: Box(40, 5, 8),
         lambda: Box(40, 5, 8) - Pos(0, 0, 4) * Box(6, 8, 4),
         _BOX,
         False,
         shared=slice(0, 3, 2),
+    ),
+    # Flat faces against an STL with its top 0.01 higher, a gap the bounds can rule points out by.
+    # Every point of either top ties, at z 4 or 4.01, so rounding picks which: the distance only.
+    "flat faces 0.01 off": _Body(
+        lambda: Box(40, 5, 8),
+        lambda: Pos(0, 0, 0.005) * Box(40, 5, 8.01),
+        _BOX,
+        shared=slice(0),
+    ),
+    # Flat but for one hole: its cylinder face and the circles bounding it leave the body to OCC,
+    # while the box it is compared with stays numpy's. The hole's wall at y 0, 2.5 from the faces
+    # at ±Y, ties on either side and at every height: y only.
+    "flat but for one hole": _Body(
+        lambda: Box(40, 5, 8),
+        lambda: Box(40, 5, 8) - Pos(10, 0, 0) * Cylinder(1, 8),
+        _BOX,
+        False,
+        shared=slice(1, 2),
     ),
     # Plane faces with holes and cylinder faces whole.
     "chamfered": _Body(
