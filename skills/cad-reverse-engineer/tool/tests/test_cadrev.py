@@ -9574,6 +9574,39 @@ def test_stl_that_holds_no_closed_mesh_is_source_unreadable(proj_dir, tmp_path, 
     assert len(found) == 1 and why in found[0]
 
 
+# A released STL whose corners do not meet exactly (#129): the COMPAct gearbox casing has two
+# corner pairs 7.63e-6 mm apart, one float32 step at x ≈ 80 mm. cadrev sews corners within 1e-4 mm.
+
+
+def _gapped_cube(root: Path, tmp_path: Path, gap: float) -> dict:
+    """Register a 4 mm cube STL, one triangle's corner moved gap mm along x, its one body probed
+    for its 4 mm height. Returns the check's report."""
+    import struct
+
+    stl = root / "sources" / released_stl(root, tmp_path, body=Box(4, 4, 4)).name
+    vertices, triangles = Box(4, 4, 4).moved(RELEASED_AT).tessellate(0.01)
+    corners = [[tuple(vertices[n]) for n in t] for t in triangles]
+    x, y, z = corners[0][0]
+    corners[0][0] = (x + gap, y, z)
+    facets = b"".join(struct.pack("<12fH", 0, 0, 0, *(v for c in t for v in c), 0) for t in corners)
+    stl.write_bytes(bytes(80) + struct.pack("<I", len(corners)) + facets)
+    edit(root, "project.yaml", lambda d: d["sources"][1].update(sha256=sha256(stl)))
+    probe = PROBE | {"source": "link_stl", "axes": {"s": "z"}, "values": {"s": 4}}
+    edit(root, "evidence.yaml", lambda d: d["evidence"].append(probe))
+    return verify(root)[1]
+
+
+def test_stl_whose_corners_are_7_6e_6_mm_apart_reads_as_one_solid(proj_dir, tmp_path):
+    report = _gapped_cube(proj_dir, tmp_path, 7.6e-6)
+    assert [(q["body"], q["ok"]) for q in report["probes"]] == [("link_stl", True)]
+
+
+def test_guard_stl_whose_corners_are_0_001_mm_apart_is_source_unreadable(proj_dir, tmp_path):
+    findings = _gapped_cube(proj_dir, tmp_path, 0.001)["findings"]
+    found = [f["message"] for f in findings if f["rule"] == "source-unreadable"]
+    assert len(found) == 1 and "the mesh does not close into solids" in found[0]
+
+
 # A shape check against an STL (#123): a real body's flat triangles give hundreds of thousands of
 # sample points, and computing every one's distance in OCC took minutes. Its datums lie on flat
 # faces, where an STL keeps them: the middles of the part's two ends and of its +Y side.
@@ -9706,7 +9739,7 @@ def _stl_solid(path: Path):
 
     mesh = importlib.import_module("OCP.TopoDS").TopoDS_Shape()
     assert importlib.import_module("OCP.StlAPI").StlAPI_Reader().Read(mesh, str(path))
-    sewing = importlib.import_module("OCP.BRepBuilderAPI").BRepBuilderAPI_Sewing(1e-6)
+    sewing = importlib.import_module("OCP.BRepBuilderAPI").BRepBuilderAPI_Sewing(1e-4)
     sewing.Add(mesh)
     sewing.Perform()
     return Solid(Shape.cast(sewing.SewedShape()))

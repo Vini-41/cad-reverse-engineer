@@ -29,8 +29,10 @@ _GRID = 24
 SAMPLES = 8
 # How finely off_solid samples each edge of a cylindrical face to find the face's axial extent.
 _EDGE_SAMPLES = 16
-# How far apart, in millimetres, two triangle corners of an STL may be and still be sewn as one.
-_SEWING_TOL = 1e-6
+# How far apart, in millimetres, two triangle corners of an STL may be and still be sewn as one:
+# a released mesh rounds its corners to float32, a step of 7.6e-6 mm at 80 mm (#129), and 1e-4 mm
+# stays 10× below the default tolerance.length.
+_SEWING_TOL = 1e-4
 
 
 def _step_solids(path: Path) -> list:
