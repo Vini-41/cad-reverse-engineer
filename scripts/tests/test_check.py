@@ -2,6 +2,7 @@
 stubbed: each stub records how it was called."""
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -171,7 +172,8 @@ def test_an_example_slower_than_the_budget_fails(tmp_path):
     )
     assert result.returncode == 1
     assert "failed: examples/alpha reaches its documented status" in result.stdout
-    assert "examples/alpha took 2 s, over the 1 s an example may take" in result.stdout
+    # A two-second sleep measures 2 or 3 in bash's whole seconds.
+    assert re.search(r"examples/alpha took [23] s, over the 1 s an example may take", result.stdout)
 
 
 def test_guard_an_example_within_the_budget_passes(tmp_path):

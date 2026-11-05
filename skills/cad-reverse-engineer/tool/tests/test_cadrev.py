@@ -9754,7 +9754,8 @@ def test_guard_shape_check_finds_the_distance_where_a_cut_leaves_a_cylinder_face
     gap, at = _every_point_distance(_tube(), import_step(str(source)))
     shape = _shape_result(verify(proj_dir)[1])["shape"]
     assert shape["distance"] == pytest.approx(gap, rel=1e-9, abs=1e-12)
-    assert shape["worst_point"] == pytest.approx(at, abs=1e-6)
+    # Every point along the slot's middle is as far, so rounding picks which: x and y only.
+    assert shape["worst_point"][:2] == pytest.approx(at[:2], abs=1e-6)
 
 
 # Cut files (ADR-0011): a laser-cut sheet drawn at half size, declared 600 mm wide over a 300-unit
