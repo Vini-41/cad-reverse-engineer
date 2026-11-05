@@ -9596,9 +9596,14 @@ _ROUNDED = swap(
 )
 
 
-def shape_checked(root: Path, tmp_path: Path, body, model: str = _FACE_DATUMS, stl=True) -> Path:
+_LINK_AT = {"e": (-20, 0, 0), "f": (20, 0, 0), "g": (0, 2.5, 0)}
+
+
+def shape_checked(
+    root: Path, tmp_path: Path, body, model: str = _FACE_DATUMS, stl=True, at=_LINK_AT
+) -> Path:
     """Build the link with model, register body as the STL (or STEP) geometry source body, its
-    datums where the link's e, f and g are, and compare the link with it by a shape check.
+    datums e, f and g at at, where the link's are, and compare the link with it by a shape check.
     Returns the source file. The STL's facets lie within 0.01 of body, few enough to compute
     every sample point's distance in a test."""
     path = tmp_path / ("body.stl" if stl else "body.step")
@@ -9608,7 +9613,6 @@ def shape_checked(root: Path, tmp_path: Path, body, model: str = _FACE_DATUMS, s
         export_step(body, str(path))
     register = ["source", str(root), str(path), "--id", "body", "--kind", "geometry"]
     assert cli.main([*register, "--citation", "Doe 2026, body"]) == 0
-    at = {"e": (-20, 0, 0), "f": (20, 0, 0), "g": (0, 2.5, 0)}
     edit(
         root,
         "evidence.yaml",
@@ -9698,6 +9702,56 @@ def test_guard_shape_check_finds_the_distance_computing_every_point_gives(
     source = shape_checked(proj_dir, tmp_path, body(), model, stl)
     released_body = _stl_solid(source) if stl else import_step(str(source))
     gap, at = _every_point_distance(part(), released_body)
+    shape = _shape_result(verify(proj_dir)[1])["shape"]
+    assert shape["distance"] == pytest.approx(gap, rel=1e-9, abs=1e-12)
+    assert shape["worst_point"] == pytest.approx(at, abs=1e-6)
+
+
+# A tube 40 long, 10 and 9 in radius, its datums on its two ends. A cut through its wall leaves
+# its outer face bounded by lines along its axis and circles around it.
+_TUBE_AT = {"e": (9.5, 0, -20), "f": (9.5, 0, 20), "g": (0, 9.5, 20)}
+_TUBE = swap(
+    swap(
+        MODEL,
+        "    link = Box(p.link_L, p.link_W, p.link_H)\n"
+        "    link -= Pos(-p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2, p.link_H)\n"
+        "    link -= Pos(p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2, p.link_H)\n",
+        "    link = Cylinder(10, 40) - Cylinder(9, 40)\n",
+    ),
+    '"link.b": (p.pitch / 2, 0, 0)}',
+    '"link.b": (p.pitch / 2, 0, 0)'
+    + "".join(f', "link.{k}": {v}' for k, v in _TUBE_AT.items())
+    + "}",
+)
+
+
+def _tube():
+    return Cylinder(10, 40) - Cylinder(9, 40)
+
+
+@pytest.mark.parametrize(
+    "cut",
+    [Pos(10, 0, 0) * Box(6, 8, 8), Pos(10, 0, 18) * Box(6, 8, 8)],
+    ids=["window", "notch at an end"],
+)
+def test_shape_check_finds_the_distance_where_a_cylinder_face_has_a_hole(proj_dir, tmp_path, cut):
+    # The cut's edges lie inside the outer face's range of angle and height, where it has no
+    # surface, so its points nearest by angle and height bound nothing there.
+    source = shape_checked(proj_dir, tmp_path, _tube() - cut, _TUBE, stl=False, at=_TUBE_AT)
+    gap, at = _every_point_distance(_tube(), import_step(str(source)))
+    shape = _shape_result(verify(proj_dir)[1])["shape"]
+    assert gap > 1
+    assert shape["distance"] == pytest.approx(gap, rel=1e-9, abs=1e-12)
+    assert shape["worst_point"] == pytest.approx(at, abs=1e-6)
+
+
+def test_guard_shape_check_finds_the_distance_where_a_cut_leaves_a_cylinder_face_whole(
+    proj_dir, tmp_path
+):
+    # A slot end to end leaves the outer face's lines at its first and last angle.
+    slotted = _tube() - Pos(10, 0, 0) * Box(6, 8, 50)
+    source = shape_checked(proj_dir, tmp_path, slotted, _TUBE, stl=False, at=_TUBE_AT)
+    gap, at = _every_point_distance(_tube(), import_step(str(source)))
     shape = _shape_result(verify(proj_dir)[1])["shape"]
     assert shape["distance"] == pytest.approx(gap, rel=1e-9, abs=1e-12)
     assert shape["worst_point"] == pytest.approx(at, abs=1e-6)

@@ -299,8 +299,9 @@ def _triangles_bound(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
 def _cylinder_bound(points: np.ndarray, face) -> np.ndarray:
     """Each point's distance to the point of a cylinder face nearest the point's own angle and
     height, clamped to the face's: exact where the point lies over the face, an upper bound
-    beyond it. Inf throughout where the face is not a rectangle of angle and height, bounded
-    only by lines along the axis and circles around it."""
+    beyond it. Inf throughout where the face is not the whole rectangle of angle and height it
+    spans: where an edge is not a line along the axis at its first or last angle or a circle
+    around the axis at its lowest or highest height, as a hole or a notch in the face has."""
     cylinder = _OCP["BRepAdaptor"].BRepAdaptor_Surface(face.wrapped).Cylinder()
     frame = cylinder.Position()
     o, x, y, axis = (
@@ -308,25 +309,38 @@ def _cylinder_bound(points: np.ndarray, face) -> np.ndarray:
         for v in (frame.Location(), frame.XDirection(), frame.YDirection(), frame.Direction())
     )
     radius = cylinder.Radius()
+    u0, u1, v0, v1 = _OCP["BRepTools"].BRepTools.UVBounds_s(face.wrapped)
+
+    def angle_of(p: np.ndarray) -> np.ndarray:
+        w = p - o
+        return u0 + np.mod(np.arctan2(w @ y, w @ x) - u0, 2 * math.pi)
+
+    def on_side(along: float, ends: tuple[float, ...], scale: float) -> bool:
+        """Whether along lies at one of ends, within _ON_FACE as a length."""
+        return min(abs(along - e) for e in ends) * scale <= _ON_FACE
+
     for edge in _edges(face.wrapped):
-        curve, kind, _, _ = _curve(edge)
+        curve, kind, start, _ = _curve(edge)
         if kind == _LINE:
-            off_grid = abs(abs(np.array(_xyz(curve.Line().Direction())) @ axis) - 1) > 1e-12
+            off_side = abs(abs(np.array(_xyz(curve.Line().Direction())) @ axis) - 1) > 1e-12
+            # An angle at u0 is also at u0 + 2π, where a whole turn's seam lies.
+            at = float(angle_of(start))
+            off_side = off_side or not on_side(at, (u0, u1, u0 + 2 * math.pi), radius)
         elif kind == _CIRCLE:
             circle = curve.Circle()
             centre = np.array(_xyz(circle.Location())) - o
-            off_grid = (
+            off_side = (
                 abs(abs(np.array(_xyz(circle.Axis().Direction())) @ axis) - 1) > 1e-12
                 or np.linalg.norm(centre - (centre @ axis) * axis) > 1e-9
                 or abs(circle.Radius() - radius) > 1e-9
+                or not on_side(float(centre @ axis), (v0, v1), 1.0)
             )
         else:
-            off_grid = True
-        if off_grid:
+            off_side = True
+        if off_side:
             return np.full(len(points), np.inf)
-    u0, u1, v0, v1 = _OCP["BRepTools"].BRepTools.UVBounds_s(face.wrapped)
     w = points - o
-    angle = u0 + np.mod(np.arctan2(w @ y, w @ x) - u0, 2 * math.pi)
+    angle = angle_of(points)
     if u1 - u0 < 2 * math.pi:
         # Past the face's last angle, the nearer of its two ends.
         nearer_first = angle - u1 > u0 + 2 * math.pi - angle

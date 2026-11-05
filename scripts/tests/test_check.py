@@ -131,7 +131,7 @@ def test_an_unknown_argument_runs_no_step(tmp_path):
     result, calls = check(tmp_path, args=["--fast"])
     assert result.returncode == 2
     assert calls == []
-    assert "usage: scripts/check [--lint | --nightly]" in result.stderr
+    assert "usage: scripts/check [--lint]" in result.stderr
 
 
 def test_every_example_the_copy_holds_is_checked_for_its_documented_status(tmp_path):
@@ -148,77 +148,38 @@ def test_every_example_the_copy_holds_is_checked_for_its_documented_status(tmp_p
     ]
 
 
-def examples_copy(tmp_path: Path, nightly: tuple[str, ...]) -> dict[str, str]:
-    """A committed-examples stub whose copy holds alpha and beta, those named in nightly marked
-    `Checked: nightly` in their README."""
+def examples_copy(tmp_path: Path) -> dict[str, str]:
+    """A committed-examples stub whose copy holds alpha and beta."""
     copy = tmp_path / "copy" / "examples"
     for name in ("alpha", "beta"):
         (copy / name).mkdir(parents=True)
         (copy / name / "project.yaml").write_text("format: 1\n")
-        marker = "Checked: nightly\n" if name in nightly else ""
-        (copy / name / "README.md").write_text(f"Expected status: `VERIFIED`\n{marker}")
+        (copy / name / "README.md").write_text("Expected status: `VERIFIED`\n")
     return {"committed-examples": f"echo '{copy}'; exit 0"}
-
-
-def test_an_example_its_readme_marks_nightly_is_left_to_the_nightly_check(tmp_path):
-    result, _ = check(tmp_path, bodies=examples_copy(tmp_path, nightly=("beta",)))
-    steps = [line for line in result.stdout.splitlines() if line.startswith("== examples/")]
-    assert steps == ["== examples/alpha reaches its documented status"]
-    assert "examples/beta: checked nightly (scripts/check --nightly), not here" in result.stdout
-
-
-def test_nightly_checks_only_the_examples_marked_nightly(tmp_path):
-    result, calls = check(
-        tmp_path, bodies=examples_copy(tmp_path, nightly=("beta",)), args=["--nightly"]
-    )
-    steps = [line for line in result.stdout.splitlines() if line.startswith("== ")]
-    assert steps == ["== examples/beta reaches its documented status"]
-    copy = tmp_path / "copy" / "examples"
-    assert calls == [
-        "uv sync --locked --extra test",
-        "committed-examples ",
-        f"uv run cadrev check {copy}/beta",
-    ]
 
 
 # A cadrev check that takes two seconds and prints the status every example's README expects.
 SLOW_CHECK = '[ "$2" = cadrev ] && { sleep 2; echo "VERIFIED. Report: build/report.md"; }; exit 0'
 
 
-def test_an_example_checked_on_every_push_slower_than_the_budget_fails_naming_the_nightly_line(
-    tmp_path,
-):
+def test_an_example_slower_than_the_budget_fails(tmp_path):
     result, _ = check(
         tmp_path,
-        bodies=examples_copy(tmp_path, nightly=()),
+        bodies=examples_copy(tmp_path),
         uv_run=SLOW_CHECK,
         env={"EXAMPLE_SECONDS": "1"},
     )
     assert result.returncode == 1
     assert "failed: examples/alpha reaches its documented status" in result.stdout
-    assert "examples/alpha took 2 s, over the 1 s an example checked on every push may take" in (
-        result.stdout
-    )
-    assert "Checked: nightly" in result.stdout
+    assert "examples/alpha took 2 s, over the 1 s an example may take" in result.stdout
 
 
 def test_guard_an_example_within_the_budget_passes(tmp_path):
     result, _ = check(
         tmp_path,
-        bodies=examples_copy(tmp_path, nightly=()),
+        bodies=examples_copy(tmp_path),
         uv_run=SLOW_CHECK,
         env={"EXAMPLE_SECONDS": "60"},
-    )
-    assert result.returncode == 0
-
-
-def test_guard_an_example_checked_nightly_is_held_to_no_budget(tmp_path):
-    result, _ = check(
-        tmp_path,
-        bodies=examples_copy(tmp_path, nightly=("alpha", "beta")),
-        uv_run=SLOW_CHECK,
-        env={"EXAMPLE_SECONDS": "1"},
-        args=["--nightly"],
     )
     assert result.returncode == 0
 
