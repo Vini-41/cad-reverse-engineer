@@ -4,11 +4,8 @@
 #
 #   scripts/check
 #   scripts/check --lint   # pyright and ruff alone, in seconds, for after an edit
-#   scripts/check --nightly   # only the examples whose README says `Checked: nightly`
 #
-# An example too slow for every push says `Checked: nightly` in its README: the plain check leaves
-# it out, naming it, and .github/workflows/nightly.yml checks it with --nightly. An example checked
-# on every push fails past EXAMPLE_SECONDS (default 150, about the slowest CI runner's time for
+# An example fails past EXAMPLE_SECONDS (default 150, about the slowest CI runner's time for
 # examples/legclaw with room to spare).
 #
 # The plugin manifests are validated only where the `claude` CLI is installed; CI installs it.
@@ -20,8 +17,7 @@ set -uo pipefail
 case "${1-}" in
   "") mode=full ;;
   --lint) mode=lint ;;
-  --nightly) mode=nightly ;;
-  *) echo "usage: scripts/check [--lint | --nightly]" >&2; exit 2 ;;
+  *) echo "usage: scripts/check [--lint]" >&2; exit 2 ;;
 esac
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -52,8 +48,8 @@ step() {
   [ "${PIPESTATUS[0]}" -eq 0 ] || { failed+=("$name"); failed_logs+=("$log"); failed_reruns+=("$rerun"); }
 }
 
-# Fails unless cadrev check on example prints the status line its README states, and, for an
-# example checked on every push, within EXAMPLE_SECONDS.
+# Fails unless cadrev check on example prints the status line its README states, within
+# EXAMPLE_SECONDS.
 example_status() {
   local example=$1 expected log code=0 start took budget=${EXAMPLE_SECONDS:-150}
   expected=$(sed -n 's/^Expected status: `\(.*\)`$/\1/p' "$example/README.md")
@@ -65,8 +61,8 @@ example_status() {
   grep -qF "$expected. Report:" "$log" || { echo "expected: $expected"; code=1; }
   rm -f "$log"
   echo "examples/$(basename "$example") took $took s"
-  if [ "$mode" = full ] && [ "$took" -gt "$budget" ]; then
-    echo "examples/$(basename "$example") took $took s, over the $budget s an example checked on every push may take: make it faster, or say \`Checked: nightly\` in its README, on the line after its status"
+  if [ "$took" -gt "$budget" ]; then
+    echo "examples/$(basename "$example") took $took s, over the $budget s an example may take: make it faster"
     code=1
   fi
   return "$code"
@@ -97,12 +93,10 @@ plugin_validate() {
 
 left_out="$logs/left-out"
 red_count=""
-if [ "$mode" != nightly ]; then
-  step "pyright" uv run pyright
-  step "ruff check" uv run ruff check ../../..
-  step "ruff format" uv run ruff format --check ../../..
-fi
-# --lint stops here, past the steps an edit most often fails; --nightly checks only examples.
+step "pyright" uv run pyright
+step "ruff check" uv run ruff check ../../..
+step "ruff format" uv run ruff format --check ../../..
+# --lint stops here, past the steps an edit most often fails.
 if [ "$mode" = full ]; then
   step "tool tests" uv run pytest -q
   step "script tests" uv run pytest -q ../../../scripts/tests
@@ -117,8 +111,6 @@ if [ "$mode" = full ]; then
     red_on_main_or_notice
   # Its count, repeated at the end, past the examples' output.
   red_count=$(grep -E '^[0-9]+ red \(holes\), [0-9]+ green$' "$logs/$steps" | tail -n 1)
-fi
-if [ "$mode" != lint ]; then
   # The examples as a clone after committing holds them: tracked and staged files at their staged text.
   # The last line repeats how many edits that left out, so a pass never hides that it checked older text.
   examples=$(../../../scripts/committed-examples 2>"$left_out")
@@ -129,12 +121,6 @@ if [ "$mode" != lint ]; then
     for project in "$examples"/*/project.yaml; do
       [ -e "$project" ] || continue
       example=$(basename "$(dirname "$project")")
-      checked=full
-      grep -qx 'Checked: nightly' "$(dirname "$project")/README.md" 2>/dev/null && checked=nightly
-      if [ "$checked" != "$mode" ]; then
-        [ "$mode" = nightly ] || echo "examples/$example: checked nightly (scripts/check --nightly), not here"
-        continue
-      fi
       step "examples/$example reaches its documented status" \
         --rerun "scripts/cadrev check examples/$example" example_status "$examples/$example"
     done
