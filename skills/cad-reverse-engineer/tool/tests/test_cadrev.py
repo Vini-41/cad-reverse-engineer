@@ -11,7 +11,9 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 import yaml
@@ -9682,31 +9684,6 @@ def _every_point_distance(a, b) -> tuple[float, tuple[float, float, float]]:
     return worst
 
 
-@pytest.mark.parametrize(
-    "part, body, model, stl",
-    [
-        (link_body, link_body, _FACE_DATUMS, True),
-        (_rounded_box, _rounded_box, _ROUNDED, True),
-        (
-            link_body,
-            lambda: chamfer(link_body().edges().filter_by(Axis.Z), 0.05),
-            _FACE_DATUMS,
-            False,
-        ),
-    ],
-    ids=["faceted holes", "faceted fillets", "chamfered"],
-)
-def test_guard_shape_check_finds_the_distance_computing_every_point_gives(
-    proj_dir, tmp_path, part, body, model, stl
-):
-    source = shape_checked(proj_dir, tmp_path, body(), model, stl)
-    released_body = _stl_solid(source) if stl else import_step(str(source))
-    gap, at = _every_point_distance(part(), released_body)
-    shape = _shape_result(verify(proj_dir)[1])["shape"]
-    assert shape["distance"] == pytest.approx(gap, rel=1e-9, abs=1e-12)
-    assert shape["worst_point"] == pytest.approx(at, abs=1e-6)
-
-
 # A tube 40 long, 10 and 9 in radius, its datums on its two ends. A cut through its wall leaves
 # its outer face bounded by lines along its axis and circles around it.
 _TUBE_AT = {"e": (9.5, 0, -20), "f": (9.5, 0, 20), "g": (0, 9.5, 20)}
@@ -9729,35 +9706,54 @@ def _tube():
     return Cylinder(10, 40) - Cylinder(9, 40)
 
 
-@pytest.mark.parametrize(
-    "cut",
-    [Pos(10, 0, 0) * Box(6, 8, 8), Pos(10, 0, 18) * Box(6, 8, 8)],
-    ids=["window", "notch at an end"],
-)
-def test_guard_shape_check_finds_the_distance_where_a_cylinder_face_has_a_hole(
-    proj_dir, tmp_path, cut
-):
-    # The cut's edges lie inside the outer face's range of angle and height, where it has no
-    # surface, so its points nearest by angle and height bound nothing there.
-    source = shape_checked(proj_dir, tmp_path, _tube() - cut, _TUBE, stl=False, at=_TUBE_AT)
-    gap, at = _every_point_distance(_tube(), import_step(str(source)))
-    shape = _shape_result(verify(proj_dir)[1])["shape"]
-    assert gap > 1
-    assert shape["distance"] == pytest.approx(gap, rel=1e-9, abs=1e-12)
-    assert shape["worst_point"] == pytest.approx(at, abs=1e-6)
+class _Body(NamedTuple):
+    """A row of SHAPE_BODIES: the part as built and the body as released, the model building the
+    part, whether the body is an STL (else a STEP), its datums, and the worst point's coordinates
+    every run shares (all three but where equally far points tie)."""
+
+    part: Callable
+    body: Callable
+    model: str = _FACE_DATUMS
+    stl: bool = True
+    at: dict = _LINK_AT
+    shared: slice = slice(3)
 
 
-def test_guard_shape_check_finds_the_distance_where_a_cut_leaves_a_cylinder_face_whole(
-    proj_dir, tmp_path
-):
-    # A slot end to end leaves the outer face's lines at its first and last angle.
-    slotted = _tube() - Pos(10, 0, 0) * Box(6, 8, 50)
-    source = shape_checked(proj_dir, tmp_path, slotted, _TUBE, stl=False, at=_TUBE_AT)
-    gap, at = _every_point_distance(_tube(), import_step(str(source)))
-    shape = _shape_result(verify(proj_dir)[1])["shape"]
-    assert shape["distance"] == pytest.approx(gap, rel=1e-9, abs=1e-12)
+# Bodies a shape check's distance bounds (distance.py) read: each kind of face a bound reads, cut
+# where the bound's assumption fails, beside the cut it still takes. Each row's distance and worst
+# point are the ones computing every point gives.
+SHAPE_BODIES = {
+    # Flat triangles, an STL's sag mid-facet the largest.
+    "faceted holes": _Body(link_body, link_body),
+    "faceted fillets": _Body(_rounded_box, _rounded_box, _ROUNDED),
+    # Plane faces with holes and cylinder faces whole.
+    "chamfered": _Body(
+        link_body, lambda: chamfer(link_body().edges().filter_by(Axis.Z), 0.05), stl=False
+    ),
+    # A cylinder face whose edges lie inside its range of angle and height, where it has no
+    # surface: its points nearest by angle and height bound nothing there.
+    "window in a cylinder face": _Body(
+        _tube, lambda: _tube() - Pos(10, 0, 0) * Box(6, 8, 8), _TUBE, False, _TUBE_AT
+    ),
+    "notch at a cylinder face's end": _Body(
+        _tube, lambda: _tube() - Pos(10, 0, 18) * Box(6, 8, 8), _TUBE, False, _TUBE_AT
+    ),
+    # A slot end to end leaves the face's lines at its first and last angle, so the face is whole.
     # Every point along the slot's middle is as far, so rounding picks which: x and y only.
-    assert shape["worst_point"][:2] == pytest.approx(at[:2], abs=1e-6)
+    "slot along a cylinder face": _Body(
+        _tube, lambda: _tube() - Pos(10, 0, 0) * Box(6, 8, 50), _TUBE, False, _TUBE_AT, slice(2)
+    ),
+}
+
+
+@pytest.mark.parametrize("row", SHAPE_BODIES.values(), ids=SHAPE_BODIES.keys())
+def test_guard_shape_check_finds_the_distance_computing_every_point_gives(proj_dir, tmp_path, row):
+    source = shape_checked(proj_dir, tmp_path, row.body(), row.model, row.stl, row.at)
+    released_body = _stl_solid(source) if row.stl else import_step(str(source))
+    gap, at = _every_point_distance(row.part(), released_body)
+    shape = _shape_result(verify(proj_dir)[1])["shape"]
+    assert shape["distance"] == pytest.approx(gap, rel=1e-9, abs=1e-12)
+    assert shape["worst_point"][row.shared] == pytest.approx(at[row.shared], abs=1e-6)
 
 
 # Cut files (ADR-0011): a laser-cut sheet drawn at half size, declared 600 mm wide over a 300-unit

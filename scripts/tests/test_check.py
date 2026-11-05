@@ -10,6 +10,7 @@ from pathlib import Path
 SCRIPT = Path(__file__).resolve().parents[1] / "check"
 STUBS = (
     "red-on-main",
+    "check-cli-imports",
     "check-doc-pointers",
     "check-glossary-words",
     "check-kind-branches",
@@ -116,7 +117,7 @@ def test_guard_the_end_names_no_count_where_red_on_main_printed_none(tmp_path):
     assert not result.stdout.splitlines()[-1].startswith("red-on-main:")
 
 
-def test_lint_runs_only_the_type_and_ruff_steps(tmp_path):
+def test_lint_runs_only_the_type_ruff_and_import_steps(tmp_path):
     result, calls = check(tmp_path, args=["--lint"])
     assert result.returncode == 0
     assert calls == [
@@ -124,6 +125,7 @@ def test_lint_runs_only_the_type_and_ruff_steps(tmp_path):
         "uv run pyright",
         "uv run ruff check ../../..",
         "uv run ruff format --check ../../..",
+        "check-cli-imports ",
     ]
     assert result.stdout.splitlines()[-1] == "all steps passed"
 

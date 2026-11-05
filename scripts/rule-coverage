@@ -9,7 +9,6 @@
 - the rows of the test suite's FINDINGS table are in alphabetical order of their rule;
 - every unit in cadrev.units.UNITS is read by a row of the test suite's UNITS table: a quote whose
   value the quote reader assigns that unit;
-- the tests import no cadrev module but the CLI entry point, cadrev.cli.
 - the tests edit a fixture (a module constant such as MODEL, or a file's read_text()) only through
   swap, which fails when the text it replaces is absent, so an edit never leaves a test vacuous.
 
@@ -373,27 +372,6 @@ def unsorted_findings() -> list[str]:
     return []
 
 
-def stray_imports() -> list[str]:
-    """Each import in the tests of a cadrev module other than cadrev.cli."""
-    out = []
-    for path in sorted(TESTS.rglob("*.py")):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf8"))):
-            if isinstance(node, ast.Import):
-                modules = [a.name for a in node.names]
-            elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
-                modules = (
-                    [f"{node.module}.{a.name}" for a in node.names]
-                    if node.module == "cadrev"
-                    else [node.module]
-                )
-            else:
-                continue
-            for module in modules:
-                if (module == "cadrev" or module.startswith("cadrev.")) and module != "cadrev.cli":
-                    out.append(f"{path.relative_to(REPO)}:{node.lineno}: imports {module}")
-    return out
-
-
 def fixture(node: ast.AST) -> bool:
     """Whether node is fixture text: a module constant (MODEL, _SLOT), a file's read_text(), or an
     edit of either."""
@@ -471,7 +449,6 @@ def main() -> int:
     ]
     problems += unsorted_findings()
     problems += [f"unit {u} is read by no row of the tests' UNITS table" for u in unread_units()]
-    problems += [f"{where}; tests import only cadrev.cli" for where in stray_imports()]
     problems += [
         f"{where}; use swap, which fails when the text it replaces is absent"
         for where in unchecked_edits()
