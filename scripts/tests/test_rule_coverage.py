@@ -137,20 +137,6 @@ def test_unit_no_units_row_reads_fails(tmp_path):
     assert result.stdout.splitlines()[1:] == ["unit cm is read by no row of the tests' UNITS table"]
 
 
-def test_test_importing_a_cadrev_module_but_the_cli_fails(tmp_path):
-    tests = TESTS.replace(
-        "from cadrev import cli", "from cadrev import cli, sources\nimport cadrev.units"
-    )
-    result = check(repo(tmp_path, tests=tests))
-    assert result.returncode == 1
-    assert result.stdout.splitlines()[1:] == [
-        "skills/cad-reverse-engineer/tool/tests/test_cadrev.py:1: imports cadrev.sources;"
-        " tests import only cadrev.cli",
-        "skills/cad-reverse-engineer/tool/tests/test_cadrev.py:2: imports cadrev.units;"
-        " tests import only cadrev.cli",
-    ]
-
-
 FIXTURE_EDITS = """
 
 MODEL = "def build(p):\\n"

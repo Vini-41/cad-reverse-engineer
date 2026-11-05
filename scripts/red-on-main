@@ -18,11 +18,12 @@
 # pytest's -k rejects a row id holding * (19*12.5 mm), so name the function that reads the table
 # there; LIST=1 then names each row red or green.
 #
-# BASE is the commit before the fix: by default the upstream branch (origin/main), so unpushed
-# commits on main count as the fix. A branch with no upstream, such as a worktree's, compares
-# against the commit its reflog says it was created at, so a branch cut from an integration branch
-# counts only its own commits as the fix; without that record, or once the branch has merged a
-# later main or been rebased, it compares against its merge-base with main. Set BASE=<ref> to
+# BASE is the commit before the fix. On main it is the upstream (origin/main), so unpushed
+# commits on main count as the fix. Any other branch, pushed or not, compares against the commit
+# its reflog says it was created at, as its PR's run compares against the branch it merges into,
+# so a branch cut from an integration branch counts only its own commits as the fix; without that
+# record, or once the branch has merged a later main or been rebased, it compares against its
+# merge-base with main. Set BASE=<ref> to
 # compare against another commit.
 set -euo pipefail
 
@@ -37,7 +38,8 @@ if [ -n "${BASE:-}" ]; then
     echo "BASE $BASE is not in this clone (a force-push may have dropped it), so there is no fix to compare" >&2
     exit 3
   fi
-elif base=$(git -C "$repo" rev-parse -q --verify "@{upstream}" 2>/dev/null); then
+elif [ "$(git -C "$repo" symbolic-ref -q --short HEAD || true)" = main ] &&
+  base=$(git -C "$repo" rev-parse -q --verify "@{upstream}" 2>/dev/null); then
   label=upstream
 else
   label="merge-base with main"

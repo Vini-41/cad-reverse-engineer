@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+"""Fail when a test imports a cadrev module other than the CLI entry point, cadrev.cli: the tests
+drive the tool as an agent does, so its modules stay free to change. Prints file:line: imports
+<module>; tests import only cadrev.cli for each and exits 1 if there is one. Reads only the tests'
+syntax, so it runs in seconds, in scripts/check --lint.
+
+    scripts/check-cli-imports [repo root, default this script's repo]
+"""
+
+import ast
+import sys
+from pathlib import Path
+
+TESTS = "skills/cad-reverse-engineer/tool/tests"
+
+
+def stray_imports(repo: Path) -> list[str]:
+    """Each import in the tests of a cadrev module other than cadrev.cli."""
+    out = []
+    for path in sorted((repo / TESTS).rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf8"))):
+            if isinstance(node, ast.Import):
+                modules = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                modules = (
+                    [f"{node.module}.{a.name}" for a in node.names]
+                    if node.module == "cadrev"
+                    else [node.module]
+                )
+            else:
+                continue
+            for module in modules:
+                if (module == "cadrev" or module.startswith("cadrev.")) and module != "cadrev.cli":
+                    out.append(f"{path.relative_to(repo)}:{node.lineno}: imports {module}")
+    return out
+
+
+def main() -> int:
+    repo = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[1]
+    problems = stray_imports(repo)
+    for where in problems:
+        print(f"{where}; tests import only cadrev.cli")
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

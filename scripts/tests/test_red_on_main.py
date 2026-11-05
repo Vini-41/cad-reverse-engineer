@@ -180,3 +180,17 @@ def test_guard_branch_that_merged_main_since_it_was_created_compares_against_mai
     result = red_on_main(root, base=None)
     assert result.returncode == 3, result.stdout + result.stderr
     assert "no test function is new or changed since merge-base with main" in result.stderr
+
+
+def test_pushed_branch_compares_against_where_it_was_created_not_its_upstream(tmp_path):
+    # Its upstream holds the fix, as a branch's does once pushed; a PR's run compares against
+    # the branch it merges into, so a test red there is red here.
+    root = repo(tmp_path, dependencies='"pytest"')
+    git(root, "branch", "-f", "main", "HEAD~1")
+    git(root, "switch", "-qc", "ticket", "main")
+    git(root, "cherry-pick", "master")
+    git(root, "branch", "-u", "master")
+    result = red_on_main(root, base=None)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "1 red (holes), 0 green" in result.stdout
+    assert "the commit ticket was created at" in result.stdout
