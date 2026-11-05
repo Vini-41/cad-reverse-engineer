@@ -9734,7 +9734,9 @@ def _tube():
     [Pos(10, 0, 0) * Box(6, 8, 8), Pos(10, 0, 18) * Box(6, 8, 8)],
     ids=["window", "notch at an end"],
 )
-def test_shape_check_finds_the_distance_where_a_cylinder_face_has_a_hole(proj_dir, tmp_path, cut):
+def test_guard_shape_check_finds_the_distance_where_a_cylinder_face_has_a_hole(
+    proj_dir, tmp_path, cut
+):
     # The cut's edges lie inside the outer face's range of angle and height, where it has no
     # surface, so its points nearest by angle and height bound nothing there.
     source = shape_checked(proj_dir, tmp_path, _tube() - cut, _TUBE, stl=False, at=_TUBE_AT)
