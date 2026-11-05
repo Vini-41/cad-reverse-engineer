@@ -9643,6 +9643,62 @@ def test_shape_check_against_an_stl_computes_few_points_distances_in_occ(
     assert len(computed) < 1500
 
 
+# A link built from its released STL's own triangles, as a model that imports a mesh is: the part
+# and the body agree to rounding, so no point's distance bound falls below the largest distance.
+_FACETED = """\
+from build123d import *
+
+
+def build(p):
+    (link,) = Mesher().read({path!r})
+    return {{
+        "parts": {{"link": link}},
+        "datums": {{
+            "link.a": (-p.pitch / 2, p.link_W / 2, 0), "link.b": (p.pitch / 2, p.link_W / 2, 0),
+            "link.e": (-p.link_L / 2, 0, 0), "link.f": (p.link_L / 2, 0, 0),
+            "link.g": (0, p.link_W / 2, 0),
+        }},
+        "assembly": {{"link_1": ("link", Location())}},
+    }}
+"""
+
+
+# The link with no holes, a box: each of its faces a rectangle its STL splits into two triangles.
+# Its datums a and b lie on its face at +Y, a pitch apart.
+_BOX = swap(
+    swap(
+        _FACE_DATUMS,
+        "    link -= Pos(-p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2, p.link_H)\n"
+        "    link -= Pos(p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2, p.link_H)\n",
+        "",
+    ),
+    '"link.a": (-p.pitch / 2, 0, 0), "link.b": (p.pitch / 2, 0, 0)',
+    '"link.a": (-p.pitch / 2, p.link_W / 2, 0), "link.b": (p.pitch / 2, p.link_W / 2, 0)',
+)
+
+
+@pytest.mark.parametrize(
+    "body, model",
+    [(link_body, None), (lambda: Box(40, 5, 8), _BOX)],
+    ids=["triangles", "flat faces bounded by lines"],
+)
+def test_shape_check_of_a_part_matching_its_stl_computes_no_distance_in_occ(
+    proj_dir, tmp_path, monkeypatch, body, model
+):
+    source = shape_checked(proj_dir, tmp_path, body())
+    write(proj_dir, "model.py", model or _FACETED.format(path=str(source)))
+    computed = []
+    distance_to = Compound.distance_to
+    monkeypatch.setattr(
+        Compound, "distance_to", lambda self, other: computed.append(1) or distance_to(self, other)
+    )
+    result = _shape_result(verify(proj_dir)[1])
+    # A point's distance to flat faces bounded by lines is its height over the face it lies over,
+    # or its distance to the nearest line: numpy finds either exactly.
+    assert result["ok"] and result["shape"]["distance"] < 1e-9
+    assert computed == []
+
+
 def _stl_solid(path: Path):
     """The STL at path as cadrev reads one: its triangles sewn into one closed solid."""
     from build123d import Solid
@@ -9726,6 +9782,15 @@ SHAPE_BODIES = {
     # Flat triangles, an STL's sag mid-facet the largest.
     "faceted holes": _Body(link_body, link_body),
     "faceted fillets": _Body(_rounded_box, _rounded_box, _ROUNDED),
+    # Flat faces bounded by lines, a notch across the top making the body concave: a point over
+    # one face lies nearer another's line. Points along the notch tie: x and z only.
+    "notch in a flat body": _Body(
+        lambda: Box(40, 5, 8),
+        lambda: Box(40, 5, 8) - Pos(0, 0, 4) * Box(6, 8, 4),
+        _BOX,
+        False,
+        shared=slice(0, 3, 2),
+    ),
     # Plane faces with holes and cylinder faces whole.
     "chamfered": _Body(
         link_body, lambda: chamfer(link_body().edges().filter_by(Axis.Z), 0.05), stl=False

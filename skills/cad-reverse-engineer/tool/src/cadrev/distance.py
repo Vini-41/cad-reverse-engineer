@@ -1,9 +1,11 @@
 """How far apart two shapes' surfaces lie, as a shape check evaluates it: the largest distance from
-a sample point on either surface to the other, as OCC computes it. A mesh body has hundreds of
-thousands of sample points, almost all far closer to the other surface than the largest distance,
-so numpy first bounds each point's distance from above, and OCC computes the distance of only the
-points whose bound reaches the largest distance yet found. The result is the one computing every
-point's distance gives, to the bit."""
+a sample point on either surface to the other. A mesh body has hundreds of thousands of sample
+points. A point's distance to a flat surface, whose faces are all plane faces bounded by lines
+(an STL body's triangles, or faces merged from them), is its distance to the nearest of the
+triangles those faces are exactly made of, which numpy computes. To any other surface OCC computes
+it, and since almost every point lies far closer than the largest distance, numpy first bounds
+each point's distance from above, and OCC computes the distance of only the points whose bound
+reaches the largest distance yet found, giving the result computing every point's would."""
 
 from __future__ import annotations
 
@@ -58,11 +60,23 @@ def surface_distance(a, b, samples: int) -> tuple[float, tuple[float, float, flo
     boxes = [s.bounding_box() for s in (a, b)]
     size = max(abs(v) for box in boxes for corner in (box.min, box.max) for v in corner)
     slack = _ROUNDING * max(1.0, size)
-    bounds = np.concatenate([_bound(surfaces[k].points, surfaces[1 - k], slack) for k in (0, 1)])
     others = [Compound(s.shape.faces()) for s in reversed(surfaces)]
     first = len(surfaces[0].points)
     worst: tuple[float, tuple[float, float, float]] = (0.0, (0.0, 0.0, 0.0))
     found = -1
+    bounds = []
+    for k, (points, other) in enumerate(zip((s.points for s in surfaces), reversed(surfaces))):
+        if other.mesh is None:
+            bounds.append(_bound(points, other, slack))
+            continue
+        # Every point's distance, exactly; a grid point off its own triangle has none.
+        gaps = np.where(surfaces[k].on, _triangles_bound(points, other.mesh), -np.inf)
+        if len(gaps) and gaps.max() > worst[0]:
+            n = int(np.argmax(gaps))
+            x, y, z = (float(v) for v in points[n])
+            worst, found = (float(gaps[n]), (x, y, z)), n + k * first
+        bounds.append(np.full(len(points), -np.inf))
+    bounds = np.concatenate(bounds)
     # From the highest bound down, until no bound left can reach the largest distance found.
     for n in np.argsort(-bounds, kind="stable"):
         if bounds[n] < worst[0]:
@@ -139,16 +153,38 @@ class _Surface:
         self._adapted = [_OCP["BRepAdaptor"].BRepAdaptor_Surface(f.wrapped) for f in self.faces]
         self.kinds = [a.GetType() for a in self._adapted]
         self.triangles = [_triangle(f, kind) for f, kind in zip(self.faces, self.kinds)]
-        self.points, self._places, self._given = self._sample()
+        self.mesh = self._mesh()
+        self.points, self._places, self._given, self.on = self._sample()
         # How far the faces' bounds may stray from where OCC puts them: a vertex or an edge
         # holds within its tolerance.
         self.tolerance = (
             _OCP["ShapeAnalysis"].ShapeAnalysis_ShapeTolerance().Tolerance(shape.wrapped, 1)
         )
 
+    def _mesh(self) -> np.ndarray | None:
+        """The triangles (n × 3 × 3) the surface is exactly made of, where it is flat: every face a
+        plane face bounded by lines, as a mesh's triangles and the faces merged from them are,
+        each split along its own corners. None for any other surface."""
+        out = []
+        for face, kind, corners in zip(self.faces, self.kinds, self.triangles):
+            if corners is not None:
+                out.append(corners[None])
+                continue
+            lines = (
+                _OCP["BRepAdaptor"].BRepAdaptor_Curve(e).GetType() for e in _edges(face.wrapped)
+            )
+            if kind != _PLANE or any(k != _LINE for k in lines):
+                return None
+            # A flat face's triangulation has only its corners as vertices, so it covers the face
+            # exactly, whatever the tolerance.
+            vertices, triangles = face.tessellate(1.0)
+            out.append(np.array([tuple(v) for v in vertices])[np.array(triangles)])
+        return np.concatenate(out) if out else None
+
     def _sample(self):
         """The sample points, each with its place: (face, i, j) for a triangle's grid point,
-        (-1, n) for the n-th point OCC gave, (-2, edge, i) for a line's i-th point."""
+        (-1, n) for the n-th point OCC gave, (-2, edge, i) for a line's i-th point; and whether
+        each lies on its face as numpy finds it (point, which asks OCC)."""
         s = self.samples
         steps = np.arange(s + 1) / s
         grid = np.array([(u, v) for u in steps for v in steps])
@@ -186,14 +222,16 @@ class _Surface:
                 blocks.append(np.array([tuple(p) for p in along]))
             triangles.append(np.full((len(blocks[-1]), 3, 3), np.nan))
         if not blocks:
-            return np.zeros((0, 3)), [], given
+            return np.zeros((0, 3)), [], given, np.zeros(0, bool)
         points, corners = np.concatenate(blocks), np.concatenate(triangles)
         # A triangle's grid point that numpy finds off it is off it; OCC tests the rest (point).
         gridded = ~np.isnan(corners[:, 0, 0])
-        off = np.zeros(len(points), bool)
+        own = np.zeros(len(points))
         near = corners[gridded]
-        off[gridded] = _triangle_distance(points[gridded], *near.transpose(1, 0, 2)) > _NEAR_FACE
-        return points[~off], [p for p, o in zip(places, off) if not o], given
+        own[gridded] = _triangle_distance(points[gridded], *near.transpose(1, 0, 2))
+        off = own > _NEAR_FACE
+        places = [p for p, o in zip(places, off) if not o]
+        return points[~off], places, given, own[~off] <= _ON_FACE
 
     def point(self, n: int):
         """The n-th sample point as OCC gives it, or None where it falls off its face."""
