@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """Wait for every CI run on a pushed commit and exit with their result: 0 when each succeeds, 1 when
-any fails or none starts, and 2 when the argument names no commit. A PR's head commit has a push run
-and a pull_request run, which compare against different bases, so each is watched and printed with
-its event. A failed run's log is read for what failed in each job: scripts/check's failed steps and
-pytest's FAILED lines and counts.
+any fails or none starts, and 2 when the argument names no commit or the output is piped. A PR's
+head commit has a push run and a pull_request run, which compare against different bases, so each
+is watched and printed with its event. A failed run's log is read for what failed in each job:
+scripts/check's failed steps and pytest's FAILED lines and counts.
 
 The runs are found by the commit's full SHA (gh run list --commit matches no short one), never by
 which run is newest; after each is watched the list is read again, for a run that started late.
 When no run starts within the wait, it reads where the current branch is on GitHub: at the commit,
 the push event was lost, and it names the command that reruns CI there.
+
+Its output may go to the terminal or a file, as a background run's does, but not to a pipe: a pipe
+reports the last command's exit code, so a failed run read through `| tail` looked green.
 
     scripts/ci-wait [commit, default HEAD]
 
@@ -18,6 +21,7 @@ GH names the gh executable (default gh); CI_WAIT_SECONDS how long to look for th
 
 import os
 import re
+import stat
 import subprocess
 import sys
 import time
@@ -91,6 +95,9 @@ def main() -> int:
     if arg in ("-h", "--help"):
         print(__doc__)
         return 0
+    if stat.S_ISFIFO(os.fstat(sys.stdout.fileno()).st_mode):
+        print("ci-wait's output is piped: run it unpiped and read its exit code", file=sys.stderr)
+        return 2
     # --end-of-options, since rev-parse echoes an option it does not know as if it were a commit
     found = subprocess.run(
         ["git", "rev-parse", "--verify", "-q", "--end-of-options", f"{arg}^{{commit}}"],

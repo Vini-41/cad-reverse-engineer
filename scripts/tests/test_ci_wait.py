@@ -58,9 +58,20 @@ def setup(
 
 
 def run(repo: Path, env: dict, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(SCRIPT), *args], cwd=repo, env=env, capture_output=True, text=True
-    )
+    """ci-wait's result, its stdout written to a file as a background run's is, since a pipe is
+    refused."""
+    with open(repo.parent / "stdout", "w+") as stdout:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), *args],
+            cwd=repo,
+            env=env,
+            stdout=stdout,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        stdout.seek(0)
+        result.stdout = stdout.read()
+    return result
 
 
 def test_ci_wait_finds_the_run_by_the_full_sha_of_a_short_one(tmp_path):
@@ -150,3 +161,18 @@ def test_ci_wait_exits_2_naming_an_argument_that_is_no_commit_before_asking_gith
         result = run(repo, {**env, "GH": "false"}, arg)
         assert result.returncode == 2
         assert result.stderr == f"{arg} names no commit\n"
+
+
+def test_ci_wait_piped_exits_2_saying_to_run_it_unpiped_before_asking_github(tmp_path):
+    # A pipe hides ci-wait's exit code behind the last command's, so a failed run reads as green.
+    repo, _, env = setup(tmp_path, runs=True, conclusion="failure")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT)],
+        cwd=repo,
+        env={**env, "GH": "false"},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr == "ci-wait's output is piped: run it unpiped and read its exit code\n"
