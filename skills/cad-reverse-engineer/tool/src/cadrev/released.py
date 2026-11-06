@@ -278,11 +278,13 @@ def diameters_at(shape, point: tuple[float, float, float], tol: float) -> list[f
     face, several for one on the edge where two meet."""
     from build123d import GeomType, Vector
 
+    adaptor = importlib.import_module("OCP.BRepAdaptor").BRepAdaptor_Surface
     at = Vector(*point)
     found: list[float] = []
     for face in shape.faces():
         if face.geom_type == GeomType.CYLINDER and face.distance_to(at) <= tol:
-            diameter = 2 * face.radius
+            # The adaptor reads the cylinder under a trim, where build123d's face.radius is None.
+            diameter = 2 * adaptor(face.wrapped).Cylinder().Radius()
             if all(abs(diameter - d) > tol for d in found):
                 found.append(diameter)
     return sorted(found)

@@ -18,6 +18,7 @@ from typing import NamedTuple
 import pytest
 import yaml
 from build123d import (
+    Align,
     Axis,
     Box,
     Compound,
@@ -9504,6 +9505,82 @@ def test_diameter_check_at_no_datum_of_a_part_is_check_config(proj_dir, tmp_path
     assert [f["message"] for f in report["findings"] if f["rule"] == "check-config"] == [
         f"check bore: {at} is not a datum of a part"
     ]
+
+
+# A diameter on a trimmed cylinder (#130): a STEP from another CAD tool can wrap a cylindrical
+# face's surface in a rectangular trim, where build123d reads the face's radius as None. The seat
+# is a radius-5, height-2 cylinder, whole or half, registered as source seat_step and imported as
+# part seat, its datum wall on its cylindrical face.
+
+
+def _seated(root: Path, tmp_path: Path, kind: str) -> dict:
+    """Write the seat (kind full, half, or trimmed: a half whose cylindrical face the file wraps
+    in a RECTANGULAR_TRIMMED_SURFACE), check part seat's diameter at seat.wall against the callout
+    "Ø 10" and probe seat_step's at seat_step.wall. Returns the check's report."""
+    path = tmp_path / "seat.step"
+    arc = 360 if kind == "full" else 180
+    seat = Cylinder(5, 2, arc_size=arc, align=(Align.NONE, Align.NONE, Align.CENTER))
+    export_step(seat, str(path))
+    if kind == "trimmed":
+        text = path.read_text()
+        (surface,) = re.findall(r"#(\d+) = CYLINDRICAL_SURFACE\(", text)
+        trim = max(int(n) for n in re.findall(r"#(\d+) =", text)) + 1
+        text = re.sub(rf"(ADVANCED_FACE\('[^']*',\([^)]*\),)#{surface},", rf"\g<1>#{trim},", text)
+        entity = f"#{trim} = RECTANGULAR_TRIMMED_SURFACE('',#{surface},0.,{math.pi},0.,2.,.T.,.T.);"
+        path.write_text(text.replace("ENDSEC;\nEND-ISO", f"{entity}\nENDSEC;\nEND-ISO", 1))
+    register = ["source", str(root), str(path), "--id", "seat_step", "--kind", "geometry"]
+    assert cli.main([*register, "--citation", "Doe 2026, seat.step"]) == 0
+    model = swap(MODEL, '"parts": {"link": link}', '"parts": {"link": link, "seat": SEAT}')
+    model = swap(
+        model, "(p.pitch / 2, 0, 0)}", '(p.pitch / 2, 0, 0), "seat.wall": (0, p.link_W, 0)}'
+    )
+    model = swap(model, '("link", Location())}', '("link", Location()), "seat_1": SEAT_AT}')
+    imported = f"import_step({str(root / 'sources' / path.name)!r})"
+    write(
+        root,
+        "model.py",
+        swap(swap(model, "SEAT_AT", '("seat", Pos(0, p.link_L, 0))'), "SEAT", imported),
+    )
+    add_quote(root, tmp_path, "The seat is Ø 10.", "Ø 10", {"d": 10})
+    check = {"id": "seat", "kind": "diameter", "at": "seat.wall", "evidence": "N1", "key": "d"}
+    edit(root, "checks.yaml", lambda d: d["checks"].append(check))
+    probe = {"id": "P-seat", "source": "seat_step", "locator": "the released seat"}
+    probe |= {"probe": "diameter", "at": "seat_step.wall", "values": {"d": 10}}
+    probe |= {"scope": "context", "reason": "restates N1"}
+    skip = {"source": "seat_step", "body": "seat_step", "reason": "the seat, probed only"}
+    edit(
+        root,
+        "evidence.yaml",
+        lambda d: (
+            d.setdefault("datums", {}).update({"seat_step.wall": [0, 5, 0]}),
+            d["evidence"].append(probe),
+            d["skipped"].append(skip),
+        ),
+    )
+    return verify(root)[1]
+
+
+def _seat_check(report: dict) -> list[tuple[bool, str]]:
+    return [(r["ok"], r["measured"]) for r in report["checks"] if r["id"] == "seat"]
+
+
+def _seat_probe(report: dict) -> list[tuple[bool, float]]:
+    return [(q["ok"], q["value"]) for q in report["probes"] if q["probe"] == "diameter"]
+
+
+def test_diameter_check_of_a_trimmed_cylinder_reads_the_cylinder_under_the_trim(proj_dir, tmp_path):
+    assert _seat_check(_seated(proj_dir, tmp_path, "trimmed")) == [(True, "10 at seat.wall")]
+
+
+def test_diameter_probe_of_a_trimmed_cylinder_reads_the_cylinder_under_the_trim(proj_dir, tmp_path):
+    assert _seat_probe(_seated(proj_dir, tmp_path, "trimmed")) == [(True, pytest.approx(10))]
+
+
+@pytest.mark.parametrize("kind", ["full", "half"])
+def test_guard_diameter_of_an_untrimmed_cylinder_reads_its_radius(proj_dir, tmp_path, kind):
+    report = _seated(proj_dir, tmp_path, kind)
+    assert _seat_check(report) == [(True, "10 at seat.wall")]
+    assert _seat_probe(report) == [(True, pytest.approx(10))]
 
 
 # An STL: the released link as a mesh of flat triangles, which a probe reads as it reads a STEP.
