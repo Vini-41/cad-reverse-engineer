@@ -3,7 +3,7 @@
 The prompt a dogfood run's subagent gets, word for word, so every run is briefed and reports alike whatever the object. Each object has one entry under [Objects](#objects) giving its fields, and one run log, `<object>-run-log.md` beside this file. Before the run:
 
 1. Check out the commit under test as a detached worktree outside the repo: `git worktree add --detach <checkout> <sha>`. The run reads the skill from there.
-2. Create the empty project directory `~/Documents/Projects/cadrev/dogfood/run-<n>`, numbered one past the highest run in any `*-run-log.md` here: run numbers are shared across objects.
+2. Create the empty project directory `~/Documents/Projects/cadrev/dogfood/run-<n>`, numbered one past the highest `run-<n>` already in that directory: run numbers are shared across objects, and a log can lag its runs.
 3. Fill `<checkout>`, `<n>` and the object's fields (`<goal>`, `<sources>`, `<report items>`) below, and dispatch a fresh general-purpose subagent with the text between the rules. An object's fields come from its issue: its goal names every part the issue's acceptance criteria name, and its report items hold one line per criterion, asking what in the project meets it, so a run that misses a criterion reports the miss.
 
 An object's sources that no example holds yet are downloaded to `~/Documents/Projects/cadrev/<object>-sources`, and the object's `sources` field points there. Publisher pages often answer a script with a bot check. Open-access routes that serve files to scripts:
@@ -11,7 +11,7 @@ An object's sources that no example holds yet are downloaded to `~/Documents/Pro
 - A paper in PubMed Central: find its PMC id with Europe PMC's search API (`https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=DOI:<doi>&format=json`), then fetch `https://pmc-oa-opendata.s3.amazonaws.com/PMC<id>.1/PMC<id>.1.pdf`.
 - A Mendeley Data dataset: `https://data.mendeley.com/public-api/datasets/<id>/files?folder_id=root&version=<v>` lists each file's `download_url` and `sha256_hash`; check each download against its hash. An empty list means the files sit in folders: `https://data.mendeley.com/public-api/datasets/<id>/folders/<v>` lists each folder's `id`, to pass as `folder_id`.
 
-After the run, its report becomes the run's section in the object's log, and the checkout worktree is removed. An object's first run starts its log, headed as [legclaw-run-log.md](legclaw-run-log.md) is: the object, the spec and issue behind its runs, and how each run was briefed.
+After the run, its report becomes the run's section in the object's log, each trip it names is reproduced and filed as [repro-brief.md](repro-brief.md) says, and then the checkout worktree is removed. An object's first run starts its log, headed as [legclaw-run-log.md](legclaw-run-log.md) is: the object, the spec and issue behind its runs, and how each run was briefed.
 
 A run that ends VERIFIED PENDING REVIEW, or VERIFIED, becomes `examples/<object>`:
 
