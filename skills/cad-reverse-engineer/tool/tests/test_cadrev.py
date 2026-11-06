@@ -9568,16 +9568,16 @@ def _seat_probe(report: dict) -> list[tuple[bool, float]]:
     return [(q["ok"], q["value"]) for q in report["probes"] if q["probe"] == "diameter"]
 
 
-def test_diameter_check_of_a_trimmed_cylinder_reads_the_cylinder_under_the_trim(proj_dir, tmp_path):
+def test_diameter_check_of_a_trimmed_cylinder_takes_the_radius_under_the_trim(proj_dir, tmp_path):
     assert _seat_check(_seated(proj_dir, tmp_path, "trimmed")) == [(True, "10 at seat.wall")]
 
 
-def test_diameter_probe_of_a_trimmed_cylinder_reads_the_cylinder_under_the_trim(proj_dir, tmp_path):
+def test_diameter_probe_of_a_trimmed_cylinder_takes_the_radius_under_the_trim(proj_dir, tmp_path):
     assert _seat_probe(_seated(proj_dir, tmp_path, "trimmed")) == [(True, pytest.approx(10))]
 
 
 @pytest.mark.parametrize("kind", ["full", "half"])
-def test_guard_diameter_of_an_untrimmed_cylinder_reads_its_radius(proj_dir, tmp_path, kind):
+def test_guard_diameter_of_an_untrimmed_cylinder_takes_its_radius(proj_dir, tmp_path, kind):
     report = _seated(proj_dir, tmp_path, kind)
     assert _seat_check(report) == [(True, "10 at seat.wall")]
     assert _seat_probe(report) == [(True, pytest.approx(10))]
