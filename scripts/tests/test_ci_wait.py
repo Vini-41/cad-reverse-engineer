@@ -22,6 +22,10 @@ elif args[:2] == ["run", "watch"]:
     sys.exit(0 if runs[args[2]]["conclusion"] == "success" else 1)
 elif args[:2] == ["run", "view"] and "--log-failed" in args:
     print(runs[args[2]].get("log", ""))
+elif args[:2] == ["run", "view"] and runs[args[2]].get("lag"):
+    runs[args[2]]["lag"] -= 1
+    json.dump(state, open(os.environ["FAKE_GH_STATE"], "w"))
+    print("")
 elif args[:2] == ["run", "view"]:
     print(runs[args[2]]["conclusion"])
 else:
@@ -78,6 +82,17 @@ def test_ci_wait_finds_the_run_by_the_full_sha_of_a_short_one(tmp_path):
     repo, sha, env = setup(tmp_path, runs=True)
     result = run(repo, env, sha[:7])
     assert result.returncode == 0, result.stderr
+    assert result.stdout == f"CI success on {sha} (push run 77)\n"
+
+
+def test_ci_wait_reads_a_conclusion_again_when_github_has_none_yet_for_an_ended_run(tmp_path):
+    # Run 42523266108's push run read "" right after watch ended, then success (PR #161).
+    repo, sha, env = setup(tmp_path, runs=True)
+    state = json.loads(Path(env["FAKE_GH_STATE"]).read_text())
+    state["runs"][sha][0]["lag"] = 2
+    Path(env["FAKE_GH_STATE"]).write_text(json.dumps(state))
+    result = run(repo, {**env, "CI_WAIT_POLL": "0"})
+    assert result.returncode == 0, result.stdout
     assert result.stdout == f"CI success on {sha} (push run 77)\n"
 
 
