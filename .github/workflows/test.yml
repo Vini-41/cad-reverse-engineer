@@ -12,7 +12,7 @@ jobs:
         python: ["3.10", "3.12", "3.13"]
     defaults:
       run:
-        working-directory: skills/cad-reverse-engineer/tool
+        working-directory: plugin/skills/cad-reverse-engineer/tool
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,7 +20,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --locked -p ${{ matrix.python }} --extra test
       - run: npm install -g @anthropic-ai/claude-code  # for scripts/check's plugin validation
-      - run: ../../../scripts/check
+      - run: ../../../../scripts/check
         env:
           # A PR's checkout is its merge commit, whose first parent is the base it merges into; a
           # rerun by hand compares against the commit's own parent.

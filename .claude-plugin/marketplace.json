@@ -10,7 +10,7 @@
     {
       "name": "cad-reverse-engineer",
       "description": "Reverse-engineer CAD from papers: a parametric build123d model where every dimension traces to a quoted, hashed source and is checked against the built geometry.",
-      "source": "./",
+      "source": "./plugin",
       "category": "development"
     }
   ]

@@ -37,13 +37,30 @@ Here VERIFIED means that every number is accounted for and the geometry realises
 
 Then ask Claude something like *"reverse-engineer the gripper in this paper as CAD"*, or invoke `/cad-reverse-engineer`. The skill guides Claude through seven steps: scope, sources, ledger, parameters, model, checks and hand-over. Each step ends on a criterion the CLI can confirm.
 
+### As a Codex plugin
+
+```
+codex plugin marketplace add Vini-41/cad-reverse-engineer
+codex plugin add cad-reverse-engineer@cad-reverse-engineer
+```
+
+### As a skill for any agent
+
+```
+npx skills add Vini-41/cad-reverse-engineer
+```
+
+### Requirements
+
+The plugin ships from [`plugin/`](plugin): the skill, its CLI's source and lockfile, and nothing else of this repo. The CLI runs locally and needs [uv](https://docs.astral.sh/uv/), with Python 3.10 to 3.13. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute), at the versions in the lockfile. Under Codex's default sandbox, which blocks network access, allow network for that first run.
+
 ### As a standalone CLI
 
 The CLI requires [uv](https://docs.astral.sh/uv/).
 
 ```bash
 git clone https://github.com/Vini-41/cad-reverse-engineer
-alias cadrev="$PWD/cad-reverse-engineer/skills/cad-reverse-engineer/cadrev"
+alias cadrev="$PWD/cad-reverse-engineer/plugin/skills/cad-reverse-engineer/cadrev"
 cadrev init my-project
 cadrev source my-project paper.pdf --id paper --kind paper --citation "Doe et al. 2026"
 cadrev text my-project paper --page 4      # the exact text quotes are matched against
@@ -73,20 +90,26 @@ The example covers each kind of evidence: Table S2 envelopes from the DOCX suppl
 ## Files
 
 ```
-.claude-plugin/          plugin and marketplace manifests
-skills/cad-reverse-engineer/
-  SKILL.md               the workflow Claude follows
+.claude-plugin/          the Claude Code marketplace
+.agents/plugins/         the Codex marketplace
+skills.sh.json           where npx skills finds the skill
+plugin/                  the plugin, as it installs
+  .claude-plugin/        its Claude Code manifest
+  .codex-plugin/         its Codex manifest
+plugin/skills/cad-reverse-engineer/
+  SKILL.md               the workflow the agent follows
   references/            project file formats; the model contract
   tool/                  the cadrev Python package (build123d, pypdf, PyYAML, matplotlib)
+tests/                   the cadrev tests
 examples/                worked reconstructions
 ```
 
 ## Development
 
 ```bash
-cd skills/cad-reverse-engineer/tool
+cd plugin/skills/cad-reverse-engineer/tool
 uv sync --locked -p 3.12 --extra test
-uv run pytest -q
+uv run pytest -q ../../../../tests
 ```
 
 `scripts/check` runs every CI step locally, and sets this clone's `core.hooksPath` to `.githooks`, whose pre-commit hook ruff-formats staged Python.

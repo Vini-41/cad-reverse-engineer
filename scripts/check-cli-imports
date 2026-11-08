@@ -11,7 +11,7 @@ import ast
 import sys
 from pathlib import Path
 
-TESTS = "skills/cad-reverse-engineer/tool/tests"
+TESTS = "tests"
 
 
 def stray_imports(repo: Path) -> list[str]:

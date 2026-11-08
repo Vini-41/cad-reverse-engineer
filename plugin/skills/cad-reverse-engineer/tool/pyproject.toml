@@ -31,9 +31,3 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cadrev"]
-
-[tool.pyright]
-include = ["src", "tests"]
-exclude = ["src/cadrev/template"]
-venvPath = "."
-venv = ".venv"

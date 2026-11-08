@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "check-kind-branches"
-SRC = "skills/cad-reverse-engineer/tool/src/cadrev"
+SRC = "plugin/skills/cad-reverse-engineer/tool/src/cadrev"
 PROJECT = """
 CHECK_KINDS = {"bbox": CheckKind("length", "length"), "mass": CheckKind("mass", None)}
 OVERLAP_KINDS = ("interference",)

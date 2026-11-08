@@ -1,0 +1,26 @@
+{
+  "name": "cad-reverse-engineer",
+  "version": "0.1.0",
+  "description": "Reverse-engineer CAD from papers: a parametric build123d model where every dimension traces to a quoted, hashed source and is checked against the built geometry.",
+  "author": {
+    "name": "Vini Rezanejad",
+    "url": "https://github.com/Vini-41"
+  },
+  "homepage": "https://github.com/Vini-41/cad-reverse-engineer",
+  "repository": "https://github.com/Vini-41/cad-reverse-engineer",
+  "license": "MIT",
+  "keywords": ["cad", "build123d", "step", "reverse-engineering", "papers", "robotics", "reproducibility"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "CAD Reverse Engineer",
+    "shortDescription": "Auditable CAD from papers",
+    "longDescription": "Rebuild a part, gripper or mechanism from a paper, patent, supplement or datasheet as a parametric build123d model, STEP and MuJoCo, where every number the sources state is a verbatim quote and every stated value is checked against the built geometry. The cadrev CLI runs locally and needs uv; its first run downloads build123d, OCC and MuJoCo from PyPI, so under Codex's default sandbox allow network access for it.",
+    "developerName": "Vini Rezanejad",
+    "category": "Coding",
+    "websiteURL": "https://github.com/Vini-41/cad-reverse-engineer",
+    "defaultPrompt": ["Reverse-engineer the gripper in this paper as CAD"],
+    "brandColor": "#1F4E79",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/icon.png"
+  }
+}

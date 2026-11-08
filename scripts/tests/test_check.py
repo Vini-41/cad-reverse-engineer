@@ -32,7 +32,7 @@ def check(
     """Run the copied check; each stub in failing prints its text and exits 1, each in bodies
     runs its shell body instead, and uv runs uv_run for any command but sync."""
     root = tmp_path / "repo"
-    (root / "skills/cad-reverse-engineer/tool").mkdir(parents=True)
+    (root / "plugin/skills/cad-reverse-engineer/tool").mkdir(parents=True)
     (root / "scripts").mkdir()
     shutil.copy(SCRIPT, root / "scripts/check")
     log = tmp_path / "calls"
@@ -79,7 +79,7 @@ def test_a_failed_step_reprints_the_end_of_its_output_under_its_name(tmp_path):
     block = result.stdout.split(name + "\n")[1].split("failed: ")[0].splitlines()
     rerun = (
         "  rerun alone: "
-        "(cd skills/cad-reverse-engineer/tool && ../../../scripts/check-glossary-words)"
+        "(cd plugin/skills/cad-reverse-engineer/tool && ../../../../scripts/check-glossary-words)"
     )
     assert block == [rerun, *(f"  line {i}" for i in range(11, 31))]
 
@@ -122,9 +122,9 @@ def test_lint_runs_only_the_type_ruff_and_import_steps(tmp_path):
     assert result.returncode == 0
     assert calls == [
         "uv sync --locked --extra test",
-        "uv run pyright",
-        "uv run ruff check ../../..",
-        "uv run ruff format --check ../../..",
+        "uv run pyright -p ../../../../pyrightconfig.json",
+        "uv run ruff check ../../../..",
+        "uv run ruff format --check ../../../..",
         "check-cli-imports ",
     ]
     assert result.stdout.splitlines()[-1] == "all steps passed"

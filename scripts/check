@@ -23,7 +23,7 @@ esac
 repo=$(cd "$(dirname "$0")/.." && pwd)
 # This clone runs the repo's git hooks (.githooks) unless it already uses others.
 [ -n "$(git -C "$repo" config core.hooksPath)" ] || git -C "$repo" config core.hooksPath .githooks
-cd "$repo/skills/cad-reverse-engineer/tool" || exit 2
+cd "$repo/plugin/skills/cad-reverse-engineer/tool" || exit 2
 # The test extra holds pytest, pyright and ruff, which CI installs with the same sync; a new
 # worktree has no environment until this runs.
 uv sync --locked --extra test || { echo "uv sync --locked --extra test failed, so no step ran"; exit 1; }
@@ -39,7 +39,7 @@ trap 'rm -rf "$logs"' EXIT
 step() {
   local name=$1 rerun log
   shift
-  rerun="(cd skills/cad-reverse-engineer/tool && $*)"
+  rerun="(cd plugin/skills/cad-reverse-engineer/tool && $*)"
   if [ "$1" = --rerun ]; then rerun=$2; shift 2; fi
   steps=$((steps + 1))
   log="$logs/$steps"
@@ -73,7 +73,7 @@ example_status() {
 red_on_main_or_notice() {
   local log code=0
   log=$(mktemp)
-  ../../../scripts/red-on-main 2>"$log" || code=$?
+  ../../../../scripts/red-on-main 2>"$log" || code=$?
   cat "$log" >&2
   if [ "$code" -eq 3 ]; then
     echo "::notice title=red-on-main compared nothing::$(tail -n 1 "$log")"
@@ -83,9 +83,10 @@ red_on_main_or_notice() {
   return "$code"
 }
 
+# The marketplace validates, and so does the plugin it ships from plugin/.
 plugin_validate() {
   if command -v claude >/dev/null; then
-    (cd "$repo" && claude plugin validate .)
+    (cd "$repo" && claude plugin validate . && claude plugin validate plugin)
   else
     echo "skipped: no claude CLI on PATH"
   fi
@@ -93,28 +94,28 @@ plugin_validate() {
 
 left_out="$logs/left-out"
 red_count=""
-step "pyright" uv run pyright
-step "ruff check" uv run ruff check ../../..
-step "ruff format" uv run ruff format --check ../../..
-step "the tests import only cadrev.cli" ../../../scripts/check-cli-imports
+step "pyright" uv run pyright -p ../../../../pyrightconfig.json
+step "ruff check" uv run ruff check ../../../..
+step "ruff format" uv run ruff format --check ../../../..
+step "the tests import only cadrev.cli" ../../../../scripts/check-cli-imports
 # --lint stops here, past the steps an edit most often fails.
 if [ "$mode" = full ]; then
-  step "tool tests" uv run pytest -q
-  step "script tests" uv run pytest -q ../../../scripts/tests
-  step "agent-facing docs point only at files that exist" ../../../scripts/check-doc-pointers
+  step "tool tests" uv run pytest -q ../../../../tests
+  step "script tests" uv run pytest -q ../../../../scripts/tests
+  step "agent-facing docs point only at files that exist" ../../../../scripts/check-doc-pointers
   step "every rule is tested raised and not raised, documented and held by a step; tests edit fixtures through swap" \
-    uv run python ../../../scripts/rule-coverage
-  step "the skill and tool source use none of GLOSSARY.md's avoided words" ../../../scripts/check-glossary-words
-  step "the tool source branches on a check or probe kind only in run_checks" ../../../scripts/check-kind-branches
-  step "the branch holds no merge commit, so it rebase-merges" ../../../scripts/check-linear
-  step "plugin manifests validate" --rerun "claude plugin validate ." plugin_validate
+    uv run python ../../../../scripts/rule-coverage
+  step "the skill and tool source use none of GLOSSARY.md's avoided words" ../../../../scripts/check-glossary-words
+  step "the tool source branches on a check or probe kind only in run_checks" ../../../../scripts/check-kind-branches
+  step "the branch holds no merge commit, so it rebase-merges" ../../../../scripts/check-linear
+  step "plugin manifests validate" --rerun "claude plugin validate . && claude plugin validate plugin" plugin_validate
   step "red-on-main: new tests are red holes or green guards" --rerun scripts/red-on-main \
     red_on_main_or_notice
   # Its count, repeated at the end, past the examples' output.
   red_count=$(grep -E '^[0-9]+ red \(holes\), [0-9]+ green$' "$logs/$steps" | tail -n 1)
   # The examples as a clone after committing holds them: tracked and staged files at their staged text.
   # The last line repeats how many edits that left out, so a pass never hides that it checked older text.
-  examples=$(../../../scripts/committed-examples 2>"$left_out")
+  examples=$(../../../../scripts/committed-examples 2>"$left_out")
   code=$?
   cat "$left_out" >&2
   if [ "$code" -eq 0 ]; then

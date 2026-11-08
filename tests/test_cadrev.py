@@ -34,6 +34,9 @@ from build123d import (
 
 from cadrev import cli
 
+REPO = Path(__file__).resolve().parents[1]
+SKILL = REPO / "plugin" / "skills" / "cad-reverse-engineer"
+
 PAPER = """\
 Table 1. Dimensions of key components
 Name L×H×W (mm×mm×mm)
@@ -218,7 +221,7 @@ def test_report_json_carries_status_findings_and_counts(proj_dir):
 
 
 def test_guard_report_json_has_the_keys_project_format_documents(proj_dir):
-    doc = (Path(__file__).parents[2] / "references" / "project-format.md").read_text()
+    doc = (SKILL / "references" / "project-format.md").read_text()
     rows = dict(re.findall(r"^\| `(\w+)` \| (.*) \|$", doc.split("## build/report.json")[1], re.M))
     _, report = verify(proj_dir)
     assert set(report) == set(rows), "report.json and project-format.md list different keys"
@@ -226,7 +229,7 @@ def test_guard_report_json_has_the_keys_project_format_documents(proj_dir):
 
 
 def test_guard_project_format_examples_name_only_gaps_and_params_they_define():
-    doc = (Path(__file__).parents[2] / "references" / "project-format.md").read_text()
+    doc = (SKILL / "references" / "project-format.md").read_text()
 
     def example(heading: str) -> dict:
         section = doc.split(f"\n## {heading}\n")[1]
@@ -255,7 +258,7 @@ def test_every_status_cadrev_check_reports_is_defined_in_project_format(proj_dir
     statuses.add(reported())
     write(proj_dir, "gaps.yaml", {"gaps": []})
     statuses.add(reported())
-    doc = (Path(__file__).parents[2] / "references" / "project-format.md").read_text()
+    doc = (SKILL / "references" / "project-format.md").read_text()
     section = doc.split("\n## Statuses\n")[1].split("\n## ")[0]
     defined = re.findall(r"^\| \*\*([A-Z ]+)\*\* \|", section, re.M)
     assert sorted(defined) == sorted(statuses), (
@@ -3281,7 +3284,7 @@ def test_guard_source_with_coverage_on_raises_no_coverage_off_warning(proj_dir):
     assert findings(proj_dir, "coverage-off") == []
 
 
-EXAMPLE = Path(__file__).parents[4] / "examples" / "legclaw-links"
+EXAMPLE = REPO / "examples" / "legclaw-links"
 
 
 def documented_status() -> tuple[str, int, int, int, int]:

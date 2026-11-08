@@ -4,7 +4,7 @@
 # re-staged: the commit stops and names it, since formatting it would stage those changes too.
 set -euo pipefail
 
-tool="$(cd "$(dirname "$0")/.." && pwd)/skills/cad-reverse-engineer/tool"
+tool="$(cd "$(dirname "$0")/.." && pwd)/plugin/skills/cad-reverse-engineer/tool"
 ruff() { uv run -q --extra test --project "$tool" ruff format --force-exclude "$@"; }
 
 clean=() partial=()
