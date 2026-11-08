@@ -81,7 +81,12 @@ def failures(run: str) -> list[str]:
 def watch(sha: str, run: str, event: str) -> int:
     """Watch run to its end and print its conclusion, and what failed if it failed: 0 on success."""
     watched = subprocess.run([GH, "run", "watch", run, "--exit-status"], capture_output=True)
-    conclusion = out(GH, "run", "view", run, "--json", "conclusion", "--jq", ".conclusion")
+    # GitHub can report a run that watch saw end with no conclusion yet; read it again.
+    for _ in range(10):
+        conclusion = out(GH, "run", "view", run, "--json", "conclusion", "--jq", ".conclusion")
+        if conclusion:
+            break
+        time.sleep(float(os.environ.get("CI_WAIT_POLL", 6)))
     print(f"CI {conclusion} on {sha} ({event} run {run})")
     if watched.returncode == 0 and conclusion == "success":
         return 0
