@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "check-cli-imports"
-TESTS = "skills/cad-reverse-engineer/tool/tests"
+TESTS = "tests"
 
 
 def check(tmp_path: Path, text: str) -> subprocess.CompletedProcess[str]:

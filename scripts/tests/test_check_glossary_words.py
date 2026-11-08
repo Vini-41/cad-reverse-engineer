@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "check-glossary-words"
-SKILL = "skills/cad-reverse-engineer"
+SKILL = "plugin/skills/cad-reverse-engineer"
 GLOSSARY = """# Glossary
 
 **Datum**:
@@ -62,7 +62,7 @@ def test_guard_qualified_common_or_partial_words_and_other_files_pass(tmp_path):
         tmp_path,
         {
             f"{SKILL}/SKILL.md": "Copy the quote; the input joint turns; welding.\n",
-            f"{SKILL}/tool/tests/test_report.py": "# a margin\n",
+            "tests/test_report.py": "# a margin\n",
             "examples/legclaw/evidence.yaml": "quote: a 2 mm margin\n",
             "docs/notes.md": "an allowance\n",
         },

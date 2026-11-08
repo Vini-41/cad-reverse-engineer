@@ -3,7 +3,7 @@
 
 - every rule name the tool emits (the literal rule of each p.error, p.warn and Finding) is asserted
   present by one test and asserted absent by another, and is documented as `[rule-name]` in
-  skills/cad-reverse-engineer/references/*.md;
+  plugin/skills/cad-reverse-engineer/references/*.md;
 - every error rule is named by a completion criterion of SKILL.md (a "Done when" line, or the line
   of criteria every step shares), as `[rule-name]` or `[prefix-*]`;
 - the rows of the test suite's FINDINGS table are in alphabetical order of their rule;
@@ -34,9 +34,9 @@ import sys
 from pathlib import Path
 
 REPO = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[1]
-SKILL = REPO / "skills" / "cad-reverse-engineer"
+SKILL = REPO / "plugin" / "skills" / "cad-reverse-engineer"
 SRC = SKILL / "tool" / "src" / "cadrev"
-TESTS = SKILL / "tool" / "tests"
+TESTS = REPO / "tests"
 sys.path.insert(0, str(SRC.parent))
 
 from cadrev import sources, units  # noqa: E402  (after the path to the tool source)

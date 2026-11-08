@@ -17,7 +17,7 @@ import ast
 import sys
 from pathlib import Path
 
-SRC = "skills/cad-reverse-engineer/tool/src/cadrev"
+SRC = "plugin/skills/cad-reverse-engineer/tool/src/cadrev"
 TABLES = ("CHECK_KINDS", "OVERLAP_KINDS", "PROBE_KINDS")
 KEYS = ("kind", "probe")
 DISPATCH = ("geometry.py", "run_checks")

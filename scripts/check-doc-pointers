@@ -13,8 +13,8 @@ import sys
 from pathlib import Path
 
 DOCS = (
-    "skills/cad-reverse-engineer/SKILL.md",
-    "skills/cad-reverse-engineer/references/**/*.md",
+    "plugin/skills/cad-reverse-engineer/SKILL.md",
+    "plugin/skills/cad-reverse-engineer/references/**/*.md",
     "AGENTS.md",
     "docs/agents/**/*.md",
 )

@@ -2,7 +2,7 @@
 
 Before planning, read `.scratch/handoff.md` if it exists: it carries the last session's state.
 
-The CLI's source and tests live under `skills/cad-reverse-engineer/tool/`, not at the repo root; `scripts/cadrev` runs it from anywhere.
+`plugin/` is the plugin as it installs; the CLI's source lives under `plugin/skills/cad-reverse-engineer/tool/` and its tests in `tests/`, outside it. `scripts/cadrev` runs the CLI from anywhere.
 
 `scripts/check` is CI run locally: green before every commit. `scripts/check --lint` runs only pyright, ruff and the tests' imports, in seconds: the loop after an edit.
 
@@ -12,7 +12,7 @@ A pure refactor is guarded by `scripts/same-reports`: it compares each example's
 
 Dogfood run n, as an issue names it, is `~/Documents/Projects/cadrev/dogfood/run-<n>`; a different path an issue gives for a run is stale.
 
-`skills/cad-reverse-engineer/SKILL.md` and its `references/` are the shipped product: before editing them, load `/writing-for-agents`.
+`plugin/skills/cad-reverse-engineer/SKILL.md` and its `references/` are the shipped product: before editing them, load `/writing-for-agents`.
 
 ## Agent skills
 

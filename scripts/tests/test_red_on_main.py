@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "red-on-main"
-TOOL = "skills/cad-reverse-engineer/tool"
+TOOL = "plugin/skills/cad-reverse-engineer/tool"
 BASE_TESTS = (
     "from double import double\n\n\ndef test_double_of_zero():\n    assert double(0) == 0\n"
 )
@@ -36,7 +36,7 @@ def repo(tmp_path: Path, dependencies: str) -> Path:
                 f'[project]\nname = "fixture"\nversion = "0"\ndependencies = [{dependencies}]\n'
             ),
             f"{TOOL}/src/double.py": "def double(x):\n    return x\n",
-            f"{TOOL}/tests/test_double.py": BASE_TESTS,
+            "tests/test_double.py": BASE_TESTS,
         },
     )
     git(root, "init", "-q", "-b", "master")  # not main, whatever the machine's default
@@ -46,7 +46,7 @@ def repo(tmp_path: Path, dependencies: str) -> Path:
         root,
         {
             f"{TOOL}/src/double.py": "def double(x):\n    return 2 * x\n",
-            f"{TOOL}/tests/test_double.py": (
+            "tests/test_double.py": (
                 f"{BASE_TESTS}\n\ndef test_double_doubles():\n    assert double(2) == 4\n"
             ),
         },
@@ -111,12 +111,23 @@ def test_a_base_the_clone_lacks_exits_3(tmp_path):
     assert "not in this clone" in result.stderr
 
 
+def test_a_base_from_before_the_move_to_plugin_exits_3(tmp_path):
+    root = repo(tmp_path, dependencies='"pytest"')
+    git(root, "mv", "plugin/skills", "skills")
+    git(root, "commit", "-qm", "the layout before the move")
+    git(root, "mv", "skills", "plugin/skills")
+    git(root, "commit", "-qm", "the move")
+    result = red_on_main(root)
+    assert result.returncode == 3
+    assert "predates the move" in result.stderr
+
+
 def test_guard_a_new_green_test_without_the_guard_name_exits_1(tmp_path):
     root = repo(tmp_path, dependencies='"pytest"')
     commit(
         root,
         {
-            f"{TOOL}/tests/test_double.py": (
+            "tests/test_double.py": (
                 f"{BASE_TESTS}\n\ndef test_double_of_one():\n    assert double(1) != 0\n"
             )
         },
@@ -161,7 +172,7 @@ def test_branch_cut_from_another_branch_compares_against_where_it_was_created(tm
     commit(
         root,
         {
-            f"{TOOL}/tests/test_double.py": (
+            "tests/test_double.py": (
                 f"{BASE_TESTS}\n\ndef test_guard_double_of_two():\n    assert double(2) == 4\n"
             )
         },

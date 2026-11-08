@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "same-reports"
-TOOL = "skills/cad-reverse-engineer/tool"
+TOOL = "plugin/skills/cad-reverse-engineer/tool"
 CLI = """import json, sys
 from pathlib import Path
 
@@ -110,6 +110,16 @@ def test_a_base_the_clone_lacks_exits_3(tmp_path):
     result = same_reports(root, base="1" * 40)
     assert result.returncode == 3
     assert "not in this clone" in result.stderr
+
+
+def test_a_base_from_before_the_move_to_plugin_exits_3(tmp_path):
+    root = repo(tmp_path)
+    git(root, "mv", "plugin/skills", "skills")
+    git(root, "commit", "-qm", "the layout before the move")
+    git(root, "mv", "skills", "plugin/skills")
+    result = same_reports(root)
+    assert result.returncode == 3
+    assert "predates the move" in result.stderr
 
 
 def test_a_partial_run_that_only_reorders_its_printed_findings_is_same(tmp_path):

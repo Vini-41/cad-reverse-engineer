@@ -17,9 +17,9 @@ import sys
 from pathlib import Path
 
 SCANNED = (
-    "skills/cad-reverse-engineer/SKILL.md",
-    "skills/cad-reverse-engineer/references/**/*",
-    "skills/cad-reverse-engineer/tool/src/**/*",
+    "plugin/skills/cad-reverse-engineer/SKILL.md",
+    "plugin/skills/cad-reverse-engineer/references/**/*",
+    "plugin/skills/cad-reverse-engineer/tool/src/**/*",
 )
 # Avoided in the sense the glossary names, but ordinary words in another: a joint named `input`, a
 # scale `reference`, a source that states, a test rig, sources that measure their angles, copying

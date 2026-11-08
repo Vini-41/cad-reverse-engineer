@@ -1,0 +1,4 @@
+#!/bin/sh
+# Runs the cadrev CLI in tool/ beside this script, from any directory: SKILL.md's Tool section.
+# --locked installs exactly the versions in tool/uv.lock, and fails rather than re-resolve them.
+exec uv run -q --locked --project "$(dirname "$0")/tool" cadrev "$@"

@@ -1,0 +1,19 @@
+{
+  "name": "cad-reverse-engineer",
+  "interface": {
+    "displayName": "CAD Reverse Engineer"
+  },
+  "plugins": [
+    {
+      "name": "cad-reverse-engineer",
+      "source": {
+        "source": "local",
+        "path": "./plugin"
+      },
+      "policy": {
+        "installation": "AVAILABLE"
+      },
+      "category": "Coding"
+    }
+  ]
+}

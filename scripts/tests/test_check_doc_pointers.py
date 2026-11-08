@@ -5,10 +5,11 @@ import sys
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "check-doc-pointers"
+SKILL = "plugin/skills/cad-reverse-engineer"
 
 
 def repo(tmp_path: Path, docs: dict[str, str]) -> Path:
-    for name in ("skills/cad-reverse-engineer/references/project-format.md", "GLOSSARY.md"):
+    for name in (f"{SKILL}/references/project-format.md", "GLOSSARY.md"):
         (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / name).write_text("# exists\n")
     for name, text in docs.items():
@@ -24,20 +25,18 @@ def check(root: Path) -> subprocess.CompletedProcess[str]:
 def test_broken_markdown_link_in_skill_fails(tmp_path):
     root = repo(
         tmp_path,
-        {"skills/cad-reverse-engineer/SKILL.md": "intro\nsee [format](references/gone.md)\n"},
+        {f"{SKILL}/SKILL.md": "intro\nsee [format](references/gone.md)\n"},
     )
     result = check(root)
     assert result.returncode == 1
-    assert "skills/cad-reverse-engineer/SKILL.md:2: references/gone.md" in result.stdout
+    assert f"{SKILL}/SKILL.md:2: references/gone.md" in result.stdout
 
 
 def test_broken_backticked_path_in_agent_docs_fails(tmp_path):
-    root = repo(
-        tmp_path, {"docs/agents/domain.md": "Read `skills/cad-reverse-engineer/GONE.md`.\n"}
-    )
+    root = repo(tmp_path, {"docs/agents/domain.md": f"Read `{SKILL}/GONE.md`.\n"})
     result = check(root)
     assert result.returncode == 1
-    assert "docs/agents/domain.md:1: skills/cad-reverse-engineer/GONE.md" in result.stdout
+    assert f"docs/agents/domain.md:1: {SKILL}/GONE.md" in result.stdout
 
 
 def test_guard_pointers_that_name_files_or_no_repo_path_pass(tmp_path):
@@ -47,9 +46,9 @@ def test_guard_pointers_that_name_files_or_no_repo_path_pass(tmp_path):
         "Writes `build/report.md` and `build/parts/<name>.step`; `1/50` scale.\n"
     )
     agents = (
-        "Read `.scratch/handoff.md`, `GLOSSARY.md`, `skills/cad-reverse-engineer/references/`"
+        f"Read `.scratch/handoff.md`, `GLOSSARY.md`, `{SKILL}/references/`"
         " and `Vini-41/cad-reverse-engineer`; load `/writing-for-agents`.\n"
     )
-    root = repo(tmp_path, {"skills/cad-reverse-engineer/SKILL.md": skill, "AGENTS.md": agents})
+    root = repo(tmp_path, {f"{SKILL}/SKILL.md": skill, "AGENTS.md": agents})
     result = check(root)
     assert (result.returncode, result.stdout) == (0, "")

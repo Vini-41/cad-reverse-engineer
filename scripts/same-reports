@@ -8,7 +8,8 @@ With a partial run's flag (--no-build, --no-coverage), which writes no report, i
 findings each run prints instead, as a sorted list.
 Prints each example as same or as the first difference, and exits 0 when every example is the same,
 1 when one differs, 2 when a run writes no report.json, and 3 when there is nothing to compare: the
-tool source is the same at BASE as in the working tree, or BASE is not in this clone.
+tool source is the same at BASE as in the working tree, BASE is not in this clone, or BASE holds no
+tool source at plugin/ (it predates the move there).
 
     scripts/same-reports [--no-build] [--no-coverage] [example dir ...]
                                      default: every examples/*/ holding a project.yaml
@@ -26,7 +27,7 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
-TOOL = "skills/cad-reverse-engineer/tool"
+TOOL = "plugin/skills/cad-reverse-engineer/tool"
 MAIN = "import sys; from cadrev.cli import main; sys.exit(main(sys.argv[1:]))"
 
 
@@ -99,6 +100,13 @@ def main() -> int:
         )
         return 3
     commit, label = base
+    if git(repo, "cat-file", "-e", f"{commit}:{TOOL}/src").returncode != 0:
+        print(
+            f"{label} has no tool source at {TOOL}/src (it predates the move there), "
+            "so nothing to compare",
+            file=sys.stderr,
+        )
+        return 3
     if git(repo, "diff", "--quiet", commit, "--", f"{TOOL}/src").returncode == 0:
         print(
             f"the tool source is the same at {label} as here, so nothing to compare",

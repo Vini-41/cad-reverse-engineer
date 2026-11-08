@@ -7,9 +7,9 @@
 # test, so a missing pytest or an empty selection never reads as a clean comparison, and 3 if there
 # is nothing to compare: BASE is HEAD with the tool source unchanged, no test function is new or
 # changed since BASE, or BASE is not in this clone (the null commit a new branch's push names, or a
-# commit a force-push dropped). 0 is a clean comparison. New rows of a test function BASE
-# already has (the QUOTES, UNITS and FINDINGS tables) carry near misses, so only their red guards
-# count.
+# commit a force-push dropped), or BASE holds no tool source at plugin/ (it predates the move there).
+# 0 is a clean comparison. New rows of a test function BASE already has (the QUOTES, UNITS and
+# FINDINGS tables) carry near misses, so only their red guards count.
 #
 #   scripts/red-on-main [pytest args, e.g. -k units]     LIST=1 also lists every test as red or green
 #
@@ -28,7 +28,8 @@
 set -euo pipefail
 
 repo=$(git rev-parse --show-toplevel)
-tool="$repo/skills/cad-reverse-engineer/tool"
+tool="$repo/plugin/skills/cad-reverse-engineer/tool"
+tests="$repo/tests"
 if [ -n "${BASE:-}" ]; then
   label=$BASE
   if [[ "$BASE" =~ ^0+$ ]]; then
@@ -60,23 +61,28 @@ if [ "$base" = "$(git -C "$repo" rev-parse HEAD)" ] && git -C "$repo" diff --qui
   exit 3
 fi
 
+if ! git -C "$repo" cat-file -e "$base:plugin/skills/cad-reverse-engineer/tool/src" 2>/dev/null; then
+  echo "$label has no tool source at plugin/skills/cad-reverse-engineer/tool/src (it predates the move there), so there is no fix to compare" >&2
+  exit 3
+fi
+
 tree=$(mktemp -d)
 trap 'git -C "$repo" worktree remove --force "$tree" >/dev/null 2>&1 || true; rm -f "$tree.existing" "$tree.patch" "$tree.log"' EXIT
 git -C "$repo" worktree add --detach --quiet "$tree" "$base"
 # Everything but the tool source comes from the working tree: the tests read the READMEs and examples too.
-git -C "$repo" diff --binary "$base" -- . ":(exclude)skills/cad-reverse-engineer/tool/src" >"$tree.patch"
+git -C "$repo" diff --binary "$base" -- . ":(exclude)plugin/skills/cad-reverse-engineer/tool/src" >"$tree.patch"
 [ -s "$tree.patch" ] && git -C "$tree" apply --whitespace=nowarn "$tree.patch"
-rm -rf "$tree/skills/cad-reverse-engineer/tool/tests"
-cp -R "$tool/tests" "$tree/skills/cad-reverse-engineer/tool/tests"
+rm -rf "$tree/tests"
+cp -R "$tests" "$tree/tests"
 
 echo "working tree, but tool source from $label ($(git -C "$repo" rev-parse --short "$base"))"
 existing="$tree.existing"  # the test functions BASE already has
-git -C "$repo" grep -hoE '^def test_[A-Za-z0-9_]+' "$base" -- "$tool/tests" | sed 's/^def //' >"$existing" || true
+git -C "$repo" grep -hoE '^def test_[A-Za-z0-9_]+' "$base" -- "$tests" | sed 's/^def //' >"$existing" || true
 if [ $# -eq 0 ]; then
   # Select the test functions new since BASE, and those whose lines (decorators to last line) the
   # diff touches. A hunk's @@ header names the function above an insertion, so it is not used.
-  selected=$( { grep -hoE '^def test_[A-Za-z0-9_]+' "$tool"/tests/*.py | sed 's/^def //' | grep -vxFf "$existing"
-                git -C "$repo" diff -U0 "$base" -- "$tool/tests" | python3 -c '
+  selected=$( { grep -hoE '^def test_[A-Za-z0-9_]+' "$tests"/*.py | sed 's/^def //' | grep -vxFf "$existing"
+                git -C "$repo" diff -U0 "$base" -- "$tests" | python3 -c '
 import ast, re, sys
 repo, changed, path = sys.argv[1], {}, None
 for line in sys.stdin:
@@ -100,11 +106,11 @@ for path, lines in changed.items():
   set -- -k "$(echo "$selected" | paste -sd ' ' - | sed 's/ / or /g')"
   echo "running the $(echo "$selected" | wc -l | tr -d ' ') test functions new or changed since $label"
 fi
-cd "$tree/skills/cad-reverse-engineer/tool"
+cd "$tree"
 # PYTHONPATH puts the base's src ahead of the editable install of the working tree's.
 log="$tree.log"
 code=0
-PYTHONPATH="$PWD/src" uv run --project "$tool" python -m pytest -v --tb=no -p no:cacheprovider "$@" >"$log" 2>&1 || code=$?
+PYTHONPATH="$tree/plugin/skills/cad-reverse-engineer/tool/src" uv run --project "$tool" python -m pytest -v --tb=no -p no:cacheprovider tests "$@" >"$log" 2>&1 || code=$?
 results=$(sed -nE 's/^(.+) (FAILED|ERROR) +\[ *[0-9]+%\]$/red    \1/p; s/^(.+) PASSED +\[ *[0-9]+%\]$/green  \1/p' "$log" | sort || true)
 # pytest exits 1 when a test fails, which is a hole; any other failure, or exit 1 with no test run
 # (pytest missing from the tool's environment), means nothing was compared, so say so and fail.

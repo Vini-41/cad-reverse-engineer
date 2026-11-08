@@ -17,7 +17,7 @@ The five figure readings (`fig2d-width`, `fig2a-beta`, `fig2a-sole`, `fig2a-mass
 
 `scripts/check`, which CI runs on every push, copies the examples as a clone holds them, runs `cadrev check` on this directory and fails if it prints anything else; the run takes under two minutes. A change that moves the status updates this line.
 
-`checks.yaml` is written by `gen_checks.py` (`uv run --project ../../skills/cad-reverse-engineer/tool python gen_checks.py`, from this directory), which repeats the checks per leg, toe and servo: edit the script, not the file.
+`checks.yaml` is written by `gen_checks.py` (`uv run --project ../../plugin/skills/cad-reverse-engineer/tool python gen_checks.py`, from this directory), which repeats the checks per leg, toe and servo: edit the script, not the file.
 
 Instances are named `<leg>_<part>`, and toes `<leg>_toe_<side><row>_<segment>`: leg `a` or `b`; side `L` or `R`, the two halves of one foot, whose toes close toward each other; row `f` or `b`; segment `j` (the β joint block), `p1`, `p2` or `c` (the claw).
 

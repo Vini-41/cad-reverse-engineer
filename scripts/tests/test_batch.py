@@ -161,7 +161,7 @@ def test_batch_caps_a_wave_at_max(tmp_path):
 @pytest.mark.parametrize(
     "path, held",
     [
-        ("skills/cad-reverse-engineer/SKILL.md", True),
+        ("plugin/skills/cad-reverse-engineer/SKILL.md", True),
         ("plugin/skills/cad-reverse-engineer/references/modeling.md", True),
         ("README.md", True),
         ("examples/centrifuge/README.md", True),
@@ -169,7 +169,7 @@ def test_batch_caps_a_wave_at_max(tmp_path):
         (".github/workflows/test.yml", True),
         ("docs/agents/batch-ticket.md", True),
         ("scripts/check", True),
-        ("skills/cad-reverse-engineer/tool/src/cadrev/shape.py", False),
+        ("plugin/skills/cad-reverse-engineer/tool/src/cadrev/shape.py", False),
         ("scripts/check-linear", False),
         ("docs/dogfood/brief.md", False),
         ("references.py", False),

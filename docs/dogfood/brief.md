@@ -25,7 +25,7 @@ A run that ends VERIFIED PENDING REVIEW, or VERIFIED, becomes `examples/<object>
 
 Goal: <goal>
 
-Use the skill at `<checkout>/skills/cad-reverse-engineer/SKILL.md`: read it and follow it, with its `references/`. Run `cadrev` as SKILL.md says.
+Use the skill at `<checkout>/plugin/skills/cad-reverse-engineer/SKILL.md`: read it and follow it, with its `references/`. Run `cadrev` as SKILL.md says.
 
 Sources: <sources>. Read nothing else under that checkout: not `examples/` (apart from those files), not the tool's source or tests, not `docs/`, not `.scratch/`. Don't look in `~/Documents/Projects/cadrev/dogfood/` other than your own directory.
 

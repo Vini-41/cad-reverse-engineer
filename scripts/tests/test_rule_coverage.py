@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "rule-coverage"
-CADREV = SCRIPT.parents[1] / "skills/cad-reverse-engineer/tool/src/cadrev"
+CADREV = SCRIPT.parents[1] / "plugin/skills/cad-reverse-engineer/tool/src/cadrev"
 
 SOURCE = """\
 def check(p):
@@ -57,7 +57,7 @@ def repo(
 ) -> Path:
     """A repo whose tool emits source's rules, documents doc, steps through skill_md and is tested
     by tests, with a unit table of the real cadrev's units named in unit_names."""
-    src = tmp_path / "skills/cad-reverse-engineer/tool/src/cadrev"
+    src = tmp_path / "plugin/skills/cad-reverse-engineer/tool/src/cadrev"
     src.mkdir(parents=True)
     for name in ("__init__.py", "sources.py", "units.py"):
         shutil.copy(CADREV / name, src / name)
@@ -72,11 +72,11 @@ def repo(
     head = "UNITS: dict[str, Unit] = {\n"
     (src / "units.py").write_text(units[:table] + head + "\n".join(kept) + units[end:])
     (src / "check.py").write_text(source)
-    refs = tmp_path / "skills/cad-reverse-engineer/references"
+    refs = tmp_path / "plugin/skills/cad-reverse-engineer/references"
     refs.mkdir(parents=True)
     (refs / "rules.md").write_text(doc)
     (refs.parent / "SKILL.md").write_text(skill_md)
-    tool_tests = tmp_path / "skills/cad-reverse-engineer/tool/tests"
+    tool_tests = tmp_path / "tests"
     tool_tests.mkdir(parents=True)
     (tool_tests / "test_cadrev.py").write_text(tests)
     return tmp_path
@@ -165,7 +165,7 @@ def test_test_editing_a_fixture_without_swap_fails(tmp_path):
     a, b = (
         n for n, line in enumerate(tests.splitlines(), 1) if line.startswith(("    a =", "    b ="))
     )
-    where = "skills/cad-reverse-engineer/tool/tests/test_cadrev.py"
+    where = "tests/test_cadrev.py"
     use = "use swap, which fails when the text it replaces is absent"
     assert result.returncode == 1
     assert result.stdout.splitlines()[1:] == [

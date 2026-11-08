@@ -5,7 +5,7 @@
 ## A ticket the batch takes
 
 - One ticket is one capability a user would notice, sized at about half a day of agent work. A dogfood run's trips are grouped into such tickets, never filed one per trip.
-- Its body has a `Touches:` line naming the paths it changes, comma-separated (`Touches: skills/cad-reverse-engineer/tool/src/cadrev/shape.py, docs/dogfood/`). Tickets whose paths are disjoint run side by side; a ticket without the line runs alone, so a sweeping change (a move, a rename) leaves it out on purpose.
+- Its body has a `Touches:` line naming the paths it changes, comma-separated (`Touches: plugin/skills/cad-reverse-engineer/tool/src/cadrev/shape.py, docs/dogfood/`). Tickets whose paths are disjoint run side by side; a ticket without the line runs alone, so a sweeping change (a move, a rename) leaves it out on purpose.
 - Its blockers are GitHub dependencies (`issue-tracker.md`): the batch takes only unblocked tickets, so a chain runs one link per batch.
 - It carries a milestone (`v0.1`, `v0.2`), and `scripts/batch --milestone v0.1` takes that milestone alone.
 
