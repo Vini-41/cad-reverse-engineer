@@ -291,9 +291,12 @@ class Batch:
         )
         return out("git", "rev-parse", "HEAD", cwd=tree)
 
-    def ci(self, sha: str) -> tuple[bool, str]:
-        waited = run(CI_WAIT, sha)
-        return waited.returncode == 0, waited.stdout + waited.stderr
+    def ci(self, name: str, sha: str) -> tuple[bool, str]:
+        """ci-wait's result on sha, its output written to <name>.ci.log, since it refuses a pipe."""
+        log = self.dir / f"{name}.ci.log"
+        with open(log, "w") as f:
+            waited = subprocess.run([CI_WAIT, sha], cwd=ROOT, stdout=f, stderr=subprocess.STDOUT)
+        return waited.returncode == 0, log.read_text()
 
     def pr(self, t: dict, summary: str) -> str:
         found = run(GH, "pr", "view", self.branch(t), "--json", "number", "--jq", ".number")
@@ -327,13 +330,13 @@ class Batch:
             return self.ask(t, "Its branch conflicts with main in logic; see the rebase log.")
         sha = self.push(t)
         pr = self.pr(t, summary)
-        green, report = self.ci(sha)
+        green, report = self.ci(str(n), sha)
         if not green:
             task = f"CI failed on this branch. Fix it with scripts/check green.\n\n{report}"
             self.agent(t, tree, task, "ci-fix")
             self.wait([t])
             if self.result(t)[0] == "done" and self.rebase(t):
-                green, report = self.ci(self.push(t))
+                green, report = self.ci(str(n), self.push(t))
         if not green:
             return self.ask(t, f"CI stays red on PR #{pr} after one fix:\n\n```\n{report}\n```")
         held = [p for p in self.changed(t) if protected(p)]
@@ -347,7 +350,7 @@ class Batch:
             return
         run("git", "fetch", "-q", "origin", check=True)
         main = out("git", "rev-parse", "origin/main")
-        green, report = self.ci(main)
+        green, report = self.ci(f"{n}.main", main)
         if not green:
             self.stopped = f"CI is red on main at {main} after merging PR #{pr}:\n\n{report}"
             return
