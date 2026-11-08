@@ -70,7 +70,9 @@ if plan.get("file"):
 open(result, "w").write(plan["result"])
 """
 
+# Like scripts/ci-wait, it refuses a pipe, so a batch that captures its output reads exit 2.
 FAKE_CI = """#!/bin/sh
+if [ -p /dev/stdout ]; then echo "ci-wait's output is piped" >&2; exit 2; fi
 if [ -n "$FAKE_CI_RED" ]; then echo "CI failure on $1"; exit 1; fi
 echo "CI success on $1"
 """
@@ -231,5 +233,6 @@ def test_batch_asks_when_ci_stays_red_after_one_fix_and_leaves_the_pr_open(tmp_p
     assert any(c[:2] == ["pr", "create"] for c in calls)
     assert not any(c[:2] == ["pr", "merge"] for c in calls)
     logs = sorted(p.name for p in (repo / ".scratch" / "batches").glob("*/*.log"))
-    assert logs == ["1.ci-fix.log", "1.implement.log"]
+    assert logs == ["1.ci-fix.log", "1.ci.log", "1.implement.log"]
+    assert "CI failure on" in (next((repo / ".scratch" / "batches").glob("*/1.ci.log"))).read_text()
     assert "#1 Ticket 1: CI stays red on PR #1 after one fix" in result.stdout
