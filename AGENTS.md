@@ -20,6 +20,10 @@ Dogfood run n, as an issue names it, is `~/Documents/Projects/cadrev/dogfood/run
 
 Before any `gh` issue or PR operation, read `docs/agents/issue-tracker.md`.
 
+### Batch
+
+Before writing or regrouping a `ready-for-agent` ticket, or starting `scripts/batch`, read `docs/agents/batch.md`.
+
 ### Triage labels
 
 Before applying a triage label, read `docs/agents/triage-labels.md`.
