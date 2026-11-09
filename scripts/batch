@@ -14,7 +14,8 @@ A batch detaches once it has printed its waves: it starts itself again in a new 
 terminal and returns, so it runs to the end whatever started it, such as an agent session that ends
 between messages. --foreground runs it in the calling process. While it runs,
 .scratch/batches/running holds its pid and stamp, and a second batch refuses to start; a lock whose
-pid is gone is taken over. --status prints the running batch's last steps, or the latest summary.
+pid no longer runs a batch is taken over. The detached batch works the waves printed, saved in
+waves.json. --status prints the running batch's last steps, or the latest summary.
 
 Each ticket's agent runs `claude -p` in `.claude/worktrees/batch-<n>`, on branch `batch/<n>` cut
 from origin/main, briefed by docs/agents/batch-ticket.md, and writes its result file: `done` and
@@ -154,17 +155,19 @@ def select(numbers: list[int], milestone: str | None) -> list[dict]:
 
 
 def alive(pid: int) -> bool:
+    """Whether pid is a running batch: a pid the system gave another program after a batch was
+    killed holds no batch."""
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
         return False
     except PermissionError:
-        return True
-    return True
+        pass
+    return "scripts/batch" in run("ps", "-p", str(pid), "-o", "command=").stdout
 
 
 def running() -> tuple[int, str] | None:
-    """The pid and stamp of the batch that holds the lock, if its process is alive."""
+    """The pid and stamp of the batch that holds the lock, if it is still running."""
     try:
         pid, stamp = LOCK.read_text().split()
     except (OSError, ValueError):
@@ -172,14 +175,44 @@ def running() -> tuple[int, str] | None:
     return (int(pid), stamp) if alive(int(pid)) else None
 
 
-def lock(pid: int, stamp: str) -> None:
+def write_lock(pid: int, stamp: str, *, take: bool) -> bool:
+    """Write the lock whole, in one step: take it only where no lock is (False if one is), else
+    replace it."""
     BATCHES.mkdir(parents=True, exist_ok=True)
-    LOCK.write_text(f"{pid} {stamp}\n")
+    tmp = BATCHES / f"running.{os.getpid()}"
+    tmp.write_text(f"{pid} {stamp}\n")
+    try:
+        if not take:
+            os.replace(tmp, LOCK)
+            return True
+        os.link(tmp, LOCK)
+        return True
+    except FileExistsError:
+        return False
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def acquire(stamp: str) -> tuple[int, str] | None:
+    """Take the lock for this process, or return the pid and stamp of the batch holding it. A lock
+    whose batch is gone is taken over."""
+    for _ in range(2):
+        if write_lock(os.getpid(), stamp, take=True):
+            return None
+        held = running()
+        if held:
+            return held
+        LOCK.unlink(missing_ok=True)
+    return running() or (0, "unknown")
 
 
 def unlock() -> None:
-    held = running()
-    if held and held[0] == os.getpid():
+    """Remove the lock if this process holds it."""
+    try:
+        holder = int(LOCK.read_text().split()[0])
+    except (OSError, ValueError, IndexError):
+        return
+    if holder == os.getpid():
         LOCK.unlink(missing_ok=True)
 
 
@@ -517,50 +550,58 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--foreground", action="store_true")
     parser.add_argument("--status", action="store_true")
-    parser.add_argument("--stamp", help=argparse.SUPPRESS)
+    # The detached batch: it works the waves its starter printed, under the lock it was handed.
+    parser.add_argument("--child", metavar="STAMP", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.status:
         print(status(), end="")
         return 0
-    held = running()
-    if held and not args.dry_run and held[0] != os.getpid():
-        print(
-            f"batch {held[1]} is running, pid {held[0]}: see scripts/batch --status",
-            file=sys.stderr,
-        )
-        return 1
-    waves = plan(select(args.issues, args.milestone), max(1, args.max))
-    for i, wave in enumerate(waves, 1):
-        print(f"wave {i}: " + ", ".join(f"#{t['number']} {t['title']}" for t in wave))
-    if not waves:
-        print("no ready ticket")
-    if args.dry_run or not waves:
-        return 0
-    stamp = args.stamp or datetime.datetime.now().strftime("%Y-%m-%d-%H%M")
-    if not args.foreground:
-        return detach(stamp)
-    lock(os.getpid(), stamp)
+    if args.child:
+        waves = json.loads((BATCHES / args.child / "waves.json").read_text())
+        try:
+            return work(waves, args.child)
+        finally:
+            unlock()
+    stamp = datetime.datetime.now().strftime("%Y-%m-%d-%H%M")
+    if not args.dry_run:
+        held = acquire(stamp)
+        if held:
+            print(
+                f"batch {held[1]} is running, pid {held[0]}: see scripts/batch --status",
+                file=sys.stderr,
+            )
+            return 1
     try:
-        return work(waves, stamp)
+        waves = plan(select(args.issues, args.milestone), max(1, args.max))
+        for i, wave in enumerate(waves, 1):
+            print(f"wave {i}: " + ", ".join(f"#{t['number']} {t['title']}" for t in wave))
+        if not waves:
+            print("no ready ticket")
+        if args.dry_run or not waves:
+            return 0
+        if args.foreground:
+            return work(waves, stamp)
+        return detach(stamp, waves)
     finally:
         unlock()
 
 
-def detach(stamp: str) -> int:
-    """Start this batch again in a new session with no terminal, holding the lock from the start."""
+def detach(stamp: str, waves: list[list[dict]]) -> int:
+    """Start the batch in a new session with no terminal, and hand it the lock."""
     folder = BATCHES / stamp
     folder.mkdir(parents=True, exist_ok=True)
+    (folder / "waves.json").write_text(json.dumps(waves))
     log = folder / "batch.log"
     with log.open("a") as f:
         child = subprocess.Popen(
-            [sys.executable, __file__, *sys.argv[1:], "--foreground", "--stamp", stamp],
+            [sys.executable, "-u", __file__, "--child", stamp],
             cwd=ROOT,
             stdin=subprocess.DEVNULL,
             stdout=f,
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
-    lock(child.pid, stamp)
+    write_lock(child.pid, stamp, take=False)
     print(f"batch {stamp} running, pid {child.pid}: {folder}")
     print(f"log: {log}")
     print("scripts/batch --status shows its progress")
