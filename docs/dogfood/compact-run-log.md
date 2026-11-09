@@ -1,6 +1,6 @@
 # Dogfood run log: a fresh agent reconstructs the COMPAct 7.2:1 planetary gearbox
 
-Spec #103; issue #116. Each run is a fresh agent briefed with [brief.md](brief.md) word for word, under its COMPAct entry. It is given only the skill, the CC BY paper (Singh et al. 2025, arXiv:2510.07197) and the authors' released STL files for the 7.2:1 design (MIT, github.com/singhaman1750/COMPAct, `CADs/Actuator_STL_files/sspg_7.2`). The sources are kept outside the repo, at `~/Documents/Projects/cadrev/compact-sources`, until the project is committed. Each run's project is kept at `~/Documents/Projects/cadrev/dogfood/run-<n>`. Each trip it reported, or that its project showed, is listed with its fix.
+Spec #103; issue #116, and #159, which absorbs it from run 26. Each run is a fresh agent briefed with [brief.md](brief.md) word for word, under its COMPAct entry. It is given only the skill, the CC BY paper (Singh et al. 2025, arXiv:2510.07197) and the authors' released STL files for the 7.2:1 design (MIT, github.com/singhaman1750/COMPAct, `CADs/Actuator_STL_files/sspg_7.2`). The sources are kept outside the repo, at `~/Documents/Projects/cadrev/compact-sources`, until the project is committed. Each run's project is kept at `~/Documents/Projects/cadrev/dogfood/run-<n>`. Each trip it reported, or that its project showed, is listed with its fix.
 
 ## Runs 22–24
 
@@ -20,7 +20,7 @@ Claude (Opus 5.5), skill and tool at `4c9d95c` (main, after #127, #129 and #130)
 
 **Train.** Table I's `[25,65,155,0.5,3]` (`T1`), the ring fixed, the sun input and the carrier output, quoting "the ring gear fixed, the sun gear driven by the motor, and the carrier providing the output". `carrier-turn` reads 50° against `360 / R1.ratio`; `planet-turn` reads −119.2°. `planet-count` checks 3. The pitch diameters 12.5, 32.5 and 77.5 and the 22.5 mm centre distance are `distance` checks across opposite flanks at the pitch radius, each with `expect` from `T1` (trip 3).
 
-**Released bodies.** All eight STLs registered, each one valid solid. Shape-checked: planet (0.062 at `tol` 0.07), sun (0.399 at 0.45), updated carrier (0.427 at 0.85), secondary carrier (0.639 at 0.80), bearing retainer (0.143 at 0.2), and the gearbox casing holding the ring (0.706 at 1.5). Skipped: the earlier carrier, superseded by the updated one, and the motor casing, outside the target.
+**Released bodies.** All eight STL registered, each one valid solid. Shape-checked: planet (0.062 at `tol` 0.07), sun (0.399 at 0.45), updated carrier (0.427 at 0.85), secondary carrier (0.639 at 0.80), bearing retainer (0.143 at 0.2), and the gearbox casing holding the ring (0.706 at 1.5). Skipped: the earlier carrier, superseded by the updated one, and the motor casing, outside the target.
 
 **Time.** The final check took 787 s; rerun from a copy, 800 s. The casing's shape check takes 739 s of it: OCC computes 284 175 point distances against the built casing's 1701 faces, its involute ring faces having no bound. The other five shape checks take 26 s together.
 
@@ -43,7 +43,7 @@ Claude (Opus 5.5), skill and tool at `1b5b9e9` (main, after #155, #156 and #167)
 
 **Train.** Table I's "Stage-1:[25,65,155,0.5,3]" (`T1`), quoting "has the ring gear fixed, the sun gear driven by the motor, and the carrier providing the output": the ring is cut in the casing, the root; the sun is actuated; the carrier is passive. Gears sun → carrier at `25/180` and carrier → each planet at `-155/65`. `carrier-turn` reads 50° against `360 / R1.ratio`. `planets` counts 3. The pitch diameters 12.5, 32.5 and 77.5 are `distance` checks across opposite flanks with `expect: module * z`, as #142 now has the skill say; the 22.5 mm centre distance is checked from the sun (`sun-planet`) and from the ring (`ring-planet`). `build/model.mjcf` loaded: 5 revolute joints, the secondary carrier fixed on the carrier, 4 gears.
 
-**Released bodies.** All eight STLs registered, with 107 probes, each feeding a param of the same name checked by its own `p-<probe>` check. Shape-checked: planet (0.062 at `tol` 0.08), sun (0.075 at 0.1), updated carrier (0.105 at 0.2), secondary carrier (0.455 at 0.5, its boss built as a cone), gearbox casing holding the ring (0.185 at 0.3) and bearing retainer (0.143 at 0.2). Skipped: the earlier carrier, superseded by the updated one, and the motor casing, outside the target. No conflicts.
+**Released bodies.** All eight STL registered, with 107 probes, each feeding a param of the same name checked by its own `p-<probe>` check. Shape-checked: planet (0.062 at `tol` 0.08), sun (0.075 at 0.1), updated carrier (0.105 at 0.2), secondary carrier (0.455 at 0.5, its boss built as a cone), gearbox casing holding the ring (0.185 at 0.3) and bearing retainer (0.143 at 0.2). Skipped: the earlier carrier, superseded by the updated one, and the motor casing, outside the target. No conflicts.
 
 **Time.** The run's final check took 126.5 s. On the example, on the same laptop with other batch agents running (load average about 2.8), it took 146 s cold and 127 s warm: the probes and static rules 25 s, the build 19 s, the checks 81 s, the casing's shape check 64 s of them. Run 25's casing check took 739 s before #156 and #167.
 
@@ -68,4 +68,4 @@ Claude (Opus 5.5), skill and tool at `1b5b9e9` (main, after #155, #156 and #167)
 - **A. The skill gives `cadrev crop`'s box as it is passed** (trip 10). Blocks v0.1: a stranger following SKILL.md step 3 runs a command that fails.
 - **B. The skill says how a released geometry's probes are checked, what a physics value is, and how to limit a meshing gear's interference** (trips 5, 6, 8, 9). v0.2: each cost the run a workaround, none a wrong result; each needs a repro before filing, since none was confirmed beyond the run.
 - **Spec #5 (#147) and #121, #102**: trips 1–4 and 11, already v0.2.
-- **The example's time.** 127 s against the 2-minute goal; the casing's shape check is 64 s of it. v0.2, if the user wants it under 2 minutes rather than about 2 minutes: #140 is still open for the casing.
+- **The example's time.** 127 s against the 2-minute goal; the casing's shape check is 64 s of it. #140 (v0.1, absorbed by #156, then #167) is still open: it closes on this time if about 2 minutes meets the goal, or a follow-up takes the casing under it.
