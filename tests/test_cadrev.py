@@ -2,6 +2,7 @@ import ast
 import contextlib
 import hashlib
 import importlib
+import importlib.util
 import io
 import json
 import math
@@ -1053,6 +1054,95 @@ def test_overlay_model_edges_land_on_the_pixels_their_scale_puts_them(proj_dir):
     rows = np.nonzero((column[:, 0] > 150) & (column[:, 1] < 150))[0]  # the magenta edges
     # The link's top and bottom faces, z = ±4 at 10 px per mm about row 100.
     assert [rows[rows < 100].mean(), rows[rows > 100].mean()] == [60, 140], rows
+
+
+# Found by dogfood runs 19-21 (#132, #133): an instance named after its own part, placed along X.
+# part draws the part in its own frame, instance where the assembly places it.
+
+
+def _named_overlay(root: Path, at: float = 100, **target: str) -> tuple[list, list[int]]:
+    """The link placed at x = at as an instance named link, drawn by an overlay naming target over
+    a 300×40 image at 1 px per mm, model (0, 0) at pixel (100, 20); return the run's findings and
+    the columns its magenta edges cover."""
+    import numpy as np
+    from PIL import Image
+
+    edit(root, "project.yaml", lambda d: d.update(model_literals=[0, 1, 2, at]))
+    write(
+        root,
+        "model.py",
+        swap(
+            MODEL,
+            '{"link_1": ("link", Location())}',
+            f'{{"link": ("link", Location(({at}, 0, 0)))}}',
+        ),
+    )
+    (root / "figures").mkdir(exist_ok=True)
+    Image.new("RGB", (300, 40), "white").save(root / "figures" / "fig.png")
+    overlay = {"id": "named", "image": "figures/fig.png", **target, "view": "front"}
+    calibration = {"pixels": [[0, 35], [30, 35]], "evidence": "pitch.pitch"}
+    write(
+        root,
+        "overlays.yaml",
+        {"overlays": [overlay | {"origin": [100, 20], "calibration": calibration}]},
+    )
+    _, report = verify(root)
+    png = np.asarray(Image.open(root / "build" / "overlays" / "named.png"))
+    image = png[png.shape[0] - 40 :, :, :3].astype(int)
+    columns = np.nonzero(((image[:, :, 0] > 150) & (image[:, :, 1] < 150)).any(axis=0))[0]
+    return report["findings"], [int(columns.min()), int(columns.max())] if len(columns) else []
+
+
+def test_overlay_of_a_part_draws_it_in_its_own_frame_beside_an_instance_of_its_name(proj_dir):
+    found, columns = _named_overlay(proj_dir, part="link")
+    assert found == [] and columns == [80 - 1, 120 + 1], (found, columns)  # x -20..20, 1 px wide
+
+
+def test_overlay_of_an_instance_draws_it_where_the_assembly_places_it(proj_dir):
+    found, columns = _named_overlay(proj_dir, instance="link")
+    assert found == [] and columns == [180 - 1, 220 + 1], (found, columns)  # x 80..120
+
+
+def test_guard_overlay_of_the_assembly_draws_each_instance_where_it_is_placed(proj_dir):
+    found, columns = _named_overlay(proj_dir, part="assembly")
+    assert found == [] and columns == [180 - 1, 220 + 1], (found, columns)
+
+
+@pytest.mark.parametrize(
+    "target, why",
+    [
+        ({"instance": "link"}, "instance link is not an instance of the assembly; part draws"),
+        ({"part": "link_1"}, "part link_1 is not a part model.py builds"),
+        ({"part": "link", "instance": "link_1"}, "name one of part or instance, not both"),
+        ({}, "name one of part or instance, not neither"),
+    ],
+    ids=["instance naming a part", "part naming an instance", "both", "neither"],
+)
+def test_overlay_naming_no_part_or_instance_it_can_draw_is_a_config_finding(proj_dir, target, why):
+    _overlay(proj_dir)
+    edit(
+        proj_dir,
+        "overlays.yaml",
+        lambda d: (d["overlays"][0].pop("part"), d["overlays"][0].update(target)),
+    )
+    messages = findings(proj_dir, "overlay-config")
+    assert len(messages) == 1 and messages[0].startswith(f"overlay front: {why}"), messages
+
+
+def test_overlay_drawing_no_model_edge_on_its_image_warns_naming_where_its_edges_fell(proj_dir):
+    found, columns = _named_overlay(proj_dir, at=1000, instance="link")
+    assert columns == []
+    # x 980..1020 at 1 px per mm from pixel 100; z -4..4 about row 20.
+    assert found == [
+        {
+            "level": "warning",
+            "rule": "overlay-empty",
+            "message": "overlay named: no model edge of instance link falls on the 300×40 image: "
+            "its edges project to x 1080 to 1120, y 16 to 24 pixels; correct its origin, view or "
+            "calibration, or name the part, in its own frame, rather than an instance",
+        }
+    ]
+    assert "overlays/named.png" in (proj_dir / "build" / "report.md").read_text()
 
 
 # Basis: what each parameter rests on, and the headline that counts them.
@@ -3773,6 +3863,51 @@ def test_interference_check_over_one_listed_pair_says_pair(proj_dir):
     assert not clear["ok"] and clear["pairs"] == 1
 
 
+# Found by dogfood run 22 (#131): build123d intersects a Compound's children placed by the wrong
+# transform. A 10 mm cube's solid, turned a quarter about X inside a Compound, sits on a 10×30×10
+# base, both well clear of the link.
+_CAP = """\
+    base = Box(10, 30, 10)
+    cap = {cap}
+"""
+
+
+def _capped(root: Path, lift: float, cap: str) -> dict:
+    """The clear check with the cap, built as cap, placed lift above the base; return its entry in
+    report.json."""
+    edit(root, "project.yaml", lambda d: d.update(model_literals=[0, 1, 2, 90, 10, 30, 100, lift]))
+    model = swap(MODEL, "    return {\n", _CAP.format(cap=cap) + "    return {\n")
+    model = swap(model, '{"link": link}', '{"link": link, "base": base, "cap": cap}')
+    model = swap(
+        model,
+        '"link_1": ("link", Location())',
+        '"link_1": ("link", Location()), "base_1": ("base", Location((100, 0, 0))), '
+        f'"cap_1": ("cap", Location((100, 0, {lift})))',
+    )
+    write(root, "model.py", model)
+    _, report = verify(root)
+    return next(c for c in report["checks"] if c["id"] == "clear")
+
+
+_TURNED_IN_A_COMPOUND = "Compound(children=[Box(10, 10, 10).solid().rotate(Axis.X, 90)])"
+
+
+def test_interference_of_parts_touching_reads_no_overlap_where_one_is_a_compound(proj_dir):
+    clear = _capped(proj_dir, 10, _TURNED_IN_A_COMPOUND)  # the cap's bottom on the base's top
+    assert clear["ok"] and clear["measured"] == "0 over 3 pairs (all)", clear["measured"]
+
+
+def test_interference_of_a_compound_overlapping_a_part_reads_its_overlap_volume(proj_dir):
+    clear = _capped(proj_dir, 8, _TURNED_IN_A_COMPOUND)  # 2 mm into the base: 10 × 10 × 2
+    assert not clear["ok"]
+    assert clear["measured"] == "200 base_1 ∩ cap_1 over 3 pairs (all)", clear["measured"]
+
+
+def test_guard_interference_of_parts_touching_reads_no_overlap_where_both_are_flat(proj_dir):
+    clear = _capped(proj_dir, 10, "Box(10, 10, 10).solid().rotate(Axis.X, 90)")
+    assert clear["ok"] and clear["measured"] == "0 over 3 pairs (all)", clear["measured"]
+
+
 def test_only_interference_results_carry_a_pair_count(proj_dir):
     _, report = verify(proj_dir)
     assert [c["id"] for c in report["checks"] if "pairs" in c] == ["clear"]
@@ -4995,6 +5130,140 @@ def test_model_with_joints_exports_mjcf_and_a_mesh_per_part_that_mujoco_loads(pr
     assert "**Kinematic**: 3 joints and 1 loop" in (build / "report.md").read_text()
 
 
+# Found by dogfood run 15 (#134): a 32-turn swept spring, 4 mm across in 0.4 mm wire, meshes at
+# build123d's default tessellation to more faces than MuJoCo's STL decoder takes.
+_SPRING = """\
+    path = Helix((p.length - p.wire) / p.turns, p.length - p.wire, (p.od - p.wire) / 2)
+    spring = sweep(Plane(origin=path @ 0, z_dir=path % 0) * Circle(p.wire / 2), path)
+"""
+
+
+def _sprung(root: Path, turns: int) -> tuple[int, dict]:
+    """The link with a spring of turns turns fixed beside it; return the run's exit code and
+    report.json."""
+    spec = {"basis": "proposed", "rationale": "the run-15 spring", "gap": "G1"}
+    for name, value in {"length": 15, "wire": 0.4, "od": 4, "turns": turns, "mass": 1}.items():
+        _param(name, value=value, **spec)(root, None)
+    edit(
+        root,
+        "params.yaml",
+        lambda d: d.update(parts={"link": {"mass": "mass"}, "spring": {"mass": "mass"}}),
+    )
+    model = swap(MODEL, "    return {\n", _SPRING + "    return {\n")
+    model = swap(model, '{"link": link}', '{"link": link, "spring": spring}')
+    model = swap(
+        model,
+        '"link_1": ("link", Location())}',
+        '"link_1": ("link", Location()), "spring_1": ("spring", Location((p.link_L, 0, 0)))},\n'
+        '        "joints": {"held": {"type": "fixed", "parent": "link_1", "child": "spring_1"}}',
+    )
+    write(root, "model.py", model)
+    return verify(root)
+
+
+def test_mesh_over_mujocos_stl_face_limit_is_exported_coarser_and_loads(proj_dir):
+    mujoco = importlib.import_module("mujoco")
+
+    code, report = _sprung(proj_dir, 32)
+    assert code == 0, report["findings"]
+    coarsened = report["motion"]["coarsened"]
+    assert list(coarsened) == ["spring"]
+    spring = coarsened["spring"]
+    assert spring["faces"] <= 200_000 < spring["default_faces"], spring
+    assert (spring["tolerance"], spring["angular_tolerance"]) == (0.01, 0.2)
+    stl = (proj_dir / "build" / "meshes" / "spring.stl").read_bytes()
+    assert int.from_bytes(stl[80:84], "little") == spring["faces"]
+    mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
+    assert (
+        f"- Mesh `meshes/spring.stl` exported coarser for MuJoCo's STL decoder: {spring['faces']} "
+        "faces at tolerance 0.01 in the project's length unit and angular tolerance 0.2 rad, from "
+        f"{spring['default_faces']} at the default."
+    ) in (proj_dir / "build" / "report.md").read_text()
+
+
+def test_guard_mesh_under_mujocos_stl_face_limit_exports_at_the_default_tessellation(
+    proj_dir, tmp_path
+):
+    four_bar(proj_dir, tmp_path)
+    assert verify(proj_dir)[0] == 0
+    # The crank as model.py builds it, exported at build123d's default tessellation.
+    spec = importlib.util.spec_from_file_location("four_bar", proj_dir / "model.py")
+    assert spec is not None and spec.loader is not None
+    model = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(model)
+    values = {**BAR, "link_W": 5, "link_H": 4, "hole_d": 2}
+    crank = model.build(type("Params", (), values))["parts"]["crank"]
+    export_stl(crank, str(tmp_path / "crank.stl"))
+    stl = (proj_dir / "build" / "meshes" / "crank.stl").read_bytes()
+    assert stl == (tmp_path / "crank.stl").read_bytes()
+
+
+def _meshed_to(faces: dict, otherwise: int):
+    """A stand-in for build123d's export_stl writing a binary STL of faces[tolerance] faces, or
+    otherwise faces at a tolerance faces does not name (build123d's default is 0.001)."""
+
+    def export(shape, path, tolerance=0.001, angular_tolerance=0.1):
+        count = faces.get(tolerance, otherwise)
+        Path(path).write_bytes(bytes(80) + count.to_bytes(4, "little") + bytes(50 * count))
+
+    return export
+
+
+@pytest.mark.parametrize(
+    "faces, coarsened",
+    [
+        ({0.001: 300_000, 0.01: 250_000}, (0.1, 0.5)),
+        ({0.001: 300_000, 0.01: 250_000, 0.1: 200_001}, (1.0, 1.0)),
+    ],
+    ids=["second coarser step", "coarsest step"],
+)
+def test_mesh_over_mujocos_stl_face_limit_is_exported_at_the_first_coarser_step_that_fits(
+    proj_dir, tmp_path, monkeypatch, faces, coarsened
+):
+    import build123d
+
+    four_bar(proj_dir, tmp_path)
+    monkeypatch.setattr(build123d, "export_stl", _meshed_to(faces, 1000))
+    crank = verify(proj_dir)[1]["motion"]["coarsened"]["crank"]
+    assert (crank["tolerance"], crank["angular_tolerance"]) == coarsened
+    assert (crank["faces"], crank["default_faces"]) == (1000, 300_000)
+
+
+def test_guard_mesh_of_exactly_mujocos_stl_face_limit_is_not_coarsened(
+    proj_dir, tmp_path, monkeypatch
+):
+    import build123d
+
+    four_bar(proj_dir, tmp_path)
+    monkeypatch.setattr(build123d, "export_stl", _meshed_to({0.001: 200_000}, 1000))
+    _, report = verify(proj_dir)
+    assert "crank" not in report["motion"].get("coarsened", {})
+    stl = (proj_dir / "build" / "meshes" / "crank.stl").read_bytes()
+    assert int.from_bytes(stl[80:84], "little") == 200_000
+
+
+def test_mesh_that_no_tessellation_fits_under_mujocos_stl_face_limit_is_a_finding(
+    proj_dir, tmp_path, monkeypatch
+):
+    import build123d
+
+    # A mesh of one face past the limit at every tessellation, as an imported mesh's triangles
+    # stay at any tolerance.
+    four_bar(proj_dir, tmp_path)
+    monkeypatch.setattr(build123d, "export_stl", _meshed_to({}, 200_001))
+    code, report = verify(proj_dir)
+    loads = [f["message"] for f in report["findings"] if f["rule"] == "mjcf-load"]
+    assert code == 1 and len(loads) == 4, report["findings"]
+    assert loads[1] == (
+        "part crank: its mesh has 200001 faces at the coarsest tessellation cadrev tries "
+        "(tolerance 1, angular tolerance 1), over the 200000 faces MuJoCo's STL decoder takes, so "
+        "MuJoCo cannot load build/model.mjcf and no check with a pose is evaluated; build the part "
+        "from fewer faces: a flat face, such as an imported mesh's triangle, stays at least one "
+        "triangle at any tolerance"
+    )
+    assert not any("pose" in c for c in report["checks"])
+
+
 def test_report_json_gives_the_joint_ranges_and_physics_values_the_mjcf_exports(proj_dir, tmp_path):
     mujoco = importlib.import_module("mujoco")
 
@@ -5026,6 +5295,7 @@ def test_model_with_no_joints_writes_no_mjcf_and_its_report_says_it_is_static(pr
         "gears": {},
         "tendons": {},
         "cables": {},
+        "coarsened": {},
         "dropped": False,
     }
     assert (
@@ -8923,6 +9193,10 @@ FINDINGS = {
     "overlay-config": (
         lambda r, t: _overlay(r, view="side"),
         [lambda r, t: _overlay(r, view="right")],
+    ),
+    "overlay-empty": (
+        lambda r, t: _overlay(r, origin=[5000, 10]),
+        [lambda r, t: _overlay(r), lambda r, t: _overlay(r, origin=[-15, 10])],
     ),
     "param-basis": (_param("hole_d", basis="assumed"), [lambda r, t: _no_proposed(r)]),
     "param-derived": (

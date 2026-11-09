@@ -34,6 +34,11 @@ from .project import Project
 # loops close on the branch the model is built on.
 STEPS = 20
 ITERATIONS = 50
+# MuJoCo's STL decoder takes a file of at most this many faces.
+STL_FACES = 200_000
+# The (linear, angular) tolerances a part's mesh is tessellated at where build123d's default
+# (0.001, 0.1) gives more faces than STL_FACES, each coarser than the last, until it fits.
+COARSER = ((0.01, 0.2), (0.1, 0.5), (1.0, 1.0))
 
 
 def _mujoco() -> Any:
@@ -95,6 +100,9 @@ class Linkage:
 
     xml: str
     meshes: dict[str, bytes]
+    # part -> how its mesh was coarsened to fit STL_FACES: its faces at the default, and the
+    # tolerances and faces it was exported at
+    coarsened: dict[str, dict] = field(default_factory=dict)
     model: Any = None
     # pose key -> the posed assembly, or None where it cannot be reached
     posed: dict = field(default_factory=dict)
@@ -106,15 +114,27 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
     in the assembly as built is [loop-open]."""
     if not built.joints:
         return None
-    from build123d import export_stl
-
     _as_built_loops(p, built)
-    meshes = {}
+    meshes, coarsened, fits = {}, {}, True
     with tempfile.TemporaryDirectory() as tmp:
         for name, part in built.parts.items():
             path = Path(tmp) / f"{name}.stl"
-            export_stl(part, str(path))
-            meshes[f"{name}.stl"] = path.read_bytes()
+            stl, coarser = _mesh(part, path)
+            meshes[f"{name}.stl"] = stl
+            if _faces(stl) > STL_FACES:
+                fits = False
+                tolerance, angular = COARSER[-1]
+                p.error(
+                    "mjcf-load",
+                    f"part {name}: its mesh has {_faces(stl)} faces at the coarsest tessellation "
+                    f"cadrev tries (tolerance {tolerance:g}, angular tolerance {angular:g}), over "
+                    f"the {STL_FACES} faces MuJoCo's STL decoder takes, so MuJoCo cannot load "
+                    "build/model.mjcf and no check with a pose is evaluated; build the part from "
+                    "fewer faces: a flat face, such as an imported mesh's triangle, stays at least "
+                    "one triangle at any tolerance",
+                )
+            elif coarser is not None:
+                coarsened[name] = coarser
 
     root = ET.Element("mujoco", model=str(p.meta.get("name", "model")))
     ET.SubElement(root, "compiler", angle="radian", meshdir="meshes", autolimits="true")
@@ -202,7 +222,9 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
         for name in actuated:
             ET.SubElement(actuator, "motor", name=name, joint=name)
     ET.indent(root)
-    linkage = Linkage(ET.tostring(root, encoding="unicode") + "\n", meshes)
+    linkage = Linkage(ET.tostring(root, encoding="unicode") + "\n", meshes, coarsened)
+    if not fits:
+        return linkage
 
     mujoco = _mujoco()
 
@@ -215,6 +237,42 @@ def mjcf(p: Project, built: Built) -> Linkage | None:
             f"MuJoCo rejects build/model.mjcf, so no check with a pose is evaluated: {why}",
         )
     return linkage
+
+
+def _faces(stl: bytes) -> int:
+    """The face count a binary STL's header gives."""
+    return int.from_bytes(stl[80:84], "little")
+
+
+def _mesh(part, path: Path) -> tuple[bytes, dict | None]:
+    """The binary STL of part MuJoCo is given, written to path: at build123d's default
+    tessellation, or where that has more faces than STL_FACES, at the first of COARSER that fits,
+    or the coarsest; with how it was coarsened, None if it was not."""
+    import copy
+
+    from build123d import export_stl
+
+    export_stl(part, str(path))
+    stl = path.read_bytes()
+    default = _faces(stl)
+    if default <= STL_FACES:
+        return stl, None
+    coarser = None
+    for tolerance, angular in COARSER:
+        # A copy has no triangulation, so it is tessellated anew; the part keeps its own, which
+        # the checks' bounding boxes read.
+        export_stl(copy.deepcopy(part), str(path), tolerance=tolerance, angular_tolerance=angular)
+        stl = path.read_bytes()
+        coarser = {
+            "faces": _faces(stl),
+            "default_faces": default,
+            "tolerance": tolerance,
+            "angular_tolerance": angular,
+        }
+        if coarser["faces"] <= STL_FACES:
+            break
+    assert coarser is not None  # COARSER is not empty
+    return stl, coarser
 
 
 def cable_tendons(built: Built) -> dict[str, str]:
