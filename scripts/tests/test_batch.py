@@ -63,6 +63,7 @@ prompt = sys.argv[sys.argv.index("-p") + 1]
 number = re.search(r"Issue #(\d+)", prompt).group(1)
 result = re.search(r"`([^`]+\.result\.md)`", prompt).group(1)
 plan = json.load(open(os.environ["FAKE_CLAUDE"]))[number]
+open(os.environ["FAKE_CLAUDE"] + f".{number}.prompt", "a").write(prompt)
 if plan.get("file"):
     open(plan["file"], "w").write(number)
     subprocess.run(["git", "add", plan["file"]], check=True)
@@ -201,6 +202,17 @@ def test_batch_merges_a_green_ticket_and_holds_one_that_changes_the_readme(tmp_p
     assert "#2 Ticket 2: PR #2 changes README.md" in result.stdout
     created = next(c for c in calls if c[:2] == ["pr", "create"])
     assert created[created.index("--body") + 1].startswith("Part of #1\n\nAdds a.py.")
+
+
+def test_batch_asks_its_agent_for_a_reviewer_subagent_and_no_slash_command(tmp_path):
+    # A slash-command skill can't be invoked headless: batch 2026-11-08-1920's agents found
+    # /mattpocock-skills:implement refused, and #156's ran no review.
+    agents = {"1": {"file": "a.py", "result": "done\nAdds a.py."}}
+    repo, env, _ = setup(tmp_path, [issue(1, "a.py")], agents)
+    assert batch(repo, env).returncode == 0
+    prompt = (tmp_path / "claude.json.1.prompt").read_text()
+    assert "reviewer subagent" in prompt
+    assert "/mattpocock-skills" not in prompt
 
 
 def test_batch_puts_an_agent_question_on_its_issue_and_opens_no_pr(tmp_path):
