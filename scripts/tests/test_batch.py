@@ -236,6 +236,23 @@ def test_batch_puts_an_agent_question_on_its_issue_and_opens_no_pr(tmp_path):
     assert "## Needs info\n\n- #1 Ticket 1: Which unit does the sweep read?" in result.stdout
 
 
+def test_batch_continues_a_ticket_stopped_at_a_question_from_another_checkout(tmp_path):
+    # #156 stopped at a question with its only commit on a local branch in another worktree, so a
+    # batch from the main checkout would have cut batch/156 again from main.
+    agents = {"1": {"file": "a.py", "result": "needs-info\nWhich unit?"}}
+    repo, env, _ = setup(tmp_path, [issue(1, "a.py")], agents)
+    assert batch(repo, env).returncode == 0
+    other = tmp_path / "other"
+    subprocess.run(["git", "clone", "-q", str(tmp_path / "origin.git"), str(other)], check=True)
+    (tmp_path / "claude.json").write_text(json.dumps({"1": {"result": "done\nAdds a.py."}}))
+    result = batch(other, env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    landed = subprocess.run(
+        ["git", "-C", str(other), "show", "origin/main:a.py"], capture_output=True, text=True
+    )
+    assert landed.stdout == "1", result.stdout + result.stderr
+
+
 def test_batch_asks_when_ci_stays_red_after_one_fix_and_leaves_the_pr_open(tmp_path):
     agents = {"1": {"file": "a.py", "result": "done\nAdds a.py."}}
     repo, env, state = setup(tmp_path, [issue(1, "a.py")], agents)
