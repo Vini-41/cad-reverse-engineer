@@ -1,0 +1,15 @@
+build/
+# Sources are pinned by sha256 in project.yaml. `cadrev source` un-ignores each one whose license allows redistribution.
+sources/*
+figures/*/
+!figures/crops/
+!sources/Singh2025_COMPAct.pdf
+!sources/sspg_bearing_retainer.STL
+!sources/sspg_carrier.STL
+!sources/sspg_carrier_updated.STL
+!sources/sspg_gearbox_casing.STL
+!sources/sspg_motor_casing.STL
+!sources/sspg_planet.STL
+!sources/sspg_sec_carrier.STL
+!sources/sspg_sun.STL
+!sources/LICENSE-COMPAct.txt
