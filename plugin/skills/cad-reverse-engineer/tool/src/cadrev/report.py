@@ -142,12 +142,12 @@ def _valued(p: Project, entry: dict, keys) -> dict:
     }
 
 
-def motion(p: Project, built: Built) -> dict:
+def motion(p: Project, built: Built, coarsened: dict) -> dict:
     """How the model moves, as the MJCF exports it: each joint with its type, what it joins, its
     drive, its range and its physics values, each loop, each gear with its joints and ratio or lead,
-    each tendon with its path and physics values, and each cable with its path and, wound on a
-    wheel, the closed value of each joint it closes; no joints means the model is static, unless a
-    finding dropped them."""
+    each tendon with its path and physics values, each cable with its path and, wound on a wheel,
+    the closed value of each joint it closes, and each part whose mesh was coarsened to fit
+    MuJoCo's STL decoder; no joints means the model is static, unless a finding dropped them."""
     joints = {}
     for name, j in built.joints.items():
         joints[name] = {k: j[k] for k in ("type", "parent", "child", "drive") if k in j}
@@ -175,6 +175,7 @@ def motion(p: Project, built: Built) -> dict:
             )
             for name, c in built.cables.items()
         },
+        "coarsened": coarsened,
         "dropped": built.dropped,
     }
 
@@ -233,12 +234,19 @@ def _motion_line(moves: dict | None) -> list[str]:
             )
             line += f", wound on {c['wheel']}; its full turn closes {closes}"
         cables.append(line + ".")
+    meshes = [
+        f"- Mesh `meshes/{name}.stl` exported coarser for MuJoCo's STL decoder: {m['faces']} "
+        f"faces at tolerance {m['tolerance']:g} in the project's length unit and angular "
+        f"tolerance {m['angular_tolerance']:g} rad, from {m['default_faces']} at the default."
+        for name, m in moves["coarsened"].items()
+    ]
     return [
         f"**Kinematic**: {joints} joint{'s' * (joints != 1)} and {loops} "
         f"loop{'s' * (loops != 1)}, exported as `build/model.mjcf`; "
         "a posed check shows its pose beside its interpretation.",
         "",
         *([*cables, ""] if cables else []),
+        *([*meshes, ""] if meshes else []),
     ]
 
 

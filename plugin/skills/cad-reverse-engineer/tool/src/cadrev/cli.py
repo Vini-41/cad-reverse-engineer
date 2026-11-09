@@ -306,7 +306,7 @@ def cmd_check(args) -> int:
             poser = None if linkage is None else motion.poser(p, built, linkage)
             results, evaluated = geometry.run_checks(p, built, poser)
             model_reads = built.used
-            moves = report.motion(p, built)
+            moves = report.motion(p, built, {} if linkage is None else linkage.coarsened)
             weighed = report.masses(built)
             if not partial:
                 written = geometry.export(p, built)

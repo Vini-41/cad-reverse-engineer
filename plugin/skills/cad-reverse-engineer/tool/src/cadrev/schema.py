@@ -144,6 +144,7 @@ OVERLAY = Record(
         "id": TEXT_OR_NUMBER,
         "image": str,
         "part": str,
+        "instance": str,
         "view": str,
         "origin": Items(NUMBER),
         "mirror": bool,

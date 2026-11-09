@@ -1410,6 +1410,15 @@ def _interference(
     return [_worst_overlap(p, c, poses, sweep)]
 
 
+def _solids(shape):
+    """shape as its placed solids, a Compound without children: build123d's intersect places a
+    Compound's children by the wrong transform, so a solid turned inside a moved Compound is
+    intersected where it is not."""
+    from build123d import Compound
+
+    return Compound(shape.solids())
+
+
 def _worst_overlap(p: Project, c: dict, poses: list, sweep: dict | None) -> CheckResult:
     """An interference check's result: the worst overlap among its pairs across poses, each a
     (placed assembly, its pose), naming the pose it occurred at where sweep says how they were
@@ -1423,11 +1432,12 @@ def _worst_overlap(p: Project, c: dict, poses: list, sweep: dict | None) -> Chec
     worst, worst_pose, where, across = (0.0, ""), None, "", ""
     for assembly, pose in poses:
         shapes = dict(_instances(assembly))
+        solids = {name: _solids(shape) for name, shape in shapes.items()}
         boxes = {name: shape.bounding_box().wrapped for name, shape in shapes.items()}
         for a, b in pairs:
             if boxes[a].IsOut(boxes[b]):
                 continue  # apart, so no overlap: the boolean is the slow part of a sweep
-            volume = _volume(shapes[a].intersect(shapes[b]))
+            volume = _volume(solids[a].intersect(solids[b]))
             if volume > worst[0]:  # name a pair only where instances overlap
                 worst, worst_pose = (volume, f"{a} ∩ {b}"), pose
     if sweep is not None:
