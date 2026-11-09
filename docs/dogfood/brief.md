@@ -85,3 +85,19 @@ Log: [cell-stretcher-run-log.md](cell-stretcher-run-log.md).
   - each region of each cut sheet and each STL body: registered or not, and shape-checked or skipped, with the reason;
   - each probe, its value, and the params it feeds;
   - each conflict and its resolution;
+
+### COMPAct
+
+Log: [compact-run-log.md](compact-run-log.md).
+
+- **goal:** reconstruct the COMPAct 7.2:1 single-stage planetary gearbox with its motion: the sun, the planets, the ring inside the gearbox casing, and the carrier.
+- **sources:** (CC-BY) the paper `~/Documents/Projects/cadrev/compact-sources/Singh2025_COMPAct.pdf` and the authors' released STL files for the 7.2:1 design beside it (MIT, github.com/singhaman1750/COMPAct, `CADs/Actuator_STL_files/sspg_7.2`)
+- **report items:**
+  - the train: each gear, its tooth count and where it comes from, which member is fixed, input and output, quoting the paper, and the posed `angle` check of the output's turn with the value it compares against;
+  - the planet count and the check that covers it;
+  - each pitch diameter (sun, planets, ring) and the diameter check that covers it, and the check on the planets' centre distance;
+  - each released body: registered or not, and shape-checked or skipped, with the reason; where the ring is and how it is checked;
+  - whether `build/model.mjcf` loaded, joint counts by type, and the gears;
+  - each probe, its value, and the params it feeds;
+  - each conflict and its resolution;
+  - how long the final `cadrev check` took;
