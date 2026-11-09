@@ -10434,13 +10434,15 @@ SHAPE_BODIES = {
     "filleted tube": _Body(_tube, _filleted_tube, _TUBE, False, _TUBE_AT, slice(0)),
     # A window through a cone face and a torus face, as through the cylinder face above: the
     # part's points over it, nearest by angle and place along the face to points in the window,
-    # are the farthest from the body.
+    # are the farthest from the body. The cone's outer and inner faces, at x 7.5 and 6.5 mid-window,
+    # are each 2 from the window's edges, so rounding picks which: y and z only.
     "window in a cone face": _Body(
         _cone_shell,
         lambda: _cone_shell() - Pos(7.5, 0, 0) * Box(4, 6, 4),
         _CONE_SHELL,
         False,
         _CONE_SHELL_AT,
+        slice(1, 3),
     ),
     "window in a torus face": _Body(
         _torus_shell,
