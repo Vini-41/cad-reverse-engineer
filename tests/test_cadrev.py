@@ -23,9 +23,12 @@ from build123d import (
     Axis,
     Box,
     Compound,
+    Cone,
     Cylinder,
     Location,
     Pos,
+    Rot,
+    Torus,
     chamfer,
     export_step,
     export_stl,
@@ -10300,26 +10303,54 @@ def _every_point_distance(a, b) -> tuple[float, tuple[float, float, float]]:
     return worst
 
 
+def _solid_model(solid: str, at: dict) -> str:
+    """MODEL with the link built as solid, a build123d expression, and given datums e, f and g
+    at at."""
+    return swap(
+        swap(
+            MODEL,
+            "    link = Box(p.link_L, p.link_W, p.link_H)\n"
+            "    link -= Pos(-p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2, p.link_H)\n"
+            "    link -= Pos(p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2, p.link_H)\n",
+            f"    link = {solid}\n",
+        ),
+        '"link.b": (p.pitch / 2, 0, 0)}',
+        '"link.b": (p.pitch / 2, 0, 0)'
+        + "".join(f', "link.{k}": {v}' for k, v in at.items())
+        + "}",
+    )
+
+
 # A tube 40 long, 10 and 9 in radius, its datums on its two ends. A cut through its wall leaves
 # its outer face bounded by lines along its axis and circles around it.
 _TUBE_AT = {"e": (9.5, 0, -20), "f": (9.5, 0, 20), "g": (0, 9.5, 20)}
-_TUBE = swap(
-    swap(
-        MODEL,
-        "    link = Box(p.link_L, p.link_W, p.link_H)\n"
-        "    link -= Pos(-p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2, p.link_H)\n"
-        "    link -= Pos(p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2, p.link_H)\n",
-        "    link = Cylinder(10, 40) - Cylinder(9, 40)\n",
-    ),
-    '"link.b": (p.pitch / 2, 0, 0)}',
-    '"link.b": (p.pitch / 2, 0, 0)'
-    + "".join(f', "link.{k}": {v}' for k, v in _TUBE_AT.items())
-    + "}",
-)
+_TUBE = _solid_model("Cylinder(10, 40) - Cylinder(9, 40)", _TUBE_AT)
 
 
 def _tube():
     return Cylinder(10, 40) - Cylinder(9, 40)
+
+
+def _rimmed(round_off):
+    """The tube, its two outer rims, 10 in radius, given to round_off with a size of 0.5."""
+    tube = _tube()
+    return round_off(
+        [e for e in tube.edges() if e.geom_type.name == "CIRCLE" and e.radius == 10], 0.5
+    )
+
+
+def _chamfered_tube():
+    """The tube, its outer rims chamfered: cone faces."""
+    return _rimmed(chamfer)
+
+
+def _filleted_tube():
+    """The tube, its outer rims rounded: torus faces."""
+    return _rimmed(fillet)
+
+
+# A hole 0.2 in radius along X through the tube's wall at +X, through its upper rim.
+_RIM_HOLE = Pos(10, 0, 19.75) * Rot(0, 90, 0) * Cylinder(0.2, 6)
 
 
 class _Body(NamedTuple):
@@ -10386,6 +10417,17 @@ SHAPE_BODIES = {
     "slot along a cylinder face": _Body(
         _tube, lambda: _tube() - Pos(10, 0, 0) * Box(6, 8, 50), _TUBE, False, _TUBE_AT, slice(2)
     ),
+    # Cone faces and torus faces, whole, and each cut by a hole, where its points nearest by angle
+    # and place along it fall in the hole. Whole, either rim is as far all round, so rounding may
+    # pick which point: the distance only.
+    "chamfered tube": _Body(_tube, _chamfered_tube, _TUBE, False, _TUBE_AT, slice(0)),
+    "hole through a chamfer": _Body(
+        _tube, lambda: _chamfered_tube() - _RIM_HOLE, _TUBE, False, _TUBE_AT
+    ),
+    "filleted tube": _Body(_tube, _filleted_tube, _TUBE, False, _TUBE_AT, slice(0)),
+    "hole through a fillet": _Body(
+        _tube, lambda: _filleted_tube() - _RIM_HOLE, _TUBE, False, _TUBE_AT
+    ),
 }
 
 
@@ -10397,6 +10439,65 @@ def test_guard_shape_check_finds_the_distance_computing_every_point_gives(proj_d
     shape = _shape_result(verify(proj_dir)[1])["shape"]
     assert shape["distance"] == pytest.approx(gap, rel=1e-9, abs=1e-12)
     assert shape["worst_point"][row.shared] == pytest.approx(at[row.shared], abs=1e-6)
+
+
+# Solids each with a curved face of one kind, as the model builds it and as the body is, the datums
+# e, f and g on it: a cone, a torus, and a cylinder cut by a through hole along X.
+_CURVED = {
+    "cone": (
+        "Cone(10, 5, 10)",
+        lambda: Cone(10, 5, 10),
+        {"e": (10, 0, -5), "f": (5, 0, 5), "g": (0, 10, -5)},
+    ),
+    "torus": (
+        "Torus(20, 3)",
+        lambda: Torus(20, 3),
+        {"e": (23, 0, 0), "f": (0, 23, 0), "g": (20, 0, 3)},
+    ),
+    "cylinder cut by a hole": (
+        "Cylinder(10, 20) - Rot(0, 90, 0) * Cylinder(2, 30)",
+        lambda: Cylinder(10, 20) - Rot(0, 90, 0) * Cylinder(2, 30),
+        {"e": (0, 10, -10), "f": (0, 10, 10), "g": (0, -10, 10)},
+    ),
+}
+
+
+def _occ_distances_of_a_shape_check_against_its_stl(root, tmp_path, monkeypatch, row) -> int:
+    """How many sample points' distances OCC computes in a shape check of row's solid, as built,
+    against its own STL. Where every point is bounded by its distance, only the points
+    whose bound reaches the largest of the facets' sag go to OCC."""
+    model, solid, at = row
+    shape_checked(root, tmp_path, solid(), _solid_model(model, at), at=at)
+    computed = []
+    distance_to = Compound.distance_to
+    monkeypatch.setattr(
+        Compound, "distance_to", lambda self, other: computed.append(1) or distance_to(self, other)
+    )
+    shape = _shape_result(verify(root)[1])["shape"]
+    assert 0 < shape["distance"] < 0.2
+    return len(computed)
+
+
+@pytest.mark.parametrize("row", _CURVED.values(), ids=_CURVED.keys())
+def test_shape_check_of_a_cone_torus_or_cut_cylinder_against_its_stl_computes_few_points_in_occ(
+    proj_dir, tmp_path, monkeypatch, row
+):
+    # Each STL point by the curved face is bounded by its distance to the face's nearest point to
+    # it, where that point lies on the face: only those near the facets' sag, or by the hole's
+    # rim, go to OCC, not the thousands (6534, 60498 and 9388) left to it before.
+    assert (
+        _occ_distances_of_a_shape_check_against_its_stl(proj_dir, tmp_path, monkeypatch, row) < 1000
+    )
+
+
+def test_guard_shape_check_of_a_whole_cylinder_against_its_stl_computes_few_points_in_occ(
+    proj_dir, tmp_path, monkeypatch
+):
+    at = {"e": (10, 0, -10), "f": (10, 0, 10), "g": (0, 10, 10)}
+    row = ("Cylinder(10, 20)", lambda: Cylinder(10, 20), at)
+    assert (
+        _occ_distances_of_a_shape_check_against_its_stl(proj_dir, tmp_path, monkeypatch, row) < 1000
+    )
 
 
 # Cut files (ADR-0011): a laser-cut sheet drawn at half size, declared 600 mm wide over a 300-unit
