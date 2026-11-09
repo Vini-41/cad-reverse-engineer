@@ -392,15 +392,16 @@ def stated_quantities(text: str, as_printed: str | None = None) -> list[tuple[in
     a unit (a whole range such as 3-5 mm, a nominal and its tolerance), an a×b×c product, a
     diameter callout (Ø 32.5), or a thread size; never digits inside a name or a figure, table,
     equation or section number, a model name (E-M10), a moment (t = 2 s), a one-letter unit
-    before a subscripted symbol (2N r2), or a unit after a ratio's colon (60:1 in) but a time's;
-    and, where as_printed gives text normalized but for case, no one-letter unit printed as
-    another symbol's capital (8G, 2S), nor a thread size printed in lower case (m1, a module).
+    before a subscripted symbol (2N r2), or a unit after a ratio's colon (60:1 in) except a time
+    (1:30 min); and, where as_printed gives text normalized but for case, no one-letter unit
+    printed as another symbol's capital (8G, 2S), nor a thread size printed in lower case (m1, a
+    gear's module).
 
     It errs towards listing: a unit glued to a number is a candidate even where it is part of a
     name (1990s, 4g), because extracted text glues real ones too (0.5s, 20g), and a false
     candidate costs one skip where a missed one leaves a quantity unledgered."""
     case_unknown = as_printed is None or len(as_printed) != len(text)
-    if as_printed is None or case_unknown:
+    if as_printed is None or case_unknown:  # as_printed is None again, for pyright
         as_printed = text
     spans, group = [], []
     for t in _tokens(text):
@@ -420,18 +421,25 @@ def stated_quantities(text: str, as_printed: str | None = None) -> list[tuple[in
             and units.quantity(t.unit) == "time"
             and _MOMENT.search(text, max(0, group[0].start - 4), group[0].start) is not None
         )
-        symbol = (
+        subscript = _SUBSCRIPTED.match(text, t.end)
+        before_subscript = (
             len(group) == 1
             and len(t.unit or "") == 1
             and not text[t.end - 2].isalpha()
-            and _SUBSCRIPTED.match(text, t.end) is not None
+            and subscript is not None
+            and as_printed[subscript.start() + 1] != "M"  # a thread size: 10 N M4 bolt
         )
         ratio = (
             t.unit is not None
             and units.quantity(t.unit) != "time"
             and _RATIO.search(text, max(0, group[0].start - 2), group[0].start) is not None
         )
-        misread = moment or symbol or ratio or (len(group) == 1 and _capital_symbol(t, as_printed))
+        misread = (
+            moment
+            or before_subscript
+            or ratio
+            or (len(group) == 1 and _capital_symbol(t, as_printed))
+        )
         stated = t.unit or product or callout
         if stated and not glued and not misread and not any(g.labelled for g in group):
             spans.append((start, t.end))
