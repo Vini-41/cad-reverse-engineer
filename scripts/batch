@@ -16,8 +16,9 @@ plan order, rebases each done branch onto origin/main, pushes it, opens its PR (
 and waits for CI with scripts/ci-wait. It merges the PR with `gh pr merge --rebase` unless the PR
 changes a protected path (what users read, or the gate itself), which waits for the user. Once CI
 is green on main it closes the issue. A rebase conflict or a red CI gets the agent once more; if it
-still fails, or the agent asked a question, the issue gets the question and `needs-info`, and the
-batch goes on. Red CI on main stops the batch.
+still fails, or the agent asked a question, the issue gets the question and `needs-info`, its
+commits are pushed to `batch/<n>`, where a later batch from any checkout carries on, and the batch
+goes on. Red CI on main stops the batch.
 
 Everything lands in .scratch/batches/<stamp>/: one log per agent run and summary.md, which says
 what merged, what waits for the user and why, and each question. The batch ends with a desktop
@@ -222,9 +223,16 @@ class Batch:
         return f"batch/{t['number']}"
 
     def start(self, t: dict) -> None:
-        """Cut the ticket's worktree, or reuse the one an earlier batch left at a question."""
+        """Cut the ticket's worktree, or reuse the one an earlier batch left at a question. A
+        ticket that stopped at a question in another checkout carries on from its pushed branch."""
         if not self.tree(t).exists():
             run("git", "fetch", "-q", "origin", check=True)
+            pushed = f"origin/{self.branch(t)}"
+            base = (
+                pushed
+                if run("git", "rev-parse", "-q", "--verify", pushed).returncode == 0
+                else "origin/main"
+            )
             run(
                 "git",
                 "worktree",
@@ -233,7 +241,7 @@ class Batch:
                 "-B",
                 self.branch(t),
                 str(self.tree(t)),
-                "origin/main",
+                base,
                 check=True,
             )
         task = (
@@ -244,6 +252,21 @@ class Batch:
         self.agent(t, self.tree(t), task, "implement")
 
     def ask(self, t: dict, question: str) -> None:
+        """Put question on the ticket, and push its commits, so any checkout can carry on."""
+        if (
+            self.tree(t).exists()
+            and out("git", "rev-list", "--count", "origin/main..HEAD", cwd=self.tree(t)) != "0"
+        ):
+            run(
+                "git",
+                "push",
+                "-q",
+                "--force-with-lease",
+                "-u",
+                "origin",
+                self.branch(t),
+                cwd=self.tree(t),
+            )
         body = f"The batch runner stopped on this ticket.\n\n{question}"
         run(GH, "issue", "comment", str(t["number"]), "--body", body)
         run(

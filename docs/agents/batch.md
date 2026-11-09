@@ -15,7 +15,7 @@ A PR that changes a protected path stays open, green, for the user to merge: wha
 
 ## A question
 
-A ticket the agent cannot finish gets its question as an issue comment and `needs-info`. The user answers in a comment, swaps `needs-info` back to `ready-for-agent`, and the next batch carries on from the commits left in `.claude/worktrees/batch-<n>`.
+A ticket the agent cannot finish gets its question as an issue comment and `needs-info`. The user answers in a comment, swaps `needs-info` back to `ready-for-agent`, and the next batch carries on from the ticket's commits, which the runner pushed to `batch/<n>`, from any checkout.
 
 ## Lessons
 
