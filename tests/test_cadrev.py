@@ -25,6 +25,7 @@ from build123d import (
     Compound,
     Cone,
     Cylinder,
+    Face,
     Location,
     Pos,
     Rot,
@@ -10458,6 +10459,23 @@ SHAPE_BODIES = {
         False,
         _TORUS_SHELL_AT,
     ),
+    # A hole through a torus face and one across a cylinder face, each rim B-spline edges: the
+    # part's points by the rim are nearest to points of the face just inside it or just in the
+    # hole, where the tests of which point is on the face could tell them apart.
+    "hole in a torus face": _Body(
+        _torus_shell,
+        lambda: _torus_shell() - Pos(0, -20, 0) * Cylinder(1.5, 10),
+        _TORUS_SHELL,
+        False,
+        _TORUS_SHELL_AT,
+    ),
+    "hole across a cylinder face": _Body(
+        _tube,
+        lambda: _tube() - Rot(0, 90, 0) * Cylinder(1.5, 30),
+        _TUBE,
+        False,
+        _TUBE_AT,
+    ),
 }
 
 
@@ -10492,16 +10510,19 @@ _CURVED = {
 }
 
 
-def _occ_distances_of_a_shape_check_against_its_stl(root, tmp_path, monkeypatch, row) -> int:
-    """How many sample points' distances OCC computes in a shape check of row's solid, as built,
-    against its own STL. Where every point is bounded by its distance, only the points
-    whose bound reaches the largest of the facets' sag go to OCC."""
+def _occ_distances_of_a_shape_check_against_its_stl(
+    root, tmp_path, monkeypatch, row, of: type = Compound
+) -> int:
+    """How many distances OCC computes in a shape check of row's solid, as built, against its own
+    STL: by default the sample points' to the other surface, with of=Face each one to a face, as
+    the tests of which point is on a face compute it. Where every point is bounded by its
+    distance, only the points whose bound reaches the largest of the facets' sag go to OCC."""
     model, solid, at = row
     shape_checked(root, tmp_path, solid(), _solid_model(model, at), at=at)
     computed = []
-    distance_to = Compound.distance_to
+    distance_to = of.distance_to
     monkeypatch.setattr(
-        Compound, "distance_to", lambda self, other: computed.append(1) or distance_to(self, other)
+        of, "distance_to", lambda self, other: computed.append(1) or distance_to(self, other)
     )
     shape = _shape_result(verify(root)[1])["shape"]
     assert 0 < shape["distance"] < 0.2
@@ -10517,6 +10538,23 @@ def test_shape_check_of_a_cone_torus_or_cut_cylinder_against_its_stl_computes_fe
     # rim, go to OCC, not the thousands (6534, 60498 and 9388) left to it before.
     assert (
         _occ_distances_of_a_shape_check_against_its_stl(proj_dir, tmp_path, monkeypatch, row) < 1000
+    )
+
+
+def test_shape_check_of_a_torus_with_a_notch_against_its_stl_tests_few_points_on_a_face_in_occ(
+    proj_dir, tmp_path, monkeypatch
+):
+    # Run 25's casing spent 83 s on 50 525 such tests against its one torus face, cut by B-spline
+    # edges, and this check made 70 740. A point on the face's surface counts as on it by OCC's
+    # classifier at the point's own parameters, which computes no distance, but where it lies on
+    # an edge, as the STL's vertices along the torus's seams do; nor is a point tested whose bound
+    # already lies below the largest distance found.
+    model = "Torus(20, 3) - Pos(0, -20, 3) * Rot(0, 0, 30) * Box(3, 3, 3)"
+    at = {"e": (23, 0, 0), "f": (0, 23, 0), "g": (20, 0, 3)}
+    row = (model, lambda: Torus(20, 3) - Pos(0, -20, 3) * Rot(0, 0, 30) * Box(3, 3, 3), at)
+    assert (
+        _occ_distances_of_a_shape_check_against_its_stl(proj_dir, tmp_path, monkeypatch, row, Face)
+        < 10000
     )
 
 
