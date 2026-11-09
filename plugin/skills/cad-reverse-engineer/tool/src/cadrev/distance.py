@@ -7,7 +7,8 @@ it, and since almost every point lies far closer than the largest distance, nump
 each point's distance from above, and OCC computes the distance of only the points whose bound
 reaches the largest distance yet found: the result computing every point's distance gives. Flat
 triangles, plane faces bounded by lines and circles, and cylinder, cone and torus faces give a
-bound; a point near only B-spline or other faces is left to OCC."""
+bound, a cut one only where the point's nearest point on it is on the face; a point near only
+other faces, or over a cut face's hole, is left to OCC."""
 
 from __future__ import annotations
 
@@ -258,8 +259,10 @@ def _bound(points: np.ndarray, surface: _Surface, slack: float) -> np.ndarray:
     """An upper bound on each point's distance to surface: its distance to a point on a flat
     triangle, a plane face bounded by lines and circles, or a cylinder, cone or torus face of it,
     whichever is nearest, plus slack for rounding and for surface's tolerance, within which OCC's
-    distance strays. B-spline and other faces give no bound: a point near only those is bounded
-    by the others, however far, and so left to OCC."""
+    distance strays. B-spline and other faces give no bound, nor does a plane face with other
+    edges, nor a cut cylinder, cone or torus face where the point's nearest point on its surface
+    falls in a hole: a point near only those is bounded by the others, however far, and so left
+    to OCC."""
     out = np.full(len(points), np.inf)
     triangles = [c for c in surface.triangles if c is not None]
     if triangles:

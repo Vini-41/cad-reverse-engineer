@@ -10349,8 +10349,19 @@ def _filleted_tube():
     return _rimmed(fillet)
 
 
-# A hole 0.2 in radius along X through the tube's wall at +X, through its upper rim.
-_RIM_HOLE = Pos(10, 0, 19.75) * Rot(0, 90, 0) * Cylinder(0.2, 6)
+# A cone and a torus, each a shell 1 thick, their datums on their outer faces.
+_CONE_SHELL_AT = {"e": (10, 0, -5), "f": (5, 0, 5), "g": (0, 10, -5)}
+_CONE_SHELL = _solid_model("Cone(10, 5, 10) - Cone(9, 4, 10)", _CONE_SHELL_AT)
+_TORUS_SHELL_AT = {"e": (-23, 0, 0), "f": (0, 23, 0), "g": (20, 0, 3)}
+_TORUS_SHELL = _solid_model("Torus(20, 3) - Torus(20, 2)", _TORUS_SHELL_AT)
+
+
+def _cone_shell():
+    return Cone(10, 5, 10) - Cone(9, 4, 10)
+
+
+def _torus_shell():
+    return Torus(20, 3) - Torus(20, 2)
 
 
 class _Body(NamedTuple):
@@ -10417,16 +10428,26 @@ SHAPE_BODIES = {
     "slot along a cylinder face": _Body(
         _tube, lambda: _tube() - Pos(10, 0, 0) * Box(6, 8, 50), _TUBE, False, _TUBE_AT, slice(2)
     ),
-    # Cone faces and torus faces, whole, and each cut by a hole, where its points nearest by angle
-    # and place along it fall in the hole. Whole, either rim is as far all round, so rounding may
-    # pick which point: the distance only.
+    # Cone faces and torus faces, whole: either rim is as far all round, so rounding may pick which
+    # point: the distance only.
     "chamfered tube": _Body(_tube, _chamfered_tube, _TUBE, False, _TUBE_AT, slice(0)),
-    "hole through a chamfer": _Body(
-        _tube, lambda: _chamfered_tube() - _RIM_HOLE, _TUBE, False, _TUBE_AT
-    ),
     "filleted tube": _Body(_tube, _filleted_tube, _TUBE, False, _TUBE_AT, slice(0)),
-    "hole through a fillet": _Body(
-        _tube, lambda: _filleted_tube() - _RIM_HOLE, _TUBE, False, _TUBE_AT
+    # A window through a cone face and a torus face, as through the cylinder face above: the
+    # part's points over it, nearest by angle and place along the face to points in the window,
+    # are the farthest from the body.
+    "window in a cone face": _Body(
+        _cone_shell,
+        lambda: _cone_shell() - Pos(7.5, 0, 0) * Box(4, 6, 4),
+        _CONE_SHELL,
+        False,
+        _CONE_SHELL_AT,
+    ),
+    "window in a torus face": _Body(
+        _torus_shell,
+        lambda: _torus_shell() - Pos(23, 0, 0) * Box(4, 4, 4),
+        _TORUS_SHELL,
+        False,
+        _TORUS_SHELL_AT,
     ),
 }
 
