@@ -23,9 +23,12 @@ from build123d import (
     Axis,
     Box,
     Compound,
+    Cone,
     Cylinder,
     Location,
     Pos,
+    Rot,
+    Torus,
     chamfer,
     export_step,
     export_stl,
@@ -10300,26 +10303,65 @@ def _every_point_distance(a, b) -> tuple[float, tuple[float, float, float]]:
     return worst
 
 
+def _solid_model(solid: str, at: dict) -> str:
+    """MODEL with the link built as solid, a build123d expression, and given datums e, f and g
+    at at."""
+    return swap(
+        swap(
+            MODEL,
+            "    link = Box(p.link_L, p.link_W, p.link_H)\n"
+            "    link -= Pos(-p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2, p.link_H)\n"
+            "    link -= Pos(p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2, p.link_H)\n",
+            f"    link = {solid}\n",
+        ),
+        '"link.b": (p.pitch / 2, 0, 0)}',
+        '"link.b": (p.pitch / 2, 0, 0)'
+        + "".join(f', "link.{k}": {v}' for k, v in at.items())
+        + "}",
+    )
+
+
 # A tube 40 long, 10 and 9 in radius, its datums on its two ends. A cut through its wall leaves
 # its outer face bounded by lines along its axis and circles around it.
 _TUBE_AT = {"e": (9.5, 0, -20), "f": (9.5, 0, 20), "g": (0, 9.5, 20)}
-_TUBE = swap(
-    swap(
-        MODEL,
-        "    link = Box(p.link_L, p.link_W, p.link_H)\n"
-        "    link -= Pos(-p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2, p.link_H)\n"
-        "    link -= Pos(p.pitch / 2, 0, 0) * Cylinder(p.hole_d / 2, p.link_H)\n",
-        "    link = Cylinder(10, 40) - Cylinder(9, 40)\n",
-    ),
-    '"link.b": (p.pitch / 2, 0, 0)}',
-    '"link.b": (p.pitch / 2, 0, 0)'
-    + "".join(f', "link.{k}": {v}' for k, v in _TUBE_AT.items())
-    + "}",
-)
+_TUBE = _solid_model("Cylinder(10, 40) - Cylinder(9, 40)", _TUBE_AT)
 
 
 def _tube():
     return Cylinder(10, 40) - Cylinder(9, 40)
+
+
+def _rimmed(round_off):
+    """The tube, its two outer rims, 10 in radius, given to round_off with a size of 0.5."""
+    tube = _tube()
+    return round_off(
+        [e for e in tube.edges() if e.geom_type.name == "CIRCLE" and e.radius == 10], 0.5
+    )
+
+
+def _chamfered_tube():
+    """The tube, its outer rims chamfered: cone faces."""
+    return _rimmed(chamfer)
+
+
+def _filleted_tube():
+    """The tube, its outer rims rounded: torus faces."""
+    return _rimmed(fillet)
+
+
+# A cone and a torus, each a shell 1 thick, their datums on their outer faces.
+_CONE_SHELL_AT = {"e": (10, 0, -5), "f": (5, 0, 5), "g": (0, 10, -5)}
+_CONE_SHELL = _solid_model("Cone(10, 5, 10) - Cone(9, 4, 10)", _CONE_SHELL_AT)
+_TORUS_SHELL_AT = {"e": (-23, 0, 0), "f": (0, 23, 0), "g": (20, 0, 3)}
+_TORUS_SHELL = _solid_model("Torus(20, 3) - Torus(20, 2)", _TORUS_SHELL_AT)
+
+
+def _cone_shell():
+    return Cone(10, 5, 10) - Cone(9, 4, 10)
+
+
+def _torus_shell():
+    return Torus(20, 3) - Torus(20, 2)
 
 
 class _Body(NamedTuple):
@@ -10374,9 +10416,16 @@ SHAPE_BODIES = {
         link_body, lambda: chamfer(link_body().edges().filter_by(Axis.Z), 0.05), stl=False
     ),
     # A cylinder face whose edges lie inside its range of angle and height, where it has no
-    # surface: its points nearest by angle and height bound nothing there.
+    # surface: its points nearest by angle and height bound nothing there. The tube's outer and
+    # inner faces, at x 10 and 9 mid-window, are each 4 from an edge of the window, so rounding
+    # picks which: y and z only.
     "window in a cylinder face": _Body(
-        _tube, lambda: _tube() - Pos(10, 0, 0) * Box(6, 8, 8), _TUBE, False, _TUBE_AT
+        _tube,
+        lambda: _tube() - Pos(10, 0, 0) * Box(6, 8, 8),
+        _TUBE,
+        False,
+        _TUBE_AT,
+        slice(1, 3),
     ),
     "notch at a cylinder face's end": _Body(
         _tube, lambda: _tube() - Pos(10, 0, 18) * Box(6, 8, 8), _TUBE, False, _TUBE_AT
@@ -10385,6 +10434,29 @@ SHAPE_BODIES = {
     # Every point along the slot's middle is as far, so rounding picks which: x and y only.
     "slot along a cylinder face": _Body(
         _tube, lambda: _tube() - Pos(10, 0, 0) * Box(6, 8, 50), _TUBE, False, _TUBE_AT, slice(2)
+    ),
+    # Cone faces and torus faces, whole: either rim is as far all round, so rounding may pick which
+    # point: the distance only.
+    "chamfered tube": _Body(_tube, _chamfered_tube, _TUBE, False, _TUBE_AT, slice(0)),
+    "filleted tube": _Body(_tube, _filleted_tube, _TUBE, False, _TUBE_AT, slice(0)),
+    # A window through a cone face and a torus face, as through the cylinder face above: the
+    # part's points over it, nearest by angle and place along the face to points in the window,
+    # are the farthest from the body. The cone's outer and inner faces, at x 7.5 and 6.5 mid-window,
+    # are each 2 from an edge of the window, so rounding picks which: y and z only.
+    "window in a cone face": _Body(
+        _cone_shell,
+        lambda: _cone_shell() - Pos(7.5, 0, 0) * Box(4, 6, 4),
+        _CONE_SHELL,
+        False,
+        _CONE_SHELL_AT,
+        slice(1, 3),
+    ),
+    "window in a torus face": _Body(
+        _torus_shell,
+        lambda: _torus_shell() - Pos(23, 0, 0) * Box(4, 4, 4),
+        _TORUS_SHELL,
+        False,
+        _TORUS_SHELL_AT,
     ),
 }
 
@@ -10397,6 +10469,65 @@ def test_guard_shape_check_finds_the_distance_computing_every_point_gives(proj_d
     shape = _shape_result(verify(proj_dir)[1])["shape"]
     assert shape["distance"] == pytest.approx(gap, rel=1e-9, abs=1e-12)
     assert shape["worst_point"][row.shared] == pytest.approx(at[row.shared], abs=1e-6)
+
+
+# Solids each with a curved face of one kind, as the model builds it and as the body is, the datums
+# e, f and g on it: a cone, a torus, and a cylinder cut by a through hole along X.
+_CURVED = {
+    "cone": (
+        "Cone(10, 5, 10)",
+        lambda: Cone(10, 5, 10),
+        {"e": (10, 0, -5), "f": (5, 0, 5), "g": (0, 10, -5)},
+    ),
+    "torus": (
+        "Torus(20, 3)",
+        lambda: Torus(20, 3),
+        {"e": (23, 0, 0), "f": (0, 23, 0), "g": (20, 0, 3)},
+    ),
+    "cylinder cut by a hole": (
+        "Cylinder(10, 20) - Rot(0, 90, 0) * Cylinder(2, 30)",
+        lambda: Cylinder(10, 20) - Rot(0, 90, 0) * Cylinder(2, 30),
+        {"e": (0, 10, -10), "f": (0, 10, 10), "g": (0, -10, 10)},
+    ),
+}
+
+
+def _occ_distances_of_a_shape_check_against_its_stl(root, tmp_path, monkeypatch, row) -> int:
+    """How many sample points' distances OCC computes in a shape check of row's solid, as built,
+    against its own STL. Where every point is bounded by its distance, only the points
+    whose bound reaches the largest of the facets' sag go to OCC."""
+    model, solid, at = row
+    shape_checked(root, tmp_path, solid(), _solid_model(model, at), at=at)
+    computed = []
+    distance_to = Compound.distance_to
+    monkeypatch.setattr(
+        Compound, "distance_to", lambda self, other: computed.append(1) or distance_to(self, other)
+    )
+    shape = _shape_result(verify(root)[1])["shape"]
+    assert 0 < shape["distance"] < 0.2
+    return len(computed)
+
+
+@pytest.mark.parametrize("row", _CURVED.values(), ids=_CURVED.keys())
+def test_shape_check_of_a_cone_torus_or_cut_cylinder_against_its_stl_computes_few_points_in_occ(
+    proj_dir, tmp_path, monkeypatch, row
+):
+    # Each STL point by the curved face is bounded by its distance to the face's nearest point to
+    # it, where that point lies on the face: only those near the facets' sag, or by the hole's
+    # rim, go to OCC, not the thousands (6534, 60498 and 9388) left to it before.
+    assert (
+        _occ_distances_of_a_shape_check_against_its_stl(proj_dir, tmp_path, monkeypatch, row) < 1000
+    )
+
+
+def test_guard_shape_check_of_a_whole_cylinder_against_its_stl_computes_few_points_in_occ(
+    proj_dir, tmp_path, monkeypatch
+):
+    at = {"e": (10, 0, -10), "f": (10, 0, 10), "g": (0, 10, 10)}
+    row = ("Cylinder(10, 20)", lambda: Cylinder(10, 20), at)
+    assert (
+        _occ_distances_of_a_shape_check_against_its_stl(proj_dir, tmp_path, monkeypatch, row) < 1000
+    )
 
 
 # Cut files (ADR-0011): a laser-cut sheet drawn at half size, declared 600 mm wide over a 300-unit

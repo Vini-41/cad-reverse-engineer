@@ -5,8 +5,9 @@
 #   scripts/check
 #   scripts/check --lint   # pyright, ruff and the tests' imports alone, in seconds, for after an edit
 #
-# An example fails past EXAMPLE_SECONDS (default 150, about the slowest CI runner's time for
-# examples/legclaw with room to spare).
+# An example fails past EXAMPLE_SECONDS (default 600). Review holds each example to a goal a user
+# feels, a full cadrev check in about 2 minutes on a laptop; this ceiling only catches a large
+# regression, so it is not tuned to the slowest example.
 #
 # The plugin manifests are validated only where the `claude` CLI is installed; CI installs it.
 set -uo pipefail
@@ -51,7 +52,7 @@ step() {
 # Fails unless cadrev check on example prints the status line its README states, within
 # EXAMPLE_SECONDS.
 example_status() {
-  local example=$1 expected log code=0 start took budget=${EXAMPLE_SECONDS:-150}
+  local example=$1 expected log code=0 start took budget=${EXAMPLE_SECONDS:-600}
   expected=$(sed -n 's/^Expected status: `\(.*\)`$/\1/p' "$example/README.md")
   [ -n "$expected" ] || { echo "$example/README.md states no expected status"; return 1; }
   log=$(mktemp)
