@@ -10459,12 +10459,14 @@ SHAPE_BODIES = {
         False,
         _TORUS_SHELL_AT,
     ),
-    # A hole through a torus face and one across a cylinder face, each rim B-spline edges: the
+    # A notch in a torus face and a hole across a cylinder face, each rim B-spline edges: the
     # part's points by the rim are nearest to points of the face just inside it or just in the
-    # hole, where the tests of which point is on the face could tell them apart.
-    "hole in a torus face": _Body(
+    # cut, where the tests of which point is on the face could tell them apart, and those over
+    # the cut are the farthest from the body. The hole goes through both walls, its middle at x
+    # ±10 and ±9 as far from its rim, so rounding picks which: y and z only.
+    "notch in a torus face": _Body(
         _torus_shell,
-        lambda: _torus_shell() - Pos(0, -20, 0) * Cylinder(1.5, 10),
+        lambda: _torus_shell() - Pos(0, -20, 3) * Rot(0, 0, 30) * Box(3, 3, 3),
         _TORUS_SHELL,
         False,
         _TORUS_SHELL_AT,
@@ -10475,12 +10477,14 @@ SHAPE_BODIES = {
         _TUBE,
         False,
         _TUBE_AT,
+        slice(1, 3),
     ),
 }
 
 
 @pytest.mark.parametrize("row", SHAPE_BODIES.values(), ids=SHAPE_BODIES.keys())
 def test_guard_shape_check_finds_the_distance_computing_every_point_gives(proj_dir, tmp_path, row):
+    assert row.body().is_valid
     source = shape_checked(proj_dir, tmp_path, row.body(), row.model, row.stl, row.at)
     released_body = _stl_solid(source) if row.stl else import_step(str(source))
     gap, at = _every_point_distance(row.part(), released_body)
