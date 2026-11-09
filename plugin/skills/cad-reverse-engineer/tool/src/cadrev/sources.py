@@ -338,6 +338,18 @@ def extract_figures(path: Path, out: Path) -> list[Path]:
     return written
 
 
+def pixel_size(path: Path) -> tuple[int, int] | None:
+    """An image file's width and height in pixels, the frame `cadrev crop` takes its box in; None
+    for a file Pillow cannot read."""
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(path) as image:
+            return image.size
+    except (UnidentifiedImageError, OSError, ValueError):
+        return None
+
+
 VIEWABLE = {".png", ".jpg", ".jpeg", ".gif", ".webp"}  # formats an image viewer shows as they are
 
 

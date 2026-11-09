@@ -247,7 +247,9 @@ def cmd_figures(args) -> int:
         return 1
     out = p.root / "figures" / args.source
     for path in sources.extract_figures(p.source_path(args.source), out):
-        print(path.relative_to(p.root))
+        size = sources.pixel_size(path)
+        frame = f"  {size[0]} x {size[1]} px" if size else ""
+        print(f"{path.relative_to(p.root)}{frame}")
     return 0
 
 
@@ -258,12 +260,16 @@ def cmd_crop(args) -> int:
     target = root / "figures" / "crops" / f"{args.name}.png"
     target.parent.mkdir(parents=True, exist_ok=True)
     with Image.open(root / args.image) as image:
-        region = image.crop((args.left, args.top, args.right, args.bottom))
+        box = (args.left, args.top, args.right, args.bottom)
+        width, height = image.size
+        region = image.crop(box)
         if args.zoom != 1:
             region = region.resize(
                 (region.width * args.zoom, region.height * args.zoom), Image.Resampling.LANCZOS
             )
         region.save(target)
+    # The frame the box was read in, so a box placed on a downscaled view shows as one.
+    print(f"cropped {' '.join(map(str, box))} of {args.image}, {width} x {height} px")
     print(f"image: {target.relative_to(root)}\nimage_sha256: {sources.sha256(target)}")
     return 0
 
@@ -367,7 +373,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--grep", help="only lines matching this regex")
     s.set_defaults(fn=cmd_text)
 
-    s = sub.add_parser("figures", help="extract a source's embedded images to figures/<source>/")
+    s = sub.add_parser(
+        "figures",
+        help="extract a source's embedded images to figures/<source>/ and print each one's path "
+        "and pixel size",
+    )
     s.add_argument("dir")
     s.add_argument("source")
     s.set_defaults(fn=cmd_figures)
@@ -376,7 +386,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("dir")
     s.add_argument("image", help="path relative to the project")
     for edge in ("left", "top", "right", "bottom"):
-        s.add_argument(edge, type=int, metavar=edge.upper())
+        s.add_argument(edge, type=int, metavar=edge.upper(), help="pixels of the image's file")
     s.add_argument(
         "--name", required=True, help="the crop's name: it is written to figures/crops/<NAME>.png"
     )
