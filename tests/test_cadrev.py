@@ -3476,11 +3476,11 @@ def docx(text: str, image: bytes | None = None, media: str = "image1.png") -> by
     return out.getvalue()
 
 
-def png(format: str = "PNG") -> bytes:
+def png(format: str = "PNG", size: tuple[int, int] = (4, 2)) -> bytes:
     from PIL import Image
 
     out = io.BytesIO()
-    Image.new("RGB", (4, 2), "red").save(out, format=format)
+    Image.new("RGB", size, "red").save(out, format=format)
     return out.getvalue()
 
 
@@ -3571,7 +3571,7 @@ def test_guard_figures_extracts_each_embedded_image(proj_dir, tmp_path, name, co
     add_source(proj_dir, tmp_path, name, content())
     code, out = run("figures", str(proj_dir), "doc")
     assert code == 0 and len(out.splitlines()) == 1 and out.startswith(written)
-    assert (proj_dir / out.strip()).stat().st_size > 0
+    assert (proj_dir / out.split("  ")[0].strip()).stat().st_size > 0
 
 
 def test_figures_writes_an_image_a_viewer_cannot_show_as_png(proj_dir, tmp_path):
@@ -3579,9 +3579,25 @@ def test_figures_writes_an_image_a_viewer_cannot_show_as_png(proj_dir, tmp_path)
 
     add_source(proj_dir, tmp_path, "supp.docx", docx(PAPER, image=png("TIFF"), media="image1.tiff"))
     code, out = run("figures", str(proj_dir), "doc")
-    assert (code, out) == (0, "figures/doc/image1.png\n")
+    assert (code, out) == (0, "figures/doc/image1.png  4 x 2 px\n")
     with Image.open(proj_dir / "figures" / "doc" / "image1.png") as image:
         assert (image.format, image.size) == ("PNG", (4, 2))
+
+
+# Runs 13-15's figure (#128): larger than an image viewer's downscaled view of it, so a box read
+# off the view lands short of the label unless it is placed in the file's own pixels.
+LARGE_FIGURE = (2051, 2028)
+
+
+def test_figures_prints_each_figure_path_with_its_pixel_size(proj_dir, tmp_path):
+    add_source(proj_dir, tmp_path, "paper.docx", docx(PAPER, image=png(size=LARGE_FIGURE)))
+    code, out = run("figures", str(proj_dir), "doc")
+    assert (code, out) == (0, "figures/doc/image1.png  2051 x 2028 px\n")
+
+
+def test_guard_figures_prints_the_path_alone_of_an_image_pillow_cannot_read(proj_dir, tmp_path):
+    add_source(proj_dir, tmp_path, "paper.docx", docx(PAPER, image=b"not an image", media="a.emf"))
+    assert run("figures", str(proj_dir), "doc") == (0, "figures/doc/a.emf\n")
 
 
 def test_guard_figures_of_a_source_without_images_writes_nothing(proj_dir):
@@ -3615,9 +3631,30 @@ def test_guard_crop_writes_the_region_zoomed_and_prints_its_sha256(proj_dir):
         "3",
     )
     crop = proj_dir / "figures" / "crops" / "c.png"
-    assert (code, out) == (0, f"image: figures/crops/c.png\nimage_sha256: {sha256(crop)}\n")
+    assert code == 0
+    assert out.splitlines()[-2:] == ["image: figures/crops/c.png", f"image_sha256: {sha256(crop)}"]
     with Image.open(crop) as image:
         assert image.size == (30, 15)
+
+
+def test_crop_prints_the_pixel_frame_its_box_is_in(proj_dir):
+    from PIL import Image
+
+    (proj_dir / "figures").mkdir(exist_ok=True)
+    Image.new("RGB", LARGE_FIGURE, "white").save(proj_dir / "figures" / "p004_01.png")
+    box = ["860", "0", "1270", "420"]  # run 13's corrected foot-envelope box
+    code, out = run("crop", str(proj_dir), "figures/p004_01.png", *box, "--name", "foot")
+    assert code == 0
+    assert out.splitlines()[0] == "cropped 860 0 1270 420 of figures/p004_01.png, 2051 x 2028 px"
+    with Image.open(proj_dir / "figures" / "crops" / "foot.png") as image:
+        assert image.size == (410, 420)
+
+
+def test_crop_help_says_its_box_is_in_pixels_of_the_images_file(capsys):
+    with pytest.raises(SystemExit):
+        cli.main(["crop", "--help"])
+    out = " ".join(capsys.readouterr().out.split())
+    assert "LEFT pixels of the image's file" in out
 
 
 # Trips from the dogfood run (docs/dogfood/legclaw-run-log.md): each is a place a fresh agent
@@ -8433,6 +8470,85 @@ def test_pitch_diameter_and_planet_axis_of_a_planetary_train_match_its_stated_co
     # 0.5 × 25 and 0.5 × (25 + 65) / 2.
     expected = (checks["sun-pitch"]["expect"]["value"], checks["orbit"]["expect"]["value"])
     assert expected == (12.5, 22.5)
+
+
+# A toothed sun (#142): radial flanks, so each tooth is `tooth` half pitches thick at every
+# radius (1 is half a pitch, less is backlash), tips a module out from the pitch circle and roots a
+# module in, round a bore the sun's axis datums lie on. flank_a and flank_b lie on the pitch
+# circle half a turn apart, flank_a on the first tooth's flank.
+TOOTHED_SUN = """\
+    rp = p.m * p.z_sun / 2
+    half = pi / p.z_sun / 2 * p.tooth
+    corners = []
+    for k in range(int(p.z_sun)):
+        c = 2 * pi * k / p.z_sun
+        for r, a in ((rp - p.m, c - half), (rp + p.m, c - half)):
+            corners.append((r * cos(a), r * sin(a)))
+        for r, a in ((rp + p.m, c + half), (rp - p.m, c + half)):
+            corners.append((r * cos(a), r * sin(a)))
+    sun = extrude(Polygon(*corners, align=None), h / 2, both=True) - Cylinder(p.pin_r, h)
+"""
+
+
+def _toothed_sun(root: Path, tmp_path: Path, row: str, tooth: float, check: dict) -> dict:
+    """The planetary train with its sun toothed (TOOTHED_SUN) and check as its one check;
+    the report of a full run."""
+    planetary(root, tmp_path, row)
+    model = swap(
+        PLANETARY,
+        "from build123d import *",
+        "from math import cos, pi, sin\nfrom build123d import *",
+    )
+    orbit = "    orbit = ring_r - planet_r\n"
+    model = swap(model, orbit, orbit + TOOTHED_SUN)
+    model = swap(model, '"sun": Cylinder(sun_r, h),', '"sun": sun,')
+    flanks = (
+        '"sun.flank_a": (rp * cos(half), rp * sin(half), 0),\n'
+        '            "sun.flank_b": (-rp * cos(half), -rp * sin(half), 0),'
+    )
+    model = swap(model, '"sun.p": (sun_r, 0, 0),', flanks)
+    write(root, "model.py", model)
+    gap = {"rationale": "a test sun", "gap": "G1"}
+    _param("tooth", basis="proposed", value=tooth, **gap)(root, tmp_path)
+    write(root, "checks.yaml", {"checks": [check]})
+    return verify(root)[1]
+
+
+_FLANK_PITCH = {
+    "id": "sun-pitch",
+    "kind": "distance",
+    "between": ["sun.flank_a", "sun.flank_b"],
+    "expect": "T1.m * T1.z_sun",
+}
+
+
+@pytest.mark.parametrize(
+    "row, tooth, pitch_d",
+    [(TABLE_I, 1, 12.5), ("SSPG [24, 64, 152, 0.5, 3]", 0.8, 12)],
+    ids=["odd-half-pitch-teeth", "even-with-backlash"],
+)
+def test_guard_toothed_sun_pitch_diameter_is_a_distance_across_opposite_flanks(
+    proj_dir, tmp_path, row, tooth, pitch_d
+):
+    report = _toothed_sun(proj_dir, tmp_path, row, tooth, _FLANK_PITCH)
+    pitch = _by_id(report)["sun-pitch"]
+    assert pitch["ok"], report["findings"]
+    assert pitch["expect"]["value"] == pitch_d  # 0.5 × 25 and 0.5 × 24
+    assert findings(proj_dir, "datum-off-solid") == []
+
+
+def test_guard_diameter_at_a_flank_datum_of_a_toothed_sun_is_check_config(proj_dir, tmp_path):
+    check = {
+        "id": "sun-pitch",
+        "kind": "diameter",
+        "at": "sun.flank_a",
+        "expect": "T1.m * T1.z_sun",
+    }
+    _toothed_sun(proj_dir, tmp_path, TABLE_I, 1, check)
+    assert findings(proj_dir, "check-config") == [
+        "check sun-pitch: sun.flank_a lies on no cylindrical face of part sun; place it on the "
+        "face whose diameter the check compares"
+    ]
 
 
 def test_planet_axis_fails_where_the_ring_count_breaks_ring_equals_sun_plus_two_planets(
