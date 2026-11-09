@@ -236,7 +236,11 @@ class Batch:
                 "origin/main",
                 check=True,
             )
-        task = f"Implement it: run `/mattpocock-skills:implement {t['number']}`."
+        task = (
+            "Implement it test-first: read the issue with `gh issue view "
+            f"{t['number']} --comments`, then write each test red before the change that "
+            "turns it green."
+        )
         self.agent(t, self.tree(t), task, "implement")
 
     def ask(self, t: dict, question: str) -> None:
