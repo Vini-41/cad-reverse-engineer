@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -274,6 +275,18 @@ def test_batch_asks_when_ci_stays_red_after_one_fix_and_leaves_the_pr_open(tmp_p
     assert "#1 Ticket 1: CI stays red on PR #1 after one fix" in result.stdout
 
 
+@pytest.fixture(autouse=True)
+def reap(tmp_path):
+    """Kill a detached batch a failed test left running, with its fake agent."""
+    yield
+    (tmp_path / "go").touch()
+    try:
+        pid = int((tmp_path / "repo" / ".scratch" / "batches" / "running").read_text().split()[0])
+        os.killpg(pid, signal.SIGKILL)
+    except (OSError, ValueError):
+        pass
+
+
 def until(condition, seconds: float = 60) -> None:
     end = time.monotonic() + seconds
     while not condition():
@@ -328,16 +341,37 @@ def test_a_second_batch_is_refused_while_one_runs_and_a_stale_lock_is_taken_over
     repo, env, _ = setup(tmp_path, [issue(1, "a.py")], agents)
     lock = repo / ".scratch" / "batches" / "running"
     lock.parent.mkdir(parents=True)
-    lock.write_text(f"{os.getpid()} 2026-11-09-1327\n")
-    for foreground in (True, False):
-        refused = batch(repo, env, foreground=foreground)
-        assert refused.returncode == 1
-        assert f"batch 2026-11-09-1327 is running, pid {os.getpid()}" in refused.stderr
+    other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)", "scripts/batch"])
+    try:
+        lock.write_text(f"{other.pid} 2026-11-09-1327\n")
+        for foreground in (True, False):
+            refused = batch(repo, env, foreground=foreground)
+            assert refused.returncode == 1
+            assert f"batch 2026-11-09-1327 is running, pid {other.pid}" in refused.stderr
+    finally:
+        other.kill()
+        other.wait()
     assert not list((repo / ".scratch" / "batches").glob("*/summary.md"))
+    # A pid that has ended, and one the system gave a program that is no batch.
     gone = subprocess.Popen(["true"])
     gone.wait()
-    lock.write_text(f"{gone.pid} 2026-11-09-1327\n")
-    result = batch(repo, env)
+    for stale in (gone.pid, os.getpid()):
+        lock.write_text(f"{stale} 2026-11-09-1327\n")
+        result = batch(repo, env)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "## Merged\n\n- #1 Ticket 1: PR #" in result.stdout
+        assert not lock.exists()
+
+
+def test_guard_the_detached_batch_works_the_waves_it_printed(tmp_path):
+    # Planned again from GitHub, a ticket relabelled after the starter printed its waves would join.
+    agents = {"1": {"file": "a.py", "result": "done\nAdds a.py."}}
+    repo, env, state = setup(tmp_path, [issue(1, "a.py")], agents)
+    result = batch(repo, env, foreground=False)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "#1 Ticket 1: PR #1" in result.stdout
-    assert not lock.exists()
+    gh = json.loads(state.read_text())
+    gh["issues"].append(issue(2, "b.py"))
+    state.write_text(json.dumps(gh))
+    until(lambda: not (repo / ".scratch" / "batches" / "running").exists())
+    summary = next((repo / ".scratch" / "batches").glob("*/summary.md")).read_text()
+    assert "#1 Ticket 1" in summary and "#2" not in summary
