@@ -1,5 +1,5 @@
 build/
-# Sources are pinned by sha256 in project.yaml. `cadrev source` un-ignores each one whose license allows redistribution.
+# Sources are pinned by sha256 in project.yaml. `cadrev source` un-ignored the CC BY paper; the MIT STL and their licence were un-ignored by hand, since its pattern leaves MIT out (#102).
 sources/*
 figures/*/
 !figures/crops/
