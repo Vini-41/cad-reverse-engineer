@@ -15,7 +15,8 @@ terminal and returns, so it runs to the end whatever started it, such as an agen
 between messages. --foreground runs it in the calling process. While it runs,
 .scratch/batches/running holds its pid and stamp, and a second batch refuses to start; a lock whose
 pid no longer runs a batch is taken over. The detached batch works the waves printed, saved in
-waves.json. --status prints the running batch's last steps, or the latest summary.
+waves.json. --status prints the running batch's last steps and each running agent's latest
+action, or the latest summary.
 
 Each ticket's agent runs `claude -p` in `.claude/worktrees/batch-<n>`, on branch `batch/<n>` cut
 from origin/main, briefed by docs/agents/batch-ticket.md, and writes its result file: `done` and
@@ -29,9 +30,9 @@ commits are pushed to `batch/<n>`, where a later batch from any checkout carries
 goes on. Red CI on main stops the batch.
 
 Everything lands in .scratch/batches/<stamp>/: batch.log (the runner's own output), progress.log
-(one line per step), one log per agent run and summary.md, which says what merged, what waits for
-the user and why, and each question. The batch ends with a desktop
-notification.
+(one line per step), one log per agent run (its stream-json, written as it works, beside a .pid
+file while it runs) and summary.md, which says what merged, what waits for the user and why, and
+each question. The batch ends with a desktop notification.
 
 CLAUDE, GH and CI_WAIT name the executables (default claude, gh and scripts/ci-wait);
 BATCH_TICKET_SECONDS caps one agent run (default 10800); CADREV_PROJECTS is the evidence dir the
@@ -216,6 +217,58 @@ def unlock() -> None:
         LOCK.unlink(missing_ok=True)
 
 
+def latest_action(log: Path, tail: int = 256 * 1024) -> str | None:
+    """The last tool call or text in an agent's stream-json log, on one line. Only the log's end is
+    read, as a log holds every tool result; a line it cuts is skipped, as is one not yet whole."""
+    with log.open("rb") as f:
+        f.seek(max(0, log.stat().st_size - tail))
+        lines = f.read().decode(errors="replace").splitlines()
+    for line in reversed(lines):
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict) or event.get("type") != "assistant":
+            continue
+        message = event.get("message")
+        if not isinstance(message, dict):
+            continue
+        content = message.get("content")
+        for item in reversed(content if isinstance(content, list) else []):
+            if not isinstance(item, dict):
+                continue
+            if item.get("type") == "tool_use":
+                given = item.get("input") if isinstance(item.get("input"), dict) else {}
+                keys = ("command", "file_path", "pattern", "description")
+                what = next((str(given[k]) for k in keys if k in given), "")
+                text = f"{item.get('name')}: {what}"
+            elif item.get("type") == "text" and str(item.get("text", "")).strip():
+                text = str(item["text"]).strip()
+            else:
+                continue
+            text = " ".join(text.split("\n", 1)[0].split())
+            return text if len(text) <= 120 else text[:117] + "..."
+    return None
+
+
+def agents_now(folder: Path) -> list[str]:
+    """A line for each agent still running, as its .pid file names a live process: the latest
+    action in its log."""
+    lines = []
+    for pidfile in sorted(folder.glob("*.*.pid"), key=lambda p: int(p.name.split(".")[0])):
+        n, tag = pidfile.name.split(".")[:2]
+        log = folder / f"{n}.{tag}.log"
+        try:
+            pid = int(pidfile.read_text())
+            os.kill(pid, 0)
+        except (OSError, ValueError):
+            continue
+        action = latest_action(log) if log.exists() else None
+        if action:
+            lines.append(f"#{n} {tag}, now: {action}")
+    return lines
+
+
 def status() -> str:
     held = running()
     if held:
@@ -223,6 +276,7 @@ def status() -> str:
         progress = BATCHES / stamp / "progress.log"
         lines = progress.read_text().splitlines()[-8:] if progress.exists() else []
         log = BATCHES / stamp / "batch.log"
+        lines += agents_now(BATCHES / stamp)
         return "\n".join([f"batch {stamp} running, pid {pid}", f"log: {log}", *lines]) + "\n"
     dirs = sorted(d for d in BATCHES.glob("*") if d.is_dir()) if BATCHES.is_dir() else []
     if not dirs:
@@ -284,7 +338,8 @@ class Batch:
             "--permission-mode",
             "auto",
             "--output-format",
-            "json",
+            "stream-json",
+            "--verbose",
             "--add-dir",
             str(self.dir),
             "--settings",
@@ -295,16 +350,26 @@ class Batch:
         log = self.dir / f"{t['number']}.{tag}.log"
         self.note(f"#{t['number']} {tag}: agent started")
         with log.open("w") as f:
-            proc = subprocess.Popen(args, cwd=tree, stdout=f, stderr=subprocess.STDOUT, text=True)
-            t.setdefault("procs", []).append(proc)
+            proc = subprocess.Popen(
+                args,
+                cwd=tree,
+                stdin=subprocess.DEVNULL,
+                stdout=f,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            (self.dir / f"{t['number']}.{tag}.pid").write_text(str(proc.pid))
+            t.setdefault("procs", []).append((proc, self.dir / f"{t['number']}.{tag}.pid"))
 
     def wait(self, wave: list[dict]) -> None:
         for t in wave:
-            for proc in t.pop("procs", []):
+            for proc, pidfile in t.pop("procs", []):
                 try:
                     proc.wait(timeout=TICKET_SECONDS)
                 except subprocess.TimeoutExpired:
                     proc.kill()
+                    proc.wait()
+                pidfile.unlink(missing_ok=True)
 
     def result(self, t: dict) -> tuple[str, str]:
         path = self.dir / f"{t['number']}.result.md"
@@ -436,7 +501,11 @@ class Batch:
         found = run(GH, "pr", "view", self.branch(t), "--json", "number", "--jq", ".number")
         if found.returncode == 0 and found.stdout.strip():
             return found.stdout.strip()
-        body = f"Part of #{t['number']}\n\n{summary}\n\nOpened by scripts/batch."
+        own = f"Part of #{t['number']}"
+        head, _, rest = summary.partition("\n")
+        if head.strip() == own:
+            summary = rest.lstrip()
+        body = f"{own}\n\n{summary}\n\nOpened by scripts/batch."
         url = out(
             GH,
             "pr",

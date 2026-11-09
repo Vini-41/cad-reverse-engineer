@@ -57,8 +57,8 @@ json.dump(state, open(path, "w"))
 sys.exit(code)
 """
 
-# Reads the ticket number from the task, then does what FAKE_CLAUDE says for it: wait until a file
-# exists, commit a file, and write the result file the brief names.
+# Reads the ticket number from the task, then does what FAKE_CLAUDE says for it: print stream-json
+# lines, wait until a file exists, commit a file, and write the result file the brief names.
 FAKE_CLAUDE = r"""#!/usr/bin/env python3
 import json, os, re, subprocess, sys, time
 prompt = sys.argv[sys.argv.index("-p") + 1]
@@ -66,6 +66,8 @@ number = re.search(r"Issue #(\d+)", prompt).group(1)
 result = re.search(r"`([^`]+\.result\.md)`", prompt).group(1)
 plan = json.load(open(os.environ["FAKE_CLAUDE"]))[number]
 open(os.environ["FAKE_CLAUDE"] + f".{number}.prompt", "a").write(prompt)
+for line in plan.get("say", []):
+    print(json.dumps(line), flush=True)
 end = time.monotonic() + 30
 while plan.get("wait_for") and not os.path.exists(plan["wait_for"]) and time.monotonic() < end:
     time.sleep(0.05)
@@ -375,3 +377,86 @@ def test_guard_the_detached_batch_works_the_waves_it_printed(tmp_path):
     until(lambda: not (repo / ".scratch" / "batches" / "running").exists())
     summary = next((repo / ".scratch" / "batches").glob("*/summary.md")).read_text()
     assert "#1 Ticket 1" in summary and "#2" not in summary
+
+
+TOOL_CALL = {
+    "type": "assistant",
+    "message": {
+        "content": [
+            {"type": "tool_use", "name": "Bash", "input": {"command": "scripts/check --lint"}}
+        ]
+    },
+}
+TEXT = {
+    "type": "assistant",
+    "message": {"content": [{"type": "text", "text": "Reading it.\nMore."}]},
+}
+
+
+@pytest.mark.parametrize(
+    "said, now",
+    [
+        ([TEXT, TOOL_CALL], "Bash: scripts/check --lint"),
+        ([TOOL_CALL, TEXT], "Reading it."),
+        # Lines the CLI doesn't write today are skipped, not a traceback.
+        (
+            [
+                TEXT,
+                {"type": "assistant", "message": None},
+                {"type": "assistant", "message": {"content": "hi"}},
+                {"type": "assistant", "message": {"content": ["hi", 3]}},
+                [1, 2],
+            ],
+            "Reading it.",
+        ),
+    ],
+)
+def test_latest_action_reads_the_last_tool_call_or_text(tmp_path, said, now):
+    log = tmp_path / "1.implement.log"
+    lines = ["Warning: a plain line", *map(json.dumps, said), '{"type": "assist']
+    log.write_text("\n".join(lines))
+    assert load_batch().latest_action(log) == now
+
+
+def test_status_names_a_running_agents_latest_action_from_its_log(tmp_path):
+    go = tmp_path / "go"
+    said = [
+        {"type": "system", "subtype": "init"},
+        {
+            "type": "assistant",
+            "message": {"content": [{"type": "text", "text": "Reading it.\nMore."}]},
+        },
+        {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Bash",
+                        "input": {"command": "scripts/check --lint"},
+                    }
+                ]
+            },
+        },
+        {"type": "user", "message": {"content": [{"type": "tool_result", "content": "ok"}]}},
+    ]
+    agents = {"1": {"file": "a.py", "result": "done\nAdds a.py.", "wait_for": str(go), "say": said}}
+    repo, env, _ = setup(tmp_path, [issue(1, "a.py")], agents)
+    assert batch(repo, env, foreground=False).returncode == 0
+    log = repo / ".scratch" / "batches"
+    until(lambda: "tool_result" in "".join(p.read_text() for p in log.glob("*/1.implement.log")))
+    status = batch(repo, env, "--status")
+    assert "#1 implement, now: Bash: scripts/check --lint" in status.stdout
+    go.touch()
+    until(lambda: not (log / "running").exists())
+    assert "now:" not in batch(repo, env, "--status").stdout
+
+
+def test_a_pr_body_names_its_issue_once_when_the_agent_already_did(tmp_path):
+    # PR #173's body read "Part of #167" twice.
+    agents = {"1": {"file": "a.py", "result": "done\nPart of #1\n\nAdds a.py."}}
+    repo, env, state = setup(tmp_path, [issue(1, "a.py")], agents)
+    assert batch(repo, env).returncode == 0
+    calls = json.loads(state.read_text())["calls"]
+    created = next(c for c in calls if c[:2] == ["pr", "create"])
+    assert created[created.index("--body") + 1].startswith("Part of #1\n\nAdds a.py.")
