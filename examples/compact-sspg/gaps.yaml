@@ -1,0 +1,20 @@
+# What the sources leave undefined, and how to close each gap (ask: authors | measure | datasheet | test).
+gaps:
+  - id: G-tooth
+    question: What tooth form does the COMPAct gear generator use (pressure angle, addendum and dedendum in modules, profile shift, backlash)?
+    ask: authors
+  - id: G-density
+    question: What is the printed parts' density (filament and infill as printed, 100% infill stated)?
+    ask: measure
+  - id: G-clock
+    question: Is each gear clocked with its involute's base point on the part's 0 deg axis (the bolt pattern's, on the sun and ring), as the released files show, and is that the generator's rule?
+    ask: authors
+  - id: G-rounds
+    question: What radii are the rounds on the carrier extrusions, the casing lugs and the casing pocket lobes in the parametric CAD?
+    ask: authors
+  - id: G-boss
+    question: What profile does the secondary carrier's pin boss have (outer radius at its face, flank shape)?
+    ask: authors
+  - id: G-place
+    question: How are the sun, planets and secondary carrier located axially in the assembled actuator (which faces bear on which bearings)?
+    ask: authors
