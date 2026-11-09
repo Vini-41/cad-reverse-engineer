@@ -10416,9 +10416,16 @@ SHAPE_BODIES = {
         link_body, lambda: chamfer(link_body().edges().filter_by(Axis.Z), 0.05), stl=False
     ),
     # A cylinder face whose edges lie inside its range of angle and height, where it has no
-    # surface: its points nearest by angle and height bound nothing there.
+    # surface: its points nearest by angle and height bound nothing there. The tube's outer and
+    # inner faces, at x 10 and 9 mid-window, are each 4 from an edge of the window, so rounding
+    # picks which: y and z only.
     "window in a cylinder face": _Body(
-        _tube, lambda: _tube() - Pos(10, 0, 0) * Box(6, 8, 8), _TUBE, False, _TUBE_AT
+        _tube,
+        lambda: _tube() - Pos(10, 0, 0) * Box(6, 8, 8),
+        _TUBE,
+        False,
+        _TUBE_AT,
+        slice(1, 3),
     ),
     "notch at a cylinder face's end": _Body(
         _tube, lambda: _tube() - Pos(10, 0, 18) * Box(6, 8, 8), _TUBE, False, _TUBE_AT
@@ -10435,7 +10442,7 @@ SHAPE_BODIES = {
     # A window through a cone face and a torus face, as through the cylinder face above: the
     # part's points over it, nearest by angle and place along the face to points in the window,
     # are the farthest from the body. The cone's outer and inner faces, at x 7.5 and 6.5 mid-window,
-    # are each 2 from the window's edges, so rounding picks which: y and z only.
+    # are each 2 from an edge of the window, so rounding picks which: y and z only.
     "window in a cone face": _Body(
         _cone_shell,
         lambda: _cone_shell() - Pos(7.5, 0, 0) * Box(4, 6, 4),
