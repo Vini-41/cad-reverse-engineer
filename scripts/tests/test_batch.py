@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -55,15 +56,18 @@ json.dump(state, open(path, "w"))
 sys.exit(code)
 """
 
-# Reads the ticket number from the task, then does what FAKE_CLAUDE says for it: commit a file, and
-# write the result file the brief names.
+# Reads the ticket number from the task, then does what FAKE_CLAUDE says for it: wait until a file
+# exists, commit a file, and write the result file the brief names.
 FAKE_CLAUDE = r"""#!/usr/bin/env python3
-import json, os, re, subprocess, sys
+import json, os, re, subprocess, sys, time
 prompt = sys.argv[sys.argv.index("-p") + 1]
 number = re.search(r"Issue #(\d+)", prompt).group(1)
 result = re.search(r"`([^`]+\.result\.md)`", prompt).group(1)
 plan = json.load(open(os.environ["FAKE_CLAUDE"]))[number]
 open(os.environ["FAKE_CLAUDE"] + f".{number}.prompt", "a").write(prompt)
+end = time.monotonic() + 30
+while plan.get("wait_for") and not os.path.exists(plan["wait_for"]) and time.monotonic() < end:
+    time.sleep(0.05)
 if plan.get("file"):
     open(plan["file"], "w").write(number)
     subprocess.run(["git", "add", plan["file"]], check=True)
@@ -121,9 +125,12 @@ def issue(number: int, touches: str | None = None, labels: tuple = ("ready-for-a
     }
 
 
-def batch(repo: Path, env: dict, *args: str) -> subprocess.CompletedProcess[str]:
+def batch(
+    repo: Path, env: dict, *args: str, foreground: bool = True
+) -> subprocess.CompletedProcess[str]:
+    flags = ["--foreground"] if foreground else []
     return subprocess.run(
-        [sys.executable, str(repo / "scripts" / "batch"), *args],
+        [sys.executable, str(repo / "scripts" / "batch"), *flags, *args],
         cwd=repo,
         env=env,
         capture_output=True,
@@ -262,6 +269,75 @@ def test_batch_asks_when_ci_stays_red_after_one_fix_and_leaves_the_pr_open(tmp_p
     assert any(c[:2] == ["pr", "create"] for c in calls)
     assert not any(c[:2] == ["pr", "merge"] for c in calls)
     logs = sorted(p.name for p in (repo / ".scratch" / "batches").glob("*/*.log"))
-    assert logs == ["1.ci-fix.log", "1.ci.log", "1.implement.log"]
+    assert logs == ["1.ci-fix.log", "1.ci.log", "1.implement.log", "progress.log"]
     assert "CI failure on" in (next((repo / ".scratch" / "batches").glob("*/1.ci.log"))).read_text()
     assert "#1 Ticket 1: CI stays red on PR #1 after one fix" in result.stdout
+
+
+def until(condition, seconds: float = 60) -> None:
+    end = time.monotonic() + seconds
+    while not condition():
+        assert time.monotonic() < end, "timed out"
+        time.sleep(0.1)
+
+
+def test_batch_detaches_and_finishes_on_its_own(tmp_path):
+    # Batches 2026-11-09-1234 and 2026-11-09-1315 were killed a few minutes in, with the agent
+    # session that started each one.
+    go = tmp_path / "go"
+    agents = {"1": {"file": "a.py", "result": "done\nAdds a.py.", "wait_for": str(go)}}
+    repo, env, _ = setup(tmp_path, [issue(1, "a.py")], agents)
+    result = batch(repo, env, foreground=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "batch.log" in result.stdout and "scripts/batch --status" in result.stdout
+    batches = repo / ".scratch" / "batches"
+    until(lambda: (tmp_path / "claude.json.1.prompt").exists())
+    assert not list(batches.glob("*/summary.md"))
+    go.touch()
+    until(lambda: not (batches / "running").exists())
+    summary = next(batches.glob("*/summary.md")).read_text()
+    assert "#1 Ticket 1: PR #1" in summary
+
+
+def test_status_names_the_running_step_and_then_the_summary(tmp_path):
+    go = tmp_path / "go"
+    agents = {"1": {"file": "a.py", "result": "done\nAdds a.py.", "wait_for": str(go)}}
+    repo, env, _ = setup(tmp_path, [issue(1, "a.py")], agents)
+    assert batch(repo, env, foreground=False).returncode == 0
+    until(lambda: (tmp_path / "claude.json.1.prompt").exists())
+    status = batch(repo, env, "--status")
+    assert status.returncode == 0, status.stderr
+    assert " running, pid " in status.stdout
+    assert status.stdout.rstrip().endswith("#1 implement: agent started")
+    go.touch()
+    until(lambda: not (repo / ".scratch" / "batches" / "running").exists())
+    status = batch(repo, env, "--status")
+    assert status.stdout.startswith("no batch running")
+    assert "## Merged\n\n- #1 Ticket 1: PR #1" in status.stdout
+
+
+def test_status_says_when_the_latest_batch_ended_without_a_summary(tmp_path):
+    repo, env, _ = setup(tmp_path, [], {})
+    (repo / ".scratch" / "batches" / "2026-11-09-1315").mkdir(parents=True)
+    status = batch(repo, env, "--status")
+    assert "2026-11-09-1315 ended without a summary" in status.stdout
+
+
+def test_a_second_batch_is_refused_while_one_runs_and_a_stale_lock_is_taken_over(tmp_path):
+    agents = {"1": {"file": "a.py", "result": "done\nAdds a.py."}}
+    repo, env, _ = setup(tmp_path, [issue(1, "a.py")], agents)
+    lock = repo / ".scratch" / "batches" / "running"
+    lock.parent.mkdir(parents=True)
+    lock.write_text(f"{os.getpid()} 2026-11-09-1327\n")
+    for foreground in (True, False):
+        refused = batch(repo, env, foreground=foreground)
+        assert refused.returncode == 1
+        assert f"batch 2026-11-09-1327 is running, pid {os.getpid()}" in refused.stderr
+    assert not list((repo / ".scratch" / "batches").glob("*/summary.md"))
+    gone = subprocess.Popen(["true"])
+    gone.wait()
+    lock.write_text(f"{gone.pid} 2026-11-09-1327\n")
+    result = batch(repo, env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "#1 Ticket 1: PR #1" in result.stdout
+    assert not lock.exists()
