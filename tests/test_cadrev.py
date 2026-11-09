@@ -2681,6 +2681,13 @@ UNITS = {
     "a cord of 3 N/mm": (3, 3),
     "a damper of 2 N·s/m": (2, 0.002),
     "a damper of 2 N·s/mm": (2, 2),
+    "The arm weighs 2.5 lb": (2.5, 1133.98092),
+    "a 2 pound arm": (2, 907.18474),
+    "The cap weighs 4.2 oz": (4.2, 119.0679971),
+    "a 2 ounce cap": (2, 56.69904625),
+    "The spring pulls 10 lbf": (10, 44.48221615),
+    "a wall 0.5 thou thick": (0.5, 0.0127),
+    "The pin is 1.000 ± 0.005 in long": (1.0, 25.4),
 }
 
 
@@ -3240,6 +3247,52 @@ STILL_SWEPT = {
 @pytest.mark.parametrize("form", sorted(STILL_SWEPT))
 def test_guard_coverage_lists_the_near_miss_of_each_look_alike(proj_dir, tmp_path, capsys, form):
     assert swept(proj_dir, tmp_path, capsys, f"The part is {form} here.") == [STILL_SWEPT[form]]
+
+
+# Sentences from the issues that found each miss (#96, #97, #135, #141), and the stated
+# quantities the sweep lists in each: a paper's imperial units and a tolerance's nominal, and none
+# for a model name, gear modules, a subscripted symbol after a unit letter or a ratio.
+STATED = {
+    "The arm weighs 2.5 lb.": ["2.5 lb"],
+    "The cap weighs 4.2 oz.": ["4.2 oz"],
+    "The spring pulls 10 lbf.": ["10 lbf"],
+    "The wall is 0.5 thou thick.": ["0.5 thou"],
+    "The pin is 1.000 ± 0.005 in long.": ["1.000 ± 0.005 in"],
+    "We took top-view images with an Olympus OM-D E-M10 camera mounted to a tripod.": [],
+    "X:= [N s1 , Np1 , Nr1 , Ns2 , Np2 , Nr2 , m1, m2, np1, np2],(10)": [],
+    "CPG:m 2N r2 =m 1(N s1 +N p1 ) +m 2N p2 ,": [],
+    "gear ratios ranging from 4:1 to 60:1 in unit increments": [],
+}
+
+
+@pytest.mark.parametrize("sentence", sorted(STATED))
+def test_coverage_lists_the_stated_quantities_each_sentence_states(
+    proj_dir, tmp_path, capsys, sentence
+):
+    assert swept(proj_dir, tmp_path, capsys, sentence) == STATED[sentence]
+
+
+# Each one's near miss, and #98's Ø6 mm: the stated quantities they list stay listed.
+STILL_STATED = {
+    "The hole is Ø6 mm.": ["ø6 mm"],
+    "The pin is 1.000 in ± 0.005 in long.": ["1.000 in", "0.005 in"],
+    "We used an M10 screw.": ["m10"],
+    "fastened with 4 × M3 screws": ["m3"],
+    "an M10x1.5 bolt": ["m10x1.5"],
+    "an M2.5 screw": ["m2.5"],
+    "a load of 2 N": ["2 n"],
+    "a load of 2 N.": ["2 n"],
+    "a plate 5 in wide": ["5 in"],
+    "it ran for 1:30 min": ["30 min"],
+    "4:1 in total": [],
+}
+
+
+@pytest.mark.parametrize("sentence", sorted(STILL_STATED))
+def test_guard_coverage_still_lists_the_stated_quantities_of_each_near_miss(
+    proj_dir, tmp_path, capsys, sentence
+):
+    assert swept(proj_dir, tmp_path, capsys, sentence) == STILL_STATED[sentence]
 
 
 @pytest.mark.parametrize("form", ["32.5", "3"])

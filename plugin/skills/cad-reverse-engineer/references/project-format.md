@@ -43,7 +43,7 @@ sources:
 
 `units` names the project's unit for length, angle, mass, force and time (defaults `mm`, `deg`, `g`, `N`, `s`); torque, pressure, density and speed follow from them (N·mm, N/mm², g/mm³, mm/s by default). A key outside those five, or a unit cadrev does not know or of another quantity (`length: g`), is `[units]`.
 
-**Units come from the quote.** A ledger value is written as printed (`values: {L: 4}` for "4 cm"), and cadrev reads the unit printed right after it, or after a hyphen (`2-in. plate`, `5-mm pin`), and converts the value to the project's units (40 mm) wherever a param `from:`, a check or an overlay uses it; a `value` written on that param is in project units (40). The numbers of a range or product share its last unit ("3–5 mm", "40×8×5 mm"). A value with no unit printed after it, such as a table cell (`37×6.5×5`), is already in project units. `in` and `"` read as inches, except `in` before a determiner ("4 in total", "2 in each leg").
+**Units come from the quote.** A ledger value is written as printed (`values: {L: 4}` for "4 cm"), and cadrev reads the unit printed right after it, or after a hyphen (`2-in. plate`, `5-mm pin`), and converts the value to the project's units (40 mm) wherever a param `from:`, a check or an overlay uses it; a `value` written on that param is in project units (40). The numbers of a range or product share its last unit ("3–5 mm", "40×8×5 mm"), and a nominal its tolerance's ("1.000 ± 0.005 in" is 25.4 mm). A value with no unit printed after it, such as a table cell (`37×6.5×5`), is already in project units. `in` and `"` read as inches, except `in` before a determiner ("4 in total", "2 in each leg").
 
 Each use expects one quantity: a `bbox` or `distance` check, an overlay calibration and a param `model.py` reads expect a length (the model may also read an angle or a count); an `angle` check's value expects an angle, in degrees or radians, and is compared in degrees; a mass check's `key` and `add` params expect a mass, its `density` a density, and so do a [mass model](#mass-model) entry's `mass` and `density`. A `count` check's value, a mass check's `counts` params and each param a gear's `ratio` is derived from (through its derived params, to those with a basis of their own) expect a **count**: a whole number, printed with no unit or a count unit, read as a pure number (COMPAct's `SSPG [25, 65, 155, 0.5, 3]` gives `z_sun` 25, not 25 mm); a param a gear's ratio is derived from may also be a length, printed in a length unit or as a diameter callout (`Ø 22.5`), as a belt's pulley diameters are. A value printed in a unit of another quantity, or a count that is not a whole number, is `[unit-quantity]`; a param traces to its quote through basis `source`, or through a `derived` expr that only scales one param by constants (`rho * 1000`). A value printed in two different units in one quote, or once with a unit and once without ("4 mm pins in 4 cm links"), is `[unit-ambiguous]`: quote only the part that states it.
 
@@ -51,10 +51,10 @@ Recognised units, spelled-out names included (millimetre, inches, degrees, grams
 
 | quantity | units |
 |---|---|
-| length | mm, cm, m, µm/um/micron, in/", ft/foot/feet |
+| length | mm, cm, m, µm/um/micron, in/", ft/foot/feet, thou |
 | angle | deg/°/◦, rad |
-| mass | mg, g, kg |
-| force | N, kN, mN, kgf |
+| mass | mg, g, kg, lb/lbs/pound, oz/ounce |
+| force | N, kN, mN, kgf, lbf/pound-force |
 | torque | N·m (also Nm, nm), N·mm, N·cm, mN·m, kgf·cm (also kg·cm) |
 | pressure | Pa, kPa, MPa (N/mm²), GPa, bar, psi |
 | density | g/cm³ (g/cc, g/ml), kg/m³, g/mm³ |
@@ -142,7 +142,7 @@ datums:                        # on released bodies: <body>.<feature>: [x, y, z]
 
 ### `skipped`: stated quantities that are not about the object
 
-The coverage sweep lists every number, in digits or in words, printed with a unit from the table under `units` (`six turns`, `25 teeth`; a range or list as one candidate: `3–5 mm`, `1,5,10 mm`), every `a×b×c` product, every diameter callout (`Ø 32.5`, `Ø3`: a length in the project's unit unless a unit follows) and every thread size (`M3`) in the text sources, leaving out digits inside a name (`L3`), figure, table, equation or section numbers, and three look-alikes: a number hyphenated to `bar` (a `four-bar` linkage; a pressure is `2 bar`), a moment (`T=0s`, `t = 2 s`), and a one-letter unit SI writes in lower case printed as a capital (`8G` of memory, a `2S` battery). A count with no count unit (`3 planets`, a table cell) is not swept: it enters the ledger because a param or check uses it. Each one listed must fall inside an evidence quote or a skip; one that does not is `[coverage]`. A source with `coverage: false` is not swept and raises the warning `[coverage-off]`.
+The coverage sweep lists every number, in digits or in words, printed with a unit from the table under `units` (`six turns`, `25 teeth`; a range, list or toleranced value as one candidate: `3–5 mm`, `1,5,10 mm`, `1.000 ± 0.005 in`), every `a×b×c` product, every diameter callout (`Ø 32.5`, `Ø3`: a length in the project's unit unless a unit follows) and every thread size (`M3`, printed with a capital M) in the text sources, leaving out digits inside a name (`L3`, the camera `E-M10`), figure, table, equation or section numbers, and these look-alikes: a number hyphenated to `bar` (a `four-bar` linkage; a pressure is `2 bar`), a moment (`T=0s`, `t = 2 s`), a one-letter unit SI writes in lower case printed as a capital (`8G` of memory, a `2S` battery), a lower-case `m` and digits (the gear modules `m1, m2`), a one-letter unit before a subscripted symbol (`m 2N r2 =`, a product of symbols; a load is `2 N`), and a number after a ratio's colon (`60:1 in unit increments`; a time keeps its unit: `1:30 min`). A count with no count unit (`3 planets`, a table cell) is not swept: it enters the ledger because a param or check uses it. Each one listed must fall inside an evidence quote or a skip; one that does not is `[coverage]`. A source with `coverage: false` is not swept and raises the warning `[coverage-off]`.
 
 ```yaml
 skipped:

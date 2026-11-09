@@ -61,8 +61,8 @@ _LABEL = re.compile(
 # The dash of a range ("5-10", "5 mm - 10 mm"), which separates two values rather than negating one.
 _RANGE_DASH = re.compile(rf"(?<=\d)(\s*(?:{_UNIT}\s*)?)-(?=\s*\d)")
 # What joins a number to the next one it shares a unit with: "5-10 mm", "40x8x5 mm", "1,5,10 mm",
-# "-10 to -5 deg".
-_SHARES_UNIT = re.compile(r"\s*-\s*|x|,|\s+to\s+")
+# "-10 to -5 deg", and a tolerance's nominal: "1.000 ± 0.005 in".
+_SHARES_UNIT = re.compile(r"\s*[-±]\s*|x|,|\s+to\s+")
 
 
 def sha256(path: Path) -> str:
@@ -370,13 +370,18 @@ def _write_viewable(target: Path, data: bytes) -> Path:
     return target
 
 
-# Thread and fastener sizes (M3, M2.5x0.45): stated sizes the unit table cannot read.
-_THREAD = re.compile(r"(?<![a-z0-9.])m\d+(?:\.\d+)?(?:x\d+(?:\.\d+)?)?(?![a-z0-9])")
+# Thread and fastener sizes (M3, M2.5x0.45): stated sizes the unit table cannot read; not the end
+# of a model name hyphened to a word (an Olympus E-M10).
+_THREAD = re.compile(r"(?<![a-z0-9.])(?<![a-z]-)m\d+(?:\.\d+)?(?:x\d+(?:\.\d+)?)?(?![a-z0-9])")
 # A diameter sign right before a number (Ø 32.5, Ø3, ⌀3; ∅ as some PDFs extract it), not a letter
 # of a word: a diameter callout, a length in the project's unit unless a unit follows.
 _DIAMETER = re.compile(r"(?<!\w)[ø⌀∅] ?$")
 # A moment, when something happens (t = 2 s, a video frame's T=0s), not how long it lasts (Δt).
 _MOMENT = re.compile(r"(?<!\w)t ?= ?$")
+# A subscripted symbol (r2, p2, s1) after a one-letter unit: 2N r2 is a product of symbols.
+_SUBSCRIPTED = re.compile(r" [a-z]+\d+(?![a-z0-9])")
+# The colon of a ratio (60:1), whose second number takes no unit; a time's (1:30 min) does.
+_RATIO = re.compile(r"\d:$")
 # Units whose spelling, hyphened to a number, names a thing instead: a four-bar or 4-bar linkage
 # (a pressure is 2 bar).
 _HYPHENED_NAMES = ("bar",)
@@ -396,16 +401,18 @@ def _capital_symbol(t: _Token, as_printed: str) -> bool:
 
 def stated_quantities(text: str, as_printed: str | None = None) -> list[tuple[int, int, str]]:
     """Spans in normalized text that state a quantity: a number the quote reader would read with
-    a unit (a whole range such as 3-5 mm), an a×b×c product, a diameter callout (Ø 32.5), or a
-    thread size; never digits
-    inside a name or a figure, table, equation or section number, a moment (t = 2 s), or, where
-    as_printed gives text normalized but for case, a one-letter unit printed as another symbol's
-    capital (8G, 2S).
+    a unit (a whole range such as 3-5 mm, a nominal and its tolerance), an a×b×c product, a
+    diameter callout (Ø 32.5), or a thread size; never digits inside a name or a figure, table,
+    equation or section number, a model name (E-M10), a moment (t = 2 s), a one-letter unit
+    before a subscripted symbol (2N r2), or a unit after a ratio's colon (60:1 in) but a time's;
+    and, where as_printed gives text normalized but for case, no one-letter unit printed as
+    another symbol's capital (8G, 2S), nor a thread size printed in lower case (m1, a module).
 
     It errs towards listing: a unit glued to a number is a candidate even where it is part of a
     name (1990s, 4g), because extracted text glues real ones too (0.5s, 20g), and a false
     candidate costs one skip where a missed one leaves a quantity unledgered."""
-    if as_printed is None or len(as_printed) != len(text):
+    case_unknown = as_printed is None or len(as_printed) != len(text)
+    if as_printed is None or case_unknown:
         as_printed = text
     spans, group = [], []
     for t in _tokens(text):
@@ -425,12 +432,25 @@ def stated_quantities(text: str, as_printed: str | None = None) -> list[tuple[in
             and units.quantity(t.unit) == "time"
             and _MOMENT.search(text, max(0, group[0].start - 4), group[0].start) is not None
         )
-        misread = moment or (len(group) == 1 and _capital_symbol(t, as_printed))
+        symbol = (
+            len(group) == 1
+            and len(t.unit or "") == 1
+            and not text[t.end - 2].isalpha()
+            and _SUBSCRIPTED.match(text, t.end) is not None
+        )
+        ratio = (
+            t.unit is not None
+            and units.quantity(t.unit) != "time"
+            and _RATIO.search(text, max(0, group[0].start - 2), group[0].start) is not None
+        )
+        misread = moment or symbol or ratio or (len(group) == 1 and _capital_symbol(t, as_printed))
         stated = t.unit or product or callout
         if stated and not glued and not misread and not any(g.labelled for g in group):
             spans.append((start, t.end))
         group = []
-    spans += [m.span() for m in _THREAD.finditer(text)]
+    # A thread size prints a capital M: m1, m2 in lower case are symbols (a gear's modules).
+    threads = _THREAD.finditer(text)
+    spans += [m.span() for m in threads if case_unknown or as_printed[m.start()] == "M"]
     whole = [
         (a, b)
         for a, b in spans
