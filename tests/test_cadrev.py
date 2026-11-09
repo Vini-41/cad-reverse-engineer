@@ -2686,6 +2686,7 @@ UNITS = {
     "The cap weighs 4.2 oz": (4.2, 119.0679971),
     "a 2 ounce cap": (2, 56.69904625),
     "The spring pulls 10 lbf": (10, 44.48221615),
+    "a 10 pounds-force pull": (10, 44.48221615),
     "a wall 0.5 thou thick": (0.5, 0.0127),
     "The pin is 1.000 ± 0.005 in long": (1.0, 25.4),
 }
@@ -3282,6 +3283,7 @@ STILL_STATED = {
     "an M2.5 screw": ["m2.5"],
     "a load of 2 N": ["2 n"],
     "a load of 2 N.": ["2 n"],
+    "the 10 N M4 bolt": ["10 n", "m4"],
     "a plate 5 in wide": ["5 in"],
     "it ran for 1:30 min": ["30 min"],
     "4:1 in total": [],
