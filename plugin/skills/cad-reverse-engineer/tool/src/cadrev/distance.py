@@ -24,12 +24,14 @@ _OCP = {
     for name in (
         "BRep",
         "BRepAdaptor",
+        "BRepClass",
         "BRepTools",
         "GeomAbs",
         "ShapeAnalysis",
         "TopAbs",
         "TopExp",
         "TopoDS",
+        "gp",
     )
 }
 _LINE = _OCP["GeomAbs"].GeomAbs_CurveType.GeomAbs_Line
@@ -38,6 +40,8 @@ _PLANE = _OCP["GeomAbs"].GeomAbs_SurfaceType.GeomAbs_Plane
 _CYLINDER = _OCP["GeomAbs"].GeomAbs_SurfaceType.GeomAbs_Cylinder
 _CONE = _OCP["GeomAbs"].GeomAbs_SurfaceType.GeomAbs_Cone
 _TORUS = _OCP["GeomAbs"].GeomAbs_SurfaceType.GeomAbs_Torus
+_IN = _OCP["TopAbs"].TopAbs_State.TopAbs_IN
+_ON = _OCP["TopAbs"].TopAbs_State.TopAbs_ON
 # How far from its face a grid point may lie and still be on it.
 _ON_FACE = 1e-7
 # How far from its triangle, in numpy, a grid point may lie and still be kept: well past _ON_FACE,
@@ -71,18 +75,21 @@ def surface_distance(a, b, samples: int) -> tuple[float, tuple[float, float, flo
     first = len(surfaces[0].points)
     worst: tuple[float, tuple[float, float, float]] = (0.0, (0.0, 0.0, 0.0))
     found = -1
-    bounds = []
-    for k, (points, other) in enumerate(zip((s.points for s in surfaces), reversed(surfaces))):
+    sides = list(enumerate(zip((s.points for s in surfaces), reversed(surfaces))))
+    bounds = [np.full(len(points), -np.inf) for _, (points, _) in sides]
+    # Every point's distance to a flat surface first, exactly; a grid point off its own triangle
+    # has none. The other side's bounds then need only tell which points could reach the largest.
+    for k, (points, other) in sides:
         if other.mesh is None:
-            bounds.append(_bound(points, other, slack))
             continue
-        # Every point's distance, exactly; a grid point off its own triangle has none.
         gaps = np.where(surfaces[k].on_face, _triangles_bound(points, other.mesh), -np.inf)
         if len(gaps) and gaps.max() > worst[0]:
             n = int(np.argmax(gaps))
             x, y, z = (float(v) for v in points[n])
             worst, found = (float(gaps[n]), (x, y, z)), n + k * first
-        bounds.append(np.full(len(points), -np.inf))
+    for k, (points, other) in sides:
+        if other.mesh is None:
+            bounds[k] = _bound(points, other, slack, worst[0])
     bounds = np.concatenate(bounds)
     # From the highest bound down, until no bound left can reach the largest distance found.
     for n in np.argsort(-bounds, kind="stable"):
@@ -255,14 +262,16 @@ class _Surface:
         return point if face.distance_to(point) <= _ON_FACE else None
 
 
-def _bound(points: np.ndarray, surface: _Surface, slack: float) -> np.ndarray:
+def _bound(points: np.ndarray, surface: _Surface, slack: float, need: float) -> np.ndarray:
     """An upper bound on each point's distance to surface: its distance to a point on a flat
     triangle, a plane face bounded by lines and circles, or a cylinder, cone or torus face of it,
     whichever is nearest, plus slack for rounding and for surface's tolerance, within which OCC's
     distance strays. B-spline and other faces give no bound, nor does a plane face with other
     edges, nor a cut cylinder, cone or torus face where the point's nearest point on its surface
     falls in a hole: a point near only those is bounded by the others, however far, and so left
-    to OCC."""
+    to OCC. A point whose bound already lies below need, a distance already found, can never
+    reach OCC, so the costly bounds, the lines' and the cut faces', leave it as it is."""
+    extra = slack + _TOLERANCES * surface.tolerance
     out = np.full(len(points), np.inf)
     triangles = [c for c in surface.triangles if c is not None]
     if triangles:
@@ -272,7 +281,8 @@ def _bound(points: np.ndarray, surface: _Surface, slack: float) -> np.ndarray:
         if kind not in (_CYLINDER, _CONE, _TORUS):
             continue
         if _whole(face):
-            out = np.minimum(out, np.linalg.norm(points - _nearest_on(points, face, kind), axis=1))
+            on, _ = _nearest_on(points, face, kind)
+            out = np.minimum(out, np.linalg.norm(points - on, axis=1))
         else:
             cut.append((face, kind))
     planes = [
@@ -285,22 +295,21 @@ def _bound(points: np.ndarray, surface: _Surface, slack: float) -> np.ndarray:
         over, edges = _plane_bound(points, face, out)
         out, lines = np.minimum(out, over), lines + edges
     # A plane face's lines bound the points over no face, and those over one but high above it.
-    loose = np.flatnonzero(out > _NEAR_FACE)
+    loose = np.flatnonzero((out > _NEAR_FACE) & (out + extra >= need))
     for start, end in lines:
         out[loose] = np.minimum(
             out[loose], _segment_distance(points[loose], start, end, out[loose])
         )
     # A cylinder, cone or torus face cut by a hole or a notch bounds a point by its nearest point
-    # only where the test sampling uses shows that point on the face, and only where it would
-    # lower the bound: a point whose nearest point falls in a hole gets no bound from it. That
-    # point lies within _ON_FACE of the face, well inside the tolerance term below.
+    # only where _on_face shows that point on the face, and only where it would lower the bound: a
+    # point whose nearest point falls in a hole gets no bound from it.
     for face, kind in cut:
-        on = _nearest_on(points, face, kind)
+        on, uv = _nearest_on(points, face, kind)
         gap = np.linalg.norm(points - on, axis=1)
-        for n in np.flatnonzero(gap < out):
-            if face.distance_to(tuple(on[n])) <= _ON_FACE:
+        for n in np.flatnonzero((gap < out) & (out + extra >= need)):
+            if _on_face(face, on[n], uv[n]):
                 out[n] = gap[n]
-    return out + slack + _TOLERANCES * surface.tolerance
+    return out + extra
 
 
 def _triangle_distance(p, a, b, c) -> np.ndarray:
@@ -397,12 +406,26 @@ def _clamp_angle(angle: np.ndarray, first: float, last: float) -> np.ndarray:
     return np.where(nearer_first, first, np.minimum(angle, last))
 
 
-def _nearest_on(points: np.ndarray, face, kind) -> np.ndarray:
+def _on_face(face, point: np.ndarray, uv: np.ndarray) -> bool:
+    """Whether point, a point of a face's surface at the face's parameters uv, lies on the face.
+    OCC's classifier, at uv, finds it in the face or out of it, as distance_to within _ON_FACE
+    does, but computes no distance, which against a face with B-spline edges takes a millisecond.
+    On an edge it strays either way, so there distance_to settles it. A point the classifier
+    finds in the face lies on the face's surface within its pcurves, which stray from its edges
+    by no more than the tolerance _bound allows for."""
+    at = _OCP["gp"].gp_Pnt2d(float(uv[0]), float(uv[1]))
+    state = _OCP["BRepClass"].BRepClass_FaceClassifier(face.wrapped, at, _ON_FACE).State()
+    if state == _ON:
+        return face.distance_to(tuple(point)) <= _ON_FACE
+    return state == _IN
+
+
+def _nearest_on(points: np.ndarray, face, kind) -> tuple[np.ndarray, np.ndarray]:
     """For each point, the point of a cylinder, cone or torus face's surface at the point's own
     angle around the axis and its own place along the face's other parameter (height, place along
-    the cone's line, or angle around the torus's tube), each clamped to the face's range. Exact
-    where the point lies over the face; elsewhere a point of the surface, which a face cut by a
-    hole or a notch may not have there."""
+    the cone's line, or angle around the torus's tube), each clamped to the face's range, and
+    those two parameters (n × 2). Exact where the point lies over the face; elsewhere a point of
+    the surface, which a face cut by a hole or a notch may not have there."""
     adapted = _OCP["BRepAdaptor"].BRepAdaptor_Surface(face.wrapped)
     surface = {_CYLINDER: adapted.Cylinder, _CONE: adapted.Cone, _TORUS: adapted.Torus}[kind]()
     frame = surface.Position()
@@ -416,20 +439,20 @@ def _nearest_on(points: np.ndarray, face, kind) -> np.ndarray:
     out = np.cos(angle)[:, None] * x + np.sin(angle)[:, None] * y
     if kind == _CYLINDER:
         height = np.clip(w @ axis, v0, v1)
-        return o + surface.Radius() * out + height[:, None] * axis
+        return o + surface.Radius() * out + height[:, None] * axis, np.stack([angle, height], 1)
     if kind == _CONE:
         # The cone's line at that angle, from its circle of RefRadius at the frame's origin.
         slope = surface.SemiAngle()
         start = o + surface.RefRadius() * out
         along = math.sin(slope) * out + math.cos(slope) * axis
         place = np.clip(((points - start) * along).sum(1), v0, v1)
-        return start + place[:, None] * along
+        return start + place[:, None] * along, np.stack([angle, place], 1)
     # The torus's tube circle at that angle, around its centre on the major circle.
     centre = o + surface.MajorRadius() * out
     w = points - centre
     tube = _clamp_angle(np.arctan2(w @ axis, (w * out).sum(1)), v0, v1)
     across = np.cos(tube)[:, None] * out + np.sin(tube)[:, None] * axis
-    return centre + surface.MinorRadius() * across
+    return centre + surface.MinorRadius() * across, np.stack([angle, tube], 1)
 
 
 def _plane_bound(points: np.ndarray, face, within: np.ndarray) -> tuple[np.ndarray, list]:
