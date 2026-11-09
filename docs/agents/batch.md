@@ -1,6 +1,6 @@
 # The batch
 
-`scripts/batch` works the `ready-for-agent` queue headless: the user starts it, it runs to the end, and the user reads `.scratch/batches/<stamp>/summary.md`. How it runs (waves, worktrees, rebasing, CI, merging) is in its docstring; this file holds the rules a ticket and its reviewer follow.
+`scripts/batch` works the `ready-for-agent` queue headless: the user, or an agent the user asks, starts it, and it detaches and runs to the end on its own, whatever started it. `scripts/batch --status` says what the running batch is doing, or shows the latest `.scratch/batches/<stamp>/summary.md` once it ends; one batch runs at a time. How it runs (waves, worktrees, rebasing, CI, merging) is in its docstring; this file holds the rules a ticket and its reviewer follow.
 
 ## A ticket the batch takes
 

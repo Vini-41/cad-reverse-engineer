@@ -2,12 +2,19 @@
 """Work a queue of ready tickets headless: plan waves, implement each ticket in its own worktree
 with a headless agent, then merge the green ones one at a time.
 
-    scripts/batch [issue ...] [--milestone M] [--max 3] [--dry-run]
+    scripts/batch [issue ...] [--milestone M] [--max 3] [--dry-run] [--foreground]
+    scripts/batch --status
 
 With no issue numbers it takes every open `ready-for-agent` issue (in milestone M, if given) that
 no open issue blocks. A ticket's body names the paths it changes on a line `Touches: a/, b.py`;
 tickets whose paths don't overlap share a wave of at most --max, and one with no Touches line runs
 alone. --dry-run prints the waves and stops.
+
+A batch detaches once it has printed its waves: it starts itself again in a new session with no
+terminal and returns, so it runs to the end whatever started it, such as an agent session that ends
+between messages. --foreground runs it in the calling process. While it runs,
+.scratch/batches/running holds its pid and stamp, and a second batch refuses to start; a lock whose
+pid is gone is taken over. --status prints the running batch's last steps, or the latest summary.
 
 Each ticket's agent runs `claude -p` in `.claude/worktrees/batch-<n>`, on branch `batch/<n>` cut
 from origin/main, briefed by docs/agents/batch-ticket.md, and writes its result file: `done` and
@@ -20,8 +27,9 @@ still fails, or the agent asked a question, the issue gets the question and `nee
 commits are pushed to `batch/<n>`, where a later batch from any checkout carries on, and the batch
 goes on. Red CI on main stops the batch.
 
-Everything lands in .scratch/batches/<stamp>/: one log per agent run and summary.md, which says
-what merged, what waits for the user and why, and each question. The batch ends with a desktop
+Everything lands in .scratch/batches/<stamp>/: batch.log (the runner's own output), progress.log
+(one line per step), one log per agent run and summary.md, which says what merged, what waits for
+the user and why, and each question. The batch ends with a desktop
 notification.
 
 CLAUDE, GH and CI_WAIT name the executables (default claude, gh and scripts/ci-wait);
@@ -44,6 +52,8 @@ CI_WAIT = os.environ.get("CI_WAIT", str(ROOT / "scripts" / "ci-wait"))
 TICKET_SECONDS = int(os.environ.get("BATCH_TICKET_SECONDS", "10800"))
 PROJECTS = Path(os.environ.get("CADREV_PROJECTS", "~/Documents/Projects/cadrev")).expanduser()
 BRIEF = ROOT / "docs" / "agents" / "batch-ticket.md"
+BATCHES = ROOT / ".scratch" / "batches"
+LOCK = BATCHES / "running"
 
 # A change to any of these waits for the user: what a user reads, and what gates or steers agents.
 PROTECTED_FILES = {"LICENSE", "README.md", "SKILL.md"}
@@ -143,14 +153,69 @@ def select(numbers: list[int], milestone: str | None) -> list[dict]:
     return [ticket(i) for i in ready if not blocked(i["number"])]
 
 
+def alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def running() -> tuple[int, str] | None:
+    """The pid and stamp of the batch that holds the lock, if its process is alive."""
+    try:
+        pid, stamp = LOCK.read_text().split()
+    except (OSError, ValueError):
+        return None
+    return (int(pid), stamp) if alive(int(pid)) else None
+
+
+def lock(pid: int, stamp: str) -> None:
+    BATCHES.mkdir(parents=True, exist_ok=True)
+    LOCK.write_text(f"{pid} {stamp}\n")
+
+
+def unlock() -> None:
+    held = running()
+    if held and held[0] == os.getpid():
+        LOCK.unlink(missing_ok=True)
+
+
+def status() -> str:
+    held = running()
+    if held:
+        pid, stamp = held
+        progress = BATCHES / stamp / "progress.log"
+        lines = progress.read_text().splitlines()[-8:] if progress.exists() else []
+        log = BATCHES / stamp / "batch.log"
+        return "\n".join([f"batch {stamp} running, pid {pid}", f"log: {log}", *lines]) + "\n"
+    dirs = sorted(d for d in BATCHES.glob("*") if d.is_dir()) if BATCHES.is_dir() else []
+    if not dirs:
+        return "no batch running, and none has run\n"
+    summary = dirs[-1] / "summary.md"
+    if not summary.exists():
+        return (
+            f"no batch running; the latest batch {dirs[-1].name} ended without a summary: "
+            f"see its logs in {dirs[-1]}\n"
+        )
+    return f"no batch running; the latest is {summary}\n\n" + summary.read_text()
+
+
 class Batch:
     def __init__(self, stamp: str):
-        self.dir = ROOT / ".scratch" / "batches" / stamp
+        self.dir = BATCHES / stamp
         self.dir.mkdir(parents=True, exist_ok=True)
         self.merged: list[str] = []
         self.waiting: list[str] = []
         self.questions: list[str] = []
         self.stopped = ""
+
+    def note(self, text: str) -> None:
+        """One step, in progress.log, for --status."""
+        with (self.dir / "progress.log").open("a") as f:
+            f.write(f"{datetime.datetime.now():%H:%M:%S} {text}\n")
 
     # The agent.
 
@@ -195,6 +260,7 @@ class Batch:
         if PROJECTS.is_dir():
             args += ["--add-dir", str(PROJECTS)]
         log = self.dir / f"{t['number']}.{tag}.log"
+        self.note(f"#{t['number']} {tag}: agent started")
         with log.open("w") as f:
             proc = subprocess.Popen(args, cwd=tree, stdout=f, stderr=subprocess.STDOUT, text=True)
             t.setdefault("procs", []).append(proc)
@@ -210,8 +276,10 @@ class Batch:
     def result(self, t: dict) -> tuple[str, str]:
         path = self.dir / f"{t['number']}.result.md"
         if not path.exists():
+            self.note(f"#{t['number']}: the agent wrote no result")
             return "needs-info", "The agent ended without writing its result; see its log."
         head, _, body = path.read_text().partition("\n")
+        self.note(f"#{t['number']}: the agent's result is {head.strip().lower()}")
         return head.strip().lower(), body.strip()
 
     # Git and GitHub.
@@ -280,6 +348,7 @@ class Batch:
             "ready-for-agent",
         )
         self.questions.append(f"#{t['number']} {t['title']}: {question}")
+        self.note(f"#{t['number']}: needs-info, its question is on the issue")
 
     def ahead(self, t: dict) -> bool:
         count = out("git", "rev-list", "--count", "origin/main..HEAD", cwd=self.tree(t))
@@ -287,6 +356,7 @@ class Batch:
 
     def rebase(self, t: dict) -> bool:
         tree = self.tree(t)
+        self.note(f"#{t['number']}: rebasing onto origin/main")
         run("git", "fetch", "-q", "origin", cwd=tree, check=True)
         if run("git", "rebase", "-q", "origin/main", cwd=tree).returncode == 0:
             return True
@@ -316,13 +386,17 @@ class Batch:
             cwd=tree,
             check=True,
         )
-        return out("git", "rev-parse", "HEAD", cwd=tree)
+        sha = out("git", "rev-parse", "HEAD", cwd=tree)
+        self.note(f"#{t['number']}: pushed {sha[:7]} to {self.branch(t)}")
+        return sha
 
     def ci(self, name: str, sha: str) -> tuple[bool, str]:
         """ci-wait's result on sha, its output written to <name>.ci.log, since it refuses a pipe."""
         log = self.dir / f"{name}.ci.log"
+        self.note(f"#{name}: waiting for CI on {sha[:7]}")
         with open(log, "w") as f:
             waited = subprocess.run([CI_WAIT, sha], cwd=ROOT, stdout=f, stderr=subprocess.STDOUT)
+        self.note(f"#{name}: CI {'green' if waited.returncode == 0 else 'red'} on {sha[:7]}")
         return waited.returncode == 0, log.read_text()
 
     def pr(self, t: dict, summary: str) -> str:
@@ -357,6 +431,7 @@ class Batch:
             return self.ask(t, "Its branch conflicts with main in logic; see the rebase log.")
         sha = self.push(t)
         pr = self.pr(t, summary)
+        self.note(f"#{n}: PR #{pr}")
         green, report = self.ci(str(n), sha)
         if not green:
             task = f"CI failed on this branch. Fix it with scripts/check green.\n\n{report}"
@@ -369,12 +444,14 @@ class Batch:
         held = [p for p in self.changed(t) if protected(p)]
         if held:
             self.waiting.append(f"#{n} {t['title']}: PR #{pr} changes {', '.join(held)}")
+            self.note(f"#{n}: PR #{pr} is green and waits for the user")
             return
         if run(GH, "pr", "merge", pr, "--rebase", "--delete-branch").returncode:
             self.waiting.append(
                 f"#{n} {t['title']}: PR #{pr} is green but GitHub refused the merge"
             )
             return
+        self.note(f"#{n}: merged PR #{pr}")
         run("git", "fetch", "-q", "origin", check=True)
         main = out("git", "rev-parse", "origin/main")
         green, report = self.ci(f"{n}.main", main)
@@ -394,6 +471,7 @@ class Batch:
         run(GH, "issue", "close", str(n), "--comment", f"Landed in {main}; CI green on {main}.")
         run("git", "worktree", "remove", "--force", str(tree))
         self.merged.append(f"#{n} {t['title']}: PR #{pr}, {main[:7]}")
+        self.note(f"#{n}: closed, landed in {main[:7]}")
 
     def work(self, waves: list[list[dict]]) -> None:
         for wave in waves:
@@ -422,6 +500,7 @@ class Batch:
         text += "\n" + section("Needs info", self.questions)
         path = self.dir / "summary.md"
         path.write_text(text)
+        self.note("batch done: summary.md written")
         return path
 
 
@@ -436,7 +515,20 @@ def main() -> int:
     parser.add_argument("--milestone")
     parser.add_argument("--max", type=int, default=3)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--foreground", action="store_true")
+    parser.add_argument("--status", action="store_true")
+    parser.add_argument("--stamp", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.status:
+        print(status(), end="")
+        return 0
+    held = running()
+    if held and not args.dry_run and held[0] != os.getpid():
+        print(
+            f"batch {held[1]} is running, pid {held[0]}: see scripts/batch --status",
+            file=sys.stderr,
+        )
+        return 1
     waves = plan(select(args.issues, args.milestone), max(1, args.max))
     for i, wave in enumerate(waves, 1):
         print(f"wave {i}: " + ", ".join(f"#{t['number']} {t['title']}" for t in wave))
@@ -444,7 +536,39 @@ def main() -> int:
         print("no ready ticket")
     if args.dry_run or not waves:
         return 0
-    batch = Batch(datetime.datetime.now().strftime("%Y-%m-%d-%H%M"))
+    stamp = args.stamp or datetime.datetime.now().strftime("%Y-%m-%d-%H%M")
+    if not args.foreground:
+        return detach(stamp)
+    lock(os.getpid(), stamp)
+    try:
+        return work(waves, stamp)
+    finally:
+        unlock()
+
+
+def detach(stamp: str) -> int:
+    """Start this batch again in a new session with no terminal, holding the lock from the start."""
+    folder = BATCHES / stamp
+    folder.mkdir(parents=True, exist_ok=True)
+    log = folder / "batch.log"
+    with log.open("a") as f:
+        child = subprocess.Popen(
+            [sys.executable, __file__, *sys.argv[1:], "--foreground", "--stamp", stamp],
+            cwd=ROOT,
+            stdin=subprocess.DEVNULL,
+            stdout=f,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    lock(child.pid, stamp)
+    print(f"batch {stamp} running, pid {child.pid}: {folder}")
+    print(f"log: {log}")
+    print("scripts/batch --status shows its progress")
+    return 0
+
+
+def work(waves: list[list[dict]], stamp: str) -> int:
+    batch = Batch(stamp)
     batch.work(waves)
     path = batch.summary()
     print(path.read_text())
