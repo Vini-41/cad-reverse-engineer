@@ -3806,6 +3806,21 @@ def test_crop_help_says_its_box_is_in_pixels_of_the_images_file(capsys):
     assert "LEFT pixels of the image's file" in out
 
 
+def test_guard_shipped_docs_give_crops_call_with_the_positional_box_its_help_prints(capsys):
+    with pytest.raises(SystemExit):
+        cli.main(["crop", "--help"])
+    usage = " ".join(capsys.readouterr().out.split("positional arguments")[0].split())
+    assert "--name NAME" in usage and "dir image LEFT TOP RIGHT BOTTOM" in usage
+    call = "cadrev crop <dir> <image> LEFT TOP RIGHT BOTTOM --name <name>"
+    docs = [SKILL / "SKILL.md", *sorted((SKILL / "references").glob("*.md"))]
+    calls = {doc.name: re.findall(r"`(cadrev crop [^`]+)`", doc.read_text()) for doc in docs}
+    assert call in calls["SKILL.md"], "SKILL.md shows no crop call with its positional box"
+    assert {c for found in calls.values() for c in found} == {call}, (
+        "a shipped doc shows crop called another way"
+    )
+    assert not [doc.name for doc in docs if "--box" in doc.read_text()], "crop takes no --box"
+
+
 # Trips from the dogfood run (docs/dogfood/legclaw-run-log.md): each is a place a fresh agent
 # reconstructing the full LegClaw met a crash, a false finding or a silent wrong answer.
 
