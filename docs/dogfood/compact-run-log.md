@@ -68,4 +68,4 @@ Claude (Opus 5.5), skill and tool at `1b5b9e9` (main, after #155, #156 and #167)
 - **A. The skill gives `cadrev crop`'s box as it is passed** (trip 10). Blocks v0.1: a stranger following SKILL.md step 3 runs a command that fails.
 - **B. The skill says how a released geometry's probes are checked, what a physics value is, and how to limit a meshing gear's interference** (trips 5, 6, 8, 9). v0.2: each cost the run a workaround, none a wrong result; each needs a repro before filing, since none was confirmed beyond the run.
 - **Spec #5 (#147) and #121, #102**: trips 1–4 and 11, already v0.2.
-- **The example's time.** 127 s against the 2-minute goal; the casing's shape check is 64 s of it. #140 (v0.1, absorbed by #156, then #167) closes on this time: the owner judged about 2 minutes to meet the goal, with no follow-up on the casing's shape check.
+- **The example's time.** 126 s in `scripts/check` (127 s warm standalone) against the 2-minute goal; the casing's shape check is 64 s of it. #140 (v0.1, absorbed by #156, then #167) closes on this time: the owner judged about 2 minutes to meet the goal, with no follow-up on the casing's shape check.
