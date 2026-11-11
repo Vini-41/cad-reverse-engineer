@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # The repo's only CI, run locally: green before every commit and on a PR's head before it merges.
-# Runs each step, prints the ones that failed, each with the last 20 lines of its output, and
-# exits 1 if any did.
+# Starts every step at once, each in its own process, and prints each step's output in the order
+# below once it and the steps above it have finished; lists the ones that failed, each with the last
+# 20 lines of its output, and exits 1 if any did. The tool tests and script tests run on several
+# workers (pytest-xdist).
 #
 #   scripts/check
 #   scripts/check --lint   # pyright, ruff and the tests' imports alone, in seconds, for after an edit
 #
 # An example fails past EXAMPLE_SECONDS (default 600). Review holds each example to a goal a user
 # feels, a full cadrev check in about 2 minutes on a laptop; this ceiling only catches a large
-# regression, so it is not tuned to the slowest example.
+# regression, so it is not tuned to the slowest example. An example's time is wall-clock beside the
+# other steps, so it reads a little above the example run alone; the slowest example bounds how long
+# the whole check takes.
 #
 # The plugin manifests are validated only where the `claude` CLI is installed.
 set -uo pipefail
@@ -26,27 +30,39 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 # This clone runs the repo's git hooks (.githooks) unless it already uses others.
 [ -n "$(git -C "$repo" config core.hooksPath)" ] || git -C "$repo" config core.hooksPath .githooks
 cd "$repo/plugin/skills/cad-reverse-engineer/tool" || exit 2
-# The test extra holds pytest, pyright and ruff; a new worktree has no environment until this runs.
+# The test extra holds pytest, pytest-xdist, pyright and ruff; a new worktree has no environment
+# until this runs.
 uv sync --locked --extra test || { echo "uv sync --locked --extra test failed, so no step ran"; exit 1; }
-failed=()
-failed_logs=() # each failed step's output, whose end the summary reprints under its name
-failed_reruns=() # each failed step's command, run alone from the repo root
 logs=$(mktemp -d)
-steps=0
-trap 'rm -rf "$logs"' EXIT
+copy="" # the examples copy, removed on exit
+names=() # each step's name, in the order its output prints
+reruns=() # each step's command, run alone from the repo root
+pids=() # each running step's process, which leads its own process group
+failed=() # each failed step's index
+# Each step leads its own process group, so an interrupted check stops every step it started.
+set -m
+stop() {
+  local pid
+  for pid in ${pids[@]+"${pids[@]}"}; do kill -TERM -- "-$pid" 2>/dev/null; done
+  wait # so no step still writes into the logs or the examples copy as they are removed
+  rm -rf "$logs" ${copy:+"$copy"}
+}
+trap stop EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
-# step NAME [--rerun COMMAND] CMD...: COMMAND, from the repo root, runs the step alone; by default
-# CMD in the tool directory. A step that runs a function here names its COMMAND.
+# step NAME [--rerun COMMAND] CMD...: starts CMD in the tool directory, its output to its own log;
+# COMMAND, from the repo root, runs the step alone. A step that runs a function here names its
+# COMMAND.
 step() {
-  local name=$1 rerun log
+  local name=$1 rerun
   shift
   rerun="(cd plugin/skills/cad-reverse-engineer/tool && $*)"
   if [ "$1" = --rerun ]; then rerun=$2; shift 2; fi
-  steps=$((steps + 1))
-  log="$logs/$steps"
-  echo "== $name"
-  "$@" 2>&1 | tee "$log"
-  [ "${PIPESTATUS[0]}" -eq 0 ] || { failed+=("$name"); failed_logs+=("$log"); failed_reruns+=("$rerun"); }
+  "$@" </dev/null >"$logs/${#names[@]}" 2>&1 &
+  pids+=("$!")
+  names+=("$name")
+  reruns+=("$rerun")
 }
 
 # Fails unless cadrev check on example prints the status line its README states, within
@@ -94,15 +110,26 @@ plugin_validate() {
 }
 
 left_out="$logs/left-out"
-red_count=""
+red_on_main_step="" # its index, to read its count from its log
+if [ "$mode" = full ]; then
+  # The examples as a clone after committing holds them: tracked and staged files at their staged
+  # text. The last line repeats how many edits that left out, so a pass never hides that it checked
+  # older text.
+  examples=$(../../../../scripts/committed-examples 2>"$left_out")
+  examples_code=$?
+  cat "$left_out" >&2
+  [ "$examples_code" -ne 0 ] || copy=$(dirname "$examples")
+fi
 step "pyright" uv run pyright -p ../../../../pyrightconfig.json
 step "ruff check" uv run ruff check ../../../..
 step "ruff format" uv run ruff format --check ../../../..
 step "the tests import only cadrev.cli" ../../../../scripts/check-cli-imports
 # --lint stops here, past the steps an edit most often fails.
 if [ "$mode" = full ]; then
-  step "tool tests" uv run pytest -q ../../../../tests
-  step "script tests" uv run pytest -q ../../../../scripts/tests
+  # Fixed worker counts, not -n auto (a worker per core): the examples run beside the tests, the
+  # slowest of them longest, so the tests take about half of a laptop's cores and finish first.
+  step "tool tests" uv run pytest -q -n 6 ../../../../tests
+  step "script tests" uv run pytest -q -n 4 ../../../../scripts/tests
   step "agent-facing docs point only at files that exist" ../../../../scripts/check-doc-pointers
   step "every rule is tested raised and not raised, documented and held by a step; tests edit fixtures through swap" \
     uv run python ../../../../scripts/rule-coverage
@@ -110,16 +137,10 @@ if [ "$mode" = full ]; then
   step "the tool source branches on a check or probe kind only in run_checks" ../../../../scripts/check-kind-branches
   step "the branch holds no merge commit, so it rebase-merges" ../../../../scripts/check-linear
   step "plugin manifests validate" --rerun "claude plugin validate . && claude plugin validate plugin" plugin_validate
+  red_on_main_step=${#names[@]}
   step "red-on-main: new tests are red holes or green guards" --rerun scripts/red-on-main \
     red_on_main_or_notice
-  # Its count, repeated at the end, past the examples' output.
-  red_count=$(grep -E '^[0-9]+ red \(holes\), [0-9]+ green$' "$logs/$steps" | tail -n 1)
-  # The examples as a clone after committing holds them: tracked and staged files at their staged text.
-  # The last line repeats how many edits that left out, so a pass never hides that it checked older text.
-  examples=$(../../../../scripts/committed-examples 2>"$left_out")
-  code=$?
-  cat "$left_out" >&2
-  if [ "$code" -eq 0 ]; then
+  if [ "$examples_code" -eq 0 ]; then
     # Every example is a project the copy holds; its README states the status it reaches.
     for project in "$examples"/*/project.yaml; do
       [ -e "$project" ] || continue
@@ -127,16 +148,31 @@ if [ "$mode" = full ]; then
       step "examples/$example reaches its documented status" \
         --rerun "scripts/cadrev check examples/$example" example_status "$examples/$example"
     done
-    rm -rf "$(dirname "$examples")"
-  else
-    failed+=("the examples copy as a clone holds them")
-    failed_logs+=(/dev/null)
-    failed_reruns+=(scripts/committed-examples)
   fi
 fi
 
+# Each step's output, in the order the steps were started.
+for i in "${!names[@]}"; do
+  wait "${pids[$i]}"
+  code=$?
+  echo "== ${names[$i]}"
+  cat "$logs/$i"
+  [ "$code" -eq 0 ] || failed+=("$i")
+done
+pids=()
+if [ "$mode" = full ] && [ "$examples_code" -ne 0 ]; then
+  : >"$logs/${#names[@]}"
+  failed+=("${#names[@]}")
+  names+=("the examples copy as a clone holds them")
+  reruns+=(scripts/committed-examples)
+fi
+
 report_red_count() {
-  [ -z "$red_count" ] || echo "red-on-main: $red_count"
+  local count
+  [ -n "$red_on_main_step" ] || return 0
+  # Its count, repeated at the end, past the examples' output.
+  count=$(grep -E '^[0-9]+ red \(holes\), [0-9]+ green$' "$logs/$red_on_main_step" | tail -n 1)
+  [ -z "$count" ] || echo "red-on-main: $count"
 }
 
 report_left_out() {
@@ -148,9 +184,9 @@ report_left_out() {
 }
 
 if [ ${#failed[@]} -gt 0 ]; then
-  for i in "${!failed[@]}"; do
-    printf 'failed: %s\n  rerun alone: %s\n' "${failed[$i]}" "${failed_reruns[$i]}"
-    tail -n 20 "${failed_logs[$i]}" | sed 's/^/  /'
+  for i in "${failed[@]}"; do
+    printf 'failed: %s\n  rerun alone: %s\n' "${names[$i]}" "${reruns[$i]}"
+    tail -n 20 "$logs/$i" | sed 's/^/  /'
   done
   report_red_count
   report_left_out

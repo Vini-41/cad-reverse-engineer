@@ -4,8 +4,12 @@ stubbed: each stub records how it was called."""
 import os
 import re
 import shutil
+import signal
 import subprocess
+import time
 from pathlib import Path
+
+import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "check"
 STUBS = (
@@ -20,17 +24,16 @@ STUBS = (
 )
 
 
-def check(
+def stubbed(
     tmp_path: Path,
     uv_sync_code: int = 0,
     failing: dict[str, str] | None = None,
     bodies: dict[str, str] | None = None,
-    args: list[str] | None = None,
     uv_run: str = "exit 0",
-    env: dict[str, str] | None = None,
-) -> tuple[subprocess.CompletedProcess[str], list]:
-    """Run the copied check; each stub in failing prints its text and exits 1, each in bodies
-    runs its shell body instead, and uv runs uv_run for any command but sync."""
+) -> tuple[Path, Path, dict[str, str]]:
+    """Copy the check beside its stubs: each stub in failing prints its text and exits 1, each in
+    bodies runs its shell body instead, and uv runs uv_run for any command but sync. Returns the
+    copied check, the file each stub logs its call to, and the environment to run it in."""
     root = tmp_path / "repo"
     (root / "plugin/skills/cad-reverse-engineer/tool").mkdir(parents=True)
     (root / "scripts").mkdir()
@@ -49,12 +52,25 @@ def check(
         path.write_text(f'#!/bin/sh\necho "{path.name} $*" >>"{log}"\n{body}\n')
         path.chmod(0o755)
     subprocess.run(["git", "init", "-q", str(root)], check=True)
-    env = {**os.environ, "PATH": f"{bin_}:/usr/bin:/bin", **(env or {})}
+    return root / "scripts/check", log, {**os.environ, "PATH": f"{bin_}:/usr/bin:/bin"}
+
+
+def check(
+    tmp_path: Path,
+    uv_sync_code: int = 0,
+    failing: dict[str, str] | None = None,
+    bodies: dict[str, str] | None = None,
+    args: list[str] | None = None,
+    uv_run: str = "exit 0",
+    env: dict[str, str] | None = None,
+) -> tuple[subprocess.CompletedProcess[str], list]:
+    """Run the check copied beside its stubs, as stubbed() sets them, with args and env."""
+    script, log, base = stubbed(tmp_path, uv_sync_code, failing, bodies, uv_run)
     result = subprocess.run(
-        ["bash", str(root / "scripts/check"), *(args or [])],
+        ["bash", str(script), *(args or [])],
         capture_output=True,
         text=True,
-        env=env,
+        env={**base, **(env or {})},
     )
     return result, log.read_text().splitlines() if log.exists() else []
 
@@ -120,14 +136,62 @@ def test_guard_the_end_names_no_count_where_red_on_main_printed_none(tmp_path):
 def test_lint_runs_only_the_type_ruff_and_import_steps(tmp_path):
     result, calls = check(tmp_path, args=["--lint"])
     assert result.returncode == 0
-    assert calls == [
-        "uv sync --locked --extra test",
+    assert calls[0] == "uv sync --locked --extra test"
+    assert sorted(calls[1:]) == [
+        "check-cli-imports ",
         "uv run pyright -p ../../../../pyrightconfig.json",
         "uv run ruff check ../../../..",
         "uv run ruff format --check ../../../..",
-        "check-cli-imports ",
     ]
     assert result.stdout.splitlines()[-1] == "all steps passed"
+
+
+def waits_for(mine: Path, other: Path) -> str:
+    """A stub body that marks mine, then passes once other is marked, or fails after 5 s."""
+    wait = f"for _ in $(seq 50); do [ -e '{other}' ] && exit 0; sleep 0.1; done"
+    return f"touch '{mine}'; {wait}; exit 1"
+
+
+def test_steps_run_at_once(tmp_path):
+    a, b = tmp_path / "a", tmp_path / "b"
+    bodies = {"check-doc-pointers": waits_for(a, b), "check-glossary-words": waits_for(b, a)}
+    result, _ = check(tmp_path, bodies=bodies)
+    assert result.returncode == 0, result.stdout
+
+
+def test_guard_output_and_failures_follow_the_steps_order_whatever_finishes_first(tmp_path):
+    bodies = {
+        "check-doc-pointers": "sleep 1; echo pointers; exit 1",
+        "check-glossary-words": "echo words; exit 1",
+    }
+    result, _ = check(tmp_path, bodies=bodies)
+    lines = result.stdout.splitlines()
+    pointers = "agent-facing docs point only at files that exist"
+    words = "the skill and tool source use none of GLOSSARY.md's avoided words"
+    assert lines[lines.index(f"== {pointers}") + 1] == "pointers"
+    assert lines[lines.index(f"== {words}") + 1] == "words"
+    assert lines.index(f"== {pointers}") < lines.index(f"== {words}")
+    assert [line for line in lines if line.startswith("failed: ")] == [
+        f"failed: {pointers}",
+        f"failed: {words}",
+    ]
+
+
+@pytest.mark.parametrize("sig", [signal.SIGINT, signal.SIGTERM], ids=["SIGINT", "SIGTERM"])
+def test_an_interrupted_check_stops_every_step_it_started(tmp_path, sig):
+    started, finished = tmp_path / "started", tmp_path / "finished"
+    body = f"touch '{started}'; sleep 2; touch '{finished}'"
+    script, _, env = stubbed(tmp_path, bodies={"check-doc-pointers": body})
+    child = subprocess.Popen(
+        ["bash", str(script)], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+    deadline = time.monotonic() + 10
+    while not started.exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    child.send_signal(sig)
+    assert child.wait(timeout=10) != 0
+    time.sleep(3)
+    assert not finished.exists()
 
 
 def test_an_unknown_argument_runs_no_step(tmp_path):
@@ -149,6 +213,16 @@ def test_every_example_the_copy_holds_is_checked_for_its_documented_status(tmp_p
         "== examples/alpha reaches its documented status",
         "== examples/beta reaches its documented status",
     ]
+
+
+def test_guard_examples_the_copy_cannot_be_made_of_fail_and_none_is_checked(tmp_path):
+    result, calls = check(tmp_path, failing={"committed-examples": "no index\\n"})
+    assert result.returncode == 1
+    failed = (
+        "failed: the examples copy as a clone holds them\n  rerun alone: scripts/committed-examples"
+    )
+    assert failed in result.stdout
+    assert not any("cadrev check" in call for call in calls)
 
 
 def examples_copy(tmp_path: Path) -> dict[str, str]:
