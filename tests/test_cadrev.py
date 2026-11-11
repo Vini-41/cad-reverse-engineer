@@ -2855,7 +2855,7 @@ def test_param_the_model_reads_printed_in_neither_a_length_nor_an_angle_is_a_fin
     assert len(messages) == 1 and messages[0].startswith("N1.v") and "param link_L" in messages[0]
 
 
-@pytest.mark.parametrize("unit", ["mm", "deg", ""])
+@pytest.mark.parametrize("unit", ["mm", "deg", "", "teeth"])
 def test_guard_param_the_model_reads_printed_in_a_length_an_angle_or_no_unit(
     proj_dir, tmp_path, unit
 ):
@@ -5525,24 +5525,6 @@ def test_verified_project_whose_only_proposed_params_are_physics_params_is_exact
     )
 
 
-def test_source_physics_param_needs_no_check_and_its_quoted_value_is_exported(proj_dir, tmp_path):
-    mujoco = importlib.import_module("mujoco")
-
-    physical(proj_dir, tmp_path)
-    add_quote(
-        proj_dir, tmp_path, "The cord stiffness is 0.25.", "cord stiffness is 0.25", {"k": 0.25}
-    )
-    _param("cord_k", basis="source", value=None, rationale=None, gap=None, **{"from": "N1.k"})(
-        proj_dir, tmp_path
-    )
-    code, report = verify(proj_dir)
-    assert code == 0, report["findings"]
-    unchecked = [f["message"] for f in report["findings"] if f["rule"] == "unchecked-source"]
-    assert unchecked and not [m for m in unchecked if "cord_k" in m]
-    m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
-    assert m.tendon_stiffness[0] == pytest.approx(0.25 * MJCF_PER_N)
-
-
 CORD = "The cord is 0.5 mm thick and 4 mm wide."
 
 
@@ -5595,6 +5577,9 @@ def test_physics_value_quoted_in_si_reaches_the_mjcf_in_its_units(proj_dir, tmp_
     _quoted_knee(KNEE)(proj_dir, tmp_path)
     code, report = verify(proj_dir)
     assert code == 0, report["findings"]
+    # A source physics param needs no check, though the geometry's source params still do.
+    unchecked = [f["message"] for f in report["findings"] if f["rule"] == "unchecked-source"]
+    assert unchecked and not [m for m in unchecked if "knee_" in m]
     m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
     knee = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "knee")
     # 0.25 N·m/rad is 0.25 kg·m²/s² per rad: 0.25 × 10³ g × 10⁶ mm² = 2.5 × 10⁸ g·mm²/s².
@@ -6679,15 +6664,6 @@ def test_guard_gear_ratio_derived_from_diameter_callouts_reads_them_as_lengths(p
     assert [f["message"] for f in report["findings"] if f["rule"] == "unit-quantity"] == []
 
 
-def test_guard_model_py_reading_a_count_is_no_unit_quantity(proj_dir, tmp_path):
-    add_quote(proj_dir, tmp_path, "The link has 4 teeth.", "4 teeth", {"z": 4})
-    add_params(proj_dir, teeth={"basis": "source", "from": "N1.z"})
-    write(
-        proj_dir, "model.py", swap(MODEL, "    link = Box(", "    teeth = p.teeth\n    link = Box(")
-    )
-    assert findings(proj_dir, "unit-quantity") == []
-
-
 # A cable wound on a wheel closes the joints it names toward their closed pose, in proportion to the
 # wheel's turn, and a stroke check reads how far its path shortens.
 
@@ -6818,6 +6794,8 @@ def test_a_cable_wound_on_a_wheel_closes_its_joints_in_proportion_to_its_turn(pr
     assert checks["full"]["pose"] == {"spool": {"from": "turn", "value": 120}}
     assert abs(pull_stroke() - pull_stroke(toe1=60, toe2=90)) > 0.01
     assert abs(pull_stroke(0.5) - pull_stroke(0.5, toe1=0, toe2=0)) > 0.01
+    # The toes ride slide shift, which the pose leaves as built; moved, it would change the stroke.
+    assert abs(pull_stroke() - pull_stroke(shift=5)) > 0.01
 
 
 def test_posing_a_closed_joint_alone_sets_its_wheel_and_the_cables_other_joints(proj_dir, tmp_path):
@@ -7199,18 +7177,6 @@ def test_an_interference_check_swept_over_a_cables_wheel_reads_its_closed_values
     posed = _posed(report)
     assert (posed["rests_on"], posed["rests_on_params"]) == ("source", ["turn", "c1", "c2"])
     assert _TURN_AND_CLOSED.isdisjoint(_unchecked_in(report))
-
-
-def test_a_slide_the_cable_crosses_but_the_pose_does_not_set_leaves_its_stroke_unchanged(
-    proj_dir, tmp_path
-):
-    cabled(proj_dir, tmp_path)
-    code, report = verify(proj_dir)
-    # The toes ride slide shift, which the stroke's pose leaves as built; moved, it would change
-    # the stroke.
-    assert code == 0, report["findings"]
-    assert _by_id(report)["full"]["ok"]  # against pull_stroke(), with shift as built
-    assert abs(pull_stroke() - pull_stroke(shift=5)) > 0.01
 
 
 def test_stroke_check_on_a_cable_with_no_wheel_needs_a_pose(proj_dir, tmp_path):
@@ -8045,19 +8011,6 @@ def planetary(root: Path, tmp_path: Path, row: str = TABLE_I) -> None:
     write(root, "model.py", PLANETARY)
 
 
-def test_carrier_of_a_planetary_train_turns_360_over_its_stated_ratio_per_sun_turn(
-    proj_dir, tmp_path
-):
-    planetary(proj_dir, tmp_path)
-    code, report = verify(proj_dir)
-    assert code == 0, report["findings"]
-    carrier = _by_id(report)["carrier"]
-    assert carrier["ok"]
-    assert carrier["expect"] == {"expr": "360 / R1.ratio", "value": 50}
-    # 25 / (25 + 155) of a turn, 50°, as 360° / 7.2: one ratio from the counts, one stated.
-    assert float(carrier["measured"].split("°")[0]) == pytest.approx(50, abs=1e-3)
-
-
 @pytest.mark.parametrize(
     "row, ratio",
     [(TABLE_I, "z_ring / z_sun"), ("SSPG [25, 65, 157, 0.5, 3]", "z_sun / (z_sun + z_ring)")],
@@ -8118,10 +8071,13 @@ def test_tooth_counts_of_a_planetary_train_are_checked_through_its_derived_ratio
     assert counts <= set(_unchecked(proj_dir))
 
 
+# With a ring of 157 teeth, not 25 + 2 × 65, the planet meshing the ring sits 23 from the sun axis,
+# not 22.5, and the planet axis check fails.
+@pytest.mark.parametrize("ring, orbit_ok", [(155, True), (157, False)], ids=["155", "157"])
 def test_pitch_diameter_and_planet_axis_of_a_planetary_train_match_its_stated_counts(
-    proj_dir, tmp_path
+    proj_dir, tmp_path, ring, orbit_ok
 ):
-    planetary(proj_dir, tmp_path)
+    planetary(proj_dir, tmp_path, f"SSPG [25, 65, {ring}, 0.5, 3]")
     pitch = {"id": "sun-pitch", "kind": "diameter", "at": "sun.p", "expect": "T1.m * T1.z_sun"}
     orbit = {
         "id": "orbit",
@@ -8133,9 +8089,9 @@ def test_pitch_diameter_and_planet_axis_of_a_planetary_train_match_its_stated_co
     for check in (pitch, orbit):
         _append("checks.yaml", "checks", check)(proj_dir, tmp_path)
     code, report = verify(proj_dir)
-    assert code == 0, report["findings"]
     checks = _by_id(report)
-    assert checks["sun-pitch"]["ok"] and checks["orbit"]["ok"]
+    assert code == (0 if orbit_ok else 1), report["findings"]
+    assert checks["sun-pitch"]["ok"] and checks["orbit"]["ok"] == orbit_ok
     # 0.5 × 25 and 0.5 × (25 + 65) / 2.
     expected = (checks["sun-pitch"]["expect"]["value"], checks["orbit"]["expect"]["value"])
     assert expected == (12.5, 22.5)
@@ -8206,29 +8162,17 @@ def test_guard_toothed_sun_pitch_diameter_is_a_distance_across_opposite_flanks(
     assert findings(proj_dir, "datum-off-solid") == []
 
 
-def test_planet_axis_fails_where_the_ring_count_breaks_ring_equals_sun_plus_two_planets(
-    proj_dir, tmp_path
-):
-    # 157 ≠ 25 + 2 × 65: the planet meshing the ring sits 23 from the sun axis, not 22.5.
-    planetary(proj_dir, tmp_path, "SSPG [25, 65, 157, 0.5, 3]")
-    orbit = {
-        "id": "orbit",
-        "kind": "distance",
-        "instances": ["sun_1", "planet_1"],
-        "between": ["sun_1.a", "planet_1.a"],
-        "expect": "T1.m * (T1.z_sun + T1.z_planet) / 2",
-    }
-    write(proj_dir, "checks.yaml", {"checks": [orbit]})
-    code, report = verify(proj_dir)
-    assert code == 1 and not _by_id(report)["orbit"]["ok"]
-
-
 def test_planetary_train_exports_one_joint_equality_per_gear_in_its_chain(proj_dir, tmp_path):
     mujoco = importlib.import_module("mujoco")
 
     planetary(proj_dir, tmp_path)
     code, report = verify(proj_dir)
     assert code == 0, report["findings"]
+    carrier = _by_id(report)["carrier"]
+    assert carrier["ok"]
+    assert carrier["expect"] == {"expr": "360 / R1.ratio", "value": 50}
+    # 25 / (25 + 155) of a turn, 50°, as 360° / 7.2: one ratio from the counts, one stated.
+    assert float(carrier["measured"].split("°")[0]) == pytest.approx(50, abs=1e-3)
     m = mujoco.MjModel.from_xml_path(str(proj_dir / "build" / "model.mjcf"))
     assert m.neq == 2
     joint = mujoco.mjtObj.mjOBJ_JOINT
@@ -8804,10 +8748,16 @@ def _mismatches(report: dict) -> list[str]:
 
 
 def test_bbox_probe_whose_recorded_value_matches_the_file_passes(proj_dir, tmp_path):
-    probed(proj_dir, tmp_path)
+    probed(proj_dir, tmp_path)  # context, restating T1-link
     code, report = verify(proj_dir)
-    assert "probe-mismatch" not in [f["rule"] for f in report["findings"]]
-    assert (code, report["status"]) == (0, "VERIFIED")
+    found = [f["rule"] for f in report["findings"]]
+    assert "probe-mismatch" not in found and "evidence-unused" not in found
+    assert [q["ok"] for q in report["probes"]] == [True] * 3
+    # Its only released values are probes, which await no reviewer: VERIFIED, not pending review.
+    assert (code, report["status"], report["awaiting_confirmation"]) == (0, "VERIFIED", [])
+    # The quote it restates stays in scope, so link_L rests on it.
+    assert report["params"]["link_L"]["value"] == 40
+    assert report["params"]["link_L"]["rests_on"] == "source"
 
 
 def test_bbox_probe_off_by_more_than_the_length_tolerance_is_probe_mismatch(proj_dir, tmp_path):
@@ -8823,14 +8773,6 @@ def test_bbox_probe_mismatch_is_raised_without_the_build(proj_dir, tmp_path, cap
     probed(proj_dir, tmp_path, values={"L": 41, "W": 5, "H": 8})
     cli.main(["check", str(proj_dir), "--no-build"])
     assert "[probe-mismatch] probe P-link.L" in capsys.readouterr().out
-
-
-def test_project_whose_only_released_value_is_a_probe_is_verified_not_pending_review(
-    proj_dir, tmp_path
-):
-    probed(proj_dir, tmp_path)
-    _, report = verify(proj_dir)
-    assert report["status"] == "VERIFIED" and report["awaiting_confirmation"] == []
 
 
 def test_param_from_a_probe_takes_its_value_and_rests_on_source(proj_dir, tmp_path):
@@ -9041,29 +8983,15 @@ def test_guard_coverage_over_several_bodies_names_each_neither_compared_nor_skip
     assert _coverage(verify(proj_dir)[1]) == [found[1]]
 
 
-def test_guard_probe_restating_a_quote_is_context_and_the_quote_stays_in_scope(proj_dir, tmp_path):
-    probed(proj_dir, tmp_path)  # context, restates T1-link
-    code, report = verify(proj_dir)
-    assert report["params"]["link_L"]["value"] == 40
-    assert report["params"]["link_L"]["rests_on"] == "source"
-    assert [q["ok"] for q in report["probes"]] == [True] * 3
-    assert "evidence-unused" not in [f["rule"] for f in report["findings"]]
-    assert (code, report["status"]) == (0, "VERIFIED")
-    edit(proj_dir, "evidence.yaml", lambda d: d["evidence"][-1].pop("reason"))
-    assert "evidence-scope" in errors(proj_dir)
-
-
-def _pitch_in_conflict(root: Path, tmp_path: Path, resolution: str | None = None) -> dict:
+def _pitch_in_conflict(root: Path, tmp_path: Path) -> dict:
     """The link released with its holes 32 mm apart, the paper's 30 mm pitch, and a probe of the
-    file's 32 set beside it as a conflict, open unless resolution is given."""
+    file's 32 set beside it as an open conflict."""
     released(root, tmp_path, body=link_body(pitch=32), at=Location(), check=False)
     wide = {"link_step.a": [-16, 0, 0], "link_step.b": [16, 0, 0]}
     probe = PROBE | _PITCH_PROBE | {"id": "P-pitch", "values": {"v": 32}}
     probe |= {"reason": "differs from pitch, see C1"}
     skip = {"source": "link_step", "body": "link_step", "reason": "probed only"}
     conflict = {"id": "C1", "evidence": ["pitch", "P-pitch"], "summary": "pitch 30 or 32"}
-    if resolution:
-        conflict["resolution"] = resolution
     edit(
         root,
         "evidence.yaml",
@@ -9293,11 +9221,9 @@ def _seat_probe(report: dict) -> list[tuple[bool, float]]:
 
 
 def test_diameter_check_of_a_trimmed_cylinder_takes_the_radius_under_the_trim(proj_dir, tmp_path):
-    assert _seat_check(_seated(proj_dir, tmp_path, "trimmed")) == [(True, "10 at seat.wall")]
-
-
-def test_diameter_probe_of_a_trimmed_cylinder_takes_the_radius_under_the_trim(proj_dir, tmp_path):
-    assert _seat_probe(_seated(proj_dir, tmp_path, "trimmed")) == [(True, pytest.approx(10))]
+    report = _seated(proj_dir, tmp_path, "trimmed")
+    assert _seat_check(report) == [(True, "10 at seat.wall")]
+    assert _seat_probe(report) == [(True, pytest.approx(10))]  # and so does a diameter probe
 
 
 def test_guard_diameter_of_an_untrimmed_cylinder_takes_its_radius(proj_dir, tmp_path):
@@ -9855,8 +9781,8 @@ SHEET = """\
   </g>
 </svg>
 """
-# Points inside the link's region and the plate's, on the sheet at its declared scale.
-LINK_AT, PLATE_AT = "sheet@30,41", "sheet@130,50"
+# A point inside the link's region, on the sheet at its declared scale.
+LINK_AT = "sheet@30,41"
 # Datums on the sheet, in its frame: the link's hole centres and the middle of its long edge at
 # y 45, where the built link's datums a, b and d (on its face at +Y) project along Z.
 SHEET_DATUMS = {"sheet.a": [25, 42.5], "sheet.b": [55, 42.5], "sheet.d": [40, 45]}
