@@ -4678,7 +4678,8 @@ def test_model_with_joints_exports_mjcf_and_a_mesh_per_part_that_mujoco_loads(pr
 
 
 # Found by dogfood run 15 (#134): a 32-turn swept spring, 4 mm across in 0.4 mm wire, meshes at
-# build123d's default tessellation to more faces than MuJoCo's STL decoder takes.
+# build123d's default tessellation to more faces than MuJoCo's STL decoder takes. 12 turns do too,
+# some 230,000 faces, in a quarter of the time.
 _SPRING = """\
     path = Helix((p.length - p.wire) / p.turns, p.length - p.wire, (p.od - p.wire) / 2)
     spring = sweep(Plane(origin=path @ 0, z_dir=path % 0) * Circle(p.wire / 2), path)
@@ -4711,7 +4712,7 @@ def _sprung(root: Path, turns: int) -> tuple[int, dict]:
 def test_mesh_over_mujocos_stl_face_limit_is_exported_coarser_and_loads(proj_dir):
     mujoco = importlib.import_module("mujoco")
 
-    code, report = _sprung(proj_dir, 32)
+    code, report = _sprung(proj_dir, 12)
     assert code == 0, report["findings"]
     coarsened = report["motion"]["coarsened"]
     assert list(coarsened) == ["spring"]
@@ -9392,18 +9393,27 @@ _ROUNDED = swap(
 
 
 _LINK_AT = {"e": (-20, 0, 0), "f": (20, 0, 0), "g": (0, 2.5, 0)}
+# The linear and angular tolerance a test's STL is exported at.
+_STL_TOLERANCES = (0.01, 0.5)
 
 
 def shape_checked(
-    root: Path, tmp_path: Path, body, model: str = _FACE_DATUMS, stl=True, at=_LINK_AT
+    root: Path,
+    tmp_path: Path,
+    body,
+    model: str = _FACE_DATUMS,
+    stl=True,
+    at=_LINK_AT,
+    stl_tolerances: tuple[float, float] = _STL_TOLERANCES,
 ) -> Path:
     """Build the link with model, register body as the STL (or STEP) geometry source body, its
     datums e, f and g at at, where the link's are, and compare the link with it by a shape check.
-    Returns the source file. The STL's facets lie within 0.01 of body, few enough to compute
-    every sample point's distance in a test."""
+    Returns the source file. The STL's facets lie within stl_tolerances of body, by default 0.01
+    and 0.5, few enough to compute every sample point's distance in a test."""
     path = tmp_path / ("body.stl" if stl else "body.step")
     if stl:
-        export_stl(body, str(path), tolerance=0.01, angular_tolerance=0.5)
+        linear, angular = stl_tolerances
+        export_stl(body, str(path), tolerance=linear, angular_tolerance=angular)
     else:
         export_step(body, str(path))
     register = ["source", str(root), str(path), "--id", "body", "--kind", "geometry"]
@@ -9596,8 +9606,8 @@ def _torus_shell():
 
 class _Body(NamedTuple):
     """A row of SHAPE_BODIES: the part as built and the body as released, the model building the
-    part, whether the body is an STL (else a STEP), its datums, and the worst point's coordinates
-    every run shares (all three but where equally far points tie)."""
+    part, whether the body is an STL (else a STEP), its datums, the worst point's coordinates
+    every run shares (all three but where equally far points tie), and an STL's tolerances."""
 
     part: Callable
     body: Callable
@@ -9605,6 +9615,7 @@ class _Body(NamedTuple):
     stl: bool = True
     at: dict = _LINK_AT
     shared: slice = slice(3)
+    stl_tolerances: tuple[float, float] = _STL_TOLERANCES
 
 
 # Bodies a shape check's distance bounds (distance.py) read: each kind of face a bound reads, cut
@@ -9613,7 +9624,9 @@ class _Body(NamedTuple):
 SHAPE_BODIES = {
     # Flat triangles, an STL's sag mid-facet the largest.
     "faceted holes": _Body(link_body, link_body),
-    "faceted fillets": _Body(_rounded_box, _rounded_box, _ROUNDED),
+    # The fillets' corners are trimmed faces whose grid points fall off them, for OCC to settle.
+    # Their STL is coarse, a quarter of the triangles, so computing every point takes seconds.
+    "faceted fillets": _Body(_rounded_box, _rounded_box, _ROUNDED, stl_tolerances=(0.1, 1.0)),
     # Flat faces bounded by lines, split into the triangles they are made of: a notch across the
     # top leaves the faces at ±Y U-shaped, not convex. Points along the notch tie: x and z only.
     "notch in a flat body": _Body(
@@ -9714,7 +9727,9 @@ SHAPE_BODIES = {
 @pytest.mark.parametrize("row", SHAPE_BODIES.values(), ids=SHAPE_BODIES.keys())
 def test_guard_shape_check_finds_the_distance_computing_every_point_gives(proj_dir, tmp_path, row):
     assert row.body().is_valid
-    source = shape_checked(proj_dir, tmp_path, row.body(), row.model, row.stl, row.at)
+    source = shape_checked(
+        proj_dir, tmp_path, row.body(), row.model, row.stl, row.at, row.stl_tolerances
+    )
     released_body = _stl_solid(source) if row.stl else import_step(str(source))
     gap, at = _every_point_distance(row.part(), released_body)
     shape = _shape_result(verify(proj_dir)[1])["shape"]
