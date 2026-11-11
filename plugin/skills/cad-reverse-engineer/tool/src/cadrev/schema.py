@@ -161,6 +161,7 @@ FILES = {
         "units": (dict, None),
         "tolerance": (Record({"length": NUMBER, "angle": NUMBER}), None),
         "model_literals": (Items(NUMBER), None),
+        "known_first": (bool, None),
         "sources": (SOURCE, list),
     },
     "evidence.yaml": {

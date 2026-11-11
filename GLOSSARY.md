@@ -56,7 +56,7 @@ The basis of a value the reconstruction chooses because no source states it.
 _Avoid_: assumed, guessed
 
 **Gap**:
-A question that, once answered, would replace a proposed or measured value, or the choice a derived parameter's computation makes, with a stated one.
+A question that, once answered, would replace a proposed or measured value, or the choice a derived parameter's computation makes, with a stated one. In a known-first project, a gap no parameter names is what a waiting part asks.
 
 **Physics value**:
 A parameter only the simulation reads, such as a joint's damping or friction, a spring's stiffness or rest, or a tendon's elasticity; it has a basis like any other but shapes no geometry.
@@ -164,3 +164,11 @@ The first part taken through modelling, checks and the report before any other p
 
 **Tracer loop**:
 The first closed loop of a mechanism taken through its joints, the MJCF export and a posed check before any other joint is declared.
+
+**Known first**:
+A project that builds only the parts whose every dimension the sources settle, so no parameter rests on a proposed value but physics values and a sweep's resolution, and lists what waits; the user then builds on it, or has the reconstruction propose the rest as the complete model. Its project.yaml sets `known_first: true`.
+_Avoid_: draft model, sources-only model
+
+**Waiting**:
+Of a stated value in a known-first project: one no parameter uses and no check compares, because the part it belongs to needs a value the sources leave open. It is listed with the gaps no parameter names rather than found unused.
+_Avoid_: pending (for a value; PENDING REVIEW is a status), deferred

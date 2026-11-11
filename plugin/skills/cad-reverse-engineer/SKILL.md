@@ -29,9 +29,14 @@ Each step ends on a criterion `cadrev` confirms: the rules named in brackets are
 
 ### 1. Scope the target
 
-Ask the user where the project directory goes if they have not said. `cadrev init <dir>`, then write `target:` in project.yaml: the object, the version or iteration, and the configuration. Papers often show earlier iterations next to the reported one; the target names which one the ledger describes. A target narrows the object by version and configuration (lid off), and keeps every part of it: a cut sheet nesting all of a unit's plates is that many parts to build and compare, while a sheet's regions of another unit (a controller's housing) are skipped in step 4. When you choose a released variant later (step 4), rewrite the target to name it.
+Ask the user where the project directory goes, and which of two builds they want, unless they have said:
 
-Done when `target` names one object in one version and `cadrev check <dir> --no-build` reports no `[target]`, `[format-*]` or `[units]`.
+- **The complete model**: every part built, each value the sources leave open proposed beside the gap that would close it.
+- **Known first**: only the parts whose every dimension the sources settle, built and checked; every other part waits, listed with the question that would settle it, until the user builds on the model or has you propose the rest.
+
+`cadrev init <dir>`, then write `target:` in project.yaml: the object, the version or iteration, and the configuration; for known first, write `known_first: true` too ([Known first](references/project-format.md#known-first)). Papers often show earlier iterations next to the reported one; the target names which one the ledger describes. A target narrows the object by version and configuration (lid off), and keeps every part of it: a cut sheet nesting all of a unit's plates is that many parts to build and compare, while a sheet's regions of another unit (a controller's housing) are skipped in step 4. When you choose a released variant later (step 4), rewrite the target to name it.
+
+Done when `target` names one object in one version, project.yaml sets `known_first: true` exactly when the user chose known first, and `cadrev check <dir> --no-build` reports no `[target]`, `[format-*]` or `[units]`.
 
 ### 2. Register sources
 
@@ -78,17 +83,21 @@ Write params.yaml. Each modelled dimension takes the strongest basis available: 
 
 Format: `params.yaml` and `gaps.yaml` in [`references/project-format.md`](references/project-format.md).
 
+**Known first** makes each value the sources leave open a gap, never a proposed param. Write params for the settled parts alone; a measured param is allowed. Give each waiting part a gap whose question names the part ("What diameter are the finger link's pins?"), so step 9 can group what waits by part.
+
 Joint ranges, poses and physics values wait for step 8, and the mass model's `parts` entries for step 6, where each part gets its entry as it is modelled.
 
-Done when every feature the model will need has a param, and `cadrev check <dir> --no-build` reports no `[param-*]` error and no `[unit-quantity]`. `[evidence-unused]` may remain for values only a check or step 8 will use.
+Done when every feature the model will need has a param, and `cadrev check <dir> --no-build` reports no `[param-*]` error, no `[known-first]` and no `[unit-quantity]`. `[evidence-unused]` may remain for values only a check or step 8 will use.
 
 ### 6. Model, tracer part first
 
 Take one part all the way through before modelling any other: the tracer part. Choose a part with a stated envelope or pitch, or with a released body its shape check compares as a whole, model it alone, give it its checks (step 7), and run `cadrev check <dir>` until `build/report.md` shows those checks green. The tracer part proves the whole path, ledger to params to model to checks to report, while a mistake in it costs one part.
 
-Then write the rest of model.py per [`references/modeling.md`](references/modeling.md): parts in their own frames, datums at every checked feature (pivots included, which step 8 hinges on), and the assembly as placed instances, built at the configuration the sources measure their angles from. Build every part the sources' parts tables list and every mechanism they state; `scope: not-modeled` is for what [the evidence format](references/project-format.md#evidence-the-ledger) leaves out. Weigh each part in params.yaml's [mass model](references/project-format.md#mass-model) as you model it, never ahead of model.py: a purchased part by its datasheet `mass`, a printed one by `density`.
+Then write the rest of model.py per [`references/modeling.md`](references/modeling.md): parts in their own frames, datums at every checked feature (pivots included, which step 8 hinges on), and the assembly as placed instances, built at the configuration the sources measure their angles from. Build every part the sources' parts tables list (known first: every settled one) and every mechanism they state; `scope: not-modeled` is for what [the evidence format](references/project-format.md#evidence-the-ledger) leaves out. Weigh each part in params.yaml's [mass model](references/project-format.md#mass-model) as you model it, never ahead of model.py: a purchased part by its datasheet `mass`, a printed one by `density`.
 
-Done when the tracer part's checks went green before a second part was modelled, and `cadrev check <dir>` builds every part with no `[model-*]`, `[part-invalid]`, `[part-mass]`, `[datum-off-solid]`, `[assembly-part]` or `[param-unused]`. Red checks on the other parts are step 7's job.
+**Known first** models the settled parts alone, the tracer part among them. A settled part whose place in the assembly the sources leave open is built in its own frame and placed by no instance ([the assembly](references/modeling.md#contract)), with a gap asking where it sits. Where no part is settled, model.py builds nothing and the project goes to step 9.
+
+Done when the tracer part's checks went green before a second part was modelled, and `cadrev check <dir>` builds every part (known first: every settled part) with no `[model-*]`, `[part-invalid]`, `[part-mass]`, `[datum-off-solid]`, `[assembly-part]` or `[param-unused]`. Red checks on the other parts are step 7's job.
 
 ### 7. Check against the sources
 
@@ -97,6 +106,8 @@ Add a check for every source value the geometry should realise: `bbox` for envel
 Where a source states the numbers a value is worked out from rather than the value itself, compare with `expect`, an expression over ledger values, in place of `evidence` and `key`: a gear's pitch diameter (the flank-pair `distance` above) is `expect: "T1.module * T1.z_sun"`, a planet axis's distance from the sun's `T1.module * (T1.z_sun + T1.z_planet) / 2`, a carrier's turn per sun turn `360 / R1.ratio`. [Worked ledger values](references/project-format.md#worked-ledger-values-expect) says which kinds take it. A param never supplies an expected value, so a worked value goes through `expect`.
 
 Check a stated total mass with a mass check that gives no `density` ([mass model](references/project-format.md#mass-model)). Add the mass check even where its density, `add` or `counts` param is proposed, and keep that value at its rationale rather than tuning it to turn the check green: the check then rests on proposed (`checks.yaml` in [`references/project-format.md`](references/project-format.md#checksyaml)), and the gap is what closes it.
+
+**Known first** checks among built parts alone and adds no check that rests on proposed: a stated value of a waiting part waits, and so does a stated mass whose density, `add` or count the sources leave open, or that weighs a waiting part.
 
 Turn a red check green by changing the model or its params, and record a changed proposed param as `params.yaml` in [`references/project-format.md`](references/project-format.md#paramsyaml) describes. Evidence changes only to correct a transcription, re-copied from `cadrev text`.
 
@@ -117,12 +128,19 @@ Then the rest:
 - **Ranges.** Read each stated range into its joint's `source` range params, confirm it with a `range` check that checks them, and sweep interference across each ranged joint ([Ranges and sweeps](references/project-format.md#ranges-and-sweeps)).
 - **Physics values** go in the joint or tendon slot that applies them, each a param marked `physics: true` ([Physics values](references/project-format.md#physics-values)). A value no source states is proposed, with a gap.
 
+**Known first** declares joints, loops, gears and cables among built instances alone. A range, ratio, closed pose or pose angle the sources leave open waits with its gap, and so does the motion that needs it; a proposed physics value and a sweep's `steps` stay allowed, as exact sets them aside. Where every joint waits, the model stays static and goes to step 9.
+
 On a `[loop-open]` or `[joint-range]` at a stated pose or range end, fix the link lengths, the ranges or the as-built zero. Near a toggle (two links collinear) the solve itself can fail on links that do close; report that end to the user rather than trimming a stated range.
 
-Done when the tracer loop's posed check (or the first gear's) went green before a second loop or gear was declared, every stated range has a `range` check, report.md prints **Kinematic**, and `cadrev check <dir>` reports no `[model-joint]`, `[model-loop]`, `[model-gear]`, `[model-cable]`, `[mjcf-load]`, `[loop-open]`, `[joint-range]`, `[part-mass]`, `[param-physics]`, `[unchecked-source]` (a range param included), `[evidence-unused]` or other error, so its status is VERIFIED or VERIFIED PENDING REVIEW.
+Done when the tracer loop's posed check (or the first gear's) went green before a second loop or gear was declared, every stated range has a `range` check (known first: of a settled joint), report.md prints **Kinematic**, and `cadrev check <dir>` reports no `[model-joint]`, `[model-loop]`, `[model-gear]`, `[model-cable]`, `[mjcf-load]`, `[loop-open]`, `[joint-range]`, `[part-mass]`, `[param-physics]`, `[unchecked-source]` (a range param included), `[evidence-unused]` or other error, so its status is VERIFIED or VERIFIED PENDING REVIEW.
 
 ### 9. Hand over
 
 Report to the user from `build/report.md` of a full verification run. State the status in the report's words (NOT VERIFIED, VERIFIED PENDING REVIEW or VERIFIED; a PARTIAL run writes no report to hand over), and call the project exact only when the report prints **Exact**, with the proposed physics values and sweep resolutions it names beside it. Then give the headline, the parameters resting on proposed values, open conflicts, and the gaps grouped by `ask` (the `authors` group is a ready list of questions for the corresponding author). List the figure readings awaiting confirmation: the user (or a reviewer they name) checks each crop and writes their own name in `confirmed_by`.
 
-Done when the user has the status, exact and the proposed physics values as `build/report.json` states them (`status`, `exact`, `counts.physics_proposed`), the proposed parameters (`rests_on_proposed`), the open conflicts (`[conflict-open]`), the questions grouped by who to ask, and the crops waiting for confirmation (`awaiting_confirmation`).
+**Known first** hands over the same report: the status, what is built and checked, and what waits, from report.md's Waiting section, grouped by part, each part with the gaps whose questions name it. Then ask the user to choose:
+
+- **Build on it themselves.** The project and the STEP files in `build/` are theirs. A value of their own enters params.yaml as `proposed`, its `rationale` naming them as its source, once `known_first` is removed; or as `measured`, scaled off a figure.
+- **Have you propose the rest.** Remove `known_first` and carry on at step 5 for the waiting parts, now as the complete model.
+
+Done when the user has the status, exact and the proposed physics values as `build/report.json` states them (`status`, `exact`, `counts.physics_proposed`), the proposed parameters (`rests_on_proposed`), the open conflicts (`[conflict-open]`), the questions grouped by who to ask, and the crops waiting for confirmation (`awaiting_confirmation`); and for known first, what waits grouped by part with the questions that would settle it (`waiting`), and the user's choice between building on it and having you propose the rest.
