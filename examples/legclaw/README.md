@@ -15,7 +15,7 @@ Expected status: `VERIFIED: 0 errors, 0 warnings, 73/73 checks pass`
 
 The five figure readings (`fig2d-width`, `fig2a-beta`, `fig2a-sole`, `fig2a-mass`, `figS1-tension`) were checked against their crops in `figures/crops/` by a named reviewer, recorded as `confirmed_by` in `evidence.yaml`. Without those fields the status would be VERIFIED PENDING REVIEW.
 
-`scripts/check`, which CI runs on every push, copies the examples as a clone holds them, runs `cadrev check` on this directory and fails if it prints anything else; the run takes under two minutes. A change that moves the status updates this line.
+`scripts/check` copies the examples as a clone holds them, runs `cadrev check` on this directory and fails if it prints anything else; the run takes under two minutes. A change that moves the status updates this line.
 
 `checks.yaml` is written by `gen_checks.py` (`uv run --project ../../plugin/skills/cad-reverse-engineer/tool python gen_checks.py`, from this directory), which repeats the checks per leg, toe and servo: edit the script, not the file.
 

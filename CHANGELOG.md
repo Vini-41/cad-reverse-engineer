@@ -16,7 +16,7 @@ The skill walks the agent through seven steps (scope, sources, ledger, parameter
 
 ### Examples
 
-One small example shows each kind of evidence, and four full reconstructions were each built by a fresh agent from the skill and the sources alone. CI holds every one to its expected status on each push.
+One small example shows each kind of evidence, and four full reconstructions were each built by a fresh agent from the skill and the sources alone. `scripts/check` holds every one to its expected status before each merge.
 
 - `examples/legclaw-links`: three linkages of the LegClaw (Cheng et al., Advanced Science 2026), with Table S2 envelopes from the DOCX supplement, methods quotes, a figure-label crop, two source conflicts and proposed pin pitches. Expected status: `VERIFIED: 0 errors, 2 warnings, 10/10 checks pass`.
 - `examples/legclaw`: the full LegClaw, both legs and their mounts with their motion and tendons, exported to MuJoCo. Expected status: `VERIFIED: 0 errors, 0 warnings, 73/73 checks pass`.
