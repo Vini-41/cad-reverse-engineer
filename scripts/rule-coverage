@@ -270,16 +270,23 @@ class Asserts:
                         module[t.id] = self.table(node.value, module, helpers)
                         tables[t.id] = shape(node.value, tables)
         functions = [n for n in tree.body if isinstance(n, ast.FunctionDef)]
-        for _ in functions:  # a helper may return another helper's rules
+        # A helper may return another helper's rules, so read them all again until none returns
+        # more.
+        changed = True
+        while changed:
+            changed = False
             for fn in functions:
                 env = self.local(fn, module, helpers, tables)
-                helpers[fn.name] = set().union(
+                returned = set().union(
                     *(
                         self.named(r.value, env, helpers)
                         for r in ast.walk(fn)
                         if isinstance(r, ast.Return) and r.value is not None
                     )
                 )
+                if returned != helpers.get(fn.name, set()):
+                    helpers[fn.name] = returned
+                    changed = True
         for fn in functions:
             if any(unrun(d) for d in fn.decorator_list):
                 continue
