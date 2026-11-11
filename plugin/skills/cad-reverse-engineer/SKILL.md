@@ -83,7 +83,7 @@ Write params.yaml. Each modelled dimension takes the strongest basis available: 
 
 Format: `params.yaml` and `gaps.yaml` in [`references/project-format.md`](references/project-format.md).
 
-**Known first** makes each value the sources leave open a gap, never a proposed param. Write params for the settled parts alone; a measured param is allowed. Give each waiting part a gap whose question names the part ("What diameter are the finger link's pins?"), so step 9 can group what waits by part.
+**Known first** makes each value the sources leave open a gap, never a proposed param ([what it allows](references/project-format.md#known-first)). Write params for the settled parts alone, and give each waiting part a gap whose question names the part ("What diameter are the finger link's pins?"), so step 9 can group what waits by part.
 
 Joint ranges, poses and physics values wait for step 8, and the mass model's `parts` entries for step 6, where each part gets its entry as it is modelled.
 
@@ -97,7 +97,7 @@ Then write the rest of model.py per [`references/modeling.md`](references/modeli
 
 **Known first** models the settled parts alone, the tracer part among them. A settled part whose place in the assembly the sources leave open is built in its own frame and placed by no instance ([the assembly](references/modeling.md#contract)), with a gap asking where it sits. Where no part is settled, model.py builds nothing and the project goes to step 9.
 
-Done when the tracer part's checks went green before a second part was modelled, and `cadrev check <dir>` builds every part (known first: every settled part) with no `[model-*]`, `[part-invalid]`, `[part-mass]`, `[datum-off-solid]`, `[assembly-part]` or `[param-unused]`. Red checks on the other parts are step 7's job.
+Done when the tracer part's checks went green before a second part was modelled (known first with no part settled: model.py builds nothing), and `cadrev check <dir>` builds every part (known first: every settled part) with no `[model-*]`, `[part-invalid]`, `[part-mass]`, `[datum-off-solid]`, `[assembly-part]` or `[param-unused]`. Red checks on the other parts are step 7's job.
 
 ### 7. Check against the sources
 
@@ -107,7 +107,7 @@ Where a source states the numbers a value is worked out from rather than the val
 
 Check a stated total mass with a mass check that gives no `density` ([mass model](references/project-format.md#mass-model)). Add the mass check even where its density, `add` or `counts` param is proposed, and keep that value at its rationale rather than tuning it to turn the check green: the check then rests on proposed (`checks.yaml` in [`references/project-format.md`](references/project-format.md#checksyaml)), and the gap is what closes it.
 
-**Known first** checks among built parts alone and adds no check that rests on proposed: a stated value of a waiting part waits, and so does a stated mass whose density, `add` or count the sources leave open, or that weighs a waiting part.
+**Known first** checks built parts alone: a stated value of a waiting part waits, and so does a stated mass whose check would weigh a waiting part or read a value the sources leave open.
 
 Turn a red check green by changing the model or its params, and record a changed proposed param as `params.yaml` in [`references/project-format.md`](references/project-format.md#paramsyaml) describes. Evidence changes only to correct a transcription, re-copied from `cadrev text`.
 
@@ -128,11 +128,11 @@ Then the rest:
 - **Ranges.** Read each stated range into its joint's `source` range params, confirm it with a `range` check that checks them, and sweep interference across each ranged joint ([Ranges and sweeps](references/project-format.md#ranges-and-sweeps)).
 - **Physics values** go in the joint or tendon slot that applies them, each a param marked `physics: true` ([Physics values](references/project-format.md#physics-values)). A value no source states is proposed, with a gap.
 
-**Known first** declares joints, loops, gears and cables among built instances alone. A range, ratio, closed pose or pose angle the sources leave open waits with its gap, and so does the motion that needs it; a proposed physics value and a sweep's `steps` stay allowed, as exact sets them aside. Where every joint waits, the model stays static and goes to step 9.
+**Known first** declares joints, loops, gears and cables among built instances alone. A range, ratio, closed pose or pose angle the sources leave open waits with its gap, and so does the motion that needs it; physics values and a sweep's `steps` are [set aside](references/project-format.md#known-first). Where every joint waits, the model stays static and goes to step 9.
 
 On a `[loop-open]` or `[joint-range]` at a stated pose or range end, fix the link lengths, the ranges or the as-built zero. Near a toggle (two links collinear) the solve itself can fail on links that do close; report that end to the user rather than trimming a stated range.
 
-Done when the tracer loop's posed check (or the first gear's) went green before a second loop or gear was declared, every stated range has a `range` check (known first: of a settled joint), report.md prints **Kinematic**, and `cadrev check <dir>` reports no `[model-joint]`, `[model-loop]`, `[model-gear]`, `[model-cable]`, `[mjcf-load]`, `[loop-open]`, `[joint-range]`, `[part-mass]`, `[param-physics]`, `[unchecked-source]` (a range param included), `[evidence-unused]` or other error, so its status is VERIFIED or VERIFIED PENDING REVIEW.
+Done when the tracer loop's posed check (or the first gear's) went green before a second loop or gear was declared, every stated range has a `range` check (known first: of a settled joint), report.md prints **Kinematic** (known first with every joint waiting: **Static**), and `cadrev check <dir>` reports no `[model-joint]`, `[model-loop]`, `[model-gear]`, `[model-cable]`, `[mjcf-load]`, `[loop-open]`, `[joint-range]`, `[part-mass]`, `[param-physics]`, `[unchecked-source]` (a range param included), `[evidence-unused]` or other error, so its status is VERIFIED or VERIFIED PENDING REVIEW.
 
 ### 9. Hand over
 
@@ -140,7 +140,7 @@ Report to the user from `build/report.md` of a full verification run. State the 
 
 **Known first** hands over the same report: the status, what is built and checked, and what waits, from report.md's Waiting section, grouped by part, each part with the gaps whose questions name it. Then ask the user to choose:
 
-- **Build on it themselves.** The project and the STEP files in `build/` are theirs. A value of their own enters params.yaml as `proposed`, its `rationale` naming them as its source, once `known_first` is removed; or as `measured`, scaled off a figure.
+- **Build on it themselves.** The project and the STEP files in `build/` are theirs; tell them how a value of their own enters it ([Known first](references/project-format.md#known-first)).
 - **Have you propose the rest.** Remove `known_first` and carry on at step 5 for the waiting parts, now as the complete model.
 
-Done when the user has the status, exact and the proposed physics values as `build/report.json` states them (`status`, `exact`, `counts.physics_proposed`), the proposed parameters (`rests_on_proposed`), the open conflicts (`[conflict-open]`), the questions grouped by who to ask, and the crops waiting for confirmation (`awaiting_confirmation`); and for known first, what waits grouped by part with the questions that would settle it (`waiting`), and the user's choice between building on it and having you propose the rest.
+Done when the user has the status, exact and the proposed physics values as `build/report.json` states them (`status`, `exact`, `counts.physics_proposed`), the proposed parameters (`rests_on_proposed`), the open conflicts (`[conflict-open]`), the questions grouped by who to ask, and the crops waiting for confirmation (`awaiting_confirmation`); and for known first, the stated values and gaps report.json lists under `waiting`, grouped by the part each belongs to, and the user's choice between building on it and having you propose the rest.

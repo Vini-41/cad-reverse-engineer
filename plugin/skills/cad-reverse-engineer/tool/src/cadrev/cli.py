@@ -339,7 +339,7 @@ def cmd_check(args) -> int:
         )
         return 1
     path = report.write(p, status, results, images, moves, weighed)
-    known_first = f"Known first: {report.stated_values_wait(p)}. " if p.known_first else ""
+    known_first = f"Known first: {report.waiting_clause(p)}. " if p.known_first else ""
     print(
         f"\n{status}: {headline['errors']} errors, {headline['warnings']} warnings, "
         f"{headline['checks_passed']}/{headline['checks']} checks pass. {known_first}"

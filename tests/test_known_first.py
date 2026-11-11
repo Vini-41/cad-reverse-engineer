@@ -82,7 +82,7 @@ def rules(report: dict, level: str = "error") -> list[str]:
 
 
 @pytest.fixture
-def kf(tmp_path):
+def project(tmp_path):
     """A known-first project: the link built and checked, the pin's length waiting on G-pin."""
     root = tmp_path / "demo"
     assert cli.main(["init", str(root)]) == 0
@@ -183,17 +183,17 @@ def kf(tmp_path):
     return root
 
 
-def test_known_first_project_verifies_exact_and_lists_the_values_that_wait(kf):
-    code, report = verify(kf)
+def test_known_first_project_verifies_exact_and_lists_the_values_that_wait(project):
+    code, report = verify(project)
     assert (code, report["status"], report["exact"]) == (0, "VERIFIED", True)
     assert report["known_first"] is True
     assert report["waiting"] == {"values": [PIN_WAITS], "gaps": [PIN_GAP]}
     assert report["findings"] == []
 
 
-def test_without_known_first_the_same_project_raises_evidence_unused_as_today(kf):
-    edit(kf, "project.yaml", lambda d: d.pop("known_first"))
-    code, report = verify(kf)
+def test_without_known_first_the_same_project_raises_evidence_unused_as_today(project):
+    edit(project, "project.yaml", lambda d: d.pop("known_first"))
+    code, report = verify(project)
     assert (code, report["status"], report["known_first"], report["waiting"]) == (
         1,
         "NOT VERIFIED",
@@ -233,10 +233,10 @@ def _pin_not_modeled(root: Path) -> None:
     ],
     ids=["one", "two", "none"],
 )
-def test_status_line_says_how_many_stated_values_wait_before_the_report(kf, change, says):
+def test_status_line_says_how_many_stated_values_wait_before_the_report(project, change, says):
     if change is not None:
-        change(kf)
-    code, out = run("check", str(kf))
+        change(project)
+    code, out = run("check", str(project))
     assert code == 0
     assert out.splitlines()[-1] == f"VERIFIED: 0 errors, 0 warnings, {says} Report: build/report.md"
 
@@ -249,7 +249,7 @@ def _known_first_says(name: str) -> str:
 
 
 BORE_GAP = {"id": "G-bore", "question": "What diameter are the pivot holes?", "ask": "authors"}
-GUESSED_BORES = {
+PROPOSED_BORES = {
     "proposed": {
         "hole_d": {"basis": "proposed", "value": 3, "rationale": "M3 pin", "gap": "G-bore"}
     },
@@ -268,35 +268,35 @@ GUESSED_BORES = {
 }
 
 
-def _guess_bore(root: Path, params: dict) -> None:
+def _propose_bore(root: Path, params: dict) -> None:
     edit(root, "params.yaml", lambda d: d["params"].update(params))
     edit(root, "gaps.yaml", lambda d: d["gaps"].append(BORE_GAP))
 
 
-@pytest.mark.parametrize("guess", GUESSED_BORES)
-def test_param_resting_on_proposed_in_a_known_first_project_is_known_first_naming_it(kf, guess):
-    _guess_bore(kf, GUESSED_BORES[guess])
-    code, report = verify(kf)
+@pytest.mark.parametrize("bore", PROPOSED_BORES)
+def test_param_resting_on_proposed_in_a_known_first_project_is_known_first_naming_it(project, bore):
+    _propose_bore(project, PROPOSED_BORES[bore])
+    code, report = verify(project)
     assert (code, report["status"]) == (1, "NOT VERIFIED")
     assert sorted(f["message"] for f in report["findings"] if f["rule"] == "known-first") == [
-        _known_first_says(name) for name in sorted(GUESSED_BORES[guess])
+        _known_first_says(name) for name in sorted(PROPOSED_BORES[bore])
     ]
-    assert rules(report) == ["known-first"] * len(GUESSED_BORES[guess])
+    assert rules(report) == ["known-first"] * len(PROPOSED_BORES[bore])
 
 
-@pytest.mark.parametrize("guess", GUESSED_BORES)
-def test_without_known_first_a_param_resting_on_proposed_raises_no_known_first(kf, guess):
-    _guess_bore(kf, GUESSED_BORES[guess])
-    _pin_not_modeled(kf)
-    edit(kf, "project.yaml", lambda d: d.pop("known_first"))
-    code, report = verify(kf)
+@pytest.mark.parametrize("bore", PROPOSED_BORES)
+def test_without_known_first_a_param_resting_on_proposed_raises_no_known_first(project, bore):
+    _propose_bore(project, PROPOSED_BORES[bore])
+    _pin_not_modeled(project)
+    edit(project, "project.yaml", lambda d: d.pop("known_first"))
+    code, report = verify(project)
     assert (code, report["status"], report["exact"]) == (0, "VERIFIED", False)
     assert "known-first" not in rules(report) + rules(report, "warning")
 
 
-def test_known_first_is_raised_by_a_run_without_the_build(kf):
-    _guess_bore(kf, GUESSED_BORES["proposed"])
-    code, out = run("check", str(kf), "--no-build")
+def test_known_first_is_raised_by_a_run_without_the_build(project):
+    _propose_bore(project, PROPOSED_BORES["proposed"])
+    code, out = run("check", str(project), "--no-build")
     assert code == 1
     assert f"error: [known-first] {_known_first_says('hole_d')}" in out.splitlines()
 
@@ -333,9 +333,9 @@ def _measured_width(root: Path) -> None:
     edit(root, "gaps.yaml", lambda d: d["gaps"].append(gap))
 
 
-def test_known_first_project_may_measure_a_value_and_stays_exact(kf):
-    _measured_width(kf)
-    code, report = verify(kf)
+def test_known_first_project_may_measure_a_value_and_stays_exact(project):
+    _measured_width(project)
+    code, report = verify(project)
     assert (code, report["status"], report["exact"]) == (0, "VERIFIED", True)
     assert report["counts"]["measured"] == 1
     assert report["waiting"] == {"values": [PIN_WAITS], "gaps": [PIN_GAP]}
@@ -345,14 +345,13 @@ def _section(md: str, heading: str) -> str:
     return md.split(f"\n## {heading}\n")[1].split("\n## ")[0]
 
 
-def test_report_md_says_known_first_and_lists_what_waits_apart_from_the_open_gaps(kf):
-    _measured_width(kf)
-    verify(kf)
-    md = (kf / "build" / "report.md").read_text()
+def test_report_md_says_known_first_and_lists_what_waits_apart_from_the_open_gaps(project):
+    _measured_width(project)
+    verify(project)
+    md = (project / "build" / "report.md").read_text()
     head = md.split("\n## ")[0]
     assert (
-        "**Known first**: the model holds only what the sources settle; 1 stated value waits, "
-        "with 1 gap no param names, listed under Waiting."
+        "**Known first**: 1 stated value waits, with 1 gap no param names, listed under Waiting."
     ) in head.splitlines()
     waiting = _section(md, "Waiting")
     assert "| pin.L | 12 | paper | Sec. 3 |" in waiting.splitlines()
@@ -362,26 +361,30 @@ def test_report_md_says_known_first_and_lists_what_waits_apart_from_the_open_gap
     assert "G-pin" not in gaps
 
 
-def test_guard_report_md_of_a_project_not_known_first_has_no_waiting_section(kf):
-    edit(kf, "project.yaml", lambda d: d.pop("known_first"))
-    verify(kf)
-    md = (kf / "build" / "report.md").read_text()
+def test_guard_report_md_of_a_project_not_known_first_has_no_waiting_section(project):
+    edit(project, "project.yaml", lambda d: d.pop("known_first"))
+    verify(project)
+    md = (project / "build" / "report.md").read_text()
     assert "Known first" not in md
     assert "\n## Waiting\n" not in md
     assert "| G-pin | What diameter are the pins? | authors |  |" in _section(md, "Open gaps")
 
 
-def test_known_first_project_with_nothing_settled_still_reports_what_waits(kf):
+def test_known_first_project_with_nothing_settled_still_reports_what_waits(project):
     """No part has its every dimension stated: model.py builds nothing, and the ledger waits."""
-    write(kf, "params.yaml", {"params": {}})
-    write(kf, "checks.yaml", {"checks": []})
-    write(kf, "model.py", 'def build(p):\n    return {"parts": {}, "datums": {}, "assembly": {}}\n')
-    code, out = run("check", str(kf))
+    write(project, "params.yaml", {"params": {}})
+    write(project, "checks.yaml", {"checks": []})
+    write(
+        project,
+        "model.py",
+        'def build(p):\n    return {"parts": {}, "datums": {}, "assembly": {}}\n',
+    )
+    code, out = run("check", str(project))
     assert out.splitlines()[-1] == (
         "VERIFIED: 0 errors, 0 warnings, 0/0 checks pass. Known first: 6 stated values wait. "
         "Report: build/report.md"
     )
-    report = json.loads((kf / "build" / "report.json").read_text())
+    report = json.loads((project / "build" / "report.json").read_text())
     assert [f"{v['evidence']}.{v['key']}" for v in report["waiting"]["values"]] == [
         "T1-link.L",
         "T1-link.H",
@@ -390,7 +393,7 @@ def test_known_first_project_with_nothing_settled_still_reports_what_waits(kf):
         "holes.d",
         "pin.L",
     ]
-    md = (kf / "build" / "report.md").read_text()
+    md = (project / "build" / "report.md").read_text()
     assert "| holes.d | 3 | paper | Sec. 2 |" in _section(md, "Waiting").splitlines()
     assert "| T1-link | paper | Table 1 | L=40, H=8, W=5 |" in _section(md, "Evidence")
 
@@ -496,11 +499,13 @@ def _jointed(root: Path, tmp_path: Path) -> None:
     write(root, "model.py", JOINTED)
 
 
-def test_known_first_sets_proposed_physics_values_and_sweep_steps_aside_as_exact_does(kf, tmp_path):
-    _jointed(kf, tmp_path)
-    code, out = run("check", str(kf), "--no-build")
+def test_known_first_sets_proposed_physics_values_and_sweep_steps_aside_as_exact_does(
+    project, tmp_path
+):
+    _jointed(project, tmp_path)
+    code, out = run("check", str(project), "--no-build")
     assert "[known-first]" not in out
-    code, report = verify(kf)
+    code, report = verify(project)
     assert (code, report["status"], report["exact"]) == (0, "VERIFIED", True)
     assert report["rests_on_proposed"] == ["sweep_steps", "swing_c"]
     assert report["counts"]["physics_proposed"] == 1
@@ -532,14 +537,14 @@ def _unplaced_pin(root: Path, tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("known_first", [True, False])
 def test_part_no_instance_places_is_exported_in_its_own_frame_and_needs_no_mass(
-    kf, tmp_path, known_first
+    project, tmp_path, known_first
 ):
-    _unplaced_pin(kf, tmp_path)
+    _unplaced_pin(project, tmp_path)
     if not known_first:
-        edit(kf, "project.yaml", lambda d: d.pop("known_first"))
-    code, report = verify(kf)
+        edit(project, "project.yaml", lambda d: d.pop("known_first"))
+    code, report = verify(project)
     assert "part-mass" not in rules(report)
-    assert (kf / "build" / "parts" / "pin.step").is_file()
+    assert (project / "build" / "parts" / "pin.step").is_file()
     assert "pin" not in report["masses"]
     assert next(r for r in report["checks"] if r["id"] == "pin-length.L")["ok"]
     if known_first:

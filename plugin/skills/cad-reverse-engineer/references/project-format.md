@@ -445,10 +445,10 @@ A project whose project.yaml sets `known_first: true` builds only the parts whos
 
 - **No proposed value in the model.** Each param resting on proposed is `[known-first]`, naming it. Physics values and a sweep's `steps` are set aside, and `measured` is allowed, as [Exact](#statuses) sets them aside and allows it, so a known-first project that is VERIFIED is exact.
 - **What waits is listed.** An in-scope ledger value that no param uses and no check compares or poses at **waits**: report.md lists it under Waiting, and report.json under `waiting`, in place of `[evidence-unused]`. A gap no param names is listed beside the waiting values, the question a waiting part asks, in place of `[gap-unused]`; a gap a param names (a measured one's) stays under the open gaps. Every other rule holds: the coverage sweep, quotes, probes and skips still harvest the whole ledger.
-- **A settled part whose place is open** is built in its own frame, checked there by checks that name its `part`, exported as `build/parts/<name>.step`, and placed by no instance ([modeling.md](modeling.md#contract)); a gap asks where it sits.
+- **A settled part whose place is open** is placed by no instance, as [the assembly](modeling.md#contract) says, with a gap asking where it sits.
 - **The status says known first.** `cadrev check` prints the status, then how many stated values wait: `VERIFIED: 0 errors, 0 warnings, 10/10 checks pass. Known first: 7 stated values wait. Report: build/report.md`. report.md prints a **Known first** line under the status and a Waiting section, and report.json sets `known_first`. A project with no part settled yet builds nothing and still reports the ledger, its params and what waits.
 
-Removing `known_first` returns the project to every rule above: each waiting value is `[evidence-unused]` until a param uses it or a check compares it, and each gap no param names `[gap-unused]`.
+Removing `known_first` returns the project to every rule above: each waiting value is `[evidence-unused]` until a param uses it or a check compares it, and each gap no param names `[gap-unused]`. A value the user supplies is `proposed`, its `rationale` naming them as its source, so `known_first` is removed first; one scaled off a figure is `measured`, which known first allows.
 
 ## build/report.json
 

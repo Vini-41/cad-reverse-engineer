@@ -166,9 +166,9 @@ The first part taken through modelling, checks and the report before any other p
 The first closed loop of a mechanism taken through its joints, the MJCF export and a posed check before any other joint is declared.
 
 **Known first**:
-A project that builds only the parts whose every dimension the sources settle, so no parameter rests on a proposed value but physics values and a sweep's resolution, and lists what waits; the user then builds on it, or has the reconstruction propose the rest as the complete model. Its project.yaml sets `known_first: true`.
+A project that builds only its settled parts, those whose every dimension the sources settle (quoted, worked out from quotes, probed or measured), so no parameter rests on a proposed value but physics values and a sweep's resolution, and lists what waits; the user then builds on it, or has the reconstruction propose the rest as the complete model. Its project.yaml sets `known_first: true`.
 _Avoid_: draft model, sources-only model
 
 **Waiting**:
-Of a stated value in a known-first project: one no parameter uses and no check compares, because the part it belongs to needs a value the sources leave open. It is listed with the gaps no parameter names rather than found unused.
+Of a part in a known-first project: not settled, since it needs a value the sources leave open, and so not built. Of a stated value: one no parameter uses and no check compares, as a waiting part's are; it is listed with the gaps no parameter names rather than found unused.
 _Avoid_: pending (for a value; PENDING REVIEW is a status), deferred
