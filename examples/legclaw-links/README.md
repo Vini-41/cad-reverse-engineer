@@ -14,7 +14,7 @@ Expected status: `VERIFIED: 0 errors, 2 warnings, 10/10 checks pass`
 
 The Fig. 2A reading was checked against `figures/crops/fig2a-foot-sole.png` by a named reviewer, recorded as `confirmed_by` on `fig2a-foot-sole` in `evidence.yaml`. Without that field the status would be VERIFIED PENDING REVIEW.
 
-CI runs `cadrev check` on this directory on every push and fails if it prints anything else. A change that moves the status updates this line.
+`scripts/check` runs `cadrev check` on this directory and fails if it prints anything else. A change that moves the status updates this line.
 
 ## Sources
 

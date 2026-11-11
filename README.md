@@ -86,13 +86,13 @@ Outputs:
 
 ## Examples
 
-[`examples/legclaw-links`](examples/legclaw-links) reconstructs three linkages of the leg-claw in Cheng et al., *Bioinspired Adaptive Leg-Claw Enables Robust Perching and Grasping for UAVs*, Advanced Science 2026 ([doi:10.1002/advs.202523518](https://doi.org/10.1002/advs.202523518)). Both sources are CC BY 4.0 and committed with it, so `cadrev check examples/legclaw-links` runs from a fresh clone; CI runs it on every push.
+[`examples/legclaw-links`](examples/legclaw-links) reconstructs three linkages of the leg-claw in Cheng et al., *Bioinspired Adaptive Leg-Claw Enables Robust Perching and Grasping for UAVs*, Advanced Science 2026 ([doi:10.1002/advs.202523518](https://doi.org/10.1002/advs.202523518)). Both sources are CC BY 4.0 and committed with it, so `cadrev check examples/legclaw-links` runs from a fresh clone; `scripts/check` runs it before every merge.
 
 The example covers each kind of evidence: Table S2 envelopes from the DOCX supplement, quotes from the PDF methods, a figure-label crop from Fig. 2A, two recorded source conflicts, and proposed pin pitches with the author questions that would settle them.
 
-[`examples/legclaw`](examples/legclaw) is the full LegClaw from the same sources, both legs and their mounts with their motion, exported as `build/model.mjcf`. A fresh agent built it from the skill alone; it reads the sources from `examples/legclaw-links/sources/`, and CI runs it on every push too.
+[`examples/legclaw`](examples/legclaw) is the full LegClaw from the same sources, both legs and their mounts with their motion, exported as `build/model.mjcf`. A fresh agent built it from the skill alone; it reads the sources from `examples/legclaw-links/sources/`, and `scripts/check` runs it too.
 
-[`examples/centrifuge`](examples/centrifuge) is the mini benchtop centrifuge of Soma Poór 2022, a static project checked against the authors' released STEP files, and [`examples/cell-stretcher`](examples/cell-stretcher) the uniaxial cell stretcher of Kah et al. 2021, two lead screws driving one carriage, checked against the authors' laser-cut SVG sheets and STL. Fresh agents built both from the skill alone; CI runs both on every push.
+[`examples/centrifuge`](examples/centrifuge) is the mini benchtop centrifuge of Soma Poór 2022, a static project checked against the authors' released STEP files, and [`examples/cell-stretcher`](examples/cell-stretcher) the uniaxial cell stretcher of Kah et al. 2021, two lead screws driving one carriage, checked against the authors' laser-cut SVG sheets and STL. Fresh agents built both from the skill alone; `scripts/check` runs both.
 
 ## Files
 
@@ -119,7 +119,7 @@ uv sync --locked -p 3.12 --extra test
 uv run pytest -q ../../../../tests
 ```
 
-`scripts/check` runs every CI step locally, and sets this clone's `core.hooksPath` to `.githooks`, whose pre-commit hook ruff-formats staged Python.
+`scripts/check` is the repo's only CI, run locally before every merge. It sets this clone's `core.hooksPath` to `.githooks`, whose pre-commit hook ruff-formats staged Python.
 
 ## License
 

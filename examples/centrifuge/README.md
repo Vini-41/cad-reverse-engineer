@@ -15,7 +15,7 @@ Expected status: `VERIFIED: 0 errors, 0 warnings, 88/88 checks pass`
 
 The Fig. 8 reading was checked against `figures/crops/fig8-body-dims.png` by a named reviewer, recorded as `confirmed_by` on `fig8-body-dims` in `evidence.yaml`. Without that field the status would be VERIFIED PENDING REVIEW.
 
-CI runs `cadrev check` on this directory on every push and fails if it prints anything else. A change that moves the status updates this line.
+`scripts/check` runs `cadrev check` on this directory and fails if it prints anything else. A change that moves the status updates this line.
 
 `gen_ledger.py` writes `evidence.yaml`, `params.yaml`, `checks.yaml` and `gaps.yaml`, reading `skips.json`; edit it and rerun it (`python3 gen_ledger.py`) rather than editing those files.
 
