@@ -285,7 +285,7 @@ def test_param_resting_on_proposed_in_a_known_first_project_is_known_first_namin
 
 
 @pytest.mark.parametrize("bore", PROPOSED_BORES)
-def test_without_known_first_a_param_resting_on_proposed_raises_no_known_first(project, bore):
+def test_guard_without_known_first_a_param_resting_on_proposed_raises_no_known_first(project, bore):
     _propose_bore(project, PROPOSED_BORES[bore])
     _pin_not_modeled(project)
     edit(project, "project.yaml", lambda d: d.pop("known_first"))
