@@ -194,8 +194,8 @@ def test_guard_branch_that_merged_main_since_it_was_created_compares_against_mai
 
 
 def test_pushed_branch_compares_against_where_it_was_created_not_its_upstream(tmp_path):
-    # Its upstream holds the fix, as a branch's does once pushed; a PR's run compares against
-    # the branch it merges into, so a test red there is red here.
+    # Its upstream holds the fix, as a branch's does once pushed; it compares against the commit
+    # it was created at, so only its own commits count as the fix.
     root = repo(tmp_path, dependencies='"pytest"')
     git(root, "branch", "-f", "main", "HEAD~1")
     git(root, "switch", "-qc", "ticket", "main")

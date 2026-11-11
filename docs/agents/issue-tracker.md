@@ -51,6 +51,6 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 
 ## This repo
 
-- **Merge a PR**: `gh pr merge <n> --rebase --delete-branch`, once `scripts/ci-wait <head sha>` is green; the repo allows only rebase merges. A PR body names its issue as `Part of #<n>`, so the issue stays open until it lands.
-- **Close after landing**: once CI is green on the merged commit of main, comment any departures from the brief and `Landed in <sha>; CI green on <sha>.`, then close the issue.
+- **Merge a PR**: `gh pr merge <n> --rebase --delete-branch`, once `scripts/check` is green locally on the PR's head; the repo allows only rebase merges. A PR body names its issue as `Part of #<n>`, so the issue stays open until it lands.
+- **Close after landing**: comment any departures from the brief and `Landed in <sha>; scripts/check green on <head sha>.`, then close the issue.
 - **File a spec's tickets**: `scripts/file-tickets` files them in order, as sub-issues with blocking edges, and reads both back; its docstring gives the input format.

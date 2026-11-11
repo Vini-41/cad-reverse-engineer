@@ -33,7 +33,7 @@ def repo(tmp_path: Path, merged: bool) -> Path:
 
 
 def check(root: Path, **env: str) -> subprocess.CompletedProcess[str]:
-    clean = {k: v for k, v in os.environ.items() if k not in ("BASE", "HEAD_SHA")}
+    clean = {k: v for k, v in os.environ.items() if k != "BASE"}
     return subprocess.run(
         [sys.executable, str(SCRIPT)],
         cwd=root,
@@ -57,21 +57,6 @@ def test_guard_a_linear_branch_passes(tmp_path):
     result = check(root)
     assert result.returncode == 0, result.stdout
     assert result.stdout == ""
-
-
-def test_head_sha_names_the_commit_checked_in_place_of_head(tmp_path):
-    # A pull_request run checks out GitHub's own merge of the PR into its base; HEAD_SHA names the
-    # PR's head, so that merge isn't counted.
-    root = repo(tmp_path, merged=True)
-    merged = git(root, "rev-parse", "HEAD")
-    git(root, "checkout", "-q", "main")
-    git(root, "merge", "-q", "--no-ff", "-m", "Merge pull request", "feature")
-    base = git(root, "rev-parse", "HEAD^1")
-    assert check(root, BASE=base, HEAD_SHA=merged).returncode == 1
-    git(root, "checkout", "-q", "-b", "linear", "feature~1")
-    linear = git(root, "rev-parse", "HEAD")
-    git(root, "checkout", "-q", "main")
-    assert check(root, BASE=base, HEAD_SHA=linear).returncode == 0
 
 
 def test_guard_a_base_of_the_null_commit_compares_nothing_and_passes(tmp_path):

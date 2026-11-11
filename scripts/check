@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# CI run locally: every step of .github/workflows/test.yml, which calls this script. Runs each step,
-# prints the ones that failed, each with the last 20 lines of its output, and exits 1 if any did.
+# The repo's only CI, run locally: green before every commit and on a PR's head before it merges.
+# Runs each step, prints the ones that failed, each with the last 20 lines of its output, and
+# exits 1 if any did.
 #
 #   scripts/check
 #   scripts/check --lint   # pyright, ruff and the tests' imports alone, in seconds, for after an edit
@@ -9,7 +10,7 @@
 # feels, a full cadrev check in about 2 minutes on a laptop; this ceiling only catches a large
 # regression, so it is not tuned to the slowest example.
 #
-# The plugin manifests are validated only where the `claude` CLI is installed; CI installs it.
+# The plugin manifests are validated only where the `claude` CLI is installed.
 set -uo pipefail
 # Bash reads a script as it runs it; inside these braces it parses the whole file first, so an edit
 # made while the check runs takes effect on the next run.
@@ -25,8 +26,7 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 # This clone runs the repo's git hooks (.githooks) unless it already uses others.
 [ -n "$(git -C "$repo" config core.hooksPath)" ] || git -C "$repo" config core.hooksPath .githooks
 cd "$repo/plugin/skills/cad-reverse-engineer/tool" || exit 2
-# The test extra holds pytest, pyright and ruff, which CI installs with the same sync; a new
-# worktree has no environment until this runs.
+# The test extra holds pytest, pyright and ruff; a new worktree has no environment until this runs.
 uv sync --locked --extra test || { echo "uv sync --locked --extra test failed, so no step ran"; exit 1; }
 failed=()
 failed_logs=() # each failed step's output, whose end the summary reprints under its name
@@ -69,15 +69,15 @@ example_status() {
   return "$code"
 }
 
-# Runs red-on-main for real against BASE (CI sets it from the event; locally it defaults to the
-# upstream). Its exit 3, nothing to compare, passes with a notice that GitHub shows.
+# Runs red-on-main for real against BASE, by default the commit the change replaces (red-on-main's
+# docstring says which). Its exit 3, nothing to compare, passes with a notice.
 red_on_main_or_notice() {
   local log code=0
   log=$(mktemp)
   ../../../../scripts/red-on-main 2>"$log" || code=$?
   cat "$log" >&2
   if [ "$code" -eq 3 ]; then
-    echo "::notice title=red-on-main compared nothing::$(tail -n 1 "$log")"
+    echo "notice: red-on-main compared nothing: $(tail -n 1 "$log")"
     code=0
   fi
   rm -f "$log"
