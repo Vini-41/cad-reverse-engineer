@@ -44,6 +44,13 @@ codex plugin marketplace add Vini-41/cad-reverse-engineer
 codex plugin add cad-reverse-engineer@cad-reverse-engineer
 ```
 
+Codex's default sandbox blocks network access, which the CLI's first run needs. Allow it in `~/.codex/config.toml`:
+
+```toml
+[sandbox_workspace_write]
+network_access = true
+```
+
 ### As a skill for any agent
 
 ```
@@ -52,7 +59,7 @@ npx skills add Vini-41/cad-reverse-engineer
 
 ### Requirements
 
-The plugin ships from [`plugin/`](plugin): the skill, its CLI's source and lockfile, and nothing else of this repo. The CLI runs locally and needs [uv](https://docs.astral.sh/uv/), with Python 3.10 to 3.13. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute), at the versions in the lockfile. Under Codex's default sandbox, which blocks network access, allow network for that first run.
+The plugin ships from [`plugin/`](plugin): the skill, its CLI's source and lockfile, and nothing else of this repo. The CLI runs locally and needs [uv](https://docs.astral.sh/uv/), with Python 3.10 to 3.13. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute), at the versions in the lockfile. Under Codex, allow network access as [its install](#as-a-codex-plugin) says.
 
 ### As a standalone CLI
 
