@@ -6,6 +6,7 @@ import importlib.util
 import io
 import json
 import math
+import os
 import re
 import shutil
 import subprocess
@@ -11050,3 +11051,51 @@ def test_expect_reads_a_ratio_printed_n_to_1_as_a_fraction(proj_dir, tmp_path):
     edit(proj_dir, "checks.yaml", lambda d: d["checks"].append(pitch))
     code, report = verify(proj_dir)
     assert _result(report, "pitch-ratio")["ok"] and (code, report["status"]) == (0, "VERIFIED")
+
+
+ENV_UV_SEES = ("UV_CACHE_DIR", "UV_PROJECT_ENVIRONMENT", "XDG_CACHE_HOME", "MPLCONFIGDIR")
+
+
+def launch(tmp_path: Path, *, writable: bool) -> dict[str, str]:
+    """Runs a copy of the shipped launcher, with HOME and the plugin's tool/ writable or not, and
+    returns the cache variables and arguments a stand-in uv receives."""
+    skill, home, tmp, bin = (tmp_path / d for d in ("skill", "home", "tmp", "bin"))
+    for d in (skill / "tool", home, tmp, bin):
+        d.mkdir(parents=True)
+    shutil.copy(SKILL / "cadrev", skill / "cadrev")
+    (bin / "uv").write_text(
+        "#!/bin/sh\n" + "".join(f'echo "{v}=${{{v}-}}"\n' for v in ENV_UV_SEES) + 'echo "args=$*"\n'
+    )
+    (bin / "uv").chmod(0o755)
+    if not writable:
+        for d in (skill / "tool", home):
+            d.chmod(0o555)
+    try:
+        out = subprocess.run(
+            [str(skill / "cadrev"), "check", "my project"],
+            env={"PATH": f"{bin}:/usr/bin:/bin", "HOME": str(home), "TMPDIR": f"{tmp}/"},
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    finally:
+        for d in (skill / "tool", home):
+            d.chmod(0o755)
+    return dict(line.split("=", 1) for line in out.splitlines())
+
+
+def test_launcher_sends_caches_and_venv_to_tmpdir_where_a_sandbox_blocks_their_defaults(tmp_path):
+    # Codex's workspace-write sandbox lets cadrev write its workspace and TMPDIR, not ~/.cache
+    # or the installed plugin's tool/.venv (#181).
+    seen = launch(tmp_path, writable=False)
+    tmp = tmp_path / "tmp" / f"cadrev-{os.getuid()}"
+    assert seen["UV_CACHE_DIR"] == f"{tmp}/cache/uv"
+    assert seen["XDG_CACHE_HOME"] == f"{tmp}/cache"
+    assert seen["MPLCONFIGDIR"] == f"{tmp}/matplotlib"
+    assert seen["UV_PROJECT_ENVIRONMENT"].startswith(f"{tmp}/venv-")
+    assert seen["args"].endswith("cadrev check my project")
+
+
+def test_launcher_leaves_writable_defaults_alone(tmp_path):
+    seen = launch(tmp_path, writable=True)
+    assert {v: seen[v] for v in ENV_UV_SEES} == dict.fromkeys(ENV_UV_SEES, "")
