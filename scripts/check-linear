@@ -3,11 +3,9 @@
 
 A PR lands on main by `gh pr merge --rebase`, which replays each commit and can't replay a merge,
 so a branch is kept linear: a ticket branch is rebased onto its integration branch's tip, never
-merged. The commits checked are BASE..HEAD_SHA. CI sets BASE from the event (the push's previous
-commit, or the PR's base) and HEAD_SHA to the PR's head, past GitHub's own merge it checks out.
-Locally BASE defaults to the merge-base with main and HEAD_SHA to HEAD. A BASE of the null commit,
-or one not in this clone, compares nothing and passes with a note. Prints each merge commit and
-exits 1 if there is one.
+merged. The commits checked are BASE..HEAD, BASE by default the merge-base with main. A BASE of
+the null commit, or one not in this clone, compares nothing and passes with a note. Prints each
+merge commit and exits 1 if there is one.
 
     scripts/check-linear
 """
@@ -22,8 +20,7 @@ def git(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def main() -> int:
-    head = os.environ.get("HEAD_SHA") or "HEAD"
-    base = os.environ.get("BASE") or git("merge-base", head, "main").stdout.strip()
+    base = os.environ.get("BASE") or git("merge-base", "HEAD", "main").stdout.strip()
     if (
         not base
         or set(base) == {"0"}
@@ -34,7 +31,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 0
-    merges = git("log", "--merges", "--format=%h %s", f"{base}..{head}").stdout.splitlines()
+    merges = git("log", "--merges", "--format=%h %s", f"{base}..HEAD").stdout.splitlines()
     if not merges:
         return 0
     for merge in merges:

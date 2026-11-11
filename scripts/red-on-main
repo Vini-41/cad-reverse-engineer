@@ -20,11 +20,10 @@
 #
 # BASE is the commit before the fix. On main it is the upstream (origin/main), so unpushed
 # commits on main count as the fix. Any other branch, pushed or not, compares against the commit
-# its reflog says it was created at, as its PR's run compares against the branch it merges into,
-# so a branch cut from an integration branch counts only its own commits as the fix; without that
-# record, or once the branch has merged a later main or been rebased, it compares against its
-# merge-base with main. Set BASE=<ref> to
-# compare against another commit.
+# its reflog says it was created at, so a branch cut from an integration branch counts only its
+# own commits as the fix; without that record, or once the branch has merged a later main or been
+# rebased, it compares against its merge-base with main. Set BASE=<ref> to compare against another
+# commit.
 set -euo pipefail
 
 repo=$(git rev-parse --show-toplevel)
