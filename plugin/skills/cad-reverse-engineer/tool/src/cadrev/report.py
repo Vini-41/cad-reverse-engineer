@@ -19,6 +19,8 @@ from .project import (
     default_tolerance,
     OVERLAP_KINDS,
     overlap_limit,
+    unnamed_gaps,
+    unused_values,
 )
 
 
@@ -73,7 +75,38 @@ def status(p: Project, partial: bool = False) -> str:
 def exact(p: Project, status: str) -> bool:
     """Exact: VERIFIED with no parameter resting on a proposed value but physics values and a
     sweep's resolution, which exact leaves out (ADR-0008)."""
-    return status == VERIFIED and not p.proposed - p.physics - p.resolution
+    return status == VERIFIED and not p.inexact
+
+
+def waiting(p: Project) -> dict | None:
+    """What a known-first project leaves for later: each stated value no param or check uses,
+    and each gap no param names, the question a waiting part asks; None for any other project,
+    where those are [evidence-unused] and [gap-unused]."""
+    if not p.known_first:
+        return None
+    return {
+        "values": [
+            {
+                "evidence": e["id"],
+                "key": key,
+                "value": e["values"][key],
+                "source": e.get("source"),
+                "locator": e.get("locator"),
+            }
+            for e, key in unused_values(p)
+        ],
+        "gaps": [
+            {"gap": gid, "question": p.gaps[gid].get("question"), "ask": p.gaps[gid].get("ask")}
+            for gid in unnamed_gaps(p)
+        ],
+    }
+
+
+def stated_values_wait(p: Project) -> str:
+    """How many stated values a known-first project leaves waiting, as a clause: "1 stated value
+    waits"."""
+    n = len(unused_values(p))
+    return f"{n} stated value{'s' * (n != 1)} wait{'s' * (n == 1)}"
 
 
 def measured_params(p: Project) -> list[dict]:
@@ -326,6 +359,15 @@ def write(
     ]
     if exact(p, status):
         md += [_exact_line(p, headline["physics_proposed"]), ""]
+    waits = waiting(p)
+    if waits is not None:
+        n = len(waits["gaps"])
+        md += [
+            "**Known first**: the model holds only what the sources settle; "
+            f"{stated_values_wait(p)}, with {n} gap{'s' * (n != 1)} no param names, "
+            "listed under Waiting.",
+            "",
+        ]
     md += _motion_line(moves)
     md += [
         "VERIFIED means every number in the model is accounted for and the geometry matches "
@@ -470,6 +512,26 @@ def write(
         ],
     )
 
+    if waits is not None:
+        md += [
+            "## Waiting",
+            "",
+            "Each stated value below waits: the part it belongs to needs a value the sources "
+            "leave open. Each gap below asks for such a value, and no param names it yet.",
+            "",
+        ]
+        md += _table(
+            ["stated value", "value", "source", "locator"],
+            [
+                [f"{v['evidence']}.{v['key']}", v["value"], v["source"], v["locator"]]
+                for v in waits["values"]
+            ],
+        )
+        md += _table(
+            ["gap", "question", "close by"],
+            [[g["gap"], g["question"] or "", g["ask"] or ""] for g in waits["gaps"]],
+        )
+
     md += ["## Open gaps", ""]
     affected = {gid: [n for n, s in p.params.items() if s.get("gap") == gid] for gid in p.gaps}
     md += _table(
@@ -477,6 +539,7 @@ def write(
         [
             [gid, g.get("question", ""), g.get("ask", ""), ", ".join(affected[gid])]
             for gid, g in p.gaps.items()
+            if waits is None or affected[gid]  # a known-first project lists the rest as waiting
         ],
     )
 
@@ -513,6 +576,8 @@ def write(
                 "overlap_limits": limits,
                 "model_literals": override,
                 "exact": exact(p, status),
+                "known_first": p.known_first,
+                "waiting": waits,
                 "motion": moves,
                 "masses": weighed,
                 "params": {

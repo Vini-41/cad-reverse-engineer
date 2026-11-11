@@ -322,6 +322,7 @@ def cmd_check(args) -> int:
                     print(f"wrote {path.relative_to(p.root)}")
                 images = overlay.render(p, built)
     accounting.check_source_params(p, evaluated, model_reads)
+    proj.check_known_first(p)
     status = report.status(p, partial)
     headline = report.counts(p, results)
     _print_findings(p.findings)
@@ -338,9 +339,10 @@ def cmd_check(args) -> int:
         )
         return 1
     path = report.write(p, status, results, images, moves, weighed)
+    known_first = f"Known first: {report.stated_values_wait(p)}. " if p.known_first else ""
     print(
         f"\n{status}: {headline['errors']} errors, {headline['warnings']} warnings, "
-        f"{headline['checks_passed']}/{headline['checks']} checks pass. "
+        f"{headline['checks_passed']}/{headline['checks']} checks pass. {known_first}"
         f"Report: {path.relative_to(p.root)}"
     )
     return 0 if status in report.PASSING else 1

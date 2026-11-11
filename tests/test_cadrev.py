@@ -2447,6 +2447,9 @@ DAMAGE = {
     "model_literals is a number": lambda r: _replace(
         r, "project.yaml", "name:", "model_literals: 5\nname:"
     ),
+    "known_first is text": lambda r: _replace(
+        r, "project.yaml", "name:", 'known_first: "x"\nname:'
+    ),
     "deeply nested expr": lambda r: edit(
         r,
         "params.yaml",

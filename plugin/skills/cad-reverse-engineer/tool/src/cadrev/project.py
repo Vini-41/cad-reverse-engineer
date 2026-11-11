@@ -171,7 +171,8 @@ class Project:
     # The mass model: part -> {mass: param} or {density: param}, from params.yaml's parts.
     parts: dict[str, dict] = field(default_factory=dict)
     # Params read only as a sweep's steps: a resolution the reconstruction chooses, which states
-    # nothing about the object, so exact leaves them out. Set by the build.
+    # nothing about the object, so exact leaves them out. Judged from the checks alone as params
+    # resolve, then narrowed by the build to those model.py and the export do not read either.
     resolution: set[str] = field(default_factory=set)
     values: dict[str, float] = field(default_factory=dict)
     # Text and geometry sources whose file exists but cannot be read as text or geometry.
@@ -198,9 +199,21 @@ class Project:
         self.findings.append(Finding("warning", rule, message))
 
     @property
+    def known_first(self) -> bool:
+        """Whether the project builds only what the sources settle, so what they leave open
+        waits rather than being proposed: project.yaml's known_first."""
+        return self.meta.get("known_first") is True
+
+    @property
     def proposed(self) -> set[str]:
         """Parameters resting on a proposed value, directly or through derived expressions."""
         return {name for name, basis in self.rests_on.items() if basis == "proposed"}
+
+    @property
+    def inexact(self) -> set[str]:
+        """Parameters resting on a proposed value that keep a VERIFIED project from being exact:
+        all but physics values and a sweep's resolution (ADR-0008)."""
+        return self.proposed - self.physics - self.resolution
 
     @property
     def physics(self) -> set[str]:
@@ -1043,7 +1056,7 @@ def _on_cycle(name: str, inputs: dict[str, set[str]]) -> bool:
 def resolve_params(p: Project) -> None:
     """Fill p.values, enforcing each basis's obligations."""
     pending = dict(p.params)
-    resolution = resolution_params(p)
+    resolution = p.resolution = resolution_params(p)
     for name, spec in p.params.items():
         basis = spec.get("basis")
         if basis not in BASES:
@@ -1577,39 +1590,77 @@ def check_released_datums(p: Project) -> None:
             )
 
 
-def check_evidence_used(p: Project) -> None:
-    """Every evidence value is used by a parameter, checked against geometry, or set aside."""
-    used = {spec.get("from") for spec in p.params.values()}
+def _scaled_images(p: Project) -> list[dict]:
+    """The ledger items that are only the image a measured param scales off: they state no
+    values, so nothing is asked of them."""
     measured_from = {
         str(spec.get("from", "")).partition(".")[0]
         for spec in p.params.values()
         if spec.get("basis") == "measured"
     }
-    checked = {ref for c in p.checks for ref in check_refs(c)}
-    used |= checked | {ref for c in p.checks for ref in pose_refs(c)}
+    return [e for e in p.evidence if e["id"] in measured_from and not e.get("values")]
+
+
+def unused_values(p: Project) -> list[tuple[dict, str]]:
+    """Each in-scope ledger value no param uses and no check compares or poses at, as its item
+    and key, in ledger order."""
+    used = {spec.get("from") for spec in p.params.values()}
+    used |= {ref for c in p.checks for ref in [*check_refs(c), *pose_refs(c)]}
+    scaled = _scaled_images(p)
+    return [
+        (e, key)
+        for e in p.evidence
+        if e not in scaled and e.get("scope") not in ("not-modeled", "context")
+        for key in e.get("values") or {}
+        if f"{e['id']}.{key}" not in used
+    ]
+
+
+def check_evidence_used(p: Project) -> None:
+    """Every evidence value is used by a parameter, checked against geometry, or set aside; in a
+    known-first project, a value neither used nor set aside waits instead."""
+    scaled = _scaled_images(p)
     for e in p.evidence:
-        eid = e["id"]
-        if eid in measured_from and not e.get("values"):
-            continue
-        if e.get("scope") in ("not-modeled", "context"):
-            if not e.get("reason"):
-                p.error("evidence-scope", f"{eid}: scope {e['scope']} needs a reason")
-            continue
-        for key in e.get("values") or {}:
-            if f"{eid}.{key}" not in used:
-                p.error(
-                    "evidence-unused",
-                    f"{eid}.{key} is neither used by a param nor checked "
-                    "(or mark the item scope: not-modeled with a reason)",
-                )
+        scoped = e.get("scope") in ("not-modeled", "context")
+        if scoped and e not in scaled and not e.get("reason"):
+            p.error("evidence-scope", f"{e['id']}: scope {e['scope']} needs a reason")
+    if p.known_first:
+        return
+    for e, key in unused_values(p):
+        p.error(
+            "evidence-unused",
+            f"{e['id']}.{key} is neither used by a param nor checked "
+            "(or mark the item scope: not-modeled with a reason)",
+        )
+
+
+def unnamed_gaps(p: Project) -> list[str]:
+    """The gaps no param's gap names; an id in a conflict's text does not count."""
+    named = {spec.get("gap") for spec in p.params.values()}
+    return [gid for gid in p.gaps if gid not in named]
 
 
 def check_gaps(p: Project) -> None:
-    """Every gap is named by a param's gap; an id in a conflict's text does not count."""
-    named = {spec.get("gap") for spec in p.params.values()}
-    for gid in p.gaps:
-        if gid not in named:
-            p.warn("gap-unused", f"gap {gid}: no param names it")
+    """Every gap is named by a param's gap; in a known-first project, one no param names is a
+    question a waiting part asks instead."""
+    if p.known_first:
+        return
+    for gid in unnamed_gaps(p):
+        p.warn("gap-unused", f"gap {gid}: no param names it")
+
+
+def check_known_first(p: Project) -> None:
+    """[known-first] for each param of a known-first project that keeps it from being exact, once
+    per verification run, after the build has narrowed what a sweep's resolution is."""
+    if not p.known_first:
+        return
+    for name in [n for n in p.params if n in p.inexact]:
+        p.error(
+            "known-first",
+            f"param {name} rests on proposed, and a known-first project holds only what the "
+            "sources settle: leave out what needs it, so its stated values wait, and ask for it "
+            "in gaps.yaml",
+        )
 
 
 def check_conflicts(p: Project) -> None:

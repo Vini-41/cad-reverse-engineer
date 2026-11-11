@@ -26,6 +26,7 @@ target: Version-3 two-finger gripper as reported in Doe 2025, fingers open (not 
 units: {length: mm, angle: deg, mass: g}
 tolerance: {length: 0.001, angle: 0.01}
 model_literals: [0, 1, 2, -1, 0.5, 90, 180, 270, 360]   # optional; numbers model.py may contain (modeling.md)
+known_first: true        # optional: build only what the sources settle (see Known first)
 sources:
   - id: paper
     kind: paper            # paper | supplement | datasheet | video | drawing | geometry | other
@@ -38,6 +39,8 @@ sources:
 ```
 
 `format` is the version of these file formats. A project without it is `[format-missing]`; one with a version this cadrev does not read is `[format-unknown]`. Either way cadrev reads no other project file, every command refuses the project, and no report is written.
+
+`known_first: true` holds the project to what the sources settle, and lists what waits: see [Known first](#known-first).
 
 `target` names the object, version and configuration reconstructed, and, where the authors released several variants (two rotors), the one built; one missing or still starting with `TODO` is `[target]`.
 
@@ -112,7 +115,7 @@ One item per statement in a source. Three anchor types: a quote and a figure rea
 
 Each item has an `id` no other item shares; a repeated one is `[evidence-id]`, naming it. Every item under a repeated id is still checked, counts toward coverage and is listed in the report, but a citation of that id reads neither item and is an error naming the id as repeated, raised whether or not the model builds: `[param-from]` for a param's `from`, `[check-config]` for a check's ledger value or pose, `[conflict-ref]` for a conflict's `evidence` and `[overlay-config]` for an overlay's `calibration.evidence`. A check or overlay citing it is not evaluated. Each item has a registered `source` (`[evidence-source]`) and a `locator` (`[evidence-locator]`), and is anchored by a quote from a text source, an image + reading, or a probe of a geometry source (`[evidence-anchor]`). A quote not found in its source, or not on its `page`, is `[quote-not-found]`; a quote from a source of several pages that gives no `page` raises the warning `[quote-page]`, which names the page it was found on. A probed item needs `values`, and a quoted item does unless it is `scope: context` or only [claim checks](#poses-and-the-mjcf-export) cite it (`[evidence-values]`). An image item needs its crop (`[image-missing]`), unchanged since `image_sha256` was printed (`[image-hash]`), and a `reading` (`[image-reading]`). A value that is not a number in its quote is `[value-not-in-quote]`; in its reading, `[value-not-in-reading]`. A `scope` needs a `reason` (`[evidence-scope]`).
 
-Every value of an in-scope item must be used by a param `from:` or compared by a check (`[evidence-unused]`).
+Every value of an in-scope item must be used by a param `from:` or compared by a check (`[evidence-unused]`); in a [known-first](#known-first) project, one that is not waits.
 
 ### Probes: released geometry
 
@@ -219,7 +222,7 @@ parts:
   servo: {mass: servo_mass}
 ```
 
-cadrev computes each weighed part's centre of mass and inertia from its solid at that mass. The MJCF export writes these as each body's `<inertial>`, report.json lists them under `masses`, and a mass check without `density` weighs each of its instances by the same masses, as the export weighs each instance's body, so export, report and check never disagree. The params need no read in model.py. In a model with joints every part needs an entry: a part without one, an entry naming a param params.yaml does not define, or an entry naming no part `build` returns is `[part-mass]`; an entry giving both `mass` and `density` is `[schema]`. A static model may leave `parts` out.
+cadrev computes each weighed part's centre of mass and inertia from its solid at that mass. The MJCF export writes these as each body's `<inertial>`, report.json lists them under `masses`, and a mass check without `density` weighs each of its instances by the same masses, as the export weighs each instance's body, so export, report and check never disagree. The params need no read in model.py. In a model with joints every part an instance places needs an entry: one without, an entry naming a param params.yaml does not define, or an entry naming no part `build` returns is `[part-mass]`. A part no instance places is no body of the MJCF, so it needs none ([modeling.md](modeling.md#contract)); an entry giving both `mass` and `density` is `[schema]`. A static model may leave `parts` out.
 
 ## checks.yaml
 
@@ -404,7 +407,7 @@ gaps:
     ask: datasheet
 ```
 
-The report lists every gap with the params that name it in their `gap`: this is the list of questions to send the authors. Only a param's `gap` names a gap, so a gap no param names is the warning `[gap-unused]` even when a conflict's text cites its id; when a resolution leaves a question open, put the gap on the param whose value the resolution chose.
+The report lists every gap with the params that name it in their `gap`: this is the list of questions to send the authors. Only a param's `gap` names a gap, so a gap no param names is the warning `[gap-unused]` even when a conflict's text cites its id; when a resolution leaves a question open, put the gap on the param whose value the resolution chose. In a [known-first](#known-first) project, a gap no param names is a question a waiting part asks, listed under Waiting.
 
 ## overlays.yaml
 
@@ -436,6 +439,17 @@ Every verification run ends on one status: `cadrev check` prints it last, and re
 
 **Exact** is not a status: it qualifies VERIFIED when no param rests on a proposed value, [physics values](#physics-values) and a sweep's `steps` ([Ranges and sweeps](#ranges-and-sweeps)) aside. report.md then prints **Exact** under the status, naming the proposed physics values and sweep resolutions it set aside, and report.json sets `exact` to true.
 
+## Known first
+
+A project whose project.yaml sets `known_first: true` builds only the parts whose every dimension the sources settle: quoted, worked out from quotes, probed from released geometry, or measured. A part needing any value they leave open waits, listed with the question that would settle it. While it is set:
+
+- **No proposed value in the model.** Each param resting on proposed is `[known-first]`, naming it. Physics values and a sweep's `steps` are set aside, and `measured` is allowed, as [Exact](#statuses) sets them aside and allows it, so a known-first project that is VERIFIED is exact.
+- **What waits is listed.** An in-scope ledger value that no param uses and no check compares or poses at **waits**: report.md lists it under Waiting, and report.json under `waiting`, in place of `[evidence-unused]`. A gap no param names is listed beside the waiting values, the question a waiting part asks, in place of `[gap-unused]`; a gap a param names (a measured one's) stays under the open gaps. Every other rule holds: the coverage sweep, quotes, probes and skips still harvest the whole ledger.
+- **A settled part whose place is open** is built in its own frame, checked there by checks that name its `part`, exported as `build/parts/<name>.step`, and placed by no instance ([modeling.md](modeling.md#contract)); a gap asks where it sits.
+- **The status says known first.** `cadrev check` prints the status, then how many stated values wait: `VERIFIED: 0 errors, 0 warnings, 10/10 checks pass. Known first: 7 stated values wait. Report: build/report.md`. report.md prints a **Known first** line under the status and a Waiting section, and report.json sets `known_first`. A project with no part settled yet builds nothing and still reports the ledger, its params and what waits.
+
+Removing `known_first` returns the project to every rule above: each waiting value is `[evidence-unused]` until a param uses it or a check compares it, and each gap no param names `[gap-unused]`.
+
 ## build/report.json
 
 The machine-readable report `cadrev check` writes beside `report.md`, which renders the same data. A PARTIAL run writes neither. Its top-level keys:
@@ -444,6 +458,8 @@ The machine-readable report `cadrev check` writes beside `report.md`, which rend
 |---|---|
 | `status` | the run's status (see [Statuses](#statuses)) |
 | `exact` | whether the project is exact (see [Statuses](#statuses)) |
+| `known_first` | whether project.yaml sets `known_first` (see [Known first](#known-first)) |
+| `waiting` | in a known-first project, what waits: its `values`, each stated value no param uses and no check compares, as its `evidence`, `key`, `value` as written in the ledger, `source` and `locator`; and its `gaps`, each gap no param names, as its `gap`, `question` and `ask`; null in any other project |
 | `counts` | `errors`, `warnings`, `checks`, `checks_passed`, `params`, the params resting on each basis: `source`, `measured`, `proposed`, and the proposed physics values counted apart from `proposed`: `physics_proposed` |
 | `findings` | every finding as `level`, `rule`, `message` |
 | `checks` | every geometry check with its result, expected and evaluated values, the basis it `rests_on`, and the params it reads resting on that basis (`rests_on_params`); for a mass check, each part it weighs in several instances with no `counts` entry and its instance count (`uncounted`); for an interference check, also the number of pairs it evaluated (`pairs`); for a posed check, its `pose`: each joint with the param or ledger value it is set `from` and that `value`; for a check with `from`, its `from_pose` in the same form (`{}` for as built); for a swept interference check, its `sweep` (`joint`, the range params it is swept `from`, their values as `range`, and the number of `poses`), and as `pose` the one with the worst overlap; for a shape check, its `shape`: the `residual` its datum pairs fit within and, once they fit, the largest surface `distance` and the `worst_point` where it occurs, in the body's frame (against a cut file's region, the largest outline `distance` and `worst_point` as `[x, y]` on the sheet); for a check with an `expect`, its `expect`: the expression (`expr`) and the `value` it works out to |

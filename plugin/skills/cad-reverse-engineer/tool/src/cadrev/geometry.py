@@ -562,19 +562,20 @@ def printed(*values: float) -> tuple[float, ...]:
 
 def _mass_model(p: Project, built: Built) -> dict[str, Mass]:
     """Each part's Mass from params.yaml's parts: its datasheet mass, or its volume times its
-    density; the inertia is the solid's, scaled to that mass. A part of a model with joints that
-    the entries leave unweighed, an entry naming an undefined param, or one naming no part is
-    [part-mass]."""
+    density; the inertia is the solid's, scaled to that mass. A part an instance places in a model
+    with joints that the entries leave unweighed, an entry naming an undefined param, or one naming
+    no part is [part-mass]; a part no instance places is no body of the MJCF, so it needs none."""
     from build123d import CenterOf
 
     for name in p.parts.keys() - built.parts.keys():
         p.error("part-mass", f"params.yaml parts {name}: model.build returns no part {name}")
+    placed = {part for part, _ in built.assembly.values()}
     masses = {}
     for name, part in built.parts.items():
         entry = p.parts.get(name) or {}
         by = next(iter(entry), None)
         if by is None:
-            if built.joints:
+            if built.joints and name in placed:
                 p.error(
                     "part-mass",
                     f"part {name}: params.yaml parts gives it no mass or density, so the MJCF "
