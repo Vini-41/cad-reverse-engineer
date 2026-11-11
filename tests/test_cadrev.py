@@ -3481,7 +3481,7 @@ def test_guard_root_readme_shows_the_status_the_example_readme_documents():
     )
 
 
-def test_changelog_heads_with_the_manifests_version_and_names_each_example_with_its_status():
+def test_guard_changelog_heads_with_the_manifests_version_and_names_each_example_with_its_status():
     repo = EXAMPLE.parents[1]
     versions = {
         json.loads((repo / "plugin" / manifest / "plugin.json").read_text())["version"]
