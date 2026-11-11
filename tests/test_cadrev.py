@@ -2715,6 +2715,9 @@ def test_report_lists_every_length_check_under_a_project_wide_tolerance(proj_dir
         {"check": "env", "kind": "bbox", "tol": 0.01},
         {"check": "pitch", "kind": "distance", "tol": 0.01},
     ]
+    assert [o["check"] for o in report["overlap_limits"]] == ["clear"]
+    assert report["overlap_limits"][0]["max_volume"] == pytest.approx(1e-6)
+    assert "| clear | 1e-06 |" in (proj_dir / "build" / "report.md").read_text()
 
 
 def test_check_at_the_default_tolerance_is_not_listed(proj_dir):
@@ -2733,14 +2736,6 @@ def test_report_lists_an_interference_check_with_its_max_volume(proj_dir):
     assert code == 0
     assert report["overlap_limits"] == [{"check": "clear", "max_volume": 0.5}]
     assert "| clear | 0.5 |" in (proj_dir / "build" / "report.md").read_text()
-
-
-def test_report_lists_an_interference_check_under_a_project_wide_tolerance(proj_dir):
-    edit(proj_dir, "project.yaml", lambda d: d.update(tolerance={"length": 0.01}))
-    _, report = verify(proj_dir)
-    assert [o["check"] for o in report["overlap_limits"]] == ["clear"]
-    assert report["overlap_limits"][0]["max_volume"] == pytest.approx(1e-6)
-    assert "| clear | 1e-06 |" in (proj_dir / "build" / "report.md").read_text()
 
 
 @pytest.mark.parametrize(
@@ -2984,35 +2979,16 @@ def test_coverage_lists_each_quantity_form_whole(proj_dir, tmp_path, capsys, for
     assert swept(proj_dir, tmp_path, capsys, f"The part is {form} here.") == [SWEPT[form]]
 
 
+@pytest.mark.parametrize("markup", ["tags", "title"])
 def test_coverage_lists_an_html_sources_stated_quantity_and_no_number_from_its_markup(
-    proj_dir, tmp_path, capsys
+    proj_dir, tmp_path, capsys, markup
 ):
-    assert swept(proj_dir, tmp_path, capsys, DATASHEET_HTML.decode(), "ds.html") == ["20.6 g"]
-
-
-def test_coverage_lists_no_number_from_an_html_sources_title(proj_dir, tmp_path, capsys):
-    page = "<html><head><title>Servo 5 mm</title></head><body><p>Weight 20.6 g</p></body></html>"
+    page = {
+        "tags": DATASHEET_HTML.decode(),
+        "title": "<html><head><title>Servo 5 mm</title></head>"
+        "<body><p>Weight 20.6 g</p></body></html>",
+    }[markup]
     assert swept(proj_dir, tmp_path, capsys, page, "ds.html") == ["20.6 g"]
-
-
-def test_guard_coverage_lists_a_degree_sign_angle(proj_dir, tmp_path, capsys):
-    assert swept(proj_dir, tmp_path, capsys, "The part is 30° here.") == ["30°"]
-
-
-def test_guard_coverage_lists_no_product_across_a_spaced_asterisk(proj_dir, tmp_path, capsys):
-    assert swept(proj_dir, tmp_path, capsys, "Price 3500* 500 g here.") == ["500 g"]
-
-
-def test_coverage_lists_nothing_where_no_quantity_is_stated(proj_dir, tmp_path, capsys):
-    assert (
-        swept(
-            proj_dir,
-            tmp_path,
-            capsys,
-            "Fig. 2 shows 2 in each leg of L14 at 30 °C beside an M3a cell (doi:10.1088/ada2cc).",
-        )
-        == []
-    )
 
 
 # Look-alikes of a quantity: a number before a unit's spelling that names something else.
@@ -3025,6 +3001,9 @@ NOT_SWEPT = {
     "T=0s": "(A) T=0s, BLCM in the initial state.",
     "t = 2 s": "At t = 2 s the toes close.",
     "n.a.": "Price (EUR) 500 n.a. 20",
+    "no quantity stated": (
+        "Fig. 2 shows 2 in each leg of L14 at 30 °C beside an M3a cell (doi:10.1088/ada2cc)."
+    ),
 }
 
 
@@ -3044,6 +3023,7 @@ STILL_SWEPT = {
     "a wall of t = 2 mm": "2 mm",
     "rated at 500 N.": "500 n",
     "rated at 10 mm.The": "10 mm",
+    "30°": "30°",
 }
 
 
@@ -3075,7 +3055,8 @@ def test_coverage_lists_the_stated_quantities_each_sentence_states(
     assert swept(proj_dir, tmp_path, capsys, sentence) == STATED[sentence]
 
 
-# Each one's near miss, and #98's Ø6 mm: the stated quantities they list stay listed.
+# Each one's near miss, #98's Ø6 mm, and numbers that state no quantity (no unit, Ø inside a word, a
+# number word or count noun with no unit, a product across a spaced *): what they list stays so.
 STILL_STATED = {
     "The hole is Ø6 mm.": ["ø6 mm"],
     "The pin is 1.000 in ± 0.005 in long.": ["1.000 in", "0.005 in"],
@@ -3089,6 +3070,12 @@ STILL_STATED = {
     "a plate 5 in wide": ["5 in"],
     "it ran for 1:30 min": ["30 min"],
     "4:1 in total": [],
+    "Price 3500* 500 g here.": ["500 g"],
+    "The part is 32.5 here.": [],
+    "The part is 3 here.": [],
+    "Built at Ørsted 3 and Søborg 2.": [],
+    "Eight tension springs hold one of the links.": [],
+    "Its 3 planets mesh with a ring; SSPG [25, 65, 155, 0.5, 3] lists each.": [],
 }
 
 
@@ -3097,26 +3084,6 @@ def test_guard_coverage_still_lists_the_stated_quantities_of_each_near_miss(
     proj_dir, tmp_path, capsys, sentence
 ):
     assert swept(proj_dir, tmp_path, capsys, sentence) == STILL_STATED[sentence]
-
-
-@pytest.mark.parametrize("form", ["32.5", "3"])
-def test_guard_coverage_lists_no_number_without_a_diameter_sign_or_unit(
-    proj_dir, tmp_path, capsys, form
-):
-    assert swept(proj_dir, tmp_path, capsys, f"The part is {form} here.") == []
-
-
-def test_guard_coverage_lists_no_diameter_sign_inside_a_word(proj_dir, tmp_path, capsys):
-    assert swept(proj_dir, tmp_path, capsys, "Built at Ørsted 3 and Søborg 2.") == []
-
-
-def test_guard_coverage_lists_no_number_word_without_a_unit(proj_dir, tmp_path, capsys):
-    assert swept(proj_dir, tmp_path, capsys, "Eight tension springs hold one of the links.") == []
-
-
-def test_guard_coverage_lists_no_open_ended_count_noun_or_bare_integer(proj_dir, tmp_path, capsys):
-    text = "Its 3 planets mesh with a ring; SSPG [25, 65, 155, 0.5, 3] lists each."
-    assert swept(proj_dir, tmp_path, capsys, text) == []
 
 
 def test_coverage_counts_a_number_word_with_a_unit_as_ledgered_by_its_value(proj_dir, tmp_path):
@@ -3466,6 +3433,7 @@ def test_crop_help_says_what_name_and_zoom_do(capsys):
     out = " ".join(capsys.readouterr().out.split())
     assert "--name NAME the crop's name: it is written to figures/crops/<NAME>.png" in out
     assert "--zoom ZOOM enlarge the crop by this whole-number factor (default 1)" in out
+    assert "LEFT pixels of the image's file" in out  # its box is in the image file's pixels
 
 
 def test_guard_crop_writes_the_region_zoomed_and_prints_its_sha256(proj_dir):
@@ -3504,13 +3472,6 @@ def test_crop_prints_the_pixel_frame_its_box_is_in(proj_dir):
     assert out.splitlines()[0] == "cropped 860 0 1270 420 of figures/p004_01.png, 2051 x 2028 px"
     with Image.open(proj_dir / "figures" / "crops" / "foot.png") as image:
         assert image.size == (410, 420)
-
-
-def test_crop_help_says_its_box_is_in_pixels_of_the_images_file(capsys):
-    with pytest.raises(SystemExit):
-        cli.main(["crop", "--help"])
-    out = " ".join(capsys.readouterr().out.split())
-    assert "LEFT pixels of the image's file" in out
 
 
 def test_guard_shipped_docs_give_crops_call_with_the_positional_box_its_help_prints(capsys):
@@ -4051,10 +4012,6 @@ def test_mass_check_naming_no_instances_or_parts_weighs_every_instance(proj_dir,
     total = _by_id(report)["total"]
     assert total["ok"] and total["measured"] == "6"
     assert (total["rests_on"], total["uncounted"]) == ("proposed", {"link": 2})
-
-
-def test_report_md_names_a_part_weighed_in_several_uncounted_instances(proj_dir, tmp_path):
-    _two_weighed_links(proj_dir, tmp_path)
     assert "rests on proposed: link (2 instances uncounted)" in _check_row(proj_dir, "total")
 
 
@@ -4267,8 +4224,10 @@ def test_guard_failing_mass_check_on_a_proposed_density_still_fails(proj_dir, tm
     assert [f["rule"] for f in report["findings"] if f["level"] == "error"] == ["check-failed"]
 
 
-def test_mass_check_on_source_density_add_and_counts_rests_on_source(proj_dir, tmp_path):
-    text = "3 links weigh 6.4 g with 1 g of screws, printed in resin of 1.2 g/cm3."
+# A count its source states in digits or in words.
+@pytest.mark.parametrize("count", ["3", "Three"])
+def test_mass_check_on_source_density_add_and_counts_rests_on_source(proj_dir, tmp_path, count):
+    text = f"{count} links weigh 6.4 g with 1 g of screws, printed in resin of 1.2 g/cm3."
     report = _weighed(
         proj_dir,
         tmp_path,
@@ -4280,24 +4239,9 @@ def test_mass_check_on_source_density_add_and_counts_rests_on_source(proj_dir, t
         hardware={"basis": "source", "from": "N1.screws"},
         n_links={"basis": "source", "from": "N1.n"},
     )
-    assert _mass_result(report)["rests_on"] == "source"
-    assert "rests on" not in _check_row(proj_dir, "m")
-
-
-def test_mass_check_counts_a_part_by_a_count_its_source_states_in_words(proj_dir, tmp_path):
-    report = _weighed(
-        proj_dir,
-        tmp_path,
-        "Three links weigh 6.4 g with 1 g of screws, printed in resin of 1.2 g/cm3.",
-        {"n": 3, "m": 6.4, "screws": 1, "rho": 1.2},
-        check={"add": ["hardware"], "counts": {"link": "n_links"}},
-        links=3,
-        rho={"basis": "source", "from": "N1.rho"},
-        hardware={"basis": "source", "from": "N1.screws"},
-        n_links={"basis": "source", "from": "N1.n"},
-    )
     assert report["params"]["n_links"]["rests_on"] == "source"
     assert _mass_result(report)["rests_on"] == "source"
+    assert "rests on" not in _check_row(proj_dir, "m")
 
 
 def _counted_through(root: Path, tmp_path: Path, counted: bool) -> dict:
