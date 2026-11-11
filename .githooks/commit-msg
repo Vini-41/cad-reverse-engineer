@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+"""Refuses a commit whose subject runs past 72 characters: the subject says what changed, in a
+line a log can show whole, and the body says the rest. A subject git writes itself (a revert, a
+merge, a fixup) passes. scripts/check sets core.hooksPath to this folder.
+
+    .githooks/commit-msg <message file>
+"""
+
+import sys
+from pathlib import Path
+
+LIMIT = 72
+GIT_WRITTEN = ('Revert "', "Merge ", "fixup! ", "squash! ", "amend! ")
+
+lines = Path(sys.argv[1]).read_text(encoding="utf8").splitlines()
+subject = next((s for s in lines if s.strip() and not s.startswith("#")), "")
+if len(subject) > LIMIT and not subject.startswith(GIT_WRITTEN):
+    sys.exit(
+        f"commit-msg: the subject is {len(subject)} characters; keep it to {LIMIT} and put the "
+        "rest in the body"
+    )

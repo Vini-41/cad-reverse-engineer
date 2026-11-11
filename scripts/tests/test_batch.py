@@ -175,11 +175,20 @@ def test_batch_caps_a_wave_at_max(tmp_path):
         ("plugin/skills/cad-reverse-engineer/SKILL.md", True),
         ("plugin/skills/cad-reverse-engineer/references/modeling.md", True),
         ("README.md", True),
-        ("examples/centrifuge/README.md", True),
+        ("plugin/README.md", True),
+        ("LICENSE", True),
+        ("plugin/LICENSE", True),
+        ("AGENTS.md", True),
+        ("CODING_STANDARDS.md", True),
         (".claude-plugin/plugin.json", True),
         (".github/workflows/test.yml", True),
+        (".githooks/commit-msg", True),
         ("docs/agents/batch-ticket.md", True),
+        ("docs/agents/workflow.md", True),
         ("scripts/check", True),
+        ("examples/centrifuge/README.md", False),
+        ("examples/compact-sspg/sources/LICENSE-COMPAct.txt", False),
+        ("docs/dogfood/AGENTS.md", False),
         ("plugin/skills/cad-reverse-engineer/tool/src/cadrev/shape.py", False),
         ("scripts/check-linear", False),
         ("docs/dogfood/brief.md", False),
@@ -214,15 +223,18 @@ def test_batch_merges_a_green_ticket_and_holds_one_that_changes_the_readme(tmp_p
     assert created[created.index("--body") + 1].startswith("Part of #1\n\nAdds a.py.")
 
 
-def test_batch_asks_its_agent_for_a_reviewer_subagent_and_no_slash_command(tmp_path):
-    # A slash-command skill can't be invoked headless: batch 2026-11-08-1920's agents found
-    # /mattpocock-skills:implement refused, and #156's ran no review.
+def test_batch_briefs_its_agent_with_skills_the_skill_tool_loads_and_no_slash_command(tmp_path):
+    # A user-only skill is refused headless: batch 2026-11-08-1920's agents found
+    # /mattpocock-skills:implement refused, and #156's ran no review. A model-invoked one loads
+    # through the Skill tool, as writing-for-agents did for batch 2026-11-10-1023's agent.
     agents = {"1": {"file": "a.py", "result": "done\nAdds a.py."}}
     repo, env, _ = setup(tmp_path, [issue(1, "a.py")], agents)
     assert batch(repo, env).returncode == 0
     prompt = (tmp_path / "claude.json.1.prompt").read_text()
-    assert "reviewer subagent" in prompt
+    assert "Skill tool's `mattpocock-skills:tdd`" in prompt
+    assert "Skill tool's `mattpocock-skills:code-review`" in prompt
     assert "/mattpocock-skills" not in prompt
+    assert "mattpocock-skills:implement" not in prompt
 
 
 def test_batch_puts_an_agent_question_on_its_issue_and_opens_no_pr(tmp_path):

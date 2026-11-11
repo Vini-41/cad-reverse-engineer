@@ -63,7 +63,7 @@ Claude (Opus 5.5), skill and tool at `1b5b9e9` (main, after #155, #156 and #167)
 | 10 | The skill gives no `cadrev crop` box syntax; `--box` failed with "unrecognized arguments: --box". It takes LEFT TOP RIGHT BOTTOM positionally. | ticket A | SKILL.md step 3 says the box is in pixels of the extracted file but not how it is passed. |
 | 11 | (From the project.) `cadrev source` did not un-ignore the MIT-licensed STL (above). | duplicate | #102 (v0.2) drops the licence field and commits every source. |
 
-**Tickets for approval.** The trips group into these, for the user to approve in one pass ([batch.md](../agents/batch.md)); trips 1–4 and 11 are already filed:
+**Tickets for approval.** The trips group into these, for the user to approve in one pass ([workflow.md](../agents/workflow.md)); trips 1–4 and 11 are already filed:
 
 - **A. The skill gives `cadrev crop`'s box as it is passed** (trip 10). Blocks v0.1: a stranger following SKILL.md step 3 runs a command that fails.
 - **B. The skill says how a released geometry's probes are checked, what a physics value is, and how to limit a meshing gear's interference** (trips 5, 6, 8, 9). v0.2: each cost the run a workaround, none a wrong result; each needs a repro before filing, since none was confirmed beyond the run.
