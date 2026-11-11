@@ -111,7 +111,7 @@ Run as `codex exec --sandbox workspace-write -c sandbox_workspace_write.network_
 | 7 | Table 2's centimetre columns: unit only in the heading. The run ledgered them with ×10 expressions. | ticket C | As run 27 trip 2. |
 | 8 | (From the project.) The six-tube rotor's mass check at `tol_rel: 0.2`. | ticket D | As run 27 trip 8. |
 
-**Tickets for approval.** The two runs' trips group into these, for the user to approve in one pass ([batch.md](../agents/batch.md)):
+**Tickets for approval.** The two runs' trips group into these, for the user to approve in one pass ([workflow.md](../agents/workflow.md)):
 
 - **A. Under Codex's sandbox, the README and the Codex manifest say what `cadrev` must write** (run 28 trips 0 and 1): uv's cache, the plugin's `tool/.venv`, Matplotlib's and fontconfig's caches, or a `--add-dir` for each. Blocks a stranger on Codex, so v0.1, before the tag. It changes protected paths (README, the plugin manifests), so its PR waits for the user.
 - **B. Run 26's ticket B** absorbs run 27 trip 4.
