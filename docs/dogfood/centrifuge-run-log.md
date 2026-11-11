@@ -38,3 +38,78 @@ The fan and screws are purchased parts with no released body. The STEP files' "S
 | 11 | (From the project, at review.) The compatibility body's and the arrows' skip reasons named a variant and an optional inlay, without saying that neither is part of the device. | example | Their reasons in the example say so. |
 
 **CI.** `cadrev check` on the example takes about 17 s, so `examples/centrifuge` runs on every push beside `examples/legclaw-links`, and no nightly job is needed.
+
+## Release gate: runs 27 and 28
+
+Issue #160's gate for v0.1.0: two fresh agents, each briefed with [brief.md](brief.md)'s Centrifuge entry word for word but for where the skill lives. Each installed the skill as a stranger does, from the marketplace on GitHub at `46308e9` (main, after #157, #158, #159 and #177), not from a checkout. The brief's line "Use the skill at `<checkout>/…/SKILL.md`" became "Use the cad-reverse-engineer skill, which this session has installed from its plugin marketplace as a stranger installs it (`<the install commands below>`)", and "Read nothing else under that checkout" became "Read nothing else of the plugin's install: not its `tool/` source, only SKILL.md and its `references/`. Read nothing of any checkout of the cad-reverse-engineer repository." Neither run's tool calls read outside its brief.
+
+### Run 27: Claude Code
+
+Claude Code 2.1.311, Claude (Opus 5.5), `claude -p` in auto mode with only project and local settings. Installed in the run directory with:
+
+```
+claude plugin marketplace add --scope local 'https://github.com/Vini-41/cad-reverse-engineer.git#main'
+claude plugin install --scope local cad-reverse-engineer@cad-reverse-engineer
+```
+
+`claude plugin marketplace add` takes a branch or tag after `#`, not a commit, so it was given `main` and the clone was confirmed at `46308e9`. The session listed the skill as `cad-reverse-engineer:cad-reverse-engineer` and ran `cadrev` from the plugin's install. Project kept at `~/Documents/Projects/cadrev/dogfood/run-27`. 52 tool calls, about 30 minutes.
+
+**End state:** VERIFIED PENDING REVIEW, not exact: 0 errors, 0 warnings, 93/93 checks pass. 102 params, resting on 84 source, 0 measured and 18 proposed (the fan, switch and DC-socket envelopes and seating, the screw head, `pla_density`, the boss web's `web_half`), with no physics values. Three readings await confirmation, crops in `figures/crops/`: `fig8-body-size.png` ("130.0 x 130.0 x 34.0 mm"), `fig8-arrows-size.png` ("78.3 x 80.4 x 0.2 mm") and `fig8-body-filament.png` ("121g · 40.63m").
+
+**Rotor variant: the six-tube rotor for the 32.5 mm hub**, the paper's main configuration (Fig. 1), whose row states the hub, 7 blades, six tubes and 16 g. Its released body weighs 13.15 g at the proposed 1.24 g/cm³, 18% under the stated 16 g; the run set `tol_rel: 0.2` to pass it, and said that at that density the PCR-strip rotor weighs 16.0 g (run 10's choice). Fig. 8's 121 g body is a slicer estimate, kept as context.
+
+**Released bodies.** All twelve STEP files registered, no STL. Shape-checked: body (0.0012 at `tol` 0.005), bottom plate (0.00035), rotor (0.0026 at 0.005). Skipped with a reason: the compatibility body and the three other rotors (variants), both fit testers, both arrow inlays (the engraving is built), both tube adapters (the rotor is unloaded).
+
+**Probes.** 65: 40 of the body, 8 of the plate, 17 of the rotor, each feeding a source param checked by its own `c-*` check; the rotor's Ø32.5 bore probe is context, restating the quote. Every stated diameter (Ø32.5 hub, the DC socket's 5.5/2.1, M3, the 80 mm fan) has a check; the lid's 116 is not modelled, the lid being off. No conflicts recorded: the 36.6 mm PCR rotor's "32.5 mm hub" is read as a copy error in a variant not built.
+
+| # | Trip | Kind | Fix |
+|---|---|---|---|
+| 1 | `cadrev init .` failed with ". is not empty": the directory held only the `.claude/` the local-scope install wrote. The run initialised in its scratchpad and copied the files in. | ticket C | *unconfirmed* beyond the run: whether `init` should accept a directory holding only dot-directories an agent harness writes. A user-scope install writes none. |
+| 2 | The coverage sweep listed Table 2's `13x13x10`, whose unit (cm) is printed only in the column heading, so it reads as 13 mm. The run ledgered it as context with no values. | ticket C | Run 10 trip 2 did the same by hand, and run 28 trip 12 again: a table cell's unit given in its heading is not read. |
+| 3 | A probe restating a figure reading (`P-body-env` and `F-body-size`, both 130/34) raised no finding, where a probe restating a quote is context. The run kept both in scope. | ticket C | *unconfirmed*: whether a probe that restates a figure reading should be context, as one restating a quote is. |
+| 4 | Each of the 64 probe-fed params needed its own check repeating the probe on the model; `gen_ledger.py` generated them. | duplicate | Run 26 trip 8, its ticket B. |
+| 5 | Probes recorded at 3 decimals failed the shape checks by 0.0012 and 0.0026; the run set `tol: 0.005` on the body and rotor. | duplicate | #119 (v0.2), as run 10 trip 5. |
+| 6 | Fig. 8's labels were unreadable at native size; the run re-cropped with `--zoom 4`, which `cadrev crop --help` gives and SKILL.md does not. | ticket C | SKILL.md step 3's crop instruction does not say a small label is cropped with `--zoom`. |
+| 7 | The run modelled every part before its first build, not following the tracer-part order. | no change | The run's own departure from SKILL.md, which no rule can see. |
+| 8 | (From the project.) The six-tube rotor's mass check passes 13.15 g against the stated 16 g only at `tol_rel: 0.2`, under the 0.25 cap. The 16 g matches the PCR-strip rotor at the same density (run 10). Run 28 did the same. | ticket D | *unconfirmed*: which rotor the paper's "rotor (16 g)" weighs; the skill does not say that a mass check failing by more than the density's spread points at the variant, not the tolerance. |
+
+### Run 28: Codex
+
+Codex CLI 0.167.0, its default model (gpt-6.1-sol), `codex exec` with a fresh `CODEX_HOME` holding only the login, so no other plugin or setting was loaded. Installed with:
+
+```
+codex plugin marketplace add Vini-41/cad-reverse-engineer --ref 46308e992a0edfbd67718584b5416d7ac8624cf5
+codex plugin add cad-reverse-engineer@cad-reverse-engineer
+```
+
+Run as `codex exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --add-dir ~/.cache/uv -C <run dir>`: the README's "allow network for that first run" was not enough (trip 0). The fresh `CODEX_HOME` lay under `/private/tmp`, which the sandbox lets a command write, so the plugin's own `tool/.venv` could be created there; a stranger's `~/.codex` is not writable from the sandbox, which this run therefore did not test. Project kept at `~/Documents/Projects/cadrev/dogfood/run-28`. 70 commands, about 25 minutes.
+
+**End state:** VERIFIED PENDING REVIEW, not exact: 0 errors, 0 warnings, 154/154 checks pass. 200 params, resting on 179 source, 0 measured and 21 proposed, with no physics values. Four readings await confirmation, crops in `figures/crops/`: `body-slicer.png` ("130.0 x 130.0 x 34.0 mm"), `arrows-slicer.png` ("78.3 x 80.4 x 0.2 mm"), `body-slicer-mass.png` ("15 hours 20 minutes; 121g · 40.63m") and `arrows-slicer-mass.png` ("1 minute; 0g · 0.02m").
+
+**Rotor variant: the six-tube rotor for the 32.5 mm hub**, the paper's main configuration, chosen to compare with the stated 16 g. Its mass check reads 13.147 g against 16 g at `tol_rel: 0.2`, as run 27's; the body's full-solid 121.26 g passes against the slicer's 121 g at 5%, both at the proposed 1.24 g/cm³.
+
+**Released bodies.** All twelve STEP files registered, no STL. Shape-checked: body, bottom plate and rotor, at `tol` 0.0012 and 0.007 where the files' edges are coarser than the default. Skipped with a reason: both arrow inlays (monochrome build), the compatibility body and the three other rotors (variants), both fit testers (tools), both tube adapters (unloaded).
+
+**Probes and diameters.** 134 recorded values, each feeding params listed in the run's `build/audit.md` and `build/probe-inventory.csv`, which also give each stated or probed diameter's check. **Conflicts**, each resolved: the 36.6 mm PCR rotor's "32.5" as a copy error; the 121 g slicer screenshot at 100% infill against the instructions' 10% body infill.
+
+| # | Trip | Kind | Fix |
+|---|---|---|---|
+| 0 | (Before the run.) Under Codex's `workspace-write` sandbox with network allowed, as the README says, `cadrev --help` fails: `Could not acquire lock … Operation not permitted (os error 1) at path "/Users/…/.cache/uv/.tmpHoRnYG"`. Run as `codex sandbox -c 'sandbox_mode="workspace-write"' -c 'sandbox_workspace_write.network_access=true' <plugin>/skills/cad-reverse-engineer/cadrev --help`. The run was given `--add-dir ~/.cache/uv`. | ticket A | The README and the Codex manifest say only to allow network; uv also writes its cache and the plugin's `tool/.venv`, outside the workspace. |
+| 1 | `cadrev check` could not write Matplotlib's and fontconfig's caches; the run set `MPLCONFIGDIR` and `XDG_CACHE_HOME` to temporary directories in `run_check.sh`. | ticket A | The same sandbox: a stranger's run needs these writable or redirected. |
+| 2 | `ps` was refused by the sandbox. | no change | The sandbox; the run used its own logs. |
+| 3 | Its own inspection scripts hit `NameError`, `Vertex.to_tuple`, `No module named yaml` and a missing `sqrt` import. | no change | The run's scripting, fixed as it went. |
+| 4 | `[datum-off-solid]` and `[model-arithmetic]` (√2 and quarter factors) on first builds; the run moved datums onto faces and the factors into derived params. | no change | The rules working as SKILL.md says. |
+| 5 | A revolve gave a null shape and a zero-volume rotor until the run used the profile's edges; a seventh tab's fuse cut the rotor's volume from 11683.8 to 47.9 mm³, found with its own `debug_build.py`, until it cut the gaps from a continuous ring. | ticket C | *unconfirmed*: whether a part whose volume collapses in its build should be a finding; the run's shape check would have failed on it. |
+| 6 | The released files' edge precision exceeded `tolerance.length`; the run set shape `tol` 0.0012 and 0.007. | duplicate | #119, as run 27 trip 5. |
+| 7 | Table 2's centimetre columns: unit only in the heading. The run ledgered them with ×10 expressions. | ticket C | As run 27 trip 2. |
+| 8 | (From the project.) The six-tube rotor's mass check at `tol_rel: 0.2`. | ticket D | As run 27 trip 8. |
+
+**Tickets for approval.** The two runs' trips group into these, for the user to approve in one pass ([batch.md](../agents/batch.md)):
+
+- **A. Under Codex's sandbox, the README and the Codex manifest say what `cadrev` must write** (run 28 trips 0 and 1): uv's cache, the plugin's `tool/.venv`, Matplotlib's and fontconfig's caches, or a `--add-dir` for each. Blocks a stranger on Codex, so v0.1, before the tag. It changes protected paths (README, the plugin manifests), so its PR waits for the user.
+- **B. Run 26's ticket B** absorbs run 27 trip 4.
+- **C. The skill and the sweep, from the gate runs** (run 27 trips 1, 2, 3, 6; run 28 trips 5, 7): a table cell's unit in its heading, `--zoom` in SKILL.md's crop step, a probe restating a figure reading, `init` beside a harness's dot-directory, a build whose volume collapses. v0.2: each cost a workaround, none a wrong result; trips 1, 3 and 5 need a repro before filing.
+- **D. A stated mass is checked on the variant it weighs** (run 27 trip 8, run 28 trip 8): both runs passed a 16 g against 13.15 g by widening `tol_rel` to 0.2, where run 10 found the 16 g on the PCR-strip rotor. v0.2, after a repro: the status is right by its own rules, but the check holds less than it reads.
+- #119 holds run 27 trip 5 and run 28 trip 6.
+
+**Status against the example's.** Both runs end where run 10 did before review: VERIFIED PENDING REVIEW, 0 errors, 0 warnings, each with Fig. 8's "130.0 x 130.0 x 34.0 mm" among its readings. `examples/centrifuge`'s VERIFIED comes from a named reviewer confirming that reading, which a run cannot do.
