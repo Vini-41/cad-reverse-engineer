@@ -91,6 +91,16 @@ def test_guard_rules_asserted_present_and_absent_documented_and_read_pass(tmp_pa
     assert (result.returncode, result.stdout.splitlines()[1:]) == (0, [])
 
 
+def test_guard_rule_asserted_through_a_helper_calling_one_defined_after_it_passes(tmp_path):
+    # _short_of comes first and calls _too_long, so one reading in file order finds no rule in it.
+    helper = "def _short_of(root):\n    return _too_long(root)\n\n\ndef _too_long(root):"
+    tests = TESTS.replace("def _too_long(root):", helper).replace(
+        "assert _too_long(tmp_path) == []", "assert _short_of(tmp_path) == []"
+    )
+    result = check(repo(tmp_path, tests=tests))
+    assert (result.returncode, result.stdout.splitlines()[1:]) == (0, [])
+
+
 def test_rule_no_test_asserts_absent_fails(tmp_path):
     result = check(repo(tmp_path, tests=TESTS.split("\n\n\ndef test_guard_closed_end")[0]))
     assert result.returncode == 1
