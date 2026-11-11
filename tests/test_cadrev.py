@@ -3481,6 +3481,25 @@ def test_guard_root_readme_shows_the_status_the_example_readme_documents():
     )
 
 
+def test_changelog_heads_with_the_manifests_version_and_names_each_example_with_its_status():
+    repo = EXAMPLE.parents[1]
+    versions = {
+        json.loads((repo / "plugin" / manifest / "plugin.json").read_text())["version"]
+        for manifest in (".claude-plugin", ".codex-plugin")
+    }
+    assert len(versions) == 1, f"the plugin manifests disagree on the version: {versions}"
+    entries = re.split(r"^## ", (repo / "CHANGELOG.md").read_text(), flags=re.M)
+    assert len(entries) > 1, "CHANGELOG.md holds no entry"
+    latest = entries[1]
+    assert latest.split()[0] == f"v{versions.pop()}"
+    for example in sorted(p for p in (repo / "examples").iterdir() if p.is_dir()):
+        status = re.search(r"^Expected status: (`.+`)$", (example / "README.md").read_text(), re.M)
+        assert status, f"{example.name}'s README states no expected status"
+        assert f"`examples/{example.name}`" in latest and status[1] in latest, (
+            f"the entry names no examples/{example.name} with its expected status"
+        )
+
+
 def gitignored(root: Path, name: str, license: str | None) -> bool:
     """Whether git ignores sources/<name> after it is registered with this license."""
     subprocess.run(["git", "init", "-q", str(root)], check=True)
