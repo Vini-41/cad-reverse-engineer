@@ -1,6 +1,6 @@
 # Repro brief
 
-The prompt a dogfood run's trips get before they are filed, word for word, so every finding reaches the tracker with the evidence [issue-tracker.md](../agents/issue-tracker.md) asks of a bug's body. Before the repro:
+The prompt a dogfood run's trips get before they are filed, word for word, so every finding reaches the tracker with the evidence below. Before the repro:
 
 1. Keep the run's checkout (step 1 of [brief.md](brief.md)) until every repro is done: the repros run the tool at the commit the run used.
 2. Give each trip a short slug, and group the trips into agents of one to three findings each, related findings together.

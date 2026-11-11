@@ -23,11 +23,11 @@ from origin/main, briefed by docs/agents/batch-ticket.md, and writes its result 
 a PR summary, or `needs-info` and the question it needs answered. After each wave the runner, in
 plan order, rebases each done branch onto origin/main, pushes it, opens its PR (`Part of #<n>`)
 and waits for CI with scripts/ci-wait. It merges the PR with `gh pr merge --rebase` unless the PR
-changes a protected path (what users read, or the gate itself), which waits for the user. Once CI
-is green on main it closes the issue. A rebase conflict or a red CI gets the agent once more; if it
-still fails, or the agent asked a question, the issue gets the question and `needs-info`, its
-commits are pushed to `batch/<n>`, where a later batch from any checkout carries on, and the batch
-goes on. Red CI on main stops the batch.
+changes a protected path (the shipped skill, or what steers agents), which waits for the user.
+Once CI is green on main it closes the issue. A rebase conflict or a red CI gets the agent once
+more; if it still fails, or the agent asked a question, the issue gets the question and
+`needs-info`, its commits are pushed to `batch/<n>`, where a later batch from any checkout carries
+on, and the batch goes on. Red CI on main stops the batch.
 
 Everything lands in .scratch/batches/<stamp>/: batch.log (the runner's own output), progress.log
 (one line per step), one log per agent run (its stream-json, written as it works, beside a .pid
@@ -57,11 +57,21 @@ BRIEF = ROOT / "docs" / "agents" / "batch-ticket.md"
 BATCHES = ROOT / ".scratch" / "batches"
 LOCK = BATCHES / "running"
 
-# A change to any of these waits for the user: what a user reads, and what gates or steers agents.
-PROTECTED_FILES = {"LICENSE", "README.md", "SKILL.md"}
+# A change to any of these waits for the user: the shipped skill, the READMEs a stranger reads
+# first, and what gates or steers agents. An example's README merges on green.
+PROTECTED_FILES = {"LICENSE", "SKILL.md"}
 PROTECTED_DIRS = {"references", ".claude-plugin", ".codex-plugin"}
-PROTECTED_ROOTS = {".github", ".claude", ".agents", "docs/agents"}
-PROTECTED_SCRIPTS = {"scripts/check", "scripts/batch", "scripts/ci-wait", "scripts/red-on-main"}
+PROTECTED_ROOTS = {".github", ".githooks", ".claude", ".agents", "docs/agents"}
+PROTECTED_PATHS = {
+    "README.md",
+    "plugin/README.md",
+    "AGENTS.md",
+    "CODING_STANDARDS.md",
+    "scripts/check",
+    "scripts/batch",
+    "scripts/ci-wait",
+    "scripts/red-on-main",
+}
 
 
 def run(*args: str, cwd: Path = ROOT, check: bool = False) -> subprocess.CompletedProcess[str]:
@@ -78,7 +88,7 @@ def protected(path: str) -> bool:
         p.name in PROTECTED_FILES
         or any(part in PROTECTED_DIRS for part in p.parts[:-1])
         or any(path == r or path.startswith(r + "/") for r in PROTECTED_ROOTS)
-        or path in PROTECTED_SCRIPTS
+        or path in PROTECTED_PATHS
     )
 
 
