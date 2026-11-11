@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Run this working tree's tests, with its docs and examples, against the tool source as it was
-# before the fix: those that go red there are holes the fix closes, those that stay green are
-# guards, named test_guard_*. Prints
+# Run this working tree's tests, with its docs and examples, against the tool source and its
+# launcher (the skill's cadrev script) as they were before the fix: those that go red there are
+# holes the fix closes, those that stay green are guards, named test_guard_*. Prints
 # the counts and each misnamed test, and exits 1 if there is one: a test_guard_* that goes red, or
 # a test function new since BASE that stays green without the name. It exits 2 if pytest ran no
 # test, so a missing pytest or an empty selection never reads as a clean comparison, and 3 if there
-# is nothing to compare: BASE is HEAD with the tool source unchanged, no test function is new or
+# is nothing to compare: BASE is HEAD with the tool source and launcher unchanged, no test function is new or
 # changed since BASE, or BASE is not in this clone (the null commit a new branch's push names, or a
 # commit a force-push dropped), or BASE holds no tool source at plugin/ (it predates the move there).
 # 0 is a clean comparison. New rows of a test function BASE already has (the QUOTES, UNITS and
@@ -56,7 +56,7 @@ else
     base=$created
   fi
 fi
-if [ "$base" = "$(git -C "$repo" rev-parse HEAD)" ] && git -C "$repo" diff --quiet HEAD -- "$tool/src"; then
+if [ "$base" = "$(git -C "$repo" rev-parse HEAD)" ] && git -C "$repo" diff --quiet HEAD -- "$tool/src" "$tool/../cadrev"; then
   echo "BASE is HEAD and the tool source is unchanged, so there is no fix to compare; set BASE=<ref>" >&2
   exit 3
 fi
@@ -69,13 +69,15 @@ fi
 tree=$(mktemp -d)
 trap 'git -C "$repo" worktree remove --force "$tree" >/dev/null 2>&1 || true; rm -f "$tree.existing" "$tree.patch" "$tree.log"' EXIT
 git -C "$repo" worktree add --detach --quiet "$tree" "$base"
-# Everything but the tool source comes from the working tree: the tests read the READMEs and examples too.
-git -C "$repo" diff --binary "$base" -- . ":(exclude)plugin/skills/cad-reverse-engineer/tool/src" >"$tree.patch"
+# Everything but the tool source and its launcher comes from the working tree: the tests read the
+# READMEs and examples too.
+git -C "$repo" diff --binary "$base" -- . ":(exclude)plugin/skills/cad-reverse-engineer/tool/src" \
+  ":(exclude)plugin/skills/cad-reverse-engineer/cadrev" >"$tree.patch"
 [ -s "$tree.patch" ] && git -C "$tree" apply --whitespace=nowarn "$tree.patch"
 rm -rf "$tree/tests"
 cp -R "$tests" "$tree/tests"
 
-echo "working tree, but tool source from $label ($(git -C "$repo" rev-parse --short "$base"))"
+echo "working tree, but tool source and launcher from $label ($(git -C "$repo" rev-parse --short "$base"))"
 existing="$tree.existing"  # the test functions BASE already has
 git -C "$repo" grep -hoE '^def test_[A-Za-z0-9_]+' "$base" -- "$tests" | sed 's/^def //' >"$existing" || true
 if [ $# -eq 0 ]; then

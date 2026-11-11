@@ -11053,7 +11053,13 @@ def test_expect_reads_a_ratio_printed_n_to_1_as_a_fraction(proj_dir, tmp_path):
     assert _result(report, "pitch-ratio")["ok"] and (code, report["status"]) == (0, "VERIFIED")
 
 
-ENV_UV_SEES = ("UV_CACHE_DIR", "UV_PROJECT_ENVIRONMENT", "XDG_CACHE_HOME", "MPLCONFIGDIR")
+ENV_UV_SEES = (
+    "UV_CACHE_DIR",
+    "UV_PYTHON_INSTALL_DIR",
+    "UV_PROJECT_ENVIRONMENT",
+    "XDG_CACHE_HOME",
+    "MPLCONFIGDIR",
+)
 
 
 def launch(tmp_path: Path, *, writable: bool) -> dict[str, str]:
@@ -11085,17 +11091,18 @@ def launch(tmp_path: Path, *, writable: bool) -> dict[str, str]:
 
 
 def test_launcher_sends_caches_and_venv_to_tmpdir_where_a_sandbox_blocks_their_defaults(tmp_path):
-    # Codex's workspace-write sandbox lets cadrev write its workspace and TMPDIR, not ~/.cache
-    # or the installed plugin's tool/.venv (#181).
+    # Codex's workspace-write sandbox lets cadrev write its workspace and TMPDIR, not HOME or the
+    # installed plugin's tool/.venv (#181). chmod stands in for it, so this cannot run as root.
     seen = launch(tmp_path, writable=False)
     tmp = tmp_path / "tmp" / f"cadrev-{os.getuid()}"
     assert seen["UV_CACHE_DIR"] == f"{tmp}/cache/uv"
+    assert seen["UV_PYTHON_INSTALL_DIR"] == f"{tmp}/python"
     assert seen["XDG_CACHE_HOME"] == f"{tmp}/cache"
     assert seen["MPLCONFIGDIR"] == f"{tmp}/matplotlib"
     assert seen["UV_PROJECT_ENVIRONMENT"].startswith(f"{tmp}/venv-")
     assert seen["args"].endswith("cadrev check my project")
 
 
-def test_launcher_leaves_writable_defaults_alone(tmp_path):
+def test_guard_launcher_leaves_writable_defaults_alone(tmp_path):
     seen = launch(tmp_path, writable=True)
     assert {v: seen[v] for v in ENV_UV_SEES} == dict.fromkeys(ENV_UV_SEES, "")

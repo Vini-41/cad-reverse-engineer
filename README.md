@@ -44,7 +44,7 @@ codex plugin marketplace add Vini-41/cad-reverse-engineer
 codex plugin add cad-reverse-engineer@cad-reverse-engineer
 ```
 
-Codex's default sandbox blocks network access, which the CLI's first run needs. Allow it in `~/.codex/config.toml`:
+Codex's default sandbox blocks network access, which the CLI needs to download its dependencies. Allow it in `~/.codex/config.toml`:
 
 ```toml
 [sandbox_workspace_write]
