@@ -3,35 +3,42 @@
 # --locked installs exactly the versions in tool/uv.lock, and fails rather than re-resolve them.
 #
 # A sandbox such as Codex's workspace-write lets cadrev write the workspace and TMPDIR, but not
-# ~/.cache, the Matplotlib directory under HOME, or the installed plugin's tool/.venv. Each of
-# those that cannot be written moves to a directory of this user's under TMPDIR (#181).
-tool=$(cd "$(dirname "$0")/tool" && pwd)
+# ~/.cache, ~/.local/share, the Matplotlib directory under HOME, or the installed plugin's
+# tool/.venv. Each of those that cannot be written moves to a directory of this user's under
+# TMPDIR (#181).
+tool=$(CDPATH='' cd -- "$(dirname -- "$0")/tool" && pwd) || exit 1
 
-# writable PATH: whether PATH, or the nearest directory above it that exists, can be written.
+# writable PATH: whether a file can be made in PATH, or in the nearest directory above it that
+# exists. It makes one rather than ask [ -w ], which Linux's Landlock sandbox does not answer.
 writable() {
   p=$1
-  while [ ! -e "$p" ]; do p=$(dirname "$p"); done
-  [ -w "$p" ]
+  while [ ! -e "$p" ]; do p=$(dirname -- "$p"); done
+  probe=$(mktemp "$p/.cadrev-probe.XXXXXX" 2>/dev/null) && rm -f -- "$probe"
 }
 
-# moved VAR DIR: sets VAR to DIR, made under the fallback directory.
-moved() {
-  mkdir -p "$2" && export "$1=$2"
+# redirect VAR DIR: makes DIR and sets VAR to it.
+redirect() {
+  mkdir -p -- "$2" && export "$1=$2"
 }
 
 tmp="${TMPDIR:-/tmp}"
 tmp="${tmp%/}/cadrev-$(id -u)"
+cache="${XDG_CACHE_HOME:-$HOME/.cache}"
 # /tmp is shared, so the fallback is used only when this user owns it.
-if mkdir -p -m 700 "$tmp" 2>/dev/null && [ -O "$tmp" ] && [ -w "$tmp" ]; then
-  writable "${UV_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/uv}" || moved UV_CACHE_DIR "$tmp/cache/uv"
+if mkdir -p -m 700 -- "$tmp" 2>/dev/null && [ -O "$tmp" ] && writable "$tmp"; then
+  writable "${UV_CACHE_DIR:-$cache/uv}" || redirect UV_CACHE_DIR "$tmp/cache/uv"
+  # where uv downloads a Python when none on the machine fits
+  writable "${UV_PYTHON_INSTALL_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/uv/python}" ||
+    redirect UV_PYTHON_INSTALL_DIR "$tmp/python"
   # fontconfig's cache, and Matplotlib's on Linux
-  writable "${XDG_CACHE_HOME:-$HOME/.cache}" || moved XDG_CACHE_HOME "$tmp/cache"
+  writable "$cache" || redirect XDG_CACHE_HOME "$tmp/cache"
   case $(uname) in
     Darwin) mpl="$HOME/.matplotlib" ;;
     *) mpl="${XDG_CONFIG_HOME:-$HOME/.config}/matplotlib" ;;
   esac
-  writable "${MPLCONFIGDIR:-$mpl}" || moved MPLCONFIGDIR "$tmp/matplotlib"
-  # one environment per installed copy of the plugin, named by its path; uv makes it
+  writable "${MPLCONFIGDIR:-$mpl}" || redirect MPLCONFIGDIR "$tmp/matplotlib"
+  # One environment per installed copy of the plugin, named by its path. uv makes it, so it is
+  # set rather than redirected: uv may refuse a directory made empty for it.
   if ! writable "${UV_PROJECT_ENVIRONMENT:-$tool/.venv}"; then
     UV_PROJECT_ENVIRONMENT="$tmp/venv-$(printf %s "$tool" | cksum | cut -d ' ' -f 1)"
     export UV_PROJECT_ENVIRONMENT
