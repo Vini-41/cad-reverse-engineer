@@ -299,44 +299,36 @@ def test_report_md_renders_the_status_and_findings_of_report_json(proj_dir):
 
 
 @pytest.mark.parametrize("flag", ["--no-build", "--no-coverage"])
-def test_skipping_part_of_the_run_is_partial_and_writes_no_report(proj_dir, capsys, flag):
-    report_md, report_json = proj_dir / "build" / "report.md", proj_dir / "build" / "report.json"
-    assert cli.main(["check", str(proj_dir), flag]) != 0
-    assert "PARTIAL" in capsys.readouterr().out
-    assert not report_md.exists() and not report_json.exists()
-
-
-@pytest.mark.parametrize("flag", ["--no-build", "--no-coverage"])
-def test_partial_run_leaves_the_existing_report_untouched(proj_dir, flag):
+def test_partial_run_leaves_the_existing_report_untouched(proj_dir, capsys, flag):
     def build_dir() -> dict[str, bytes]:
         return {str(f): f.read_bytes() for f in (proj_dir / "build").rglob("*") if f.is_file()}
 
     verify(proj_dir)
     before = build_dir()
     write(proj_dir, "gaps.yaml", {"gaps": []})
+    capsys.readouterr()
     assert cli.main(["check", str(proj_dir), flag]) != 0
+    assert "PARTIAL" in capsys.readouterr().out
     assert build_dir() == before
 
 
-def test_guard_quote_matches_across_a_hyphenated_line_break_and_spaced_times(proj_dir, tmp_path):
-    text, quote = "Bent Link-\nage 37 × 6.5×5", "Bent Linkage 37×6.5×5"
-    add_quote(proj_dir, tmp_path, text, quote, {"L": 37, "H": 6.5, "W": 5})
-    rules = errors(proj_dir)
-    assert "quote-not-found" not in rules and "value-not-in-quote" not in rules
-
-
 @pytest.mark.parametrize(
-    "text, quote",
+    "text, quote, values",
     [
-        ("and two dual-\naxis servos of 12 mm serve", "two dual-axis servos of 12 mm"),
-        ("and two dual-\naxis servos of 12 mm serve", "two dual- axis servos of 12 mm"),
-        ("with an inter-\ntoe gap of 12 mm", "with an inter- toe gap of 12 mm"),
+        ("and two dual-\naxis servos of 12 mm serve", "two dual-axis servos of 12 mm", {"L": 12}),
+        ("and two dual-\naxis servos of 12 mm serve", "two dual- axis servos of 12 mm", {"L": 12}),
+        ("with an inter-\ntoe gap of 12 mm", "with an inter- toe gap of 12 mm", {"L": 12}),
+        # Spaced and unspaced times signs match each other too.
+        ("Bent Link-\nage 37 × 6.5×5", "Bent Linkage 37×6.5×5", {"L": 37, "H": 6.5, "W": 5}),
     ],
 )
-def test_quote_copied_across_a_hyphenated_line_break_matches(proj_dir, tmp_path, text, quote):
-    add_quote(proj_dir, tmp_path, text, quote, {"L": 12})
+def test_quote_copied_across_a_hyphenated_line_break_matches(
+    proj_dir, tmp_path, text, quote, values
+):
+    add_quote(proj_dir, tmp_path, text, quote, values)
     rules = errors(proj_dir)
     assert "quote-not-found" not in rules and "coverage" not in rules
+    assert "value-not-in-quote" not in rules
 
 
 def test_quote_matched_across_a_word_the_text_breaks_with_a_space_covers_its_quantity(
@@ -519,9 +511,13 @@ def test_source_rewritten_between_runs_is_read_afresh(proj_dir):
     assert "quote-not-found" in errors(proj_dir)
 
 
-def test_model_literal_is_rejected(proj_dir):
-    write(proj_dir, "model.py", swap(MODEL, "p.link_H)\n    link -=", "7.5)\n    link -=", 1))
-    assert "model-literal" in errors(proj_dir)
+# A literal in any spelling, and one a factor around a param would also flag, is one finding.
+@pytest.mark.parametrize(
+    "literal", ["7.5", "1e1", "3.0", "10.", "0x3", "3_0", "2.5e0", "3 * p.link_H / 2"]
+)
+def test_model_literal_is_rejected(proj_dir, literal):
+    _model_with(proj_dir, line=f"extra = {literal}")
+    assert errors(proj_dir) == ["model-literal"]
 
 
 # The model lint closes every route a number could take into model.py.
@@ -582,17 +578,7 @@ def test_guard_model_converting_a_param_to_a_number_or_text(proj_dir):
         "90 + 0.5",
         "(0.5 + 0.5) * 90 / 2",
         "2 ** 2 ** 2 ** 2 ** 2",
-    ],
-)
-def test_model_constant_arithmetic_folding_to_a_disallowed_value_is_a_finding(proj_dir, expr):
-    _model_with(proj_dir, line=f"extra = {expr}")
-    messages = findings(proj_dir, "model-arithmetic")
-    assert errors(proj_dir) == ["model-arithmetic"] and len(messages) == 1
-
-
-@pytest.mark.parametrize(
-    "expr",
-    [
+        # A chain of one operator folds its literals in any order.
         "p.pitch * 2 * 2",
         "p.pitch * 2 * 2 - 0.5",
         "2 * p.pitch * 2",
@@ -603,7 +589,7 @@ def test_model_constant_arithmetic_folding_to_a_disallowed_value_is_a_finding(pr
         "p.pitch - (p.link_H - 90 - 0.5)",
     ],
 )
-def test_model_chain_of_one_operator_folds_its_literals_in_any_order(proj_dir, expr):
+def test_model_constant_arithmetic_folding_to_a_disallowed_value_is_a_finding(proj_dir, expr):
     _model_with(proj_dir, line=f"extra = {expr}")
     messages = findings(proj_dir, "model-arithmetic")
     assert errors(proj_dir) == ["model-arithmetic"] and len(messages) == 1
@@ -632,12 +618,6 @@ def test_guard_model_constant_arithmetic_folding_to_an_allowed_value(proj_dir, e
     assert code == 0
 
 
-@pytest.mark.parametrize("literal", ["1e1", "3.0", "10.", "0x3", "3_0", "2.5e0"])
-def test_guard_model_literal_in_any_spelling_is_rejected(proj_dir, literal):
-    _model_with(proj_dir, line=f"extra = {literal}")
-    assert errors(proj_dir) == ["model-literal"]
-
-
 @pytest.mark.parametrize("literal", ["2.0", "5e-1", "9e1", "0x2", "1_8_0"])
 def test_guard_model_allowed_literal_in_any_spelling(proj_dir, literal):
     _model_with(proj_dir, line=f"extra = {literal}")
@@ -648,45 +628,36 @@ def test_guard_model_allowed_literal_in_any_spelling(proj_dir, literal):
 # A constant built from params hides its number as well as a literal does.
 
 
+# Each line builds one constant from params: alone, inside a relation that varies, or through a
+# local alias.
 @pytest.mark.parametrize(
-    "expr",
+    "line, constant",
     [
-        "atan2(p.link_H, p.link_H)",
-        "p.link_W / p.link_W",
-        "p.link_W - p.link_W",
-        "atan2(2 * p.link_H, p.link_H + p.link_H)",
-        "math.degrees(math.atan2(p.link_H, p.link_H)) * p.pitch / p.pitch",
+        ("extra = atan2(p.link_H, p.link_H)", "atan2(p.link_H, p.link_H)"),
+        ("extra = p.link_W / p.link_W", "p.link_W / p.link_W"),
+        ("extra = p.link_W - p.link_W", "p.link_W - p.link_W"),
+        (
+            "extra = atan2(2 * p.link_H, p.link_H + p.link_H)",
+            "atan2(2 * p.link_H, p.link_H + p.link_H)",
+        ),
+        (
+            "extra = math.degrees(math.atan2(p.link_H, p.link_H)) * p.pitch / p.pitch",
+            "math.degrees(math.atan2(p.link_H, p.link_H)) * p.pitch / p.pitch",
+        ),
+        ("extra = p.pitch * atan2(p.link_H, p.link_H)", "atan2(p.link_H, p.link_H)"),
+        ("extra = p.pitch + (p.link_W - p.link_W)", "p.link_W - p.link_W"),
+        ("extra = max(p.pitch, p.link_W / p.link_W)", "p.link_W / p.link_W"),
+        ("w = p.link_W; extra = w / w", "w / w"),
     ],
 )
-def test_model_constant_built_from_params_is_a_finding_on_its_line(proj_dir, expr):
-    _model_with(proj_dir, header="import math\nfrom math import atan2", line=f"extra = {expr}")
+def test_model_constant_built_from_params_is_a_finding_on_its_line(proj_dir, line, constant):
+    _model_with(proj_dir, header="import math\nfrom math import atan2", line=line)
     messages = findings(proj_dir, "model-constant")
     assert errors(proj_dir) == ["model-constant"] and len(messages) == 1
-    assert messages[0].startswith(f"model.py:7: {expr}")
+    assert messages[0].startswith(f"model.py:7: {constant} is ")
 
 
-@pytest.mark.parametrize(
-    "expr, constant",
-    [
-        ("p.pitch * atan2(p.link_H, p.link_H)", "atan2(p.link_H, p.link_H)"),
-        ("p.pitch + (p.link_W - p.link_W)", "p.link_W - p.link_W"),
-        ("max(p.pitch, p.link_W / p.link_W)", "p.link_W / p.link_W"),
-    ],
-)
-def test_model_constant_inside_a_relation_that_varies_is_a_finding(proj_dir, expr, constant):
-    _model_with(proj_dir, header="import math\nfrom math import atan2", line=f"extra = {expr}")
-    messages = findings(proj_dir, "model-constant")
-    assert errors(proj_dir) == ["model-constant"] and len(messages) == 1
-    assert messages[0].startswith(f"model.py:7: {constant} is")
-
-
-def test_model_constant_through_a_local_alias_is_a_finding(proj_dir):
-    _model_with(proj_dir, line="w = p.link_W; extra = w / w")
-    messages = findings(proj_dir, "model-constant")
-    assert errors(proj_dir) == ["model-constant"] and len(messages) == 1
-    assert messages[0].startswith("model.py:6: w / w")
-
-
+# Neither a constant nor a factor other than an allowed literal.
 @pytest.mark.parametrize(
     "line",
     [
@@ -697,10 +668,21 @@ def test_model_constant_through_a_local_alias_is_a_finding(proj_dir):
         "w = p.link_W; extra = w / p.link_H",
         "w = p.link_W; w = 1; extra = w / p.link_W",
         "extra = [h / h for h in (p.link_H,)]",
+        "extra = p.pitch + p.link_H / 2",
+        "extra = p.link_H / 2 + p.link_H / 2",
+        "extra = p.pitch + p.pitch",
+        "extra = (p.link_L - p.link_W) / 2",
+        "extra = 2 * p.link_W - p.link_H",
+        "extra = p.link_L * math.cos(p.pitch)",
+        "extra = math.atan2(p.link_H, p.link_L)",
+        "extra = p.link_H ** 2",
+        "extra = p.pitch * math.pi",
+        "extra = min(p.link_H, p.link_W) / 2",
+        "extra = p.pitch / 90",
     ],
 )
 def test_guard_model_relation_that_varies_with_its_params(proj_dir, line):
-    _model_with(proj_dir, line=line)
+    _model_with(proj_dir, header="import math", line=line)
     code, _ = verify(proj_dir)
     assert code == 0 and findings(proj_dir, "model-constant") == []
 
@@ -754,31 +736,6 @@ def test_model_factor_built_through_a_local_name_names_where_it_is_assigned(proj
         "model.py:7: fy + p.link_W / 2 multiplies link_W by -1.5, not an allowed literal "
         "(fy, assigned on model.py:6, multiplies link_W by -2);"
     )
-
-
-@pytest.mark.parametrize(
-    "expr",
-    [
-        "p.link_L - p.link_L / 2",
-        "-p.pitch / 2",
-        "p.link_H - 1",
-        "p.pitch + p.link_H / 2",
-        "p.link_H / 2 + p.link_H / 2",
-        "p.pitch + p.pitch",
-        "(p.link_L - p.link_W) / 2",
-        "2 * p.link_W - p.link_H",
-        "p.link_L * math.cos(p.pitch)",
-        "math.atan2(p.link_H, p.link_L)",
-        "p.link_H ** 2",
-        "p.pitch * math.pi",
-        "min(p.link_H, p.link_W) / 2",
-        "p.pitch / 90",
-    ],
-)
-def test_guard_model_factor_that_is_an_allowed_literal_or_not_constant(proj_dir, expr):
-    _model_with(proj_dir, header="import math", line=f"extra = {expr}")
-    code, _ = verify(proj_dir)
-    assert code == 0, findings(proj_dir, "model-arithmetic")
 
 
 # 0 if p.link_H else keeps build() from running the expression, so only the lint evaluates it.
@@ -988,14 +945,12 @@ def test_overlay_of_a_part_draws_it_in_its_own_frame_beside_an_instance_of_its_n
     assert found == [] and columns == [80 - 1, 120 + 1], (found, columns)  # x -20..20, 1 px wide
 
 
-def test_overlay_of_an_instance_draws_it_where_the_assembly_places_it(proj_dir):
-    found, columns = _named_overlay(proj_dir, instance="link")
+@pytest.mark.parametrize(
+    "target", [{"instance": "link"}, {"part": "assembly"}], ids=["instance", "assembly"]
+)
+def test_overlay_of_an_instance_draws_it_where_the_assembly_places_it(proj_dir, target):
+    found, columns = _named_overlay(proj_dir, **target)
     assert found == [] and columns == [180 - 1, 220 + 1], (found, columns)  # x 80..120
-
-
-def test_guard_overlay_of_the_assembly_draws_each_instance_where_it_is_placed(proj_dir):
-    found, columns = _named_overlay(proj_dir, part="assembly")
-    assert found == [] and columns == [180 - 1, 220 + 1], (found, columns)
 
 
 @pytest.mark.parametrize(
@@ -1325,17 +1280,12 @@ def _repeat(root: Path, eid: str, **fields) -> None:
 
 
 def test_earlier_item_under_a_repeated_id_still_has_its_quote_checked(proj_dir):
+    # And so does the later one.
     _evidence("pitch", quote="spaced 31 mm apart")(proj_dir, None)
-    _repeat(proj_dir, "pitch", quote="spaced 30 mm apart")
+    _repeat(proj_dir, "pitch", quote="spaced 32 mm apart")
     assert findings(proj_dir, "quote-not-found") == [
-        "pitch: quote not found in paper: 'spaced 31 mm apart'"
-    ]
-
-
-def test_guard_later_item_under_a_repeated_id_has_its_quote_checked(proj_dir):
-    _repeat(proj_dir, "pitch", quote="spaced 31 mm apart")
-    assert findings(proj_dir, "quote-not-found") == [
-        "pitch: quote not found in paper: 'spaced 31 mm apart'"
+        "pitch: quote not found in paper: 'spaced 31 mm apart'",
+        "pitch: quote not found in paper: 'spaced 32 mm apart'",
     ]
 
 
@@ -1345,14 +1295,11 @@ def _repeat_link_as_context(root: Path) -> None:
     _repeat(root, "T1-link", **context, reason="r")
 
 
-def test_earlier_item_under_a_repeated_id_still_covers_its_stated_quantity(proj_dir):
-    _repeat_link_as_context(proj_dir)
-    assert findings(proj_dir, "coverage") == []
-
-
 def test_report_lists_every_item_under_a_repeated_id(proj_dir):
     _repeat_link_as_context(proj_dir)
-    verify(proj_dir)
+    _, report = verify(proj_dir)
+    # The earlier item still covers its stated quantity.
+    assert "coverage" not in [f["rule"] for f in report["findings"]]
     rows = (proj_dir / "build" / "report.md").read_text().splitlines()
     listed = [row for row in rows if row.startswith("| T1-link |")]
     assert [row.split(" | ")[-1] for row in listed] == [
@@ -1420,23 +1367,16 @@ def test_overlay_citing_a_repeated_evidence_id_is_scaled_by_neither_item(proj_di
 def test_check_citing_a_repeated_evidence_id_compares_with_neither_item(proj_dir, tmp_path):
     _pitch_proposed(proj_dir, tmp_path)
     _repeat(proj_dir, "pitch", quote="Link 40×8×5", values={"pitch": 40})
-    assert set(_by_id(verify(proj_dir)[1])) == {"env.L", "env.H", "env.W", "clear"}
+    code, report = verify(proj_dir)
+    assert code == 1 and "model-build" not in [f["rule"] for f in report["findings"]]
+    checks = _by_id(report)
+    assert set(checks) == {"env.L", "env.H", "env.W", "clear"}
+    assert all(c["ok"] for c in checks.values())
 
 
 def test_guard_value_cited_by_a_repeated_evidence_id_is_used_on_both_items(proj_dir):
     _repeat(proj_dir, "pitch")
     assert findings(proj_dir, "evidence-unused") == []
-
-
-def test_guard_run_on_a_ledger_with_a_repeated_evidence_id_builds_and_is_not_verified(
-    proj_dir, tmp_path
-):
-    _pitch_proposed(proj_dir, tmp_path)
-    _repeat(proj_dir, "pitch")
-    code, report = verify(proj_dir)
-    assert code == 1 and report["status"] == "NOT VERIFIED"
-    assert "model-build" not in [f["rule"] for f in report["findings"]]
-    assert all(_by_id(report)[cid]["ok"] for cid in ("env.L", "env.H", "env.W", "clear"))
 
 
 def _rename_checks(root: Path, first, second) -> None:
@@ -1502,6 +1442,9 @@ def test_derived_expr_syntax_error_is_a_finding_and_other_params_still_evaluate(
     messages = [f["message"] for f in report["findings"] if f["rule"] == "param-derived"]
     assert len(messages) == 1 and messages[0].startswith("param broken: expr is not valid")
     assert report["params"]["half_pitch"]["value"] == 15
+    # broken has no value and model.py never reads it, so the model builds and its checks pass.
+    assert "model-build" not in [f["rule"] for f in report["findings"]]
+    assert report["checks"] and all(c["ok"] for c in report["checks"])
 
 
 def _unresolved_pitch(root: Path) -> None:
@@ -1553,13 +1496,6 @@ def test_model_failing_inside_a_library_names_the_model_py_line_that_called_it(p
         "model.build failed: JSONDecodeError: Expecting property name enclosed in double quotes:"
         " line 1 column 2 (char 1) (model.py line 6: json.loads('{'))"
     ]
-
-
-def test_guard_model_never_reading_a_param_without_a_value_builds_and_its_checks_run(proj_dir):
-    _half_without_a_value(proj_dir)
-    _, report = verify(proj_dir)
-    assert "model-build" not in [f["rule"] for f in report["findings"]]
-    assert report["checks"] and all(c["ok"] for c in report["checks"])
 
 
 def test_derived_params_through_a_chain_each_name_their_direct_input_as_having_no_value(proj_dir):
