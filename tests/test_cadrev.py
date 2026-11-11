@@ -3482,7 +3482,7 @@ def test_guard_root_readme_shows_the_status_the_example_readme_documents():
 
 
 def test_guard_changelog_heads_with_the_manifests_version_and_names_each_example_with_its_status():
-    repo = EXAMPLE.parents[1]
+    repo = REPO
     versions = {
         json.loads((repo / "plugin" / manifest / "plugin.json").read_text())["version"]
         for manifest in (".claude-plugin", ".codex-plugin")
@@ -3495,8 +3495,9 @@ def test_guard_changelog_heads_with_the_manifests_version_and_names_each_example
     for example in sorted(p for p in (repo / "examples").iterdir() if p.is_dir()):
         status = re.search(r"^Expected status: (`.+`)$", (example / "README.md").read_text(), re.M)
         assert status, f"{example.name}'s README states no expected status"
-        assert f"`examples/{example.name}`" in latest and status[1] in latest, (
-            f"the entry names no examples/{example.name} with its expected status"
+        lines = [line for line in latest.splitlines() if f"`examples/{example.name}`" in line]
+        assert any(status[1] in line for line in lines), (
+            f"no line of the entry names examples/{example.name} with its expected status"
         )
 
 

@@ -32,4 +32,4 @@ One small example shows each kind of evidence, and four full reconstructions wer
 
 ### Requirements
 
-The CLI runs locally through [uv](https://docs.astral.sh/uv/) on Python 3.10 to 3.13. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute) at the versions in the shipped lockfile, so it needs network access then.
+The CLI runs locally through [uv](https://docs.astral.sh/uv/) on Python 3.10 to 3.13. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute) at the versions in the shipped lockfile, so it needs network access then. Under Codex's `workspace-write` sandbox, allowing network is not enough: `cadrev` also writes uv's cache (`~/.cache/uv`), the plugin's own `tool/.venv`, and Matplotlib's and fontconfig's caches, each outside the workspace, so each needs `--add-dir` or a redirect (`MPLCONFIGDIR`, `XDG_CACHE_HOME`).

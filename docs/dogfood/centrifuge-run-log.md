@@ -41,7 +41,14 @@ The fan and screws are purchased parts with no released body. The STEP files' "S
 
 ## Release gate: runs 27 and 28
 
-Issue #160's gate for v0.1.0: two fresh agents, each briefed with [brief.md](brief.md)'s Centrifuge entry word for word but for where the skill lives. Each installed the skill as a stranger does, from the marketplace on GitHub at `46308e9` (main, after #157, #158, #159 and #177), not from a checkout. The brief's line "Use the skill at `<checkout>/…/SKILL.md`" became "Use the cad-reverse-engineer skill, which this session has installed from its plugin marketplace as a stranger installs it (`<the install commands below>`)", and "Read nothing else under that checkout" became "Read nothing else of the plugin's install: not its `tool/` source, only SKILL.md and its `references/`. Read nothing of any checkout of the cad-reverse-engineer repository." Neither run's tool calls read outside its brief.
+Issue #160's gate for v0.1.0: two fresh agents, each briefed with [brief.md](brief.md)'s Centrifuge entry word for word, with two lines changed so that each installed the skill as a stranger does, from the marketplace on GitHub at `46308e9` (main, after #157, #158, #159 and #177), not from a checkout:
+
+| The brief's line | The gate's line |
+|---|---|
+| Use the skill at `<checkout>/plugin/skills/cad-reverse-engineer/SKILL.md`: read it and follow it, with its `references/`. | Use the cad-reverse-engineer skill, which this session has installed from its plugin marketplace as a stranger installs it (the install commands below): invoke it, read its SKILL.md and follow it, with its `references/`. |
+| Read nothing else under that checkout: not `examples/` …, not the tool's source or tests, not `docs/`, not `.scratch/`. | Read nothing else of the plugin's install: not its `tool/` source, only SKILL.md and its `references/`. Read nothing of any checkout of the cad-reverse-engineer repository. |
+
+Neither run's tool calls read outside its brief.
 
 ### Run 27: Claude Code
 
@@ -60,14 +67,14 @@ claude plugin install --scope local cad-reverse-engineer@cad-reverse-engineer
 
 **Released bodies.** All twelve STEP files registered, no STL. Shape-checked: body (0.0012 at `tol` 0.005), bottom plate (0.00035), rotor (0.0026 at 0.005). Skipped with a reason: the compatibility body and the three other rotors (variants), both fit testers, both arrow inlays (the engraving is built), both tube adapters (the rotor is unloaded).
 
-**Probes.** 65: 40 of the body, 8 of the plate, 17 of the rotor, each feeding a source param checked by its own `c-*` check; the rotor's Ø32.5 bore probe is context, restating the quote. Every stated diameter (Ø32.5 hub, the DC socket's 5.5/2.1, M3, the 80 mm fan) has a check; the lid's 116 is not modelled, the lid being off. No conflicts recorded: the 36.6 mm PCR rotor's "32.5 mm hub" is read as a copy error in a variant not built.
+**Probes.** 66: 40 of the body, 8 of the plate, 18 of the rotor. 65 each feed a source param checked by its own `c-*` check; the rotor's Ø32.5 bore probe is context, restating the quote. Every stated diameter (Ø32.5 hub, the DC socket's 5.5/2.1, M3, the 80 mm fan) has a check; the lid's 116 is not modelled, the lid being off. No conflicts recorded: the 36.6 mm PCR rotor's "32.5 mm hub" is read as a copy error in a variant not built.
 
 | # | Trip | Kind | Fix |
 |---|---|---|---|
 | 1 | `cadrev init .` failed with ". is not empty": the directory held only the `.claude/` the local-scope install wrote. The run initialised in its scratchpad and copied the files in. | ticket C | *unconfirmed* beyond the run: whether `init` should accept a directory holding only dot-directories an agent harness writes. A user-scope install writes none. |
-| 2 | The coverage sweep listed Table 2's `13x13x10`, whose unit (cm) is printed only in the column heading, so it reads as 13 mm. The run ledgered it as context with no values. | ticket C | Run 10 trip 2 did the same by hand, and run 28 trip 12 again: a table cell's unit given in its heading is not read. |
+| 2 | The coverage sweep listed Table 2's `13x13x10`, whose unit (cm) is printed only in the column heading, so it reads as 13 mm. The run ledgered it as context with no values. | ticket C | Run 10 trip 2 did the same by hand, and run 28 trip 7 again: a table cell's unit given in its heading is not read. |
 | 3 | A probe restating a figure reading (`P-body-env` and `F-body-size`, both 130/34) raised no finding, where a probe restating a quote is context. The run kept both in scope. | ticket C | *unconfirmed*: whether a probe that restates a figure reading should be context, as one restating a quote is. |
-| 4 | Each of the 64 probe-fed params needed its own check repeating the probe on the model; `gen_ledger.py` generated them. | duplicate | Run 26 trip 8, its ticket B. |
+| 4 | Each of the 65 probe-fed params needed its own check repeating the probe on the model; `gen_ledger.py` generated them. | duplicate | Run 26 trip 8, its ticket B. |
 | 5 | Probes recorded at 3 decimals failed the shape checks by 0.0012 and 0.0026; the run set `tol: 0.005` on the body and rotor. | duplicate | #119 (v0.2), as run 10 trip 5. |
 | 6 | Fig. 8's labels were unreadable at native size; the run re-cropped with `--zoom 4`, which `cadrev crop --help` gives and SKILL.md does not. | ticket C | SKILL.md step 3's crop instruction does not say a small label is cropped with `--zoom`. |
 | 7 | The run modelled every part before its first build, not following the tracer-part order. | no change | The run's own departure from SKILL.md, which no rule can see. |
@@ -113,3 +120,5 @@ Run as `codex exec --sandbox workspace-write -c sandbox_workspace_write.network_
 - #119 holds run 27 trip 5 and run 28 trip 6.
 
 **Status against the example's.** Both runs end where run 10 did before review: VERIFIED PENDING REVIEW, 0 errors, 0 warnings, each with Fig. 8's "130.0 x 130.0 x 34.0 mm" among its readings. `examples/centrifuge`'s VERIFIED comes from a named reviewer confirming that reading, which a run cannot do.
+
+**The gate is not yet passed on Codex.** Run 28 reached its status only with `--add-dir ~/.cache/uv`, which the README does not give, and with a `CODEX_HOME` the sandbox can write, which a stranger's `~/.codex` is not. Codex's gate stays open until ticket A lands and a rerun from the marketplace follows only what the README then says.
