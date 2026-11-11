@@ -1054,7 +1054,8 @@ def _on_cycle(name: str, inputs: dict[str, set[str]]) -> bool:
 
 
 def resolve_params(p: Project) -> None:
-    """Fill p.values, enforcing each basis's obligations."""
+    """Fill p.values, enforcing each basis's obligations, and judge p.resolution from the checks
+    alone, for the build to narrow."""
     pending = dict(p.params)
     resolution = p.resolution = resolution_params(p)
     for name, spec in p.params.items():
@@ -1409,8 +1410,8 @@ def check_params(p: Project) -> set[str]:
 
 
 def resolution_params(p: Project) -> set[str]:
-    """The params the checks read only as a sweep's steps; the build leaves out those the model
-    reads too, and sets the rest as Project.resolution."""
+    """The params the checks read only as a sweep's steps: Project.resolution until the build
+    leaves out those the model reads too."""
     steps = {n for c in p.checks for n in _sweep_steps(c) if n in p.params}
     return steps - {n for c in p.checks for n in params_read_by(p, c, steps=False)}
 

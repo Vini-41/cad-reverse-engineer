@@ -102,7 +102,7 @@ def waiting(p: Project) -> dict | None:
     }
 
 
-def stated_values_wait(p: Project) -> str:
+def waiting_clause(p: Project) -> str:
     """How many stated values a known-first project leaves waiting, as a clause: "1 stated value
     waits"."""
     n = len(unused_values(p))
@@ -363,9 +363,8 @@ def write(
     if waits is not None:
         n = len(waits["gaps"])
         md += [
-            "**Known first**: the model holds only what the sources settle; "
-            f"{stated_values_wait(p)}, with {n} gap{'s' * (n != 1)} no param names, "
-            "listed under Waiting.",
+            f"**Known first**: {waiting_clause(p)}, with {n} gap{'s' * (n != 1)} no param "
+            "names, listed under Waiting.",
             "",
         ]
     md += _motion_line(moves)
