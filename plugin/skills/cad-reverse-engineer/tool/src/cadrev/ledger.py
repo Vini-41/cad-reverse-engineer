@@ -179,8 +179,12 @@ def _probe_values(p: Project, e: dict, body: str) -> dict[str, float]:
         if "at" not in e:
             raise Fault("a diameter probe names the datum it is taken at in at")
         at, point = str(e["at"]), p.datum_on(e["at"], body)
-        circle = p.derived_datum(at)[2] if isinstance(p.datums.get(at), dict) else None
-        return {key: circle or released.diameter_at(solid, point, p.length_tol, at)}
+        if not isinstance(p.datums.get(at), dict):
+            return {key: released.diameter_at(solid, point, p.length_tol, at)}
+        diameter = p.derived_datum(at)[2]
+        if diameter is None:
+            raise Fault(f"{at} is a midpoint; take a diameter at a circle or on a cylindrical face")
+        return {key: diameter}
     between = e.get("between") or []
     points = [p.datum_on(name, body) for name in between]
     if kind == "distance":
@@ -236,22 +240,27 @@ def _probe(p: Project, e: dict) -> None:
 
 def _released_datums(p: Project) -> None:
     """[datum-off-solid] for each datum declared on released geometry that lies on no body, each
-    derived datum its inputs give no point, and each input of one that lies on no triangle corner
-    of an STL."""
+    derived datum the datums it names give no point, and each datum a derived one is worked out
+    from that lies on no triangle corner of an STL."""
     unread = p.unread_geometry
     sheets = [
         sid
         for sid, s in p.sources.items()
         if s.get("kind") == "geometry" and released.is_sheet(p.source_path(sid))
     ]
-    inputs = {
-        str(i) for d in p.datums.values() if isinstance(d, dict) for f in d.values() for i in f
+    # The datums some derived datum is worked out from.
+    deriving = {
+        str(datum)
+        for entry in p.datums.values()
+        if isinstance(entry, dict)
+        for through in entry.values()
+        for datum in through
     }
     for name, point in p.datums.items():
         sheet = next((s for s in sheets if name.startswith(f"{s}.")), None)
-        # A datum is derived on a solid only.
-        derived = isinstance(point, dict)
-        if not (sheet is None if derived else len(point) == (3 if sheet is None else 2)):
+        derived = isinstance(point, dict)  # on a solid only
+        misshapen = sheet is not None if derived else len(point) != (3 if sheet is None else 2)
+        if misshapen:
             shape = "[x, y, z]" if sheet is None else f"[x, y] on cut file {sheet}"
             p.error("schema", f"evidence.yaml datums.{name}: must be {shape}, not {point}")
         elif released.source_of(name.partition(".")[0]) in unread or sheet in unread:
@@ -273,7 +282,7 @@ def _released_datums(p: Project) -> None:
         elif (gap := released.off_solid(p.bodies[named[0]], named[1], p.length_tol)) is not None:
             p.error("datum-off-solid", f"datum {name} of body {named[0]}: {released.off(gap)}")
         elif (
-            name in inputs
+            name in deriving
             and released.is_mesh(p.source_path(released.source_of(named[0])))
             and (gap := released.off_corner(p.bodies[named[0]], named[1], p.length_tol))
         ):

@@ -546,6 +546,10 @@ LINK_FINDINGS = {
     "evidence-anchor: a diameter probe on no cylindrical face": _probed(
         probe="diameter", at="link_step.a", values={"v": 3}
     ),
+    "evidence-anchor: a diameter probe at a mid datum": lambda r, t: (
+        probed(r, t, probe="diameter", at="link_step.m", values={"v": 3}),
+        add(r, datums={"link_step.m": {"mid": ["link_step.a", "link_step.b"]}}),
+    ),
     # Overlays.
     "overlay-config: a view that is none": _overlay(view="side"),
     "overlay-config: a part that is none": _overlay(part="pin"),
@@ -882,10 +886,6 @@ LINK_DAMAGE = {
         r, datums={"nowhere.c": {"circle": ["nowhere.c"] * 3}}
     ),
     "derived datum on a cut file": _sheet(lambda r, t: add(r, datums={"sheet.c": {"mid": []}})),
-    "diameter probe at a mid datum": lambda r, t: (
-        probed(r, t, probe="diameter", at="link_step.m", values={"v": 3}),
-        add(r, datums={"link_step.m": {"mid": ["link_step.a", "link_step.b"]}}),
-    ),
     "instance named by a number": _model('"link_1":', '1: ("link", Location()), "link_1":'),
 }
 MECH_DAMAGE = {

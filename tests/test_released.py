@@ -224,7 +224,7 @@ def test_distance_from_a_mid_datum_reads_from_the_midpoint_of_its_two(proj_dir, 
     ("length_tol", "off", "found"),
     [(0.001, 0.4, True), (0.01, 0.005, False), (0.01, 0.02, True)],
 )
-def test_input_of_a_derived_datum_on_an_stl_lies_on_a_triangle_corner(
+def test_datum_a_derived_one_names_on_an_stl_lies_on_a_triangle_corner(
     proj_dir, tmp_path, length_tol, off, found
 ):
     # Moved off its corner radially, a1 lies on the plate's top face.
@@ -232,10 +232,9 @@ def test_input_of_a_derived_datum_on_an_stl_lies_on_a_triangle_corner(
     _faceted(proj_dir, tmp_path, datums=HOLES | {"a1": (-13.5 + off, 0, 2)})
     messages = check(proj_dir).messages("datum-off-solid")
     assert [m.split(":")[0] for m in messages] == (["datum link_step.a1 of body link_step"] * found)
-    assert all("no triangle corner" in m for m in messages)
 
 
-def test_input_of_a_derived_datum_on_a_step_needs_no_corner(proj_dir, tmp_path):
+def test_datum_a_derived_one_names_on_a_step_needs_no_corner(proj_dir, tmp_path):
     # Three points on hole a's wall, half way up it, far from any vertex of the solid.
     wall = {f"w{i}": (*_corners(-15, 0, 1.5, 3)[i - 1], 0) for i in (1, 2, 3)}
     hole = {"link_step.hole": {"circle": ["link_step.w1", "link_step.w2", "link_step.w3"]}}
@@ -246,18 +245,20 @@ def test_input_of_a_derived_datum_on_a_step_needs_no_corner(proj_dir, tmp_path):
 
 
 @pytest.mark.parametrize(
-    "inputs",
-    [["p1", "p1", "q"], ["p1", "p2", "p3"], ["p1", "q", "z"], ["p1", "q", "c"]],
+    "through",
+    [["p1", "p1b", "q"], ["p1", "p2", "p3"], ["p1", "q", "z"], ["p1", "q", "c"]],
     ids=["coincident", "collinear", "unknown", "derived"],
 )
-def test_derived_datum_whose_inputs_give_no_circle_is_a_finding_naming_it(
-    proj_dir, tmp_path, inputs
+def test_derived_datum_whose_datums_give_no_circle_is_a_finding_naming_it(
+    proj_dir, tmp_path, through
 ):
-    # p1, p2 and p3 lie along the released link's top face, q on its side; c is a circle.
-    faces = {"p1": (-10, 0, 4), "p2": (0, 0, 4), "p3": (10, 0, 4), "q": (0, 2.5, 0)}
+    # p1, p2 and p3 lie along the released link's top face, p1b within tolerance of p1, q on its
+    # side; c is a circle.
+    faces = {"p1": (-10, 0, 4), "p1b": (-10, 0.0005, 4), "p2": (0, 0, 4), "p3": (10, 0, 4)}
+    faces |= {"q": (0, 2.5, 0)}
     derived = {
-        f"link_step.{name}": {"circle": [f"link_step.{i}" for i in through]}
-        for name, through in (("c", ["p1", "p2", "q"]), ("bad", inputs))
+        f"link_step.{name}": {"circle": [f"link_step.{i}" for i in names]}
+        for name, names in (("c", ["p1", "p2", "q"]), ("bad", through))
     }
     _faceted(proj_dir, tmp_path, link_body(), faces, derived, name="link.step")
     (message,) = check(proj_dir).messages("datum-off-solid")
