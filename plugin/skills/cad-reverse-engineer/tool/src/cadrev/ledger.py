@@ -178,11 +178,12 @@ def _probe_values(p: Project, e: dict, body: str) -> dict[str, float]:
     if kind == "diameter":
         if "at" not in e:
             raise Fault("a diameter probe names the datum it is taken at in at")
-        at = str(e["at"])
-        if not isinstance(p.datums.get(at), dict) and released.at_point(body):
+        at, entry = str(e["at"]), p.datums.get(str(e["at"]))
+        derived = isinstance(entry, dict)
+        if released.at_point(body) and not (isinstance(entry, dict) and "circle" in entry):
             raise Fault(f"a diameter of a cut file's region is taken at a circle datum, not {at}")
         point = p.datum_on(at, body)
-        if not isinstance(p.datums.get(at), dict):
+        if not derived:
             return {key: released.diameter_at(shape, point, p.length_tol, at)}
         diameter = p.derived_datum(at)[2]
         if diameter is None:
@@ -273,17 +274,15 @@ def _released_datums(p: Project) -> None:
             with p.filing("datum-off-solid", f"datum {name}: "):
                 p.derived_datum(name)
         elif sheet is not None:
-            found = p.regions[sheet]
-            holding = released.outlines_at(found, (point[0], point[1]), p.length_tol)
+            found, at = p.regions[sheet], (point[0], point[1])
+            holding = released.outlines_at(found, at, p.length_tol)
             if not holding:
                 p.error(
                     "datum-off-solid",
                     f"datum {name} of cut file {sheet}: lies inside no region's outer contour",
                 )
             elif name in deriving and (
-                gap := released.off_edge(
-                    [found[i] for i in holding], (point[0], point[1]), p.length_tol
-                )
+                gap := released.off_edge([found[i] for i in holding], at, p.length_tol)
             ):
                 p.error(
                     "datum-off-solid",

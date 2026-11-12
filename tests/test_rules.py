@@ -151,6 +151,23 @@ def _probed(**entry):
     return lambda r, t: probed(r, t, **entry)
 
 
+# A ring, its 30 mm hole about (20, 20), and an island cut inside the hole; and a circle datum
+# through three points of the ring's hole, whose centre lies on the island.
+ISLAND = """\
+<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 100 100">
+  <path fill="black" fill-rule="evenodd" d="M 0 0 H 40 V 40 H 0 Z
+    M 5 20 a 15 15 0 1 0 30 0 a 15 15 0 1 0 -30 0 Z"/>
+  <path fill="black" d="M 15 15 h 10 v 10 h -10 Z"/>
+</svg>
+"""
+RING_BORE = {
+    "ring.r1": [5, 20],
+    "ring.r2": [20, 5],
+    "ring.r3": [35, 20],
+    "ring.bore": {"circle": ["ring.r1", "ring.r2", "ring.r3"]},
+}
+
+
 def _sheet(*then, **kwargs):
     return lambda r, t: (sheet(r, t, **kwargs), [step(r, t) for step in then])
 
@@ -390,6 +407,12 @@ LINK_FINDINGS = {
         lambda r, t: add(
             r, datums={"sheet.x": [30, 42.5], "sheet.m": {"mid": ["sheet.x", "sheet.side"]}}
         )
+    ),
+    "datum-off-solid: a probe's derived sheet datum off its region's edge": lambda r, t: (
+        add_source(r, t, "ring.svg", ISLAND, "ring", "geometry"),
+        add(r, datums=RING_BORE),
+        add(r, evidence=SHEET_PROBE | {"source": "ring", "body": "ring@20,20", "between": None}),
+        change(r, "evidence", "P-s", probe="diameter", at="ring.bore"),
     ),
     "datum-off-solid: a cut file's datum outside every region": _sheet(
         lambda r, t: add(r, datums="sheet.far: [1, 1]")
