@@ -91,6 +91,25 @@ def test_base_at_head_with_the_tool_source_unchanged_exits_3(tmp_path):
     assert "no fix to compare" in result.stderr
 
 
+def test_a_change_only_to_tests_exits_3_though_its_new_test_is_green_and_no_guard(tmp_path):
+    # A refactor of the tests: a new name green on BASE is not a misnamed guard, as there is no fix.
+    root = repo(tmp_path, dependencies='"pytest"')
+    test = "\n\ndef test_double_of_one():\n    assert double(1) != 0\n"
+    commit(root, {"tests/test_double.py": f"{BASE_TESTS}{test}"})
+    result = red_on_main(root)
+    assert result.returncode == 3
+    assert "the tool source and launcher are unchanged since HEAD~1" in result.stderr
+
+
+def test_a_new_untracked_file_in_the_tool_source_counts_as_a_fix(tmp_path):
+    root = repo(tmp_path, dependencies='"pytest"')
+    commit(root, {"tests/test_double.py": f"{BASE_TESTS}\n\ndef test_guard_one():\n    pass\n"})
+    (root / TOOL / "src" / "half.py").write_text("def half(x):\n    return x / 2\n")
+    result = red_on_main(root)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "0 red (holes), 1 green" in result.stdout
+
+
 def test_a_fix_with_no_new_or_changed_test_exits_3(tmp_path):
     root = repo(tmp_path, dependencies='"pytest"')
     commit(root, {f"{TOOL}/src/double.py": "def double(x):\n    return x + x\n"})
@@ -127,9 +146,10 @@ def test_guard_a_new_green_test_without_the_guard_name_exits_1(tmp_path):
     commit(
         root,
         {
+            f"{TOOL}/src/double.py": "def double(x):\n    return x * 2\n",
             "tests/test_double.py": (
                 f"{BASE_TESTS}\n\ndef test_double_of_one():\n    assert double(1) != 0\n"
-            )
+            ),
         },
     )
     result = red_on_main(root)
@@ -172,9 +192,10 @@ def test_branch_cut_from_another_branch_compares_against_where_it_was_created(tm
     commit(
         root,
         {
+            f"{TOOL}/src/double.py": "def double(x):\n    return x * 2\n",
             "tests/test_double.py": (
                 f"{BASE_TESTS}\n\ndef test_guard_double_of_two():\n    assert double(2) == 4\n"
-            )
+            ),
         },
     )
     result = red_on_main(root, base=None)
@@ -190,7 +211,7 @@ def test_guard_branch_that_merged_main_since_it_was_created_compares_against_mai
     git(root, "merge", "-q", "--no-ff", "-m", "merge main", "main")
     result = red_on_main(root, base=None)
     assert result.returncode == 3, result.stdout + result.stderr
-    assert "no test function is new or changed since merge-base with main" in result.stderr
+    assert "merge-base with main" in result.stderr
 
 
 def test_pushed_branch_compares_against_where_it_was_created_not_its_upstream(tmp_path):
