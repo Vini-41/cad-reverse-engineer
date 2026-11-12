@@ -1095,6 +1095,7 @@ def test_measured_param_naming_a_gap_clears_gap_unused_and_is_listed_under_it(pr
     add_gap(proj_dir, "G2")
     add_measured(proj_dir)
     assert findings(proj_dir, "gap-unused") == ["gap G2: no param names it"]
+    assert findings(proj_dir, "param-gap") == []  # a measured param needs no gap
     edit(proj_dir, "params.yaml", lambda d: d["params"]["foot_w"].update(gap="G2"))
     code, report = verify(proj_dir)
     assert code == 0
@@ -1368,7 +1369,8 @@ def test_check_citing_a_repeated_evidence_id_compares_with_neither_item(proj_dir
     _pitch_proposed(proj_dir, tmp_path)
     _repeat(proj_dir, "pitch", quote="Link 40×8×5", values={"pitch": 40})
     code, report = verify(proj_dir)
-    assert code == 1 and "model-build" not in [f["rule"] for f in report["findings"]]
+    assert (code, report["status"]) == (1, "NOT VERIFIED")
+    assert "model-build" not in [f["rule"] for f in report["findings"]]
     checks = _by_id(report)
     assert set(checks) == {"env.L", "env.H", "env.W", "clear"}
     assert all(c["ok"] for c in checks.values())
@@ -2715,6 +2717,11 @@ def test_report_lists_every_length_check_under_a_project_wide_tolerance(proj_dir
         {"check": "env", "kind": "bbox", "tol": 0.01},
         {"check": "pitch", "kind": "distance", "tol": 0.01},
     ]
+
+
+def test_report_lists_an_interference_check_under_a_project_wide_tolerance(proj_dir):
+    edit(proj_dir, "project.yaml", lambda d: d.update(tolerance={"length": 0.01}))
+    _, report = verify(proj_dir)
     assert [o["check"] for o in report["overlap_limits"]] == ["clear"]
     assert report["overlap_limits"][0]["max_volume"] == pytest.approx(1e-6)
     assert "| clear | 1e-06 |" in (proj_dir / "build" / "report.md").read_text()
@@ -2846,17 +2853,16 @@ def _model_reads(root: Path, tmp_path: Path, text: str) -> None:
     edit(root, "params.yaml", lambda d: d["params"]["link_L"].update({"from": "N1.v"}))
 
 
-@pytest.mark.parametrize("unit", ["g"])
 def test_param_the_model_reads_printed_in_neither_a_length_nor_an_angle_is_a_finding(
-    proj_dir, tmp_path, unit
+    proj_dir, tmp_path
 ):
-    _model_reads(proj_dir, tmp_path, f"The link reads 40 {unit} on the gauge.")
+    _model_reads(proj_dir, tmp_path, "The link reads 40 g on the gauge.")
     messages = findings(proj_dir, "unit-quantity")
     assert len(messages) == 1 and messages[0].startswith("N1.v") and "param link_L" in messages[0]
 
 
-@pytest.mark.parametrize("unit", ["mm", "deg", "", "teeth"])
-def test_guard_param_the_model_reads_printed_in_a_length_an_angle_or_no_unit(
+@pytest.mark.parametrize("unit", ["mm", "deg", "teeth", ""])
+def test_guard_param_the_model_reads_printed_in_a_length_an_angle_a_count_or_no_unit(
     proj_dir, tmp_path, unit
 ):
     _model_reads(proj_dir, tmp_path, f"The link reads 40 {unit} on the gauge.")
@@ -3001,7 +3007,7 @@ NOT_SWEPT = {
     "T=0s": "(A) T=0s, BLCM in the initial state.",
     "t = 2 s": "At t = 2 s the toes close.",
     "n.a.": "Price (EUR) 500 n.a. 20",
-    "no quantity stated": (
+    "2 in each leg": (
         "Fig. 2 shows 2 in each leg of L14 at 30 °C beside an M3a cell (doi:10.1088/ada2cc)."
     ),
 }
@@ -3055,8 +3061,7 @@ def test_coverage_lists_the_stated_quantities_each_sentence_states(
     assert swept(proj_dir, tmp_path, capsys, sentence) == STATED[sentence]
 
 
-# Each one's near miss, #98's Ø6 mm, and numbers that state no quantity (no unit, Ø inside a word, a
-# number word or count noun with no unit, a product across a spaced *): what they list stays so.
+# Each one's near miss, and #98's Ø6 mm: the stated quantities they list stay listed.
 STILL_STATED = {
     "The hole is Ø6 mm.": ["ø6 mm"],
     "The pin is 1.000 in ± 0.005 in long.": ["1.000 in", "0.005 in"],
@@ -3070,13 +3075,26 @@ STILL_STATED = {
     "a plate 5 in wide": ["5 in"],
     "it ran for 1:30 min": ["30 min"],
     "4:1 in total": [],
-    "Price 3500* 500 g here.": ["500 g"],
+}
+
+
+# Numbers that state no quantity: with no unit, a Ø inside a word, a number word or count noun with
+# no unit, a product across a spaced *. What each sentence lists.
+UNSTATED = {
     "The part is 32.5 here.": [],
     "The part is 3 here.": [],
     "Built at Ørsted 3 and Søborg 2.": [],
     "Eight tension springs hold one of the links.": [],
     "Its 3 planets mesh with a ring; SSPG [25, 65, 155, 0.5, 3] lists each.": [],
+    "Price 3500* 500 g here.": ["500 g"],
 }
+
+
+@pytest.mark.parametrize("sentence", sorted(UNSTATED))
+def test_guard_coverage_lists_no_number_that_states_no_quantity(
+    proj_dir, tmp_path, capsys, sentence
+):
+    assert swept(proj_dir, tmp_path, capsys, sentence) == UNSTATED[sentence]
 
 
 @pytest.mark.parametrize("sentence", sorted(STILL_STATED))
@@ -4099,9 +4117,8 @@ def test_count_check_fails_when_the_assembly_places_one_more(proj_dir, tmp_path)
     ]
 
 
-@pytest.mark.parametrize("stated", ["3 mm"])
-def test_count_printed_in_a_unit_of_another_quantity_is_unit_quantity(proj_dir, tmp_path, stated):
-    report = _counted_links(proj_dir, tmp_path, placed=3, stated=stated)
+def test_count_printed_in_a_unit_of_another_quantity_is_unit_quantity(proj_dir, tmp_path):
+    report = _counted_links(proj_dir, tmp_path, placed=3, stated="3 mm")
     messages = [f["message"] for f in report["findings"] if f["rule"] == "unit-quantity"]
     assert len(messages) == 1
     assert messages[0].startswith("N1.n is printed in ")
@@ -7566,7 +7583,8 @@ def test_angle_check_with_from_compares_the_change_in_angle_between_its_two_pose
     assert result["measured"].endswith("° change at ground_1.a between ground_1.d and crank_1.d")
 
 
-# A from pose naming no joint, or a bare number, on each kind that takes one: the same finding.
+# A from pose naming no joint, or a bare number: on a stroke check, and where a distance or angle
+# check takes one, the same finding.
 _FROM_FINDINGS = {
     "unknown-joint": (
         {"heel": "turn"},
@@ -7595,8 +7613,8 @@ def _from_finding(root: Path, tmp_path: Path, kind: str, case: str) -> tuple[str
     return rule, says.format(id=cid, i=i)
 
 
-# The rows of the table each kind raises a finding for only once it takes from; a bare number is
-# [schema] on any check.
+# The rows of the table a distance or angle check raises a finding for only once it takes from; a
+# bare number is [schema] on any check, as checks.yaml's schema declares from once for every kind.
 _FROM_TAKEN = [("distance", "unknown-joint"), ("angle", "unknown-joint")]
 
 
@@ -8071,13 +8089,10 @@ def test_tooth_counts_of_a_planetary_train_are_checked_through_its_derived_ratio
     assert counts <= set(_unchecked(proj_dir))
 
 
-# With a ring of 157 teeth, not 25 + 2 × 65, the planet meshing the ring sits 23 from the sun axis,
-# not 22.5, and the planet axis check fails.
-@pytest.mark.parametrize("ring, orbit_ok", [(155, True), (157, False)], ids=["155", "157"])
 def test_pitch_diameter_and_planet_axis_of_a_planetary_train_match_its_stated_counts(
-    proj_dir, tmp_path, ring, orbit_ok
+    proj_dir, tmp_path
 ):
-    planetary(proj_dir, tmp_path, f"SSPG [25, 65, {ring}, 0.5, 3]")
+    planetary(proj_dir, tmp_path)
     pitch = {"id": "sun-pitch", "kind": "diameter", "at": "sun.p", "expect": "T1.m * T1.z_sun"}
     orbit = {
         "id": "orbit",
@@ -8089,9 +8104,9 @@ def test_pitch_diameter_and_planet_axis_of_a_planetary_train_match_its_stated_co
     for check in (pitch, orbit):
         _append("checks.yaml", "checks", check)(proj_dir, tmp_path)
     code, report = verify(proj_dir)
+    assert code == 0, report["findings"]
     checks = _by_id(report)
-    assert code == (0 if orbit_ok else 1), report["findings"]
-    assert checks["sun-pitch"]["ok"] and checks["orbit"]["ok"] == orbit_ok
+    assert checks["sun-pitch"]["ok"] and checks["orbit"]["ok"]
     # 0.5 × 25 and 0.5 × (25 + 65) / 2.
     expected = (checks["sun-pitch"]["expect"]["value"], checks["orbit"]["expect"]["value"])
     assert expected == (12.5, 22.5)
@@ -8160,6 +8175,23 @@ def test_guard_toothed_sun_pitch_diameter_is_a_distance_across_opposite_flanks(
     assert pitch["ok"], report["findings"]
     assert pitch["expect"]["value"] == pitch_d  # 0.5 × 25 and 0.5 × 24
     assert findings(proj_dir, "datum-off-solid") == []
+
+
+def test_planet_axis_fails_where_the_ring_count_breaks_ring_equals_sun_plus_two_planets(
+    proj_dir, tmp_path
+):
+    # 157 ≠ 25 + 2 × 65: the planet meshing the ring sits 23 from the sun axis, not 22.5.
+    planetary(proj_dir, tmp_path, "SSPG [25, 65, 157, 0.5, 3]")
+    orbit = {
+        "id": "orbit",
+        "kind": "distance",
+        "instances": ["sun_1", "planet_1"],
+        "between": ["sun_1.a", "planet_1.a"],
+        "expect": "T1.m * (T1.z_sun + T1.z_planet) / 2",
+    }
+    write(proj_dir, "checks.yaml", {"checks": [orbit]})
+    code, report = verify(proj_dir)
+    assert code == 1 and not _by_id(report)["orbit"]["ok"]
 
 
 def test_planetary_train_exports_one_joint_equality_per_gear_in_its_chain(proj_dir, tmp_path):
@@ -8504,7 +8536,6 @@ FINDINGS = {
         ],
     ),
     "part-invalid": (_shell("[1:]"), [_shell("")]),
-    # The static project, its part weighed by nothing, is no finding.
     "part-mass": (_unweighed_rocker, [_servo_crank]),
     "quote-not-found": (
         _quote_from("paper.pdf", "spaced 30 mm apart", page=1),
@@ -8758,6 +8789,8 @@ def test_bbox_probe_whose_recorded_value_matches_the_file_passes(proj_dir, tmp_p
     # The quote it restates stays in scope, so link_L rests on it.
     assert report["params"]["link_L"]["value"] == 40
     assert report["params"]["link_L"]["rests_on"] == "source"
+    edit(proj_dir, "evidence.yaml", lambda d: d["evidence"][-1].pop("reason"))
+    assert "evidence-scope" in errors(proj_dir)
 
 
 def test_bbox_probe_off_by_more_than_the_length_tolerance_is_probe_mismatch(proj_dir, tmp_path):
@@ -8777,6 +8810,8 @@ def test_bbox_probe_mismatch_is_raised_without_the_build(proj_dir, tmp_path, cap
 
 def test_param_from_a_probe_takes_its_value_and_rests_on_source(proj_dir, tmp_path):
     probed(proj_dir, tmp_path, axes={"L": "y"}, values={"L": 40}, scope=None, reason=None)
+    # A probe of a value no quote states is in scope: until a param takes it, it is unused.
+    assert "evidence-unused" in errors(proj_dir)
     edit(proj_dir, "params.yaml", lambda d: d["params"]["link_L"].update({"from": "P-link.L"}))
     code, report = verify(proj_dir)
     assert report["params"]["link_L"]["value"] == 40
@@ -9161,19 +9196,18 @@ def test_diameter_check_at_no_datum_of_a_part_is_check_config(proj_dir, tmp_path
 
 # A diameter on a trimmed cylinder (#130): a STEP from another CAD tool can wrap a cylindrical
 # face's surface in a rectangular trim, where build123d reads the face's radius as None. The seat
-# is a radius-5, height-2 cylinder, whole or half, registered as source seat_step and imported as
+# is half of a radius-5, height-2 cylinder, registered as source seat_step and imported as
 # part seat, its datum wall on its cylindrical face.
 
 
-def _seated(root: Path, tmp_path: Path, kind: str) -> dict:
-    """Write the seat (kind full, half, or trimmed: a half whose cylindrical face the file wraps
-    in a RECTANGULAR_TRIMMED_SURFACE), check part seat's diameter at seat.wall against the callout
+def _seated(root: Path, tmp_path: Path, trimmed: bool) -> dict:
+    """Write the seat, trimmed or not (its cylindrical face's surface wrapped in a
+    RECTANGULAR_TRIMMED_SURFACE), check part seat's diameter at seat.wall against the callout
     "Ø 10" and probe seat_step's at seat_step.wall. Returns the check's report."""
     path = tmp_path / "seat.step"
-    arc = 360 if kind == "full" else 180
-    seat = Cylinder(5, 2, arc_size=arc, align=(Align.NONE, Align.NONE, Align.CENTER))
+    seat = Cylinder(5, 2, arc_size=180, align=(Align.NONE, Align.NONE, Align.CENTER))
     export_step(seat, str(path))
-    if kind == "trimmed":
+    if trimmed:
         text = path.read_text()
         (surface,) = re.findall(r"#(\d+) = CYLINDRICAL_SURFACE\(", text)
         trim = max(int(n) for n in re.findall(r"#(\d+) =", text)) + 1
@@ -9221,13 +9255,13 @@ def _seat_probe(report: dict) -> list[tuple[bool, float]]:
 
 
 def test_diameter_check_of_a_trimmed_cylinder_takes_the_radius_under_the_trim(proj_dir, tmp_path):
-    report = _seated(proj_dir, tmp_path, "trimmed")
+    report = _seated(proj_dir, tmp_path, trimmed=True)
     assert _seat_check(report) == [(True, "10 at seat.wall")]
     assert _seat_probe(report) == [(True, pytest.approx(10))]  # and so does a diameter probe
 
 
 def test_guard_diameter_of_an_untrimmed_cylinder_takes_its_radius(proj_dir, tmp_path):
-    report = _seated(proj_dir, tmp_path, "half")
+    report = _seated(proj_dir, tmp_path, trimmed=False)
     assert _seat_check(report) == [(True, "10 at seat.wall")]
     assert _seat_probe(report) == [(True, pytest.approx(10))]
 
