@@ -42,7 +42,7 @@ sources:                 # written by `cadrev source`; keep it the last key
 - `tolerance` is a modelling tolerance, not a manufacturing one. `tolerance.angle` is in degrees whatever `units.angle` says.
 - `cadrev source` with an id already registered refreshes that entry: its file, hash and whatever the command states. That is how a source is restored into a clone or replaced by a new download. A source licensed CC0, CC-BY or CC-BY-SA is un-ignored in the project's `.gitignore`, so it is committed and the project reruns from a clone.
 - **Text sources** are quote-checked and swept: PDF, DOCX, TXT, MD, HTML (read as its rendered text). Save a web datasheet as HTML or TXT to quote it. Video and image files anchor image evidence only.
-- **Geometry sources** (`kind: geometry`) are what the authors released: STEP or STL, read in millimetres and converted to the project's length unit. A **body** is named by its source's id where the file holds one solid, else `<source>#<n>`, the nth solid in file order from 1. Where a part ships as both, register the STEP: an STL holds only flat triangles, so it has no axis for a datum and no cylindrical face for a diameter.
+- **Geometry sources** (`kind: geometry`) are what the authors released: STEP or STL, read in millimetres and converted to the project's length unit. A **body** is named by its source's id where the file holds one solid, else `<source>#<n>`, the nth solid in file order from 1. Where a part ships as both, register the STEP: an STL holds only flat triangles, so it has no axis for a datum and no cylindrical face for a diameter, only a [derived datum](#probes-released-geometry) through its triangle corners.
 - **A cut file** is a laser-cut sheet, an SVG registered as `kind: geometry`. Its bodies are its regions, each an outer contour with the holes inside it, named by a point inside it: `<source>@<x>,<y>` (`plates@30,41`). Points are in the sheet's frame: from the page's top-left corner, x right and y down, at the scale the file declares with every transform applied, in the project's length unit. The coverage findings name each region by such a point, ready to copy.
 
 ## Units come from the quote
@@ -120,14 +120,22 @@ evidence:
      axes: {D: x, H: z}, values: {D: 130, H: 4}}
   - {id: R-bore, source: rotor_step, locator: "rotor, hub bore", probe: diameter,
      at: rotor_step.bore_wall, values: {d: 32.5}}
+  - {id: H-bore, source: hub_stl, locator: "hub, 13-sided bore", probe: diameter,
+     at: hub_stl.bore, values: {d: 5}}
 datums:                        # on released bodies: <body>.<feature>: [x, y, z] in the file's frame
   rotor_step.hub_top: [0, 0, 20]
   rotor_step.hub_bottom: [0, 0, 0]
   rotor_step.bore_wall: [16.25, 0, 10]
+  hub_stl.rim_1: [2.5, 0, 0]          # three triangle corners of the bore's rim
+  hub_stl.rim_5: [-0.8865, 2.3375, 0]
+  hub_stl.rim_9: [-1.8713, -1.6578, 0]
+  hub_stl.bore: {circle: [hub_stl.rim_1, hub_stl.rim_5, hub_stl.rim_9]}
 ```
 
-- `probe` is `bbox` (with `axes`, one per value), `distance` (two datums in `between`, `along` optional), `angle` (three datums, the angle at the middle one, in degrees) or `diameter` (of the cylindrical face the datum `at` lies on). Each reads the body as the check of that kind reads the built model. `body` may be left out where the file holds one solid.
+- `probe` is `bbox` (with `axes`, one per value), `distance` (two datums in `between`, `along` optional), `angle` (three datums, the angle at the middle one, in degrees) or `diameter` (of the circle a circle datum `at` names, else of the cylindrical face the datum `at` lies on). Each reads the body as the check of that kind reads the built model. `body` may be left out where the file holds one solid.
 - A datum lies on its body's solid within `tolerance.length`, as a built part's does ([modeling.md](modeling.md#contract)). A cut file's datum lies on the sheet, named `<source>.<feature>` and given as `[x, y]`, inside a region's outer contour.
+- A **derived datum** on a STEP or STL body is worked out from `[x, y, z]` datums declared on that same body: `{circle: [a, b, c]}` is the circle through three, and `{mid: [a, b]}` the midpoint of two. A `distance` or `angle` probe, or a shape check's pair, reads a circle datum at its centre, and a `diameter` probe at it reads the circle's diameter. The derived point lies in air by design, so only its inputs are held to the solid. A circle's inputs within `tolerance.length` of each other or of one line, or an input that is undeclared, derived or on another body, is `[datum-off-solid]` naming the derived datum.
+- On an STL, each input of a derived datum also lies within `tolerance.length` of a triangle corner, since corners are the points a mesh stores on the true surface; one off every corner is `[datum-off-solid]` naming that input.
 - A probe may set its own `tol`, capped as a check's is. It needs no human confirmation. A param takes its value with `from:` and basis `source`, like a quote's.
 - A probe restating a quote is `context`; one that differs from a quote is a conflict. A probe reads a solid: a cut file's regions are compared by shape checks instead.
 

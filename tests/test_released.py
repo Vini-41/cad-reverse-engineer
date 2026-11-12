@@ -9,6 +9,7 @@ from build123d import Box, Compound, Location, Polygon, Pos, Sphere, export_step
 from conftest import (
     FACE_DATUMS,
     PROBE,
+    REPO,
     SHEET,
     add,
     change,
@@ -120,6 +121,134 @@ def test_probe_recording_another_value_than_its_body_gives_is_a_mismatch(proj_di
     # Within the probe's own tol, which is capped at 5% of each value, it matches.
     change(proj_dir, "evidence", "P-link", tol=0.25)
     assert check(proj_dir).status == "VERIFIED"
+
+
+# Three corners of the 5 mm bore of COMPAct's sun at z 0, as its STL stores them: the bore has 13
+# sides, so no two corners lie opposite each other and the longest chord is 4.9635 (#136).
+SUN_RIM = {
+    "sun.r1": [14.07264518737793, 15.901710510253906, 0],
+    "sun.r2": [15.613487243652344, 14.162459373474121, 0],
+    "sun.r3": [17.920162200927734, 14.442540168762207, 0],
+}
+
+
+def test_diameter_probe_at_a_circle_datum_reads_an_odd_sided_bore_on_an_stl(proj_dir):
+    register(proj_dir, REPO / "examples/compact-sspg/sources/sspg_sun.STL", "sun", "geometry")
+    add(proj_dir, datums=SUN_RIM | {"sun.bore": {"circle": list(SUN_RIM)}})
+    bore = {"id": "P-sun", "source": "sun", "locator": "sun bore", "probe": "diameter"}
+    add(proj_dir, evidence=bore | {"at": "sun.bore", "values": {"d": 5}, "scope": "context"})
+    change(proj_dir, "evidence", "P-sun", reason="the sun is another part")
+    add(proj_dir, skipped={"source": "sun", "body": "sun", "reason": "another part"})
+    run = check(proj_dir)
+    assert run.status == "VERIFIED", run.out
+    (probe,) = run.report["probes"]
+    assert probe["value"] == pytest.approx(5, abs=1e-5) and probe["probe"] == "diameter"
+
+
+def _corners(x: float, y: float, r: float, sides: int, turn: float = 360) -> list:
+    """sides + 1 corners on the arc of radius r about (x, y) from 0 to turn degrees; all sides
+    of them for a whole turn."""
+    steps = [math.radians(turn * k / sides) for k in range(sides + (turn < 360))]
+    return [(x + r * math.cos(t), y + r * math.sin(t)) for t in steps]
+
+
+# A 40×10×4 plate with two 3 mm holes 30 apart, each of 9 facets, which no axis passes through.
+PLATE = Box(40, 10, 4) - [
+    Pos(0, 0, -2) * extrude(Polygon(*_corners(x, 0, 1.5, 9), align=None), 4) for x in (-15, 15)
+]
+# Three corners of each hole on the plate's top face, and the circles through them.
+HOLES = {
+    f"{hole}{i}": (*_corners(x, 0, 1.5, 9)[k], 2)
+    for hole, x in (("a", -15), ("b", 15))
+    for i, k in enumerate((0, 3, 6), 1)
+}
+CIRCLES = {f"link_step.{h}": {"circle": [f"link_step.{h}{i}" for i in (1, 2, 3)]} for h in "ab"}
+
+
+def _faceted(root, tmp_path, solid=PLATE, datums=HOLES, derived=CIRCLES, name="plate.stl"):
+    """Register solid as geometry source link_step where it lies, declare datums and derived on
+    it, and skip its body."""
+    released(root, tmp_path, solid=solid, at=Location(), name=name, datums=datums, check=False)
+    add(root, datums=derived, skipped="{source: link_step, body: link_step, reason: probed}")
+
+
+def _probe(kind: str, value: float, **fields) -> dict:
+    entry = {"id": "P-c", "source": "link_step", "locator": "holes", "probe": kind}
+    return entry | fields | {"values": {"v": value}, "scope": "context", "reason": "probed"}
+
+
+def test_diameter_probe_at_a_circle_datum_reads_a_faceted_fillets_radius(proj_dir, tmp_path):
+    # A 10 mm square plate whose corner is rounded to radius 3 in six facets.
+    arc = _corners(7, 7, 3, 6, turn=90)
+    rounded = extrude(Polygon((0, 0), (10, 0), *arc, (0, 10), align=None), 2)
+    corners = {f"f{i}": (*arc[k], 2) for i, k in enumerate((0, 3, 6), 1)}
+    fillet = {"link_step.fillet": {"circle": [f"link_step.f{i}" for i in (1, 2, 3)]}}
+    _faceted(proj_dir, tmp_path, solid=rounded, datums=corners, derived=fillet)
+    add(proj_dir, evidence=_probe("diameter", 6, at="link_step.fillet"))
+    run = check(proj_dir)
+    assert run.status == "VERIFIED" and run.report["probes"][0]["value"] == pytest.approx(6)
+
+
+def test_distance_between_circle_datums_reads_the_spacing_of_faceted_holes(proj_dir, tmp_path):
+    _faceted(proj_dir, tmp_path)
+    add(proj_dir, evidence=_probe("distance", 30, between=["link_step.a", "link_step.b"]))
+    run = check(proj_dir)
+    assert run.status == "VERIFIED" and "datum-off-solid" not in run.rules
+    assert run.report["probes"][0]["value"] == pytest.approx(30, abs=1e-6)
+
+
+def test_distance_from_a_mid_datum_reads_from_the_midpoint_of_its_two(proj_dir, tmp_path):
+    # The midpoint of the plate's two top corners at x -20 is 5 from hole a's centre.
+    ends = {"e1": (-20, -5, 2), "e2": (-20, 5, 2)}
+    end = {"link_step.end": {"mid": ["link_step.e1", "link_step.e2"]}}
+    _faceted(proj_dir, tmp_path, datums=HOLES | ends, derived=CIRCLES | end)
+    add(proj_dir, evidence=_probe("distance", 5, between=["link_step.end", "link_step.a"]))
+    run = check(proj_dir)
+    assert run.status == "VERIFIED" and run.report["probes"][0]["value"] == pytest.approx(5)
+
+
+@pytest.mark.parametrize(
+    ("length_tol", "off", "found"),
+    [(0.001, 0.4, True), (0.01, 0.005, False), (0.01, 0.02, True)],
+)
+def test_input_of_a_derived_datum_on_an_stl_lies_on_a_triangle_corner(
+    proj_dir, tmp_path, length_tol, off, found
+):
+    # Moved off its corner radially, a1 lies on the plate's top face.
+    meta(proj_dir, tolerance={"length": length_tol, "angle": 0.01})
+    _faceted(proj_dir, tmp_path, datums=HOLES | {"a1": (-13.5 + off, 0, 2)})
+    messages = check(proj_dir).messages("datum-off-solid")
+    assert [m.split(":")[0] for m in messages] == (["datum link_step.a1 of body link_step"] * found)
+    assert all("no triangle corner" in m for m in messages)
+
+
+def test_input_of_a_derived_datum_on_a_step_needs_no_corner(proj_dir, tmp_path):
+    # Three points on hole a's wall, half way up it, far from any vertex of the solid.
+    wall = {f"w{i}": (*_corners(-15, 0, 1.5, 3)[i - 1], 0) for i in (1, 2, 3)}
+    hole = {"link_step.hole": {"circle": ["link_step.w1", "link_step.w2", "link_step.w3"]}}
+    _faceted(proj_dir, tmp_path, solid=link_body(), datums=wall, derived=hole, name="link.step")
+    add(proj_dir, evidence=_probe("diameter", 3, at="link_step.hole"))
+    run = check(proj_dir)
+    assert run.status == "VERIFIED" and run.report["probes"][0]["value"] == pytest.approx(3)
+
+
+@pytest.mark.parametrize(
+    "inputs",
+    [["p1", "p1", "q"], ["p1", "p2", "p3"], ["p1", "q", "z"], ["p1", "q", "c"]],
+    ids=["coincident", "collinear", "unknown", "derived"],
+)
+def test_derived_datum_whose_inputs_give_no_circle_is_a_finding_naming_it(
+    proj_dir, tmp_path, inputs
+):
+    # p1, p2 and p3 lie along the released link's top face, q on its side; c is a circle.
+    faces = {"p1": (-10, 0, 4), "p2": (0, 0, 4), "p3": (10, 0, 4), "q": (0, 2.5, 0)}
+    derived = {
+        f"link_step.{name}": {"circle": [f"link_step.{i}" for i in through]}
+        for name, through in (("c", ["p1", "p2", "q"]), ("bad", inputs))
+    }
+    _faceted(proj_dir, tmp_path, link_body(), faces, derived, name="link.step")
+    (message,) = check(proj_dir).messages("datum-off-solid")
+    assert message.startswith("datum link_step.bad: ")
 
 
 @pytest.mark.parametrize("name", ["both.step", "both.stl"])

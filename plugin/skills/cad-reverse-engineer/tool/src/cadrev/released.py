@@ -5,6 +5,7 @@ angles between datums."""
 from __future__ import annotations
 
 import importlib
+import itertools
 import math
 import re
 from functools import cache
@@ -91,6 +92,11 @@ def solids(path: Path, scale: float) -> tuple:
     if not found:
         raise ValueError("the file holds no solid")
     return found
+
+
+def is_mesh(path: Path) -> bool:
+    """Whether the geometry source at path is an STL, whose solids hold only flat triangles."""
+    return path.suffix.lower() == ".stl"
 
 
 def is_sheet(path: Path) -> bool:
@@ -299,6 +305,14 @@ def off_solid(solid, point: tuple[float, float, float], tol: float) -> float | N
     return None if nearest <= tol else nearest
 
 
+def off_corner(solid, point: tuple[float, float, float], tol: float) -> float | None:
+    """How far point is from the nearest corner of a solid's faces, or None if it lies within tol
+    of one."""
+    corners = _kept("corners", solid, lambda s: [(v.X, v.Y, v.Z) for v in s.vertices()])
+    nearest = min((math.dist(point, c) for c in corners), default=math.inf)
+    return None if nearest <= tol else nearest
+
+
 def off(gap: float) -> str:
     """What a [datum-off-solid] finding says of a datum off_solid finds gap away."""
     return (
@@ -326,6 +340,26 @@ def diameter_at(solid, point: tuple[float, float, float], tol: float, name: str)
     edge = " and ".join(f"{d:.4g}" for d in sorted(found))
     where = f"the edge of cylindrical faces of diameters {edge}" if found else "no cylindrical face"
     raise Fault(f"{name} lies on {where}")
+
+
+def circle(points, tol: float, names) -> tuple[tuple[float, float, float], float]:
+    """The centre and diameter of the circle through three datums' points; a Fault where two lie
+    within tol of each other or all three within tol of one line."""
+    import numpy as np
+
+    for (i, a), (j, b) in itertools.combinations(enumerate(points), 2):
+        if math.dist(a, b) <= tol:
+            raise Fault(
+                f"its inputs {names[i]} and {names[j]} coincide, so no circle passes through them"
+            )
+    if collinear(list(points), tol):
+        inputs = ", ".join(names)
+        raise Fault(f"its inputs {inputs} lie on one line, so no circle passes through them")
+    a, b, c = (np.asarray(q, float) for q in points)
+    u, w = a - c, b - c
+    normal = np.cross(u, w)
+    centre = c + np.cross((u @ u) * w - (w @ w) * u, normal) / (2 * (normal @ normal))
+    return (float(centre[0]), float(centre[1]), float(centre[2])), 2 * math.dist(a, centre)
 
 
 def datum_distance(points, along: str | None = None) -> float:
