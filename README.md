@@ -1,6 +1,6 @@
 # cad-reverse-engineer
 
-A Claude Code skill and CLI for rebuilding published hardware as CAD that anyone can audit, number by number, against the paper.
+A skill and CLI that has a coding agent rebuild published hardware as CAD anyone can audit, number by number, against the paper. Built for Fable 5.2 and [benchmarked](docs/benchmark.md) across Anthropic's and OpenAI's frontier models, it runs in Claude Code, Codex and any agent that reads skills.
 
 Papers rarely ship CAD. They give an envelope table in the supplement, a few labelled dimensions in a figure, a kinematic length in the methods, and part numbers for the servos. A reconstruction built from that mixes stated values with guesses, and once the STEP file exists, nobody can tell which number is which.
 
@@ -26,6 +26,13 @@ Of 15 parameters, 9 rest on sources, 0 on measured values and 6 on proposed valu
 
 Here VERIFIED means that every number is accounted for and the geometry realises every checked source value. Anything the sources leave open stays listed as proposed, so the report never claims more than the evidence supports. A number read off a figure crop holds the status at VERIFIED PENDING REVIEW until a named reviewer confirms that reading; the example's Fig. 2A label has been confirmed.
 
+## Two ways to build
+
+The agent asks which you want before it starts:
+
+- **The complete model.** Every part is built. Each value the sources leave open is proposed, beside the question that would settle it.
+- **Known first.** Only the parts the sources settle completely are built and checked. The rest wait, each with its question, until you build on the model yourself or have the agent propose the rest.
+
 ## Install
 
 ### As a Claude Code plugin
@@ -35,7 +42,7 @@ Here VERIFIED means that every number is accounted for and the geometry realises
 /plugin install cad-reverse-engineer@cad-reverse-engineer
 ```
 
-Then ask Claude something like *"reverse-engineer the gripper in this paper as CAD"*, or invoke `/cad-reverse-engineer`. The skill guides Claude through seven steps: scope, sources, ledger, parameters, model, checks and hand-over. Each step ends on a criterion the CLI can confirm.
+Then ask Claude something like *"reverse-engineer the gripper in this paper as CAD"*, or invoke `/cad-reverse-engineer`. The skill guides the agent through nine steps: scope, sources, ledger, released geometry, parameters, model, checks, joints and hand-over. Each step ends on a criterion the CLI can confirm.
 
 ### As a Codex plugin
 
