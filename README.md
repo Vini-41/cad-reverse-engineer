@@ -99,7 +99,7 @@ The example covers each kind of evidence: Table S2 envelopes from the DOCX suppl
 
 [`examples/legclaw`](examples/legclaw) is the full LegClaw from the same sources, both legs and their mounts with their motion, exported as `build/model.mjcf`. A fresh agent built it from the skill alone; it reads the sources from `examples/legclaw-links/sources/`, and `scripts/check` runs it too.
 
-[`examples/centrifuge`](examples/centrifuge) is the mini benchtop centrifuge of Soma Poór 2022, a static project checked against the authors' released STEP files, and [`examples/cell-stretcher`](examples/cell-stretcher) the uniaxial cell stretcher of Kah et al. 2021, two lead screws driving one carriage, checked against the authors' laser-cut SVG sheets and STL. Fresh agents built both from the skill alone; `scripts/check` runs both.
+[`examples/centrifuge`](examples/centrifuge) is the mini benchtop centrifuge of Soma Poór 2022, a static project checked against the authors' released STEP files; [`examples/cell-stretcher`](examples/cell-stretcher) the uniaxial cell stretcher of Kah et al. 2021, two lead screws driving one carriage, checked against the authors' laser-cut SVG sheets and STL; and [`examples/compact-sspg`](examples/compact-sspg) the COMPAct 7.2:1 planetary gearbox of Singh et al. 2025, its train checked from its tooth counts and against the authors' STL. Fresh agents built all three from the skill alone; `scripts/check` runs them too.
 
 ## Files
 
@@ -130,4 +130,4 @@ uv run pytest -q ../../../../tests
 
 ## License
 
-The code is under the MIT license. The example's sources and figure crop come from the CC BY 4.0 article cited above and keep that license and attribution.
+The code is under the MIT license. Each example's sources and figure crops keep the license and credit its README names: CC BY 4.0 for the articles and their files, MIT for COMPAct's STL.
