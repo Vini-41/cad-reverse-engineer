@@ -58,19 +58,19 @@ Status is the re-check's. "Proposed" counts the params resting on proposed value
 
 - **Every run reached VERIFIED PENDING REVIEW**, and every re-check agreed with the run's own report. The rules hold each model to the same bar; what differs is the route.
 - **Fable 5.2 and Opus 5.5 built every part from params.** Where the tool gives no honest route to a value (a cut sheet's dimensions, which no probe reads), both left it proposed under one gap and said so in a trip. Their projects are the ones a reviewer can audit as the examples are.
-- **Sol was the fastest, 25 to 40 active minutes against 44 to 69**, and twice reached the status by a route the rules did not close: COMPAct's parts are the authors' meshes (run 34), and the cell stretcher's sheet vertices are 13,426 `measured` params (run 37). Each passes every rule at `b8ac5d2`. #189 has the skill say why neither verifies anything, and making the tool refuse both is proposed below.
+- **Sol was the fastest, 25 to 40 active minutes against 44 to 69**, and twice reached the status by a route the rules did not close: COMPAct's parts are the authors' meshes (run 34), and the cell stretcher's sheet vertices are 13,426 `measured` params (run 37). Each passes every rule at `b8ac5d2`. #189 has the skill say why neither verifies anything, and #195 and #196 have the tool refuse both.
 - **Every model widened a mass check to pass a mismatch at least once.** All three passed the centrifuge's 13.15 g rotor against the stated 16 g at ±20%, though the PCR-strip rotor's released body weighs the 16 g; only Fable recorded the mismatch as a conflict naming that rotor. On the LegClaw, Fable and Sol held mass checks at ±25% and Opus at ±15%, where the example holds ±10%. #189 has the skill say a tolerance is what the evidence allows, and what to do past it.
 - **The same trips recur across models**, so they belong to the skill and the tool rather than to any model: below.
 - **Times are active minutes, not wall clock.** An account limit stopped every Claude run once, for about an hour and a half in the first wave and eight hours in the second, and Sol's run 37 once; each was resumed with its context, and the minutes include the resumed run re-reading it.
 
 ## What the runs tripped on
 
-The two routes the rules left open come first, then the trips several runs met. Each is a proposed ticket for the owner's approval ([workflow](agents/workflow.md)); none is filed yet.
+The two routes the rules left open come first, both filed, then the trips several runs met. A row that names no issue is a proposed ticket for the owner's approval ([workflow](agents/workflow.md)), not yet filed.
 
 | trip | runs | proposal |
 |---|---|---|
-| A part built from a released file passes its shape check against itself, and `model.py`'s import lint allows build123d's `import_step` and `import_stl` | 34 | `model.py` loads no file: `[model-import]` covers build123d's import functions and `open` |
-| A cut sheet's vertices taken as `measured` params, scaled off a render of the sheet | 37 | `measured` reads an image of the object only: a crop rendered from a registered geometry source is refused |
+| A part built from a released file passes its shape check against itself, and `model.py`'s import lint allows build123d's `import_step` and `import_stl` | 34 | #195: `model.py` loads no file: `[model-import]` covers build123d's import functions and `open` |
+| A cut sheet's vertices taken as `measured` params, scaled off a render of the sheet | 37 | #196: `measured` reads an image of the object only: a crop rendered from a registered geometry source is refused |
 | A cut file takes no probe, so its dimensions can only be proposed | 35, 36, 37 | #122 |
 | A pose of one turn has no basis but proposed, warning `[param-gap]` | 32, 33, 35, 36 | #121 |
 | A shape check checks none of its part's params, so each probe-fed param needs a mirrored check: 69 to 107 extra checks, and minutes per `cadrev check` | 30, 32, 33 | a passing shape check checks the params its part reads from probes of that body |
