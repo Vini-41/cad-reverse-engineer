@@ -25,6 +25,7 @@ from conftest import (
     REPO,
     SHEET,
     add,
+    add_quote,
     change,
     check,
     link_body,
@@ -96,6 +97,9 @@ def test_probe_reads_a_released_body_and_a_param_takes_its_value(proj_dir, tmp_p
     change(proj_dir, "params", "hole_d", basis="source", value=None, rationale=None, gap=None)
     change(proj_dir, "params", "hole_d", **{"from": "P-bore.d"})
     add(proj_dir, checks="{id: bore, kind: diameter, at: link.wall, evidence: P-bore, key: d}")
+    # A probe of a length is compared as one, as a quote printed in mm is.
+    span = "kind: distance, between: [link.a, link.b], evidence: P-pitch, key: v"
+    add(proj_dir, checks=f"{{id: span, {span}}}")
     write(proj_dir, "gaps.yaml", "gaps: []\n")
     run = check(proj_dir)
     # A probe needs no confirmation, and a project resting on probes and quotes alone is exact.
@@ -122,6 +126,37 @@ def test_probe_reads_a_released_body_and_a_param_takes_its_value(proj_dir, tmp_p
         "ok": True,
     }
     assert "| P-pitch.v | link_step | distance | 30 | 30 | pass |" in run.md
+
+
+@pytest.mark.parametrize(
+    ("ref", "quantity"),
+    [("P-pitch.v", "length"), ("P-square.v", "angle")],
+    ids=["distance", "angle"],
+)
+def test_count_citing_a_probe_of_a_length_or_an_angle_is_a_unit_quantity(
+    proj_dir, tmp_path, ref, quantity
+):
+    probed(proj_dir, tmp_path)
+    add(proj_dir, datums="link_step.wall: [100, 36.5, 20]", evidence=PROBES)
+    entry, key = ref.split(".")
+    add(proj_dir, checks=f"{{id: n, kind: count, part: link, evidence: {entry}, key: {key}}}")
+    (message,) = check(proj_dir).messages("unit-quantity")
+    assert ref in message and quantity in message
+
+
+def test_mass_check_counting_by_a_param_from_a_distance_probe_is_a_unit_quantity(
+    proj_dir, tmp_path
+):
+    probed(proj_dir, tmp_path)
+    add(proj_dir, evidence=PROBES.split("- {id: P-rise")[0])
+    resin = "The link weighs 1.8 g in resin of 1.2 g/cm3."
+    add_quote(proj_dir, tmp_path, resin, values={"m": 1.8, "rho": 1.2})
+    add(proj_dir, params={"rho": {"basis": "source", "from": "N1.rho"}})
+    add(proj_dir, params={"n": {"basis": "source", "from": "P-pitch.v"}})
+    weighed = "kind: mass, evidence: N1, key: m, density: rho, tol_rel: 0.1, counts: {link: n}"
+    add(proj_dir, checks=f"{{id: m, {weighed}}}")
+    (message,) = check(proj_dir).messages("unit-quantity")
+    assert "P-pitch.v" in message and "length" in message
 
 
 def test_probe_recording_another_value_than_its_body_gives_is_a_mismatch(proj_dir, tmp_path):
