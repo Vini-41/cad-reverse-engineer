@@ -193,7 +193,7 @@ def _probe_values(p: Project, e: dict, body: str) -> dict[str, float]:
     points = [p.datum_on(name, body) for name in between]
     if kind == "distance":
         return {key: released.datum_distance(points, e.get("along"))}
-    return {key: released.angle_at(points, p.length_tol, between)}
+    return {key: released.angle_at(points, p.length_tol, between, e.get("along"))}
 
 
 def _probe(p: Project, e: dict) -> None:

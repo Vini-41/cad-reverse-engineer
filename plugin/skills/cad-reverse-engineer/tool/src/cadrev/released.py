@@ -370,6 +370,13 @@ def circle(points, tol: float, names) -> tuple[tuple[float, float, float], float
     return (float(centre[0]), float(centre[1]), float(centre[2])), 2 * math.dist(a, centre)
 
 
+def _axis(along: str) -> int:
+    """The index of the axis x, y or z that along names."""
+    if along not in _TURNS:
+        raise Fault(f"along names no axis x, y or z: {along}")
+    return "xyz".index(along)
+
+
 def datum_distance(points, along: str | None = None) -> float:
     """The distance between two datums' points, along the axis x, y or z where along names one."""
     if len(points) != 2:
@@ -377,23 +384,25 @@ def datum_distance(points, along: str | None = None) -> float:
     a, b = points
     if not along:
         return math.dist(a, b)
-    if along not in _TURNS:
-        raise Fault(f"along names no axis x, y or z: {along}")
-    i = "xyz".index(along)
+    i = _axis(along)
     return abs(a[i] - b[i])
 
 
-def angle_at(points, tol: float, names) -> float:
+def angle_at(points, tol: float, names, along: str | None = None) -> float:
     """The angle in degrees at the second of three datums' points, from the direction to the first
-    to that to the third; a Fault where either lies within tol of it, which leaves it undefined."""
+    to that to the third, all projected onto the plane square to the axis x, y or z where along
+    names one; a Fault where either lies within tol of it, which leaves it undefined."""
     if len(points) != 3:
         raise Fault(f"an angle is between three datums, [a, vertex, b], not {len(points)}")
+    if along:
+        i = _axis(along)
+        points = [[0.0 if k == i else x for k, x in enumerate(q)] for q in points]
     a, vertex, b = points
     u, w = ([x - v for x, v in zip(end, vertex)] for end in (a, b))
     if min(math.hypot(*u), math.hypot(*w)) <= tol:
         raise Fault(
-            f"{names[0]} or {names[2]} coincides with the vertex {names[1]}, so the angle is "
-            "undefined"
+            f"{names[0]} or {names[2]} coincides with the vertex {names[1]}"
+            f"{f' along {along}' if along else ''}, so the angle is undefined"
         )
     cross = (u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0])
     return math.degrees(math.atan2(math.hypot(*cross), sum(x * y for x, y in zip(u, w))))

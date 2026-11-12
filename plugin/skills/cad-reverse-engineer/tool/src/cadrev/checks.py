@@ -467,7 +467,8 @@ class Checks:
 
     def _angle(self, c: dict, placed: Model) -> Iterator[Result]:
         def evaluate(at: Model) -> float:
-            return released.angle_at(self._datums(c, at), self.p.length_tol, c["between"])
+            points = self._datums(c, at)
+            return released.angle_at(points, self.p.length_tol, c["between"], c.get("along"))
 
         yield self._measured(c, placed, evaluate, (f"° {_at(c)}", f"° change {_at(c)}"))
 
@@ -544,7 +545,9 @@ class Checks:
                         measured = released.datum_distance(points, c.get("along"))
                         shown = f" {' - '.join(c['between'])}"
                     else:
-                        measured = released.angle_at(points, p.length_tol, c["between"])
+                        measured = released.angle_at(
+                            points, p.length_tol, c["between"], c.get("along")
+                        )
                         shown = f"° {_at(c)}"
                     result = self._compare(c, f"{c['id']}.{param}", ref, measured, shown)
                 else:
@@ -724,7 +727,7 @@ class Checks:
 def _at(c: dict) -> str:
     """Where an angle is taken, as a result shows it."""
     a, vertex, b = c["between"]
-    return f"at {vertex} between {a} and {b}"
+    return f"at {vertex} between {a} and {b}" + (f" along {c['along']}" if c.get("along") else "")
 
 
 def _placement(location) -> tuple[float, ...]:

@@ -154,6 +154,37 @@ def test_check_rests_on_the_weakest_param_it_reads_and_checks_the_source_ones(fi
     assert set(finger.rules) == {"check-failed"}
 
 
+def test_angle_check_along_an_axis_reads_it_in_the_parts_or_the_assemblys_frame(proj_dir):
+    # The angle at the link's top datum between its side datum, 2.5 mm across the link, and hole
+    # b: 11.71° in 3-D, 9.462° about the part's Z and 7.337° about its Y. link_1 is turned a
+    # quarter about X, which carries the part's Y onto the assembly's Z.
+    place(proj_dir, link_1="Location((0, 0, 0), (1, 0, 0), 90)")
+    about_z, about_y = "degrees(atan2(2.5, 15))", "degrees(atan2(4, 15) - atan2(4, 30))"
+    solid = "degrees(acos(466 / sqrt(247.25 * 916)))"
+    part = {"kind": "angle", "between": ["link.side", "link.top", "link.b"]}
+    turned = {"kind": "angle", "instances": ["link_1"]}
+    turned |= {"between": ["link_1.side", "link_1.top", "link_1.b"]}
+    add(
+        proj_dir,
+        checks=[
+            part | {"id": "part-z", "along": "z", "expect": about_z},
+            part | {"id": "part-y", "along": "y", "expect": about_y},
+            part | {"id": "part", "expect": solid},
+            turned | {"id": "turned-z", "along": "z", "expect": about_y},
+            turned | {"id": "turned-y", "along": "y", "expect": about_z},
+            turned | {"id": "turned", "expect": solid},
+        ],
+    )
+    run = check(proj_dir)
+    assert run.status == "VERIFIED", run.out
+    measured = {c["id"]: number(c) for c in run.report["checks"] if c["kind"] == "angle"}
+    assert measured == pytest.approx(
+        {"part-z": 9.462, "part-y": 7.337, "part": 11.71}
+        | {"turned-z": 7.337, "turned-y": 9.462, "turned": 11.71},
+        abs=5e-4,
+    )
+
+
 def flagged(run, rule: str) -> set[int]:
     """The model.py lines a rule's findings name."""
     return {int(message.split(":")[1]) for message in run.messages(rule)}
