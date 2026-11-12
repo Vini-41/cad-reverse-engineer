@@ -1,10 +1,3 @@
 build/
-# Sources are pinned by sha256 in project.yaml. `cadrev source` un-ignores each one whose license allows redistribution.
-sources/*
 figures/*/
 !figures/crops/
-!sources/Kah2021_cell_stretcher.pdf
-!sources/Acryl3MM.svg
-!sources/Acryl6MM.svg
-!sources/Clamp.stl
-!sources/MoldFrame.stl

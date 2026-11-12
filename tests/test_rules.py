@@ -197,6 +197,7 @@ LINK_FINDINGS = {
     "schema: a mass model entry with both": lambda r, t: add(
         r, parts="link: {mass: pitch, density: pitch}"
     ),
+    "schema: a source with a license": lambda r, t: change(r, "sources", "paper", license="MIT"),
     "schema: a file that is a list": lambda r, t: write(r, "params.yaml", "- a\n- b\n"),
     "schema: a released datum of two numbers": _released(
         lambda r, t: add(r, datums="link_step.a: [1, 2]")

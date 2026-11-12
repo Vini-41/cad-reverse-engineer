@@ -12,60 +12,51 @@ sources:
     sha256: d857e9f80d0d33855c06be2e84ac1ecfbdbbe899024333c695a240f20fa900b0
     citation: "Singh, Kapa, Joshi, Kolathaya 2025, COMPAct: Computational Optimization and Automated Modular design of Planetary Actuators, arXiv:2510.07197v2"
     url: https://arxiv.org/abs/2510.07197
-    license: CC-BY-4.0
   - id: sun
     kind: geometry
     path: sources/sspg_sun.STL
     sha256: be79741cdaee076c6ba6045034fcaf06373111c5184d70d1b88a4a790b44ceee
     citation: "COMPAct released STL, CADs/Actuator_STL_files/sspg_7.2/sspg_sun.STL"
     url: https://github.com/singhaman1750/COMPAct
-    license: MIT
   - id: planet
     kind: geometry
     path: sources/sspg_planet.STL
     sha256: e4417eb33802dd837d6188d15efde0ed0d1742ab6f803f19956f40c9fc2903a0
     citation: "COMPAct released STL, CADs/Actuator_STL_files/sspg_7.2/sspg_planet.STL"
     url: https://github.com/singhaman1750/COMPAct
-    license: MIT
   - id: carrier
     kind: geometry
     path: sources/sspg_carrier.STL
     sha256: 54886add2016b8b82e76c93f4a7604253e736e48515a55d7120c5f7b34765fad
     citation: "COMPAct released STL, CADs/Actuator_STL_files/sspg_7.2/sspg_carrier.STL"
     url: https://github.com/singhaman1750/COMPAct
-    license: MIT
   - id: carrier_updated
     kind: geometry
     path: sources/sspg_carrier_updated.STL
     sha256: 3faf610be0989bbb118695d3784d350313b4a8f61baf184847884dc93ff77b5b
     citation: "COMPAct released STL, CADs/Actuator_STL_files/sspg_7.2/sspg_carrier_updated.STL"
     url: https://github.com/singhaman1750/COMPAct
-    license: MIT
   - id: sec_carrier
     kind: geometry
     path: sources/sspg_sec_carrier.STL
     sha256: 500da31d6a940739b7a6ac487eddc3c14e9bd3c5301b2f887f5a2a337969ce5a
     citation: "COMPAct released STL, CADs/Actuator_STL_files/sspg_7.2/sspg_sec_carrier.STL"
     url: https://github.com/singhaman1750/COMPAct
-    license: MIT
   - id: gearbox_casing
     kind: geometry
     path: sources/sspg_gearbox_casing.STL
     sha256: 253f056f529a5f888e90c7cf422ec961c3a75fc5186b7309459587fc7f92742f
     citation: "COMPAct released STL, CADs/Actuator_STL_files/sspg_7.2/sspg_gearbox_casing.STL"
     url: https://github.com/singhaman1750/COMPAct
-    license: MIT
   - id: motor_casing
     kind: geometry
     path: sources/sspg_motor_casing.STL
     sha256: 3a68526791d390004d199285c77222786bcbf9ab7fe0e4901f805419dfb2d4bd
     citation: "COMPAct released STL, CADs/Actuator_STL_files/sspg_7.2/sspg_motor_casing.STL"
     url: https://github.com/singhaman1750/COMPAct
-    license: MIT
   - id: bearing_retainer
     kind: geometry
     path: sources/sspg_bearing_retainer.STL
     sha256: fe8318ca78379481e6e4dceb844f110da905f8d92cbbdd7c4263c2a5f3f509b2
     citation: "COMPAct released STL, CADs/Actuator_STL_files/sspg_7.2/sspg_bearing_retainer.STL"
     url: https://github.com/singhaman1750/COMPAct
-    license: MIT

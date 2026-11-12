@@ -1,7 +1,3 @@
 build/
-# Sources are pinned by sha256 in project.yaml. `cadrev source` un-ignores each one whose license allows redistribution.
-sources/*
 figures/*/
 !figures/crops/
-!sources/Cheng2026_LegClaw.pdf
-!sources/Cheng2026_LegClaw_supplementary.docx

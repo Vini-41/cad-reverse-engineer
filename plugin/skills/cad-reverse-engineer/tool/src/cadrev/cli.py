@@ -14,8 +14,6 @@ import yaml
 from . import ledger, project, sources
 
 TEMPLATE = Path(__file__).parent / "template"
-# SPDX ids whose terms let anyone redistribute the file unchanged and for any purpose.
-REDISTRIBUTABLE = re.compile(r"CC0-1\.0|CC-BY(-SA)?-\d\.\d", re.I)
 
 
 def _print(findings, stream=None) -> None:
@@ -59,7 +57,6 @@ def cmd_source(args) -> int:
         "sha256": sources.sha256(target),
         "citation": args.citation,
         "url": args.url,
-        "license": args.license,
     }
     stated = {key: value for key, value in stated.items() if value is not None}
     entry = next((e for e in entries if e["id"] == args.id), None)
@@ -81,17 +78,6 @@ def cmd_source(args) -> int:
             )
     block = yaml.safe_dump({"sources": entries}, sort_keys=False, allow_unicode=True, width=10**6)
     meta.write_text(text.rstrip("\n") + "\n" + block, encoding="utf8")
-    license_id = re.sub(r"\s+", "-", str((entry or stated).get("license", "")).strip())
-    gitignore = root / ".gitignore"
-    if REDISTRIBUTABLE.fullmatch(license_id) and gitignore.is_file():
-        # Commit a source anyone may redistribute. git cannot re-include a file inside an ignored
-        # directory, so the directory's contents are ignored instead.
-        lines = [
-            "sources/*" if line.strip() in ("sources/", "sources") else line
-            for line in gitignore.read_text().splitlines()
-        ]
-        keep = "!" + re.sub(r"([\\*?\[!#])", r"\\\1", stated["path"])
-        gitignore.write_text("\n".join(lines + [keep] * (keep not in lines)) + "\n")
     print(f"{'registered' if entry is None else 'refreshed'} {args.id} -> {target}")
     return 0
 
@@ -245,7 +231,6 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--kind", required=True, choices=project.SOURCE_KINDS)
     s.add_argument("--citation", required=True)
     s.add_argument("--url")
-    s.add_argument("--license")
     s.add_argument("--rename", help="file name inside sources/")
     s = command(
         "text", cmd_text, "print a source's extracted text, as the quote matcher sees it", "source"
