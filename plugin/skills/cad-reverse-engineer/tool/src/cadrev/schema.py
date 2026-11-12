@@ -1,21 +1,23 @@
-"""The expected shape of every project file, checked before any rule runs.
+"""The shape of every project file, checked before any rule runs.
 
-A spec is a Python type (str, int, bool, dict), NUMBER, a tuple of alternatives,
-Items(spec) for a list, Table(spec) for a mapping of names, or Record for a
-mapping with known keys. An unknown key is a problem, since it is most often a typo or a value
-split at an unquoted comma; keys set to null count as absent.
+A spec is a type (str, int, bool, dict), NUMBER, a tuple of alternatives, Items(spec) for a list,
+Table(spec) for a mapping of names, or a Record for a mapping with known keys. An unknown key is
+a problem, since it is most often a typo or a value split at an unquoted comma; a key set to null
+counts as absent.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import math
+from dataclasses import dataclass
+from typing import Any
 
 from .sources import word_number
 
 NUMBER = "number"
-# A number, or a cardinal in words read as the number it names: a ledger value written as printed
-# (ADR-0005).
+# A number, or a cardinal in words read as the number it names: a ledger value written as printed.
 NUMBER_OR_WORD = "number or word"
+TEXT_OR_NUMBER = (str, NUMBER)
 
 
 @dataclass(frozen=True)
@@ -30,136 +32,74 @@ class Table:
 
 @dataclass(frozen=True)
 class Record:
-    fields: dict = field(default_factory=dict)
+    fields: dict
     required: tuple[str, ...] = ()
     exclusive: tuple[tuple[str, ...], ...] = ()  # groups of keys of which an entry gives one
 
 
-TEXT_OR_NUMBER = (str, NUMBER)
+_TYPES = {"int": int, "bool": bool, "number": NUMBER, "word": NUMBER_OR_WORD, "any": TEXT_OR_NUMBER}
 
-SOURCE = Record(
-    {
-        "id": str,
-        "kind": str,
-        "path": str,
-        "sha256": str,
-        "citation": str,
-        "url": str,
-        "license": str,
-        "coverage": bool,
-    },
-    required=("id",),
+
+def _spec(text: str):
+    """The spec a field's type names: [T] a list, {T} a mapping of names; text where it names
+    none."""
+    if text.startswith(("[", "{")):
+        return (Items if text[0] == "[" else Table)(_spec(text[1:-1]))
+    return _TYPES.get(text, str)
+
+
+def record(fields: str, exclusive: tuple = (), **nested) -> Record:
+    """A Record from its fields, each `name` (text) or `name:type`, a `!` after the name marking it
+    required; nested gives the fields that are records themselves."""
+    specs, required = dict(nested), []
+    for field in fields.split():
+        name, _, kind = field.partition(":")
+        if name.endswith("!"):
+            name = name[:-1]
+            required.append(name)
+        specs[name] = _spec(kind)
+    return Record(specs, tuple(required), exclusive)
+
+
+SOURCE = record("id! kind path sha256 citation url license coverage:bool")
+EVIDENCE = record(
+    "id! source page:int locator quote values:{word} scope reason image image_sha256 reading:any "
+    "confirmed_by probe body axes:{str} between:[str] along at tol:number"
 )
-EVIDENCE = Record(
-    {
-        "id": str,
-        "source": str,
-        "page": int,
-        "locator": str,
-        "quote": str,
-        "values": Table(NUMBER_OR_WORD),
-        "scope": str,
-        "reason": str,
-        "image": str,
-        "image_sha256": str,
-        "reading": TEXT_OR_NUMBER,
-        "confirmed_by": str,
-        "probe": str,
-        "body": str,
-        "axes": Table(str),
-        "between": Items(str),
-        "along": str,
-        "at": str,
-        "tol": NUMBER,
-    },
-    required=("id",),
+SKIP = record("source page:int pages:[int] quote from to body within:[[number]] reason")
+CONFLICT = record("id:any evidence:[str] summary resolution")
+PARAM = record(
+    "basis from value:number expr method uncertainty:any rationale gap interpretation physics:bool"
 )
-SKIP = Record(
-    {
-        "source": str,
-        "page": int,
-        "pages": Items(int),
-        "quote": str,
-        "from": str,
-        "to": str,
-        "body": str,
-        "within": Items(Items(NUMBER)),
-        "reason": str,
-    }
-)
-CONFLICT = Record({"id": TEXT_OR_NUMBER, "evidence": Items(str), "summary": str, "resolution": str})
-PARAM = Record(
-    {
-        "basis": str,
-        "from": str,
-        "value": NUMBER,
-        "expr": str,
-        "method": str,
-        "uncertainty": TEXT_OR_NUMBER,
-        "rationale": str,
-        "gap": str,
-        "interpretation": str,
-        "physics": bool,
-    }
-)
-CHECK = Record(
-    {
-        "id": TEXT_OR_NUMBER,
-        "kind": str,
-        "part": str,
-        "instances": Items(str),
-        "parts": Items(str),
-        "evidence": str,
-        "key": str,
-        "expect": str,
-        "axes": Table(str),
-        "between": Items(str),
-        "along": str,
-        "at": str,
-        "density": str,
-        "counts": Table(str),
-        "add": Items(str),
-        "tol": NUMBER,
-        "tol_rel": NUMBER,
-        "max_volume": NUMBER,
-        "pairs": Items(Items(str)),
-        "pose": Table(str),
-        "from": Table(str),
-        "claim": str,
-        "joint": str,
-        "cable": str,
-        "body": str,
-        "ends": Items(str),
-        "sweep": Record({"joint": str, "steps": str}, required=("joint", "steps")),
-        "interpretation": str,
-    },
-    required=("id",),
+CHECK = record(
+    "id!:any kind part instances:[str] parts:[str] evidence key expect axes:{str} between:[str] "
+    "along at density counts:{str} add:[str] tol:number tol_rel:number max_volume:number "
+    "pairs:[[str]] pose:{str} from:{str} claim joint cable body ends:[str] interpretation",
     exclusive=(("part", "instances"),),
+    sweep=record("joint! steps!"),
 )
 # A part's mass: its datasheet mass, or a density its volume is weighed by; one param either way.
-PART = Record({"mass": str, "density": str}, exclusive=(("mass", "density"),))
-GAP = Record({"id": str, "question": str, "ask": str}, required=("id",))
-OVERLAY = Record(
-    {
-        "id": TEXT_OR_NUMBER,
-        "image": str,
-        "part": str,
-        "instance": str,
-        "view": str,
-        "origin": Items(NUMBER),
-        "mirror": bool,
-        "color": str,
-        "calibration": Record({"pixels": Items(Items(NUMBER)), "evidence": str}),
-    }
+PART = record("mass density", exclusive=(("mass", "density"),))
+GAP = record("id! question ask")
+OVERLAY = record(
+    "id:any image part instance view origin:[number] mirror:bool color",
+    calibration=record("pixels:[[number]] evidence"),
 )
+# What model.py's build returns for a mechanism, held to the same shapes as the YAML.
+JOINT = record(
+    "type parent child axis:[str] range:[str] drive damping stiffness friction spring_rest"
+)
+GEAR = record("driver driven ratio lead")
+CABLE = record("path:[str] wheel closes:{str}")
+TENDON = record("path:[str] stiffness damping")
 
-# file -> top-level key -> (spec of each entry, collection type)
+# file -> top-level key -> (spec of each entry, the collection holding the entries or None)
 FILES = {
     "project.yaml": {
         "name": (TEXT_OR_NUMBER, None),
         "target": (str, None),
         "units": (dict, None),
-        "tolerance": (Record({"length": NUMBER, "angle": NUMBER}), None),
+        "tolerance": (record("length:number angle:number"), None),
         "model_literals": (Items(NUMBER), None),
         "known_first": (bool, None),
         "sources": (SOURCE, list),
@@ -181,9 +121,9 @@ _NAMES = {
     int: "a whole number",
     bool: "true or false",
     dict: "a mapping",
+    list: "a list",
     NUMBER: "a number",
     NUMBER_OR_WORD: "a number",
-    list: "a list",
 }
 
 
@@ -192,9 +132,7 @@ def _expected(spec) -> str:
         return " or ".join(_expected(s) for s in spec)
     if isinstance(spec, Items):
         return "a list"
-    if isinstance(spec, (Table, Record)):
-        return "a mapping"
-    return _NAMES[spec]
+    return "a mapping" if isinstance(spec, (Table, Record)) else _NAMES[spec]
 
 
 def _given(value) -> str:
@@ -205,21 +143,20 @@ def _given(value) -> str:
 
 
 def _is(value, spec) -> bool:
-    if spec in (NUMBER, NUMBER_OR_WORD):
-        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if spec in (NUMBER, NUMBER_OR_WORD):  # finite: .nan and .inf state nothing
+        return type(value) in (int, float) and math.isfinite(value)
     if spec is int:
-        return isinstance(value, int) and not isinstance(value, bool)
+        return type(value) is int
     return isinstance(value, spec)
 
 
-def conform(value, spec, where: str, problems: list[str]):
-    """value with null record keys dropped; each mismatch appended to problems as 'where:
-    message'."""
+def conform(value, spec, where: str, problems: list[str]) -> Any:
+    """value with null record keys dropped; each mismatch appended to problems as `where: why`."""
     if isinstance(spec, tuple):
         if any(_is(value, s) for s in spec):
             return value
     elif isinstance(spec, Items):
-        if isinstance(value, list):
+        if isinstance(value, (list, tuple)):
             return [conform(v, spec.of, f"{where}[{i}]", problems) for i, v in enumerate(value)]
     elif isinstance(spec, Table):
         if isinstance(value, dict):
@@ -236,9 +173,7 @@ def conform(value, spec, where: str, problems: list[str]):
                         "comma, quote that value"
                     )
             value = {k: v for k, v in value.items() if v is not None}
-            for key in spec.required:
-                if key not in value:
-                    problems.append(f"{where}: {key} is required")
+            problems += [f"{where}: {key} is required" for key in spec.required if key not in value]
             for group in spec.exclusive:
                 given = [key for key in group if key in value]
                 if len(given) > 1:
@@ -262,33 +197,29 @@ def conform_file(name: str, data, problems: list[str]) -> dict:
         return {}
     out = dict(data)
     for key, (spec, collection) in FILES[name].items():
-        value = data.get(key)
-        where = f"{name} {key}"
+        value, where = data.get(key), f"{name} {key}"
         if value is None:
             out.pop(key, None)
-            continue
-        if collection is None:
+        elif collection is None:
             before = len(problems)
             out[key] = conform(value, spec, where, problems)
             if len(problems) > before:
                 out.pop(key)
-            continue
-        if not isinstance(value, collection):
+        elif not isinstance(value, collection):
             problems.append(
                 f"{where}: must be {_NAMES[collection]} of entries, not {_given(value)}"
             )
             out.pop(key)
-            continue
-        entries = value.items() if collection is dict else enumerate(value)
-        kept = {}
-        for k, entry in entries:
-            found: list[str] = []
-            label = f"{where}.{k}" if collection is dict else f"{where}[{k}]"
-            entry = conform(entry, spec, label, found)
-            if collection is dict and not isinstance(k, str):
-                found.append(f"{label}: name must be text, not {_given(k)}")
-            problems += found
-            if not found:
-                kept[k] = entry
-        out[key] = kept if collection is dict else list(kept.values())
+        else:
+            kept = {}
+            for k, entry in value.items() if collection is dict else enumerate(value):
+                found: list[str] = []
+                label = f"{where}.{k}" if collection is dict else f"{where}[{k}]"
+                entry = conform(entry, spec, label, found)
+                if collection is dict and not isinstance(k, str):
+                    found.append(f"{label}: name must be text, not {_given(k)}")
+                problems += found
+                if not found:
+                    kept[k] = entry
+            out[key] = kept if collection is dict else list(kept.values())
     return out

@@ -1,4 +1,4 @@
-"""Draw model edges over a figure, scaled by a published dimension."""
+"""Draw model edges over a figure, scaled by a published dimension: visual evidence for a human."""
 
 from __future__ import annotations
 
@@ -6,8 +6,9 @@ import math
 import textwrap
 from pathlib import Path
 
-from .geometry import Built
-from .project import Project, calibration_ref
+from . import Fault
+from .build import Model
+from .project import Project
 
 VIEWS = {"front": (0, 2), "top": (0, 1), "right": (1, 2)}  # (horizontal, vertical) axes
 DPI = 100
@@ -16,28 +17,21 @@ MARKER_RADIUS = 2 * DPI / 72  # pixels: a 4 pt marker
 TITLE_LINE, TITLE_CHAR = 12, 6
 
 
-def _target(built: Built, o: dict) -> tuple[str, list]:
-    """What overlay o draws, as its title's name for it and its shapes: part in the part's own
-    frame, instance where the assembly places it, or with part "assembly" every instance so
-    placed. ValueError when o names both, neither, or one the model lacks."""
+def _target(model: Model, o: dict) -> tuple[str, list]:
+    """What overlay o draws, as its title names it, and its shapes: a part in its own frame, an
+    instance where the assembly places it, or with part "assembly" every instance so placed."""
     if ("part" in o) == ("instance" in o):
-        raise ValueError(
-            "name one of part or instance, not " + ("both" if "part" in o else "neither")
-        )
+        raise Fault("name one of part or instance")
     if o.get("part") == "assembly":
-        return "assembly", [built.parts[part].moved(loc) for part, loc in built.assembly.values()]
+        return "assembly", [model.parts[part].moved(loc) for part, loc in model.assembly.values()]
     if "instance" in o:
-        name = o["instance"]
-        if name not in built.assembly:
-            also = "; part draws the part of that name" if name in built.parts else ""
-            raise ValueError(f"instance {name} is not an instance of the assembly{also}")
-        part, loc = built.assembly[name]
-        return f"instance {name}", [built.parts[part].moved(loc)]
-    name = o["part"]
-    if name not in built.parts:
-        also = "; instance draws the instance of that name" if name in built.assembly else ""
-        raise ValueError(f"part {name} is not a part model.py builds{also}")
-    return name, [built.parts[name]]
+        if o["instance"] not in model.assembly:
+            raise Fault(f"{o['instance']} is not an instance of the assembly")
+        part, loc = model.assembly[o["instance"]]
+        return f"instance {o['instance']}", [model.parts[part].moved(loc)]
+    if o["part"] not in model.parts:
+        raise Fault(f"{o['part']} is not a part model.py builds")
+    return o["part"], [model.parts[o["part"]]]
 
 
 def _crosses(a: tuple, b: tuple, width: int, height: int) -> bool:
@@ -57,30 +51,11 @@ def _crosses(a: tuple, b: tuple, width: int, height: int) -> bool:
     return True
 
 
-def _projected(shapes: list, h: int, v: int):
-    """Each edge of shapes as 25 points along it, each as its (horizontal, vertical) model
-    coordinates in the view."""
-    for shape in shapes:
-        for edge in shape.edges():
-            points = [tuple(edge.position_at(t / 24)) for t in range(25)]
-            yield [(q[h], q[v]) for q in points]
-
-
-def _off_image(name: str, lines: list, width: int, height: int) -> str:
-    """Why an overlay of name draws no model edge on its width × height image, naming the pixel
-    bounds its edges project to."""
-    points = [q for line in lines for q in line]
-    if not points:
-        return f"{name} has no edges to draw; name a part or instance that has"
-    xs, ys = [x for x, _ in points], [y for _, y in points]
-    return (
-        f"no model edge of {name} falls on the {width}×{height} image: its edges project to "
-        f"x {min(xs):.0f} to {max(xs):.0f}, y {min(ys):.0f} to {max(ys):.0f} pixels; correct its "
-        "origin, view or calibration, or name the part, in its own frame, rather than an instance"
-    )
-
-
-def render(p: Project, built: Built) -> list[Path]:
+def render(p: Project, model: Model) -> list[Path]:
+    """Write build/overlays/<id>.png for each overlay. Below its title strip one PNG pixel is one
+    pixel of the image, so origin and calibration pixels land as written."""
+    if not p.overlays:
+        return []
     import matplotlib
 
     matplotlib.use("Agg")
@@ -93,72 +68,72 @@ def render(p: Project, built: Built) -> list[Path]:
     written = []
     for o in p.overlays:
         oid = o.get("id", "?")
-        if p.cites_repeated(calibration_ref(o)):
-            continue  # it is scaled by neither item; check_citations said so before the build
         try:
             cal = o["calibration"]
-            known = p.evidence_value(cal["evidence"])
-            if known is None:
-                raise KeyError(f"evidence value {cal['evidence']}")
+            known = p.stated(cal["evidence"])
             (x1, y1), (x2, y2) = cal["pixels"]
             scale = math.dist((x1, y1), (x2, y2)) / known  # pixels per model unit
+            if o.get("view") not in VIEWS:
+                raise Fault(f"view must be one of {', '.join(VIEWS)}, not {o.get('view')!r}")
             h, v = VIEWS[o["view"]]
             ox, oy = o["origin"]
+            if not (p.root / o["image"]).is_file():
+                raise Fault(f"image {o['image']} not found")
             image = mpimg.imread(p.root / o["image"])
-            name, shapes = _target(built, o)
+            name, shapes = _target(model, o)
             flip = -1 if o.get("mirror") else 1
-            lines = [
-                [(ox + flip * x * scale, oy - y * scale) for x, y in points]
-                for points in _projected(shapes, h, v)
+            lines = [  # each edge as 25 points along it, in the image's pixels
+                [
+                    (ox + flip * q[h] * scale, oy - q[v] * scale)
+                    for q in (tuple(edge.position_at(t / 24)) for t in range(25))
+                ]
+                for shape in shapes
+                for edge in shape.edges()
             ]
-        except (KeyError, TypeError, ValueError, ZeroDivisionError, OSError) as exc:
+            height, width = image.shape[:2]
+            title = textwrap.wrap(
+                f"{oid}: {name} {o['view']} view, scaled by {cal['evidence']} = {known:g}",
+                max(1, width // TITLE_CHAR),
+            )
+            strip = TITLE_LINE * (len(title) + 1)
+            fig = plt.figure(figsize=(width / DPI, (height + strip) / DPI), dpi=DPI)
+            ax = fig.add_axes((0, 0, 1, height / (height + strip)))
+            ax.imshow(image, interpolation="nearest")
+            for line in lines:
+                xs, ys = zip(*line)
+                ax.plot(
+                    xs, ys, color=o.get("color", "#e4007c"), linewidth=1.2, alpha=0.85, snap=False
+                )
+            # Unsnapped lines, and circles where a marker would be rounded to the next whole
+            # pixel: each lands on the pixel it names.
+            ax.plot([x1, x2], [y1, y2], "--", color="#00a0e4", linewidth=1, snap=False)
+            for end in ((x1, y1), (x2, y2)):
+                ax.add_patch(Circle(end, MARKER_RADIUS, color="#00a0e4", linewidth=0, zorder=3))
+            ax.set_xlim(-0.5, width - 0.5)  # edges past the image must not widen the axes
+            ax.set_ylim(height - 0.5, -0.5)
+            fig.text(
+                0.5,
+                1 - strip / 2 / (height + strip),
+                "\n".join(title),
+                fontsize=8,
+                ha="center",
+                va="center",
+            )
+            ax.set_axis_off()
+            try:
+                fig.savefig(out / f"{oid}.png", dpi=DPI)
+            finally:
+                plt.close(fig)
+        except (Fault, KeyError, TypeError, ValueError, ZeroDivisionError, OSError) as exc:
             p.error("overlay-config", f"overlay {oid}: {exc}")
             continue
-        # One pixel of the image is one PNG pixel: the image axes fill a W×H area of the figure,
-        # under a strip that holds the title.
-        height, width = image.shape[:2]
-        title = textwrap.wrap(
-            f"{oid}: {name} {o['view']} view, scaled by {cal['evidence']} = {known:g}",
-            max(1, width // TITLE_CHAR),
-        )
-        strip = TITLE_LINE * (len(title) + 1)
-        fig = plt.figure(figsize=(width / DPI, (height + strip) / DPI), dpi=DPI)
-        ax = fig.add_axes((0, 0, 1, height / (height + strip)))
-        ax.imshow(image, interpolation="nearest")
-        for line in lines:
-            ax.plot(
-                [x for x, _ in line],
-                [y for _, y in line],
-                color=o.get("color", "#e4007c"),
-                linewidth=1.2,
-                alpha=0.85,
-                snap=False,
-            )
-        # Unsnapped lines, and circles where a marker would be rounded to the next whole pixel:
-        # each lands on the pixel it names.
-        ax.plot([x1, x2], [y1, y2], "--", color="#00a0e4", linewidth=1, snap=False)
-        for end in ((x1, y1), (x2, y2)):
-            ax.add_patch(Circle(end, MARKER_RADIUS, color="#00a0e4", linewidth=0, zorder=3))
-        ax.set_xlim(-0.5, width - 0.5)  # edges past the image must not widen the axes
-        ax.set_ylim(height - 0.5, -0.5)
-        fig.text(
-            0.5,
-            1 - strip / 2 / (height + strip),
-            "\n".join(title),
-            fontsize=8,
-            ha="center",
-            va="center",
-        )
-        ax.set_axis_off()
-        target = out / f"{oid}.png"
-        try:
-            fig.savefig(target, dpi=DPI)
-        except (OSError, ValueError) as exc:
-            p.error("overlay-config", f"overlay {oid}: cannot write {target.name}: {exc}")
-            continue
-        finally:
-            plt.close(fig)
-        written.append(target)
+        written.append(out / f"{oid}.png")
         if not any(_crosses(a, b, width, height) for line in lines for a, b in zip(line, line[1:])):
-            p.warn("overlay-empty", f"overlay {oid}: {_off_image(name, lines, width, height)}")
+            xs, ys = zip(*(q for line in lines for q in line)) if lines else ((0,), (0,))
+            p.warn(
+                "overlay-empty",
+                f"overlay {oid}: no model edge of {name} falls on the {width}×{height} image: its "
+                f"edges project to x {min(xs):.0f} to {max(xs):.0f}, y {min(ys):.0f} to "
+                f"{max(ys):.0f} pixels; correct its origin, view or calibration",
+            )
     return written

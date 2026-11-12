@@ -1,4 +1,5 @@
-"""Write build/report.md and build/report.json."""
+"""A verification run's status, and build/report.md and build/report.json, which hold the same
+data."""
 
 from __future__ import annotations
 
@@ -8,33 +9,12 @@ from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 
-from .geometry import GEAR_BY, PHYSICS, Built, CheckResult, pose_text, printed, range_ends
+from . import checks, ledger
+from .build import GEAR_BY, PHYSICS, Model, printed, range_ends
+from .checks import Result
 from .lint import MODEL_LITERALS
-from .project import (
-    BASES,
-    RESTS_ON,
-    Project,
-    check_tolerance,
-    default_overlap_limit,
-    default_tolerance,
-    OVERLAP_KINDS,
-    overlap_limit,
-    unnamed_gaps,
-    unused_values,
-)
-
-
-def _cell(value) -> str:
-    return str(value).replace("|", "\\|").replace("\n", " ")
-
-
-def _table(header: list[str], rows: list[list]) -> list[str]:
-    if not rows:
-        return ["_None._", ""]
-    lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
-    lines += ["| " + " | ".join(_cell(c) for c in row) + " |" for row in rows]
-    return lines + [""]
-
+from .motion import pose_text
+from .project import BASES, DEFAULT_TOL, RESTS_ON, Project
 
 VERIFIED, PENDING_REVIEW, PARTIAL, NOT_VERIFIED = (
     "VERIFIED",
@@ -60,10 +40,8 @@ def awaiting_confirmation(p: Project) -> list[dict]:
 
 
 def status(p: Project, partial: bool = False) -> str:
-    """The one place a verification run's status is decided; everything else reads it.
-
-    partial: the run skipped the build or the coverage sweep, so it makes no claim.
-    """
+    """The one place a verification run's status is decided. A partial run skipped the build or
+    the coverage sweep, so it makes no claim."""
     if partial:
         return PARTIAL
     if any(f.level == "error" for f in p.findings):
@@ -71,16 +49,27 @@ def status(p: Project, partial: bool = False) -> str:
     return PENDING_REVIEW if awaiting_confirmation(p) else VERIFIED
 
 
-def exact(p: Project, status: str) -> bool:
-    """Exact: VERIFIED with no parameter resting on a proposed value but physics values and a
-    sweep's resolution, which exact leaves out (ADR-0008)."""
-    return status == VERIFIED and not p.inexact
+def counts(p: Project, results: list[Result]) -> dict[str, int]:
+    """The headline numbers: the params by what they rest on, proposed physics values apart."""
+    errors = sum(f.level == "error" for f in p.findings)
+    apart = p.proposed & p.physics
+    rest = {
+        b: sum(basis == b and n not in apart for n, basis in p.rests_on.items()) for b in RESTS_ON
+    }
+    return {
+        "errors": errors,
+        "warnings": len(p.findings) - errors,
+        "checks": len(results),
+        "checks_passed": sum(r.ok for r in results),
+        "params": len(p.params),
+        **rest,
+        "physics_proposed": len(apart),
+    }
 
 
 def waiting(p: Project) -> dict | None:
-    """What a known-first project leaves for later: each stated value no param or check uses,
-    and each gap no param names, the question a waiting part asks; None for any other project,
-    where those are [evidence-unused] and [gap-unused]."""
+    """What a known-first project leaves for later: each stated value no param or check uses, and
+    each gap no param names, the question a waiting part asks; None for any other project."""
     if not p.known_first:
         return None
     return {
@@ -92,157 +81,71 @@ def waiting(p: Project) -> dict | None:
                 "source": e.get("source"),
                 "locator": e.get("locator"),
             }
-            for e, key in unused_values(p)
+            for e, key in ledger.unused_values(p)
         ],
         "gaps": [
-            {"gap": gid, "question": p.gaps[gid].get("question"), "ask": p.gaps[gid].get("ask")}
-            for gid in unnamed_gaps(p)
+            {"gap": gap, "question": p.gaps[gap].get("question"), "ask": p.gaps[gap].get("ask")}
+            for gap in ledger.unnamed_gaps(p)
         ],
     }
 
 
 def waiting_clause(p: Project) -> str:
-    """How many stated values a known-first project leaves waiting, as a clause: "1 stated value
-    waits"."""
-    n = len(unused_values(p))
+    n = len(ledger.unused_values(p))
     return f"{n} stated value{'s' * (n != 1)} wait{'s' * (n == 1)}"
 
 
-def measured_params(p: Project) -> list[dict]:
-    """Each measured parameter with the method and uncertainty of its scaling."""
-    return [
-        {
-            "param": n,
-            "value": p.values.get(n),
-            "from": s.get("from"),
-            "method": s.get("method"),
-            "uncertainty": s.get("uncertainty"),
+def motion(p: Project, model: Model, coarsened: dict) -> dict:
+    """How the model moves, as the MJCF exports it. No joints means the model is static, unless a
+    finding dropped them."""
+
+    def valued(entry: dict, keys) -> dict:
+        return {
+            k: {"from": entry[k], "value": printed(p.values[entry[k]])[0]}
+            for k in keys
+            if k in entry
         }
-        for n, s in p.params.items()
-        if s.get("basis") == "measured"
-    ]
 
-
-def tolerances(p: Project) -> list[dict]:
-    """Each check whose tolerance is not cadrev's default, with that tolerance: tol for one
-    differing from LENGTH_TOL (ANGLE_TOL for an angle check), and tol_rel for every mass check,
-    which has no default."""
-    out = []
-    for c in p.checks:
-        tolerance = check_tolerance(p, c)
-        if tolerance is not None and tolerance != default_tolerance(c):
-            out.append({"check": c.get("id"), "kind": c.get("kind"), tolerance[0]: tolerance[1]})
-    return out
-
-
-def literal_override(p: Project) -> list | None:
-    """The numbers project.yaml allows in model.py in place of the default, or None."""
-    literals = p.meta.get("model_literals")
-    if literals is None or [float(v) for v in literals] == [float(v) for v in MODEL_LITERALS]:
-        return None
-    return literals
-
-
-def overlap_limits(p: Project) -> list[dict]:
-    """Each interference check whose overlap limit is not cadrev's default, with that limit. An
-    overlap limit is not a tolerance, so it is listed apart from the tolerances."""
-    out = []
-    for c in p.checks:
-        if c.get("kind") in OVERLAP_KINDS:
-            limit = overlap_limit(p, c)
-            if not math.isclose(limit, default_overlap_limit()):
-                out.append({"check": c.get("id"), "max_volume": limit})
-    return out
-
-
-def interpretation(r: CheckResult) -> str:
-    """A check's interpretation, with what it rests on when that is less than source: the params,
-    then each part a mass check weighs in several uncounted instances."""
-    if r.rests_on == "source":
-        return r.note
-    named = r.rests_on_params + [
-        f"{part} ({n} instances uncounted)" for part, n in (r.uncounted or {}).items()
-    ]
-    return "; ".join(filter(None, [r.note, f"rests on {r.rests_on}: {', '.join(named)}"]))
-
-
-def _valued(p: Project, entry: dict, keys) -> dict:
-    """Each of keys entry names a param for, as {from: the param, value: its value}, rounded as
-    the MJCF prints it."""
-    return {
-        k: {"from": entry[k], "value": printed(p.values[entry[k]])[0]} for k in keys if k in entry
-    }
-
-
-def motion(p: Project, built: Built, coarsened: dict) -> dict:
-    """How the model moves, as the MJCF exports it: each joint with its type, what it joins, its
-    drive, its range and its physics values, each loop, each gear with its joints and ratio or lead,
-    each tendon with its path and physics values, each cable with its path and, wound on a wheel,
-    the closed value of each joint it closes, and each part whose mesh was coarsened to fit
-    MuJoCo's STL decoder; no joints means the model is static, unless a finding dropped them."""
     joints = {}
-    for name, j in built.joints.items():
+    for name, j in model.joints.items():
         joints[name] = {k: j[k] for k in ("type", "parent", "child", "drive") if k in j}
         if "range" in j:
             (low, lo), (high, hi) = range_ends(p, j)
             joints[name]["range"] = {"from": [low, high], "value": list(printed(lo, hi))}
-        joints[name] |= _valued(p, j, PHYSICS["joint"])
+        joints[name] |= valued(j, PHYSICS["joint"])
+    cables = {}
+    for name, c in model.cables.items():
+        cables[name] = {"path": list(c["path"])}
+        if "wheel" in c:
+            cables[name] |= {"wheel": c["wheel"], "closes": valued(c["closes"], c["closes"])}
     return {
         "joints": joints,
-        "loops": {name: list(pair) for name, pair in built.loops.items()},
+        "loops": {name: list(pair) for name, pair in model.loops.items()},
         "gears": {
-            name: {"driver": g["driver"], "driven": g["driven"]} | _valued(p, g, GEAR_BY)
-            for name, g in built.gears.items()
+            name: {"driver": g["driver"], "driven": g["driven"]} | valued(g, GEAR_BY)
+            for name, g in model.gears.items()
         },
         "tendons": {
-            name: {"path": list(t["path"])} | _valued(p, t, PHYSICS["tendon"])
-            for name, t in built.tendons.items()
+            name: {"path": list(t["path"])} | valued(t, PHYSICS["tendon"])
+            for name, t in model.tendons.items()
         },
-        "cables": {
-            name: {"path": list(c["path"])}
-            | (
-                {"wheel": c["wheel"], "closes": _valued(p, c["closes"], c["closes"])}
-                if "wheel" in c
-                else {}
-            )
-            for name, c in built.cables.items()
-        },
+        "cables": cables,
         "coarsened": coarsened,
-        "dropped": built.dropped,
+        "dropped": model.dropped,
     }
 
 
-def masses(built: Built) -> dict:
-    """The mass model as the MJCF exports it: each weighed part's mass, the param it comes from,
-    and its centre of mass and inertia (ixx iyy izz ixy ixz iyz) in the part's frame."""
-    return {
-        name: {
-            "mass": m.mass,
-            "from": {m.by: m.param},
-            "center": list(m.center),
-            "inertia": list(m.inertia),
-        }
-        for name, m in built.masses.items()
-    }
+def _table(header: list[str], rows: list[list]) -> list[str]:
+    if not rows:
+        return ["_None._", ""]
+    lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
+    for row in rows:
+        cells = (str(cell).replace("|", "\\|").replace("\n", " ") for cell in row)
+        lines.append("| " + " | ".join(cells) + " |")
+    return lines + [""]
 
 
-def _exact_line(p: Project, physics: int) -> str:
-    """The Exact line, naming the proposed values exact leaves out: physics values and sweep
-    resolutions."""
-    aside = [f"{physics} physics value{'s' * (physics != 1)}"] if physics else []
-    resolution = sorted(p.proposed & p.resolution)
-    if resolution:
-        aside.append(f"the sweep resolution{'s' * (len(resolution) != 1)} {', '.join(resolution)}")
-    if not aside:
-        return "**Exact**: no parameter rests on a proposed value."
-    many = len(aside) > 1 or physics > 1 or len(resolution) > 1
-    return (
-        "**Exact**: no geometry or kinematic parameter rests on a proposed value; "
-        f"{' and '.join(aside)} {'are' if many else 'is'} proposed."
-    )
-
-
-def _motion_line(moves: dict | None) -> list[str]:
+def _motion_lines(moves: dict | None) -> list[str]:
     if moves is None:
         return []
     if moves["dropped"]:
@@ -257,7 +160,7 @@ def _motion_line(moves: dict | None) -> list[str]:
             "",
         ]
     joints, loops = len(moves["joints"]), len(moves["loops"])
-    cables = []
+    lines = []
     for name, c in moves["cables"].items():
         line = f"- Cable `{name}` through {' → '.join(c['path'])}"
         if "wheel" in c:
@@ -265,100 +168,129 @@ def _motion_line(moves: dict | None) -> list[str]:
                 f"{j} to {v['value']:g} ({v['from']})" for j, v in c["closes"].items()
             )
             line += f", wound on {c['wheel']}; its full turn closes {closes}"
-        cables.append(line + ".")
-    meshes = [
-        f"- Mesh `meshes/{name}.stl` exported coarser for MuJoCo's STL decoder: {m['faces']} "
-        f"faces at tolerance {m['tolerance']:g} in the project's length unit and angular "
-        f"tolerance {m['angular_tolerance']:g} rad, from {m['default_faces']} at the default."
-        for name, m in moves["coarsened"].items()
-    ]
+        lines.append(line + ".")
+    if lines:
+        lines.append("")
+    for name, m in moves["coarsened"].items():
+        lines.append(
+            f"- Mesh `meshes/{name}.stl` exported coarser for MuJoCo's STL decoder: {m['faces']} "
+            f"faces at tolerance {m['tolerance']:g} in the project's length unit and angular "
+            f"tolerance {m['angular_tolerance']:g} rad, from {m['default_faces']} at the default."
+        )
+    if moves["coarsened"]:
+        lines.append("")
     return [
-        f"**Kinematic**: {joints} joint{'s' * (joints != 1)} and {loops} "
-        f"loop{'s' * (loops != 1)}, exported as `build/model.mjcf`; "
-        "a posed check shows its pose beside its interpretation.",
+        f"**Kinematic**: {joints} joint{'s' * (joints != 1)} and {loops} loop{'s' * (loops != 1)}, "
+        "exported as `build/model.mjcf`; a posed check shows its pose beside its interpretation.",
         "",
-        *([*cables, ""] if cables else []),
-        *([*meshes, ""] if meshes else []),
+        *lines,
     ]
 
 
-def _posed(r: CheckResult) -> str:
-    """A check's interpretation, after the pose it was evaluated at, if any."""
-    posed = swept = ""
-    if r.pose is not None:
-        posed = f"posed: {pose_text(r.pose)}"
-    if r.from_pose is not None:
-        posed = f"from: {pose_text(r.from_pose)}; {posed}"
+def _interpretation(r: Result) -> str:
+    """A check's interpretation, after how it was swept and posed, with what it rests on when
+    that is less than source."""
+    notes = []
     if r.sweep is not None:
         (low, high), (low_from, high_from) = r.sweep["range"], r.sweep["from"]
-        swept = (
+        notes.append(
             f"swept: {r.sweep['joint']} {low:g} to {high:g} ({low_from} to {high_from}), "
             f"{r.sweep['poses']} poses"
         )
-    return "; ".join(filter(None, [swept, posed, interpretation(r)]))
+    posed = f"posed: {pose_text(r.pose)}" if r.pose is not None else ""
+    if r.from_pose is not None:
+        posed = f"from: {pose_text(r.from_pose)}; {posed}"
+    notes += [posed, r.note]
+    if r.rests_on != "source":
+        named = r.rests_on_params + [
+            f"{part} ({n} instances uncounted)" for part, n in (r.uncounted or {}).items()
+        ]
+        notes.append(f"rests on {r.rests_on}: {', '.join(named)}")
+    return "; ".join(filter(None, notes))
 
 
-def counts(p: Project, results: list[CheckResult]) -> dict[str, int]:
-    """The headline numbers shown beside the status: the params by what they rest on, proposed
-    physics values counted apart from the proposed ones."""
-    errors = sum(f.level == "error" for f in p.findings)
-    apart = p.proposed & p.physics
-    return (
-        {
-            "errors": errors,
-            "warnings": len(p.findings) - errors,
-            "checks": len(results),
-            "checks_passed": sum(r.ok for r in results),
-            "params": len(p.params),
-        }
-        | {
-            basis: sum(b == basis and n not in apart for n, b in p.rests_on.items())
-            for basis in RESTS_ON
-        }
-        | {"physics_proposed": len(apart)}
-    )
-
-
-# The keys of a check result report.json gives only the checks they apply to, left out as None.
-_LEFT_OUT_WHEN_NONE = ("pairs", "pose", "from_pose", "sweep", "uncounted", "shape", "expect")
+def _anchor(e: dict) -> str:
+    """What an evidence item is anchored by: its quote, its probe, or its figure reading."""
+    if "quote" in e:
+        return f"“{e['quote']}”"
+    if "probe" in e:
+        where = f" at {e['at']}" if e.get("at") else ""
+        if e.get("between"):
+            where = f" between {', '.join(map(str, e['between']))}"
+        return f"probe {e['probe']}{where}"
+    confirmed = "" if e.get("confirmed_by") else " (unconfirmed)"
+    return f"figure {e.get('image')}: “{e.get('reading')}”{confirmed}"
 
 
 def write(
     p: Project,
     status: str,
-    results: list[CheckResult],
+    results: list[Result],
     images: list[Path],
-    moves: dict | None = None,
-    weighed: dict | None = None,
+    model: Model | None,
+    coarsened: dict,
 ) -> Path:
-    """Write build/report.md and build/report.json. moves: how the model moves, and weighed: its
-    masses; each None when no model was built."""
+    """Write build/report.md and build/report.json; model is None when none was built."""
     out = p.root / "build"
     out.mkdir(exist_ok=True)
-    errors = [f for f in p.findings if f.level == "error"]
-    warnings = [f for f in p.findings if f.level == "warning"]
-    bases = Counter(spec.get("basis") for spec in p.params.values())
+    findings = sorted(p.findings, key=lambda f: f.level != "error")  # errors first
     headline = counts(p, results)
-    loosened = tolerances(p)
-    limits = overlap_limits(p)
-    override = literal_override(p)
+    exact = status == VERIFIED and not p.inexact
+    waits = waiting(p)
+    awaiting = awaiting_confirmation(p)
+    moves = None if model is None else motion(p, model, coarsened)
+    bases = Counter(spec.get("basis") for spec in p.params.values())
+    tolerances = [
+        {"check": c.get("id"), "kind": c.get("kind"), found[0]: found[1]}
+        for c in p.checks
+        if (found := checks.tolerance(p, c)) is not None and found != checks.default_tolerance(c)
+    ]
+    limits = [
+        {"check": c.get("id"), "max_volume": checks.overlap_limit(p, c)}
+        for c in p.checks
+        if c.get("kind") == "interference"
+        and not math.isclose(checks.overlap_limit(p, c), DEFAULT_TOL["length"] ** 3)
+    ]
+    literals = p.meta.get("model_literals")
+    if literals is not None and [float(v) for v in literals] == [float(v) for v in MODEL_LITERALS]:
+        literals = None
+    measured = [
+        {
+            "param": n,
+            "value": p.values.get(n),
+            "from": s.get("from"),
+            "method": s.get("method"),
+            "uncertainty": s.get("uncertainty"),
+        }
+        for n, s in p.params.items()
+        if s.get("basis") == "measured"
+    ]
 
+    physics = headline["physics_proposed"]
     md = [f"# {p.meta.get('name', 'Reconstruction')}: verification report", ""]
     md += [
         f"**{status}**: {headline['errors']} errors, {headline['warnings']} warnings. "
         f"{headline['checks_passed']}/{headline['checks']} geometry checks pass.",
         f"Of {headline['params']} parameters, {headline['source']} rest on sources, "
         f"{headline['measured']} on measured values and {headline['proposed']} on proposed values"
-        + (
-            f"; {headline['physics_proposed']} more are proposed physics values."
-            if headline["physics_proposed"]
-            else "."
-        ),
+        + (f"; {physics} more are proposed physics values." if physics else "."),
         "",
     ]
-    if exact(p, status):
-        md += [_exact_line(p, headline["physics_proposed"]), ""]
-    waits = waiting(p)
+    if exact:
+        aside = [f"{physics} physics value{'s' * (physics != 1)}"] if physics else []
+        resolution = sorted(p.proposed & p.resolution)
+        if resolution:
+            aside.append(
+                f"the sweep resolution{'s' * (len(resolution) != 1)} {', '.join(resolution)}"
+            )
+        many = len(aside) > 1 or physics > 1 or len(resolution) > 1
+        md += [
+            "**Exact**: no geometry or kinematic parameter rests on a proposed value; "
+            f"{' and '.join(aside)} {'are' if many else 'is'} proposed."
+            if aside
+            else "**Exact**: no parameter rests on a proposed value.",
+            "",
+        ]
     if waits is not None:
         n = len(waits["gaps"])
         md += [
@@ -366,23 +298,20 @@ def write(
             "names, listed under Waiting.",
             "",
         ]
-    md += _motion_line(moves)
+    md += _motion_lines(moves)
     md += [
         "VERIFIED means every number in the model is accounted for and the geometry matches "
         "every checked source value. It does not mean the sources fully define the part: "
         "proposed parameters are reconstruction choices, listed below.",
         "",
     ]
-    awaiting = awaiting_confirmation(p)
     if status == PENDING_REVIEW:
         md += [
-            f"PENDING REVIEW: {len(awaiting)} figure readings await human confirmation, "
-            "listed below. "
-            "Once a named reviewer has checked each against its crop and written `confirmed_by`, "
-            "the project is VERIFIED.",
+            f"PENDING REVIEW: {len(awaiting)} figure readings await human confirmation, listed "
+            "below. Once a named reviewer has checked each against its crop and written "
+            "`confirmed_by`, the project is VERIFIED.",
             "",
         ]
-
     md += ["## Sources", ""]
     md += _table(
         ["id", "kind", "citation", "sha256"],
@@ -391,48 +320,48 @@ def write(
             for s in p.meta.get("sources", [])
         ],
     )
-
     md += ["## Geometry checks against the sources", ""]
     md += _table(
         ["check", "result", "expected (evidence)", "measured", "interpretation"],
         [
-            [r.id, "pass" if r.ok else "**FAIL**", r.expected, r.measured, _posed(r)]
+            [r.id, "pass" if r.ok else "**FAIL**", r.expected, r.measured, _interpretation(r)]
             for r in results
         ],
     )
-
     md += ["## Non-default tolerances", ""]
     md += _table(
         ["check", "kind", "tolerance"],
         [
             [t["check"], t["kind"], next(f"{k} {t[k]:g}" for k in ("tol", "tol_rel") if k in t)]
-            for t in loosened
+            for t in tolerances
         ],
     )
-
     md += ["## Non-default overlap limits", ""]
     md += _table(["check", "max_volume"], [[o["check"], f"{o['max_volume']:g}"] for o in limits])
-
     md += ["## Model literal override", ""]
-    md += (
-        [
-            "project.yaml `model_literals` allows "
-            f"{', '.join(f'{v:g}' for v in override)} in model.py, "
-            f"in place of the default {', '.join(f'{v:g}' for v in MODEL_LITERALS)}.",
+    if literals is None:
+        md += ["_None._", ""]
+    else:
+        allowed, default = (
+            ", ".join(f"{v:g}" for v in values) for values in (literals, MODEL_LITERALS)
+        )
+        md += [
+            f"project.yaml `model_literals` allows {allowed} in model.py, in place of the default "
+            f"{default}.",
             "",
         ]
-        if override is not None
-        else ["_None._", ""]
-    )
-
-    md += ["## Parameters", ""]
-    md += ["Declared basis: " + " · ".join(f"{b}: {bases[b]}" for b in BASES), ""]
+    md += [
+        "## Parameters",
+        "",
+        "Declared basis: " + " · ".join(f"{b}: {bases[b]}" for b in BASES),
+        "",
+    ]
     md += _table(
         ["param", "value", "basis", "from / expr", "note"],
         [
             [
                 n,
-                f"{p.values.get(n, float('nan')):g}",
+                f"{p.values.get(n, math.nan):g}",
                 str(s.get("basis"))
                 + (
                     f" (rests on {p.rests_on[n]})"
@@ -445,16 +374,20 @@ def write(
             for n, s in p.params.items()
         ],
     )
-
     md += ["## Measured parameters", ""]
     md += _table(
         ["param", "value", "from", "method", "uncertainty"],
         [
-            [m["param"], f"{m['value']:g}", m["from"], m["method"], m["uncertainty"]]
-            for m in measured_params(p)
+            [
+                m["param"],
+                f"{p.values.get(m['param'], math.nan):g}",
+                m["from"],
+                m["method"],
+                m["uncertainty"],
+            ]
+            for m in measured
         ],
     )
-
     md += ["## Evidence", ""]
     md += _table(
         ["id", "source", "locator", "values", "anchor"],
@@ -469,7 +402,6 @@ def write(
             for e in p.evidence
         ],
     )
-
     md += ["## Probes of released geometry", ""]
     md += _table(
         ["probe", "body", "kind", "records", "evaluates to", "result"],
@@ -485,7 +417,6 @@ def write(
             for q in p.probes
         ],
     )
-
     if awaiting:
         md += ["## Figure readings awaiting human confirmation", ""]
         for a in awaiting:
@@ -495,7 +426,6 @@ def write(
                 f"  ![{a['evidence']}](../{a['image']})",
                 "",
             ]
-
     md += ["## Conflicts between sources", ""]
     md += _table(
         ["id", "evidence", "summary", "resolution"],
@@ -509,7 +439,6 @@ def write(
             for c in p.conflicts
         ],
     )
-
     if waits is not None:
         md += [
             "## Waiting",
@@ -529,82 +458,63 @@ def write(
             ["gap", "question", "close by"],
             [[g["gap"], g["question"] or "", g["ask"] or ""] for g in waits["gaps"]],
         )
-
     md += ["## Open gaps", ""]
-    affected = {gid: [n for n, s in p.params.items() if s.get("gap") == gid] for gid in p.gaps}
+    affected = {gap: [n for n, s in p.params.items() if s.get("gap") == gap] for gap in p.gaps}
     md += _table(
         ["gap", "question", "close by", "params"],
         [
-            [gid, g.get("question", ""), g.get("ask", ""), ", ".join(affected[gid])]
-            for gid, g in p.gaps.items()
-            if waits is None or affected[gid]  # a known-first project lists the rest as waiting
+            [gap, g.get("question", ""), g.get("ask", ""), ", ".join(affected[gap])]
+            for gap, g in p.gaps.items()
+            if waits is None or affected[gap]  # a known-first project lists the rest as waiting
         ],
     )
-
     if images:
         md += [
             "## Figure overlays",
             "",
-            "Model edges (magenta) over the figure, scaled by the cited dimension "
-            "(blue). Visual comparison only.",
+            "Model edges (magenta) over the figure, scaled by the cited dimension (blue). Visual "
+            "comparison only.",
+            "",
+            *(f"![{i.stem}](overlays/{i.name})" for i in images),
             "",
         ]
-        md += [f"![{i.stem}](overlays/{i.name})" for i in images] + [""]
-
     md += ["## Findings", ""]
-    md += [f"- **{f.level}** `{f.rule}`: {f.message}" for f in errors + warnings] or ["_None._"]
+    md += [f"- **{f.level}** `{f.rule}`: {f.message}" for f in findings] or ["_None._"]
+    (out / "report.md").write_text("\n".join(md) + "\n", encoding="utf8")
 
-    path = out / "report.md"
-    path.write_text("\n".join(md) + "\n", encoding="utf8")
-    (out / "report.json").write_text(
-        json.dumps(
-            {
-                "status": status,
-                "counts": headline,
-                "findings": [asdict(f) for f in errors + warnings],
-                "checks": [
-                    {
-                        k: v
-                        for k, v in asdict(r).items()
-                        if k not in _LEFT_OUT_WHEN_NONE or v is not None
-                    }
-                    for r in results
-                ],
-                "tolerances": loosened,
-                "overlap_limits": limits,
-                "model_literals": override,
-                "exact": exact(p, status),
-                "known_first": p.known_first,
-                "waiting": waits,
-                "motion": moves,
-                "masses": weighed,
-                "params": {
-                    n: {"value": p.values.get(n), "rests_on": p.rests_on.get(n), **s}
-                    for n, s in p.params.items()
-                },
-                "bases": dict(bases),
-                "rests_on_proposed": sorted(p.proposed),
-                "measured": measured_params(p),
-                "awaiting_confirmation": awaiting,
-                "probes": p.probes,
-            },
-            indent=2,
-            default=str,
-        ),
-        encoding="utf8",
-    )
-    return path
-
-
-def _anchor(e: dict) -> str:
-    """What an evidence item rests on: its quote, its probe of a released body (which no reviewer
-    confirms), or its figure reading and whether a reviewer confirmed it."""
-    if "quote" in e:
-        return f"“{e['quote']}”"
-    if "probe" in e:
-        where = f" at {e['at']}" if e.get("at") else ""
-        if e.get("between"):
-            where = f" between {', '.join(map(str, e['between']))}"
-        return f"probe {e['probe']}{where}"
-    confirmed = "" if e.get("confirmed_by") else " (unconfirmed)"
-    return f"figure {e.get('image')}: “{e.get('reading')}”{confirmed}"
+    data = {
+        "status": status,
+        "counts": headline,
+        "findings": [asdict(f) for f in findings],
+        # A result gives the keys that apply to its kind alone only where they do.
+        "checks": [{k: v for k, v in asdict(r).items() if v is not None} for r in results],
+        "tolerances": tolerances,
+        "overlap_limits": limits,
+        "model_literals": literals,
+        "exact": exact,
+        "known_first": p.known_first,
+        "waiting": waits,
+        "motion": moves,
+        "masses": None
+        if model is None
+        else {
+            name: {
+                "mass": m.mass,
+                "from": {m.by: m.param},
+                "center": list(m.center),
+                "inertia": list(m.inertia),
+            }
+            for name, m in model.masses.items()
+        },
+        "params": {
+            n: {"value": p.values.get(n), "rests_on": p.rests_on.get(n), **s}
+            for n, s in p.params.items()
+        },
+        "bases": dict(bases),
+        "rests_on_proposed": sorted(p.proposed),
+        "measured": measured,
+        "awaiting_confirmation": awaiting,
+        "probes": p.probes,
+    }
+    (out / "report.json").write_text(json.dumps(data, indent=2, default=str), encoding="utf8")
+    return out / "report.md"

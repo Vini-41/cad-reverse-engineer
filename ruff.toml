@@ -1,10 +1,6 @@
 # One config for every Python file in the repo, so ruff gives the same answer from any directory.
 line-length = 100
-# Extensionless Python scripts; a new shell script in scripts/ joins the shell scripts excluded here.
-extend-include = ["scripts/*"]
-extend-exclude = [
-  "scripts/red-on-main", "scripts/cadrev", "scripts/check", "scripts/committed-examples", ".claude",
-]
+extend-exclude = [".claude"]
 
 [format]
 # Code blocks in the reference docs keep their hand-aligned comments; examples/legclaw,

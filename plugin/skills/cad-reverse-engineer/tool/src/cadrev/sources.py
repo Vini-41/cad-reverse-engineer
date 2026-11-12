@@ -172,23 +172,25 @@ def _tokens(text: str) -> list[_Token]:
     return tokens
 
 
-def quantities_in(text: str) -> list[tuple[float, str | None]]:
+@cache
+def quantities_in(text: str) -> tuple[tuple[float, str | None], ...]:
     """The values a quote states, each with the unit printed after it (None if none): whole numeric
     tokens and number words from zero to ninety-nine, both endpoints of a range as positive
     values, and no number that labels a figure, table, equation or section. The numbers of a
     range or product share its last unit."""
-    return [(t.value, t.unit) for t in _tokens(normalize(text)) if not t.labelled]
+    return tuple((t.value, t.unit) for t in _tokens(normalize(text)) if not t.labelled)
 
 
-def diameters_in(text: str) -> list[float]:
+@cache
+def diameters_in(text: str) -> tuple[float, ...]:
     """The values a quote prints as a diameter callout (Ø 32.5): a length, whether or not a unit
     follows."""
     normalized = normalize(text)
-    return [
+    return tuple(
         t.value
         for t in _tokens(normalized)
         if not t.labelled and _DIAMETER.search(normalized, max(0, t.start - 2), t.start)
-    ]
+    )
 
 
 def numbers_in(text: str) -> list[float]:
