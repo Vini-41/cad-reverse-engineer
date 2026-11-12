@@ -136,7 +136,7 @@ if [ "$mode" = full ]; then
   step "tool tests" uv run pytest -q -n 6 ../../../../tests
   step "script tests" uv run pytest -q -n 4 ../../../../scripts/tests
   step "agent-facing docs point only at files that exist" ../../../../scripts/check-doc-pointers
-  step "every rule is tested raised and not raised, documented and held by a step; tests edit fixtures through swap" \
+  step "every rule is tested raised and beside a near miss, documented and held by a step; tests edit fixtures through swap" \
     uv run python ../../../../scripts/rule-coverage
   step "the skill and tool source use none of GLOSSARY.md's avoided words" ../../../../scripts/check-glossary-words
   step "the tool source branches on a check or probe kind only in run_checks" ../../../../scripts/check-kind-branches

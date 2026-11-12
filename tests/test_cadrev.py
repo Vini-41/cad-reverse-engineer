@@ -212,10 +212,7 @@ def test_report_json_carries_status_findings_and_counts(proj_dir):
     code, report = verify(proj_dir)
     assert code == 0
     assert report["status"] == "VERIFIED"
-    raised = {f["rule"] for f in report["findings"]}
-    assert raised == set()
-    # Named, for scripts/rule-coverage: the fixture's files, model.py and build() return are sound.
-    assert not raised & {"project-missing", "model-syntax", "model-return"}
+    assert [f["rule"] for f in report["findings"]] == []
     assert report["masses"] == {}  # a static project with no mass model weighs nothing
     assert report["counts"] == {
         "errors": 0,
@@ -544,16 +541,6 @@ def test_model_importing_beyond_build123d_and_math_is_a_finding(proj_dir, header
     assert errors(proj_dir) == ["model-import"]
 
 
-def test_guard_model_importing_build123d_and_math(proj_dir):
-    _model_with(
-        proj_dir,
-        header="import math\nfrom math import pi\nimport build123d.topology as topo\n"
-        "from build123d import Box",
-    )
-    code, _ = verify(proj_dir)
-    assert code == 0 and findings(proj_dir, "model-import") == []
-
-
 @pytest.mark.parametrize(
     "line",
     ['extra = float("4")', "extra = int('1' + '0')", 'extra = complex("4")', 'extra = eval("4")'],
@@ -561,12 +548,6 @@ def test_guard_model_importing_build123d_and_math(proj_dir):
 def test_model_converting_text_to_a_number_is_a_finding(proj_dir, line):
     _model_with(proj_dir, line=line)
     assert errors(proj_dir) == ["model-text-number"]
-
-
-def test_guard_model_converting_a_param_to_a_number_or_text(proj_dir):
-    _model_with(proj_dir, line="extra = int(p.link_H), float(p.pitch), str(p.link_L)")
-    code, _ = verify(proj_dir)
-    assert code == 0 and findings(proj_dir, "model-text-number") == []
 
 
 @pytest.mark.parametrize(
@@ -1018,11 +999,6 @@ def test_derived_param_whose_expr_references_no_param_is_a_finding(proj_dir, exp
     assert "param-constant" in errors(proj_dir)
 
 
-def test_guard_derived_param_whose_expr_references_a_param_raises_no_constant_finding(proj_dir):
-    add_params(proj_dir, half={"basis": "derived", "expr": "pi * pitch / 2"})
-    assert "param-constant" not in errors(proj_dir)
-
-
 @pytest.mark.parametrize(
     "expr, rests_on",
     [
@@ -1401,12 +1377,6 @@ def test_guard_run_without_the_build_reports_checks_sharing_an_id(proj_dir):
     assert "error: [check-id] check env: check ids must be unique" in _partial(
         proj_dir, "--no-build"
     )
-
-
-@pytest.mark.parametrize("first, second", [("env", "Env"), ("env", "env-2")])
-def test_guard_checks_whose_ids_differ_in_case_or_suffix(proj_dir, first, second):
-    _rename_checks(proj_dir, first, second)
-    assert findings(proj_dir, "check-id") == []
 
 
 @pytest.mark.parametrize(
@@ -2048,7 +2018,6 @@ def test_unreadable_source_is_a_finding(proj_dir, tmp_path, name, content):
 
 def test_init_writes_the_current_format(proj_dir):
     assert yaml.safe_load((proj_dir / "project.yaml").read_text())["format"] == 1
-    assert findings(proj_dir, "format-missing") == findings(proj_dir, "format-unknown") == []
 
 
 def test_project_without_format_stops_the_run_and_writes_nothing(proj_dir, capsys):
@@ -2665,13 +2634,6 @@ def test_check_tolerance_above_5_percent_of_its_expected_value_is_a_finding(proj
     assert "tolerance-cap" in errors(proj_dir)
 
 
-def test_guard_check_tolerance_at_5_percent_of_its_expected_value(proj_dir):
-    _set_tol(proj_dir, "pitch", tol=1.5)
-    _set_tol(proj_dir, "env", tol=0.25)
-    code, _ = verify(proj_dir)
-    assert code == 0 and findings(proj_dir, "tolerance-cap") == []
-
-
 def test_mass_check_tol_rel_above_a_quarter_is_a_finding(proj_dir, tmp_path):
     _mass_check(
         proj_dir,
@@ -2765,20 +2727,24 @@ def test_guard_interference_check_at_the_default_overlap_limit_is_not_listed(pro
     )
 
 
+def _read_as_n1(quote: str):
+    """A change ledgering quote as N1 (value 4), read by a source param n1."""
+
+    def change(r, t):
+        add_quote(r, t, quote, quote, {"v": 4})
+        edit(r, "params.yaml", lambda d: d["params"].update(n1={"basis": "source", "from": "N1.v"}))
+
+    return change
+
+
 def _ambiguous(root: Path, tmp_path: Path, quote: str) -> list[str]:
-    add_quote(root, tmp_path, quote, quote, {"v": 4})
-    edit(root, "params.yaml", lambda d: d["params"].update(n1={"basis": "source", "from": "N1.v"}))
+    _read_as_n1(quote)(root, tmp_path)
     return findings(root, "unit-ambiguous")
 
 
 @pytest.mark.parametrize("quote", ["4 mm pins in 4 cm links", "4 mm pins in 4 links"])
 def test_value_printed_in_two_units_in_its_quote_is_a_finding(proj_dir, tmp_path, quote):
     assert len(_ambiguous(proj_dir, tmp_path, quote)) == 1
-
-
-@pytest.mark.parametrize("quote", ["4 mm pins in 4 mm holes", "4 mm pins in 4 millimetre holes"])
-def test_guard_value_printed_twice_in_one_unit(proj_dir, tmp_path, quote):
-    assert _ambiguous(proj_dir, tmp_path, quote) == []
 
 
 @pytest.mark.parametrize("value", [1250, 1.25, 250, 1])
@@ -2793,14 +2759,6 @@ def test_reading_with_a_thousands_comma_is_a_finding(proj_dir):
     add_reading(proj_dir, reading="1,250 mm", values={"v": 1250})
     (message,) = findings(proj_dir, "number-ambiguous")
     assert message.startswith("F2.v = ") and "1,250" in message
-
-
-@pytest.mark.parametrize(
-    "quote", ["Walls 3,5 mm", "widths 1,5,10 mm", "a 1,2500 mm rail", "a 1,250.5 mm rail"]
-)
-def test_guard_comma_that_is_not_a_thousands_comma(proj_dir, tmp_path, quote):
-    add_quote(proj_dir, tmp_path, quote, quote, {"v": 5})
-    assert findings(proj_dir, "number-ambiguous") == []
 
 
 @pytest.mark.parametrize(("value", "rule"), [(5, None), (7, "value-not-in-quote")])
@@ -2843,12 +2801,6 @@ def test_project_units_must_name_a_unit_of_each_quantity(proj_dir, declared):
     )
 
 
-@pytest.mark.parametrize("declared", [{"length": "millimetres"}, {"force": "kN", "time": "ms"}])
-def test_guard_project_units_spelled_out_or_of_other_base_quantities(proj_dir, declared):
-    edit(proj_dir, "project.yaml", lambda d: d.update(units=declared))
-    assert findings(proj_dir, "units") == []
-
-
 def _model_reads(root: Path, tmp_path: Path, text: str) -> None:
     """Ledger text as N1 (value 40) and feed it to the model as link_L, checked by the T1
     envelope."""
@@ -2862,14 +2814,6 @@ def test_param_the_model_reads_printed_in_neither_a_length_nor_an_angle_is_a_fin
     _model_reads(proj_dir, tmp_path, "The link reads 40 g on the gauge.")
     messages = findings(proj_dir, "unit-quantity")
     assert len(messages) == 1 and messages[0].startswith("N1.v") and "param link_L" in messages[0]
-
-
-@pytest.mark.parametrize("unit", ["mm", "deg", "teeth", ""])
-def test_guard_param_the_model_reads_printed_in_a_length_an_angle_a_count_or_no_unit(
-    proj_dir, tmp_path, unit
-):
-    _model_reads(proj_dir, tmp_path, f"The link reads 40 {unit} on the gauge.")
-    assert findings(proj_dir, "unit-quantity") == []
 
 
 def _derived_density(root: Path, tmp_path: Path, text: str, expr: str) -> list[str]:
@@ -3122,11 +3066,6 @@ def test_source_with_coverage_off_is_a_warning_in_the_report(proj_dir):
         f"`coverage-off`: {warnings[0]['message']}"
         in (proj_dir / "build" / "report.md").read_text()
     )
-
-
-def test_guard_source_with_coverage_on_raises_no_coverage_off_warning(proj_dir):
-    edit(proj_dir, "project.yaml", lambda d: d["sources"][0].update(coverage=True))
-    assert findings(proj_dir, "coverage-off") == []
 
 
 EXAMPLE = REPO / "examples" / "legclaw-links"
@@ -3982,20 +3921,6 @@ def _skip_in_pdf(root: Path, tmp_path: Path, **skip) -> None:
 def test_skip_that_matches_nothing_is_a_finding(proj_dir, tmp_path, skip):
     _skip_in_pdf(proj_dir, tmp_path, **skip)
     assert "skip-not-found" in rules(proj_dir)
-
-
-@pytest.mark.parametrize(
-    "skip",
-    [
-        {"from": "Link 40", "to": "8x5"},
-        {"from": "pivot holes", "to": "diameter."},
-        {"quote": "spaced 30 mm apart", "page": 2},
-        {"pages": [1]},
-    ],
-)
-def test_guard_skip_that_matches_on_one_page(proj_dir, tmp_path, skip):
-    _skip_in_pdf(proj_dir, tmp_path, **skip)
-    assert "skip-not-found" not in rules(proj_dir)
 
 
 def _mass_of_two_links(root: Path, tmp_path: Path, count) -> None:
@@ -8246,14 +8171,57 @@ def test_planetary_train_exports_one_joint_equality_per_gear_in_its_chain(proj_d
     assert m.body_parentid[m.jnt_bodyid[planet]] == carrier_body
 
 
-# Every rule beside its near miss. scripts/rule-coverage fails CI unless each rule the tool emits is
-# asserted present by one test and absent by another; a rule no other test covers both ways gets a
-# row here: the change to the fixture that raises it, and the closest changes it must accept.
+# Every rule beside its near miss: the change to the fixture that raises it, and the closest changes
+# it must accept. scripts/rule-coverage fails unless each rule the tool emits has a row here with a
+# near miss, the only kind of test it counts as asserting a rule absent.
+
+
+def raised(root: Path) -> list[tuple[str, str]]:
+    """(level, rule) of each finding a verification run prints, so a run that stops before writing
+    its report (project-missing, format-missing, format-unknown) is read as well."""
+    _, out = run("check", str(root))
+    return re.findall(r"^(error|warning): \[([a-z0-9-]+)\]", out, re.M)
 
 
 def rules(root: Path) -> list[str]:
-    """The rule of every finding, error or warning, from a fresh verification run."""
-    return [f["rule"] for f in verify(root)[1]["findings"]]
+    """The rule of every finding, error or warning, a fresh verification run prints."""
+    return [rule for _, rule in raised(root)]
+
+
+def _quoted(text: str, **values):
+    return lambda r, t: add_quote(r, t, text, text, values)
+
+
+def _format_last(r, t) -> None:
+    """project.yaml with its format, 1, as its last key, not its first."""
+    edit(r, "project.yaml", lambda d: d.update(format=d.pop("format")))
+
+
+def _project_yaml_linked(r, t) -> None:
+    """project.yaml a link to the file it was, now meta.yaml."""
+    (r / "project.yaml").rename(r / "meta.yaml")
+    (r / "project.yaml").symlink_to("meta.yaml")
+
+
+def _pdf_skip(**skip):
+    """A change registering the paper as a two-page PDF, source doc, and skipping skip in it."""
+    return lambda r, t: _skip_in_pdf(r, t, **skip)
+
+
+def _meta(**changes):
+    """A change to project.yaml's top-level keys."""
+    return lambda r, t: edit(r, "project.yaml", lambda d: d.update(changes))
+
+
+def _read_by_the_model(unit: str):
+    return lambda r, t: _model_reads(r, t, f"The link reads 40 {unit} on the gauge.")
+
+
+def _flow_style(name: str):
+    """A change rewriting name's YAML in flow style, one line of braces: the same data."""
+    return lambda r, t: write(
+        r, name, yaml.safe_dump(yaml.safe_load((r / name).read_text()), default_flow_style=True)
+    )
 
 
 def _append(name: str, key: str, entry: dict):
@@ -8399,6 +8367,13 @@ FINDINGS = {
     ),
     "check-config": (_check("pitch", along="w"), [_check("pitch", along="x")]),
     "check-failed": (_weighs("2.0"), [_weighs("1.8")]),
+    "check-id": (
+        lambda r, t: _rename_checks(r, "env", "env"),
+        [
+            lambda r, t: _rename_checks(r, "env", "Env"),
+            lambda r, t: _rename_checks(r, "env", "env-2"),
+        ],
+    ),
     "check-kind": (_check("clear", kind="overlap"), [_weighs("1.8")]),
     "conflict-open": (
         _append("evidence.yaml", "conflicts", _CONFLICT),
@@ -8414,6 +8389,10 @@ FINDINGS = {
             _skip(pages=[1], reason="test conditions only"),
             _skip(**{"from": "Tests used", "to": "diameter."}, reason="test condition"),
         ],
+    ),
+    "coverage-off": (
+        lambda r, t: edit(r, "project.yaml", lambda d: d["sources"][0].update(coverage=False)),
+        [lambda r, t: edit(r, "project.yaml", lambda d: d["sources"][0].update(coverage=True))],
     ),
     "datum-off-solid": (
         lambda r, t: write(r, "model.py", _datum("(0, 0, p.link_L)")),
@@ -8466,6 +8445,14 @@ FINDINGS = {
         _append("evidence.yaml", "evidence", _EXTRA),
         [_append("evidence.yaml", "evidence", {**_EXTRA, "scope": "context", "reason": "a test"})],
     ),
+    "format-missing": (
+        lambda r, t: edit(r, "project.yaml", lambda d: d.pop("format")),
+        [_format_last],
+    ),
+    "format-unknown": (
+        _meta(format=2),
+        [_format_last],
+    ),
     "gap-unused": (
         lambda r, t: add_gap(r, "G2"),
         [
@@ -8479,6 +8466,10 @@ FINDINGS = {
     "image-missing": (_unpinned_reading, [_reading()]),
     "image-reading": (_reading(reading=""), [_reading(reading="70")]),
     "joint-range": (_knee_range(-1, 1), [_knee_range(-180, 180)]),
+    "known-first": (
+        _meta(known_first=True),
+        [lambda r, t: (_no_proposed(r), _meta(known_first=True)(r, t))],
+    ),
     "loop-open": (_coupler(20), [_coupler(25)]),
     "mjcf-load": (_density(0), [_density(0.0012)]),
     "model-arithmetic": (
@@ -8501,6 +8492,16 @@ FINDINGS = {
         lambda r, t: geared(r, t, swap(_MESH, '"driven": "wheel"', '"driven": "axle"')),
         [lambda r, t: geared(r, t, swap(_MESH, '"driver": "input"', '"driver": "knee"'))],
     ),
+    "model-import": (
+        lambda r, t: _model_with(r, header="import os"),
+        [
+            lambda r, t: _model_with(
+                r,
+                header="import math\nfrom math import pi\nimport build123d.topology as topo\n"
+                "from build123d import Box",
+            )
+        ],
+    ),
     "model-joint": (
         _bar(_INPUT_AXIS, '"axis": ["crank_1.a", "crank_1.a"]'),
         [_bar(_INPUT_AXIS, '"axis": ["crank_1.a_up", "crank_1.a"]')],
@@ -8517,6 +8518,33 @@ FINDINGS = {
         lambda r, t: (r / "model.py").rename(r / "model_v1.py"),
         [lambda r, t: (r / "model.py").write_text(_MOVED)],
     ),
+    "model-return": (
+        lambda r, t: write(
+            r, "model.py", swap(MODEL, "    return {", "    return []\n    _ = {", 1)
+        ),
+        [
+            lambda r, t: write(
+                r, "model.py", swap(MODEL, '"assembly": {', '"joints": {},\n        "assembly": {')
+            )
+        ],
+    ),
+    "model-syntax": (
+        lambda r, t: write(r, "model.py", swap(MODEL, "def build(p):", "def build(p)")),
+        [lambda r, t: write(r, "model.py", swap(MODEL, "def build(p):", "def build(p) -> dict:"))],
+    ),
+    "model-text-number": (
+        lambda r, t: _model_with(r, line='extra = float("4")'),
+        [lambda r, t: _model_with(r, line="extra = int(p.link_H), float(p.pitch), str(p.link_L)")],
+    ),
+    "number-ambiguous": (
+        _quoted("a 1,250 mm rail", v=1250),
+        [
+            _quoted("Walls 3,5 mm", v=5),
+            _quoted("widths 1,5,10 mm", v=5),
+            _quoted("a 1,2500 mm rail", v=5),
+            _quoted("a 1,250.5 mm rail", v=5),
+        ],
+    ),
     "overlay-config": (
         lambda r, t: _overlay(r, view="side"),
         [lambda r, t: _overlay(r, view="right")],
@@ -8526,6 +8554,10 @@ FINDINGS = {
         [lambda r, t: _overlay(r), lambda r, t: _overlay(r, origin=[-15, 10])],
     ),
     "param-basis": (_param("hole_d", basis="assumed"), [lambda r, t: _no_proposed(r)]),
+    "param-constant": (
+        lambda r, t: add_params(r, half={"basis": "derived", "expr": "2.2"}),
+        [lambda r, t: add_params(r, half={"basis": "derived", "expr": "pi * pitch / 2"})],
+    ),
     "param-derived": (
         _param("half", basis="derived", expr="pitch /"),
         [_param("half", basis="derived", expr="pitch / 2")],
@@ -8558,6 +8590,11 @@ FINDINGS = {
     ),
     "part-invalid": (_shell("[1:]"), [_shell("")]),
     "part-mass": (_unweighed_rocker, [_servo_crank]),
+    "probe-mismatch": (
+        lambda r, t: probed(r, t, values={"L": 40.002, "W": 5, "H": 8}),
+        [lambda r, t: probed(r, t, values={"L": 40.0005, "W": 5, "H": 8})],
+    ),
+    "project-missing": (lambda r, t: (r / "project.yaml").unlink(), [_project_yaml_linked]),
     "quote-not-found": (
         _quote_from("paper.pdf", "spaced 30 mm apart", page=1),
         [_quote_from("paper.docx", "pivot holes of the link are spaced 30 mm")],
@@ -8569,7 +8606,20 @@ FINDINGS = {
             _quote_from("paper.docx", "30 mm apart"),
         ],
     ),
+    "schema": (
+        lambda r, t: edit(r, "checks.yaml", lambda d: d["checks"][1].pop("id")),
+        [lambda r, t: edit(r, "checks.yaml", lambda d: d["checks"][1].update(id=7))],
+    ),
     "skip-anchor": (_skip(reason="test condition"), [_skip(pages=[1], reason="test condition")]),
+    "skip-not-found": (
+        _pdf_skip(quote="branches of 70 mm diameter"),
+        [
+            _pdf_skip(**{"from": "Link 40", "to": "8x5"}),
+            _pdf_skip(**{"from": "pivot holes", "to": "diameter."}),
+            _pdf_skip(quote="spaced 30 mm apart", page=2),
+            _pdf_skip(pages=[1]),
+        ],
+    ),
     "skip-reason": (
         _skip(quote="branches of 60 mm diameter"),
         [_skip(quote="branches of 60 mm diameter", reason="a test load")],
@@ -8584,6 +8634,10 @@ FINDINGS = {
         lambda r, t: (r / "sources" / "paper.txt").unlink(),
         [lambda r, t: ((r / "sources" / "paper.txt").unlink(), _reregister(r, t))],
     ),
+    "source-unreadable": (
+        lambda r, t: add_source(r, t, "paper.pdf", b"%PDF-1.4 not really"),
+        [lambda r, t: add_source(r, t, "paper.pdf", pdf(list(PAPER_PAGES)))],
+    ),
     "target": (
         lambda r, t: edit(r, "project.yaml", lambda d: d.update(target="TODO name the object")),
         [
@@ -8592,11 +8646,36 @@ FINDINGS = {
             )
         ],
     ),
+    "tolerance-cap": (
+        lambda r, t: _set_tol(r, "pitch", tol=1.51),  # pitch 30: the cap is 1.5
+        [lambda r, t: (_set_tol(r, "pitch", tol=1.5), _set_tol(r, "env", tol=0.25))],
+    ),
     "unchecked-source": (
         lambda r, t: edit(r, "checks.yaml", lambda d: d["checks"].pop(1)),
         [_check("pitch", along="x")],
     ),
+    "unit-ambiguous": (
+        _read_as_n1("4 mm pins in 4 cm links"),
+        [_read_as_n1("4 mm pins in 4 mm holes"), _read_as_n1("4 mm pins in 4 millimetre holes")],
+    ),
+    "unit-quantity": (
+        _read_by_the_model("g"),
+        [
+            _read_by_the_model("mm"),
+            _read_by_the_model("deg"),
+            _read_by_the_model("teeth"),
+            _read_by_the_model(""),
+        ],
+    ),
+    "units": (
+        _meta(units={"length": "furlong"}),
+        [_meta(units={"length": "millimetres"}), _meta(units={"force": "kN", "time": "ms"})],
+    ),
     "value-not-in-reading": (_reading(values={"w": 71}), [_reading(values={"w": 70})]),
+    "yaml-syntax": (
+        lambda r, t: write(r, "params.yaml", "items:\n  - id: a\n    quote: [unclosed\n"),
+        [_flow_style("params.yaml")],
+    ),
 }
 
 
@@ -8605,6 +8684,7 @@ FINDINGS = {
 WARNED = {
     "cable-on-axis",
     "conflict-open",
+    "coverage-off",
     "gap-unused",
     "overlay-empty",
     "param-unused",
@@ -8617,7 +8697,7 @@ WARNED = {
 def test_change_raises_its_rule(proj_dir, tmp_path, rule):
     FINDINGS[rule][0](proj_dir, tmp_path)
     level = "warning" if rule in WARNED else "error"
-    assert (level, rule) in [(f["level"], f["rule"]) for f in verify(proj_dir)[1]["findings"]]
+    assert (level, rule) in raised(proj_dir)
 
 
 @pytest.mark.parametrize(
@@ -8802,8 +8882,6 @@ def _mismatches(report: dict) -> list[str]:
 def test_bbox_probe_whose_recorded_value_matches_the_file_passes(proj_dir, tmp_path):
     probed(proj_dir, tmp_path)  # context, restating T1-link
     code, report = verify(proj_dir)
-    found = [f["rule"] for f in report["findings"]]
-    assert "probe-mismatch" not in found and "evidence-unused" not in found
     assert [q["ok"] for q in report["probes"]] == [True] * 3
     # Its only released values are probes, which await no reviewer: VERIFIED, not pending review.
     assert (code, report["status"], report["awaiting_confirmation"]) == (0, "VERIFIED", [])
@@ -9312,7 +9390,6 @@ def test_released_stl_is_probed_like_a_step(proj_dir, tmp_path, recorded, mismat
     assert [(q["body"], q["ok"]) for q in report["probes"] if q["key"] == "L"] == [
         ("link_stl", not mismatched)
     ]
-    assert "source-unreadable" not in [f["rule"] for f in report["findings"]]
     assert bool(_mismatches(report)) == mismatched and (code == 0) != mismatched
 
 
