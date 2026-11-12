@@ -18,7 +18,6 @@ STUBS = (
     "check-doc-pointers",
     "check-glossary-words",
     "check-kind-branches",
-    "check-linear",
     "committed-examples",
     "rule-coverage",
 )
@@ -146,6 +145,20 @@ def test_lint_runs_only_the_type_ruff_and_import_steps(tmp_path):
     assert result.stdout.splitlines()[-1] == "all steps passed"
 
 
+def untimed(out: str) -> list[str]:
+    """The check's output lines, each step's header without the time it ends on."""
+    return [re.sub(r"^(== .*) \(\d+ s\)$", r"\1", line) for line in out.splitlines()]
+
+
+def test_each_steps_header_names_how_long_it_took(tmp_path):
+    result, _ = check(tmp_path, bodies={"check-doc-pointers": "sleep 1; exit 0"})
+    # A one-second sleep measures 1 or 2 in bash's whole seconds.
+    assert re.search(
+        r"^== agent-facing docs point only at files that exist \([12] s\)$", result.stdout, re.M
+    )
+    assert re.search(r"^== pyright \(\d+ s\)$", result.stdout, re.M)
+
+
 def waits_for(mine: Path, other: Path) -> str:
     """A stub body that marks mine, then passes once other is marked, or fails after 5 s."""
     wait = f"for _ in $(seq 50); do [ -e '{other}' ] && exit 0; sleep 0.1; done"
@@ -165,7 +178,7 @@ def test_guard_output_and_failures_follow_the_steps_order_whatever_finishes_firs
         "check-glossary-words": "echo words; exit 1",
     }
     result, _ = check(tmp_path, bodies=bodies)
-    lines = result.stdout.splitlines()
+    lines = untimed(result.stdout)
     pointers = "agent-facing docs point only at files that exist"
     words = "the skill and tool source use none of GLOSSARY.md's avoided words"
     assert lines[lines.index(f"== {pointers}") + 1] == "pointers"
@@ -208,7 +221,7 @@ def test_every_example_the_copy_holds_is_checked_for_its_documented_status(tmp_p
         (copy / name / "project.yaml").write_text("format: 1\n")
     (copy / "notes").mkdir()  # not a project, so no example
     result, _ = check(tmp_path, bodies={"committed-examples": f"echo '{copy}'; exit 0"})
-    steps = [line for line in result.stdout.splitlines() if line.startswith("== examples/")]
+    steps = [line for line in untimed(result.stdout) if line.startswith("== examples/")]
     assert steps == [
         "== examples/alpha reaches its documented status",
         "== examples/beta reaches its documented status",
