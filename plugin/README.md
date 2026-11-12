@@ -27,7 +27,9 @@ network_access = true
 
 Any agent that reads skills: `npx skills add Vini-41/cad-reverse-engineer`.
 
-Then ask the agent something like *"reverse-engineer the gripper in this paper as CAD"*.
+Then ask the agent something like *"reverse-engineer the gripper in this paper as CAD"*. It asks whether you want the complete model or known first: only the parts the sources settle, built and checked, before anything is proposed.
+
+Built for Fable 5.2 and [benchmarked](https://github.com/Vini-41/cad-reverse-engineer/blob/main/docs/benchmark.md) across Anthropic's and OpenAI's frontier models.
 
 ## Requirements
 

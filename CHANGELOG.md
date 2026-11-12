@@ -12,7 +12,9 @@ The first release of `cad-reverse-engineer`, a skill and CLI (`cadrev`) for rebu
 - **Coverage.** A sweep lists every stated quantity in the sources; each one is ledgered or skipped with a reason.
 - **Report.** `cadrev check` writes one STEP per part, the assembly, figure overlays and `build/report.md`: one status (VERIFIED, VERIFIED PENDING REVIEW, or a failing one), what rests on proposed values, open conflicts, and the questions to send the authors.
 
-The skill walks the agent through seven steps (scope, sources, ledger, parameters, model, checks, hand-over), each ending on a criterion `cadrev` confirms.
+The skill walks the agent through nine steps (scope, sources, ledger, released geometry, parameters, model, checks, joints, hand-over), each ending on a criterion `cadrev` confirms. At the start the agent asks which build the user wants: the complete model, every value the sources leave open proposed beside the question that would settle it; or **known first**, only the parts the sources settle, built and checked, with the rest waiting until the user builds on it or has the agent propose them.
+
+It is built for Fable 5.2 and [benchmarked](docs/benchmark.md) across Anthropic's and OpenAI's frontier models.
 
 ### Examples
 
@@ -32,4 +34,4 @@ One small example shows each kind of evidence, and four full reconstructions wer
 
 ### Requirements
 
-The CLI runs locally through [uv](https://docs.astral.sh/uv/) on Python 3.10 to 3.13. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute) at the versions in the shipped lockfile, so it needs network access then. Under Codex's `workspace-write` sandbox, allowing network is not enough: `cadrev` also writes uv's cache (`~/.cache/uv`), the plugin's own `tool/.venv`, and Matplotlib's and fontconfig's caches, each outside the workspace, so each needs `--add-dir` or a redirect (`MPLCONFIGDIR`, `XDG_CACHE_HOME`).
+The CLI runs locally through [uv](https://docs.astral.sh/uv/) on Python 3.10 to 3.13. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute) at the versions in the shipped lockfile, so it needs network access then. Under Codex, allow it with `network_access = true` under `[sandbox_workspace_write]` in `~/.codex/config.toml`; `cadrev` moves each cache and environment the sandbox will not let it write (uv's cache, the plugin's `tool/.venv`, Matplotlib's and fontconfig's caches) to a directory of the user's under `TMPDIR`.
