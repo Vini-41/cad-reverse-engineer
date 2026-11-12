@@ -66,7 +66,11 @@ Geometry the authors released settles values no text states: probe them rather t
 
 - **Datums** on each body go under `datums` in evidence.yaml, at coordinates read from the file by a short script of your own, run as `uv run --project <the directory holding this SKILL.md>/tool python <script>`: one that loads the file with build123d, reads an STL's triangle corners, or reads a cut file's contours in the sheet's frame ([project-format.md](references/project-format.md)).
 - **Probes** take each value a body settles (a hole spacing, a bore, an envelope, a thickness), recording the design value: `32.5`, not the file's `32.4999`. A cut file's region is probed in the sheet's plane, between datums on its edges; a hole's centre and diameter are a circle datum through three points of its edge.
-- **An STL body** holds only flat triangles. A datum mid-facet sits inside the true circle by the facet's sag, so probe a bore as a `distance` between two triangle corners opposite each other, and give a curved part's shape check a `tol` of that sag.
+- **An STL body** holds only flat triangles: no cylindrical face, no axis, and a point mid-facet sits inside the true circle by the facet's sag. So every input to a [derived datum](references/project-format.md#probes-released-geometry) on it is a triangle corner read from the file, and a curved part's shape check takes a `tol` of that sag. Its routes:
+  - **A bore or a fillet:** a `diameter` probe `at` a `circle` datum through three corners on its rim or arc.
+  - **A bore's axis or a hole's centre:** that circle datum, whose centre a `distance` or `angle` probe reads.
+  - **A feature's phase about an axis:** an `angle` probe `along` the axis, at the bore's circle datum, between a hole's circle datum and the `mid` datum of a tooth's two tip corners.
+  - **A count of features about an axis:** an `angle` probe `along` the axis, at the bore's circle datum, between two adjacent features' centres, recording the design value (`60`, not `59.9999`), then a derived param `360 / <that angle's param>`. No probe counts features: the shape check is what confirms the count.
 - **Each body** is compared or skipped: a `shape` check against the part model.py will build from params to reproduce it, or a skip with a reason for a body that is not part of the device (a fit tester, a part of another device).
 
 Done when every body is named by a shape check or a skip, and every value a body settles that the model will use is probed.
