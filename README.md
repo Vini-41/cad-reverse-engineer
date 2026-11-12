@@ -42,7 +42,7 @@ The agent asks which you want before it starts:
 /plugin install cad-reverse-engineer@cad-reverse-engineer
 ```
 
-Then ask Claude something like *"reverse-engineer the gripper in this paper as CAD"*, or invoke `/cad-reverse-engineer`. The skill guides the agent through nine steps: scope, sources, ledger, released geometry, parameters, model, checks, joints and hand-over. Each step ends on a criterion the CLI can confirm.
+Then ask Claude something like *"reverse-engineer the gripper in this paper as CAD"*, or invoke `/cad-reverse-engineer`. The skill takes the agent through nine stages: scope, sources, ledger, released geometry, parameters, model, checks, motion and hand-over. Each ends on a criterion the CLI can confirm.
 
 ### As a Codex plugin
 
@@ -99,7 +99,7 @@ The example covers each kind of evidence: Table S2 envelopes from the DOCX suppl
 
 [`examples/legclaw`](examples/legclaw) is the full LegClaw from the same sources, both legs and their mounts with their motion, exported as `build/model.mjcf`. A fresh agent built it from the skill alone; it reads the sources from `examples/legclaw-links/sources/`, and `scripts/check` runs it too.
 
-[`examples/centrifuge`](examples/centrifuge) is the mini benchtop centrifuge of Soma Poór 2022, a static project checked against the authors' released STEP files, and [`examples/cell-stretcher`](examples/cell-stretcher) the uniaxial cell stretcher of Kah et al. 2021, two lead screws driving one carriage, checked against the authors' laser-cut SVG sheets and STL. Fresh agents built both from the skill alone; `scripts/check` runs both.
+[`examples/centrifuge`](examples/centrifuge) is the mini benchtop centrifuge of Soma Poór 2022, a static project checked against the authors' released STEP files; [`examples/cell-stretcher`](examples/cell-stretcher) the uniaxial cell stretcher of Kah et al. 2021, two lead screws driving one carriage, checked against the authors' laser-cut SVG sheets and STL; and [`examples/compact-sspg`](examples/compact-sspg) the COMPAct 7.2:1 planetary gearbox of Singh et al. 2025, its train checked from its tooth counts and against the authors' STL. Fresh agents built all three from the skill alone; `scripts/check` runs them too.
 
 ## Files
 
@@ -111,23 +111,24 @@ plugin/                  the plugin, as it installs
   .claude-plugin/        its Claude Code manifest
   .codex-plugin/         its Codex manifest
 plugin/skills/cad-reverse-engineer/
-  SKILL.md               the workflow the agent follows
+  SKILL.md               the work, stage by stage
   references/            project file formats; the model contract
-  tool/                  the cadrev Python package (build123d, pypdf, PyYAML, matplotlib)
-tests/                   the cadrev tests
+  cadrev                 runs the CLI from any directory
+  tool/                  the cadrev Python package and its lockfile
+tests/                   the cadrev tests, which run every example
 examples/                worked reconstructions
+scripts/check            the repo's only CI, run locally
 ```
 
 ## Development
 
+`scripts/check` is the repo's only CI, run locally before every merge: ruff, pyright and the tests, which run every example. `scripts/check --lint` runs the first two alone. The tests drive the CLI as an agent does:
+
 ```bash
 cd plugin/skills/cad-reverse-engineer/tool
-uv sync --locked -p 3.12 --extra test
-uv run pytest -q ../../../../tests
+uv run --extra test pytest -q -n auto ../../../../tests -m "not slow"   # without the examples
 ```
-
-`scripts/check` is the repo's only CI, run locally before every merge. It sets this clone's `core.hooksPath` to `.githooks`, whose pre-commit hook ruff-formats staged Python.
 
 ## License
 
-The code is under the MIT license. The example's sources and figure crop come from the CC BY 4.0 article cited above and keep that license and attribution.
+The code is under the MIT license. Each example's sources and figure crops keep the license and credit its README names: CC BY 4.0 for the articles and their files, MIT for COMPAct's STL.
