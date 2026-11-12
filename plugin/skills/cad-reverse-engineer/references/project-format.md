@@ -1,125 +1,116 @@
 # Project format
 
-A reconstruction project is a directory of YAML files plus `model.py`. `cadrev init` creates it; `cadrev check` enforces every rule below and names the rule it applies (`[rule-name]`) in each finding.
-
-Before any rule runs, every file is read against the shapes shown here. A file that is not valid YAML is `[yaml-syntax]` (file and line); an entry of the wrong shape (a missing `id`, a param that is a bare number, a non-numeric value, a key not shown here) is `[schema]`, names the file and the entry, and is left out of the run. Quote every free-text value inside a `{…}` entry (an `interpretation`, `rationale` or `reason`), since such notes soon gain a comma: unquoted, `reason: a test load, not the object` ends at the comma and leaves `not the object` as an unknown key. A directory without `project.yaml` is `[project-missing]`, and no report is written.
+A reconstruction project is a directory of YAML files plus `model.py`. `cadrev init` creates it, and `cadrev check` holds it to everything below. This file gives each file's shape and what its entries mean. A finding names what breaks a rule and where, so read this for what to write, and the findings for what to fix.
 
 ```
-project.yaml    format, sources, units, tolerance, target
+project.yaml    format, target, units, tolerance, sources
 evidence.yaml   the ledger: evidence, skipped, conflicts, datums on released bodies
-params.yaml     every number the model uses, with its basis
-checks.yaml     geometry checks against evidence
-gaps.yaml       what the sources leave undefined
+params.yaml     every number the model uses, with its basis; the mass model
+checks.yaml     the geometry compared with the ledger
+gaps.yaml       what the sources leave open
 overlays.yaml   optional: model edges drawn over figures
-model.py        build123d model; see modeling.md
-sources/        registered source files (pinned by sha256)
-figures/        extracted images; figures/crops/ holds pinned evidence crops
-build/          STEP files, overlays, report.md, report.json; model.mjcf and meshes/ for a model with joints
+model.py        the build123d model (modeling.md)
+sources/        registered source files, pinned by sha256
+figures/        extracted images; figures/crops/ holds the pinned evidence crops
+build/          STEP files, overlays, report.md, report.json; model.mjcf and meshes/ for a mechanism
 ```
+
+Every file is read against the shapes shown here: an entry with a key not shown, or a value of the wrong type, is left out of the run with a `[schema]` finding. Quote every free-text value inside a `{…}` entry (`reason: "a test load, not the object"`), since an unquoted comma ends the value there.
 
 ## project.yaml
 
 ```yaml
-format: 1                # written by `cadrev init`
+format: 1                # written by `cadrev init`; cadrev refuses a project of another format
 name: gripper
 target: Version-3 two-finger gripper as reported in Doe 2025, fingers open (not the Fig. S4 prototype)
-units: {length: mm, angle: deg, mass: g}
-tolerance: {length: 0.001, angle: 0.01}
-model_literals: [0, 1, 2, -1, 0.5, 90, 180, 270, 360]   # optional; numbers model.py may contain (modeling.md)
-known_first: true        # optional: build only what the sources settle (see Known first)
-sources:
+units: {length: mm, angle: deg, mass: g}       # also force and time; defaults mm, deg, g, N, s
+tolerance: {length: 0.001, angle: 0.01}        # how closely the model must realise a source value
+model_literals: [0, 1, 2, -1, 0.5, 90, 180, 270, 360]   # optional: the numbers model.py may hold
+known_first: true        # optional: build only what the sources settle (Known first)
+sources:                 # written by `cadrev source`; keep it the last key
   - id: paper
-    kind: paper            # paper | supplement | datasheet | video | drawing | geometry | other
+    kind: paper          # paper | supplement | datasheet | video | drawing | geometry | other
     path: sources/x.pdf
-    sha256: …              # written by `cadrev source`
+    sha256: …
     citation: …
     url: https://doi.org/…
     license: CC-BY-4.0
-    coverage: false        # optional: exclude from the coverage sweep (e.g. a 200-page catalogue; see `skipped`)
+    coverage: false      # optional: leave this source out of the coverage sweep (a 200-page catalogue)
 ```
 
-`format` is the version of these file formats. A project without it is `[format-missing]`; one with a version this cadrev does not read is `[format-unknown]`. Either way cadrev reads no other project file, every command refuses the project, and no report is written.
+- `target` names the object, its version and its configuration, and where the authors released several variants, the one built.
+- `tolerance` is a modelling tolerance, not a manufacturing one. `tolerance.angle` is in degrees whatever `units.angle` says.
+- `cadrev source` with an id already registered refreshes that entry: its file, hash and whatever the command states. That is how a source is restored into a clone or replaced by a new download. A source licensed CC0, CC-BY or CC-BY-SA is un-ignored in the project's `.gitignore`, so it is committed and the project reruns from a clone.
+- **Text sources** are quote-checked and swept: PDF, DOCX, TXT, MD, HTML (read as its rendered text). Save a web datasheet as HTML or TXT to quote it. Video and image files anchor image evidence only.
+- **Geometry sources** (`kind: geometry`) are what the authors released: STEP or STL, read in millimetres and converted to the project's length unit. A **body** is named by its source's id where the file holds one solid, else `<source>#<n>`, the nth solid in file order from 1. Where a part ships as both, register the STEP: an STL holds only flat triangles, so it has no axis for a datum and no cylindrical face for a diameter.
+- **A cut file** is a laser-cut sheet, an SVG registered as `kind: geometry`. Its bodies are its regions, each an outer contour with the holes inside it, named by a point inside it: `<source>@<x>,<y>` (`plates@30,41`). Points are in the sheet's frame: from the page's top-left corner, x right and y down, at the scale the file declares with every transform applied, in the project's length unit. The coverage findings name each region by such a point, ready to copy.
 
-`known_first: true` holds the project to what the sources settle, and lists what waits: see [Known first](#known-first).
+## Units come from the quote
 
-`target` names the object, version and configuration reconstructed, and, where the authors released several variants (two rotors), the one built; one missing or still starting with `TODO` is `[target]`.
+A ledger value is written as printed (`values: {L: 4}` for "4 cm"). cadrev reads the unit printed after the number, or after a hyphen (`5-mm pin`), and converts the value to the project's units wherever a param, a check or an overlay uses it; a `value` written on that param is in project units (40).
 
-`units` names the project's unit for length, angle, mass, force and time (defaults `mm`, `deg`, `g`, `N`, `s`); torque, pressure, density and speed follow from them (N·mm, N/mm², g/mm³, mm/s by default). A key outside those five, or a unit cadrev does not know or of another quantity (`length: g`), is `[units]`.
+- The numbers of a range or a product share its last unit ("3–5 mm", "40×8×5 mm"), and a nominal its tolerance's ("1.000 ± 0.005 in").
+- A value with no unit after it, such as a table cell, is already in project units. Where the table prints its unit in a header (`(cm)` over `13*13*10`), ledger the cell as printed, give the dimension a `derived` param scaled to the project's unit (`t_w * 10`) whose `interpretation` names the header, and check it through `expect` (`T2.W * 10`).
+- `in` and `"` read as inches, except `in` before a determiner ("4 in total").
+- A value printed in two different units in one quote, or once with a unit and once without, is ambiguous: quote only the part that states it.
+- A **count** (a gear's teeth, a train's planets) is a whole number printed with no unit or a count unit, read as a pure number: Table I's `SSPG [25, 65, 155, 0.5, 3]` gives `z_sun` 25, not 25 mm. A ratio is ledgered as its number: "7.2:1" is `{ratio: 7.2}`.
 
-**Units come from the quote.** A ledger value is written as printed (`values: {L: 4}` for "4 cm"), and cadrev reads the unit printed right after it, or after a hyphen (`2-in. plate`, `5-mm pin`), and converts the value to the project's units (40 mm) wherever a param `from:`, a check or an overlay uses it; a `value` written on that param is in project units (40). The numbers of a range or product share its last unit ("3–5 mm", "40×8×5 mm"), and a nominal its tolerance's ("1.000 ± 0.005 in" is 25.4 mm). A value with no unit printed after it, such as a table cell (`37×6.5×5`), is already in project units. `in` and `"` read as inches, except `in` before a determiner ("4 in total", "2 in each leg").
+Each use expects one quantity, and a value printed in a unit of another is a `[unit-quantity]` finding: a length for `bbox`, `distance`, `diameter` and `stroke` checks, overlay calibrations and lead params; an angle for `angle` checks; a length, angle or count for a param `model.py` reads; a mass or a density where the mass model or a mass check takes one; a count for `count` checks, a mass check's `counts`, and the params a gear ratio is derived from (which may also be lengths, as a belt's pulley diameters are); a joint's own quantity (an angle for a revolute joint, a length for a slide) for its range, its poses and a cable's closed value.
 
-Each use expects one quantity: a `bbox` or `distance` check, an overlay calibration and a param `model.py` reads expect a length (the model may also read an angle or a count); an `angle` check's value expects an angle, in degrees or radians, and is compared in degrees; a mass check's `key` and `add` params expect a mass, its `density` a density, and so do a [mass model](#mass-model) entry's `mass` and `density`. A `count` check's value, a mass check's `counts` params and each param a gear's `ratio` is derived from (through its derived params, to those with a basis of their own) expect a **count**: a whole number, printed with no unit or a count unit, read as a pure number (COMPAct's `SSPG [25, 65, 155, 0.5, 3]` gives `z_sun` 25, not 25 mm); a param a gear's ratio is derived from may also be a length, printed in a length unit or as a diameter callout (`Ø 22.5`), as a belt's pulley diameters are. A value printed in a unit of another quantity, or a count that is not a whole number, is `[unit-quantity]`; a param traces to its quote through basis `source`, or through a `derived` expr that only scales one param by constants (`rho * 1000`). A value printed in two different units in one quote, or once with a unit and once without ("4 mm pins in 4 cm links"), is `[unit-ambiguous]`: quote only the part that states it.
-
-Recognised units, spelled-out names included (millimetre, inches, degrees, grams, seconds…):
-
-| quantity | units |
+| quantity | units read, spelled-out names included |
 |---|---|
-| length | mm, cm, m, µm/um/micron, in/", ft/foot/feet, thou |
-| angle | deg/°/◦, rad |
-| mass | mg, g, kg, lb/lbs/pound, oz/ounce |
-| force | N, kN, mN, kgf, lbf/pound-force |
-| torque | N·m (also Nm, nm), N·mm, N·cm, mN·m, kgf·cm (also kg·cm) |
+| length | mm, cm, m, µm/um/micron, in/", ft, thou |
+| angle | deg/°, rad |
+| mass | mg, g, kg, lb, oz |
+| force | N, kN, mN, kgf, lbf |
+| torque | N·m (Nm), N·mm, N·cm, mN·m, kgf·cm (kg·cm) |
 | pressure | Pa, kPa, MPa (N/mm²), GPa, bar, psi |
 | density | g/cm³ (g/cc, g/ml), kg/m³, g/mm³ |
-| speed | mm/s, cm/s, m/s, km/h |
-| time | ms, s/sec, min, h/hr |
-| area | mm², cm², m² (also mm2, mm^2) |
-| volume | mm³, cm³ (cc, ml), m³ (also cm3, cm^3) |
-| angular speed | rpm (r/min), rad/s |
-| torsional stiffness, torsional damping | N·m/rad, N·mm/rad; N·m·s/rad (also Nms/rad), N·mm·s/rad |
-| linear stiffness, linear damping | N/m, N/mm; N·s/m, N·s/mm |
-| fraction, count, charge | % (percent), turns, teeth/tooth, mAh; kept in SI, so 40% is 0.4 |
+| speed, angular speed | mm/s, cm/s, m/s, km/h; rpm, rad/s |
+| time | ms, s, min, h |
+| area, volume | mm², cm², m²; mm³, cm³ (cc, ml), m³ |
+| stiffness, damping | N·m/rad, N·mm/rad, N/m, N/mm; N·m·s/rad, N·mm·s/rad, N·s/m, N·s/mm |
+| fraction, count, charge | % (40% is 0.4), turns, teeth, mAh |
 
-Any other word after a number (`12 links`) leaves it in project units.
-
-`tolerance.length` is how closely the model must realise a source value. It is a modelling check, never a manufacturing tolerance. `tolerance.angle` is the same for angle checks, in degrees whatever `units.angle` says (default 0.01). Keep `sources:` the last key: `cadrev source` appends to it. Registering an id that is already listed refreshes its entry instead: the file's `path` and `sha256`, and the `kind`, `citation`, `url` and `license` the command gives. That is how sources are restored into a clone, replaced by a new download, or given a license after the fact. A source whose `license` is CC0-1.0, CC-BY-x.y or CC-BY-SA-x.y gets a `!sources/<file>` line in the project's `.gitignore`, so it is committed and the project reruns from a clone; any other license, or none, leaves the file ignored.
-
-A source's `kind` outside the list above is `[source-kind]`, and an empty `citation` is `[source-citation]`. A `path` with no file is `[source-missing]`, whose message names the `url` to download from; a file whose sha256 differs from the pinned one is `[source-hash]`: after a deliberate change, register it again.
-
-Text formats (quote-checked and swept): PDF, DOCX, TXT, MD, HTML. An HTML source is read as its rendered text, scripts and styles dropped. A text source whose file cannot be read as text is `[source-unreadable]`. Save a web datasheet as HTML or TXT to make it quotable. Video and image files are sources for image evidence only.
-
-Geometry the authors released is `kind: geometry`: a STEP (.step, .stp) or STL (.stl) file, read in millimetres and converted to the project's length unit; one that cannot be read as either, or an STL whose triangles do not close into solids, corners within 0.0001 mm counted as meeting, is `[source-unreadable]`. Where a part ships as both STEP and STL, register the STEP: an STL holds only flat triangles, so on its bodies a datum lies on a face rather than on a hole's axis, and a diameter probe finds no cylindrical face. Its ledger entries are [probes](#probes-released-geometry), and coverage runs over its bodies. A body is the source's id where the file holds one solid, else `<source>#<n>`, the nth solid in file order from 1.
-
-A laser-cut sheet is a **cut file**, an SVG registered as `kind: geometry`; one that cannot be read as SVG, or draws no closed contour, is `[source-unreadable]`. Its bodies are its regions: each one filled region, an outer contour plus the holes inside it, whether the file fills its paths or only strokes them. Name a region `<source>@<x>,<y>`, by a point inside it (`plates@30,41`), in the sheet's frame: from the page's top-left corner, x right and y down, at the scale the file declares (`width="600mm"` over a 300-unit viewBox doubles every length; a length with no unit is a CSS pixel, 1/96 in) with every transform applied, in the project's length unit. A point inside no region, or inside two (on an edge they share), names none: `[check-config]` in a check, `[skip-not-found]` in a skip. Coverage names each region it lists by a point inside it, ready to copy.
+Torque, pressure, density and speed are in the project's base units (N·mm, N/mm², g/mm³, mm/s by default). Any other word after a number (`12 links`) leaves it in project units.
 
 ## evidence.yaml
 
 ### `evidence`: the ledger
 
-One item per statement in a source. Three anchor types: a quote and a figure reading, shown here, and a [probe](#probes-released-geometry) of released geometry.
+One item per statement in a source, anchored one of three ways: a quote, a figure reading (both below) or a [probe](#probes-released-geometry).
 
 ```yaml
-- id: T1-finger-link          # unique; referenced as T1-finger-link.L
-  source: supp
-  page: 4                      # PDF page (1-based); the quote must be on it
-  locator: Table 1             # human locator: table, figure, section, equation
-  quote: "Finger link 42×8×4"
-  values: {L: 42, H: 8, W: 4}
+evidence:
+  - id: T1-finger-link          # unique; cited as T1-finger-link.L
+    source: supp
+    page: 4                      # PDF page, 1-based; the quote must be on it
+    locator: Table 1             # for a human: table, figure, section, equation
+    quote: "Finger link 42×8×4"
+    values: {L: 42, H: 8, W: 4}
 
-- id: fig3b-palm
-  source: paper
-  page: 4
-  locator: Fig. 3B, palm inset
-  image: figures/crops/fig3b-palm.png
-  image_sha256: …              # printed by `cadrev crop`
-  reading: "48mm; 30mm; 12mm"  # the label text exactly as printed in the image
-  values: {L: 48, W: 30, H: 12}
-  confirmed_by: <reviewer>     # written by the human who checked the crop
+  - id: fig3b-palm
+    source: paper
+    page: 4
+    locator: Fig. 3B, palm inset
+    image: figures/crops/fig3b-palm.png
+    image_sha256: …              # printed by `cadrev crop`
+    reading: "48mm; 30mm; 12mm"  # the label text exactly as printed in the image
+    values: {L: 48, W: 30, H: 12}
+    confirmed_by: <reviewer>     # written by the human who checked the crop
 ```
 
-- **quote** is copied from `cadrev text` output. Matching ignores case, whitespace, line-break hyphenation, dash variants and `×`/`x`; everything else must be verbatim. Numbers match whole: a quote starting or ending at a digit never matches inside a larger number ("37 mm" is not found in "137 mm" or "3.7 mm"). Each value must appear as a number in the quote (or reading); a decimal comma is one number (`3,5 mm` is 3.5; a list `1,5,10` stays several), and so is a fraction before a unit (`1/4 inch` and `1/4-in.` are 0.25, `1 1/2 in` is 1.5; a bare `1/50` is two); both ends of a range (`5-10 mm`) count as positive values, and a number labelling a figure, table, equation or section (`Fig. 2`, `Figs. 2 and 3`, `Table S1`, `Eq. (3)`, `Sec. 4.2`) is not a value unless a unit follows it (`section 4 mm thick`; after a label, `in` is the word: `Fig. 2 in`). A cardinal from zero to ninety-nine in words is a number too, matched whole like digits: "Eight tension springs" states 8, "twenty-four bolts" and "twenty four bolts" state 24, and "eight" is not found in "eighteen" or "weight". Ordinals ("first", "twenty-first"), `a`/`an`, words such as "pair", "dozen" or "single", and a word that begins a larger number or a fraction ("one hundred", "two-thirds") are not numbers. A comma before exactly three digits (`1,250`, not `1,250.5`) reads as 1250 or 1.25 by locale, so a value read from it is `[number-ambiguous]`: quote the value where it is printed in another form, or skip it. Write each value as printed, in digits or in words (`n: eight` is 8); its unit is read from the quote (see `units` above).
-- **image** evidence covers numbers that exist only in pixels: figure labels, drawing dimensions, video frames. The crop is hashed so the reviewed image cannot change underneath its reading. Until a named human writes `confirmed_by`, the reading holds the project at VERIFIED PENDING REVIEW (see [Statuses](#statuses)); `build/report.md` lists each such reading beside its crop. Every image item awaits confirmation, whatever its `scope`. The image a `measured` param scales off is image evidence too, and needs no `values`: its `reading` transcribes any label printed in it and names the reference it is scaled against (`no printed labels; scaled on the palm width`), and its reviewer confirms that crop and that reference. Figure labels that are not about the object (test rigs, loads, results) need no evidence item.
-- **scope** is optional:
-  - `not-modeled` + `reason`: a real statement about something the reconstruction does not build: what lies outside the device (a test rig, the electronics), a part the `target`'s configuration leaves out (a lid taken off), or a part whose motion cadrev's joint types cannot model (a flexure); the `reason` says which. Every other part the sources' parts tables list, and every mechanism they state (a linkage and its loops), is built. It keeps its `values`, so the report shows what was left unbuilt.
-  - `context` + `reason`: a statement that informs interpretation but is not a dimension of any modelled feature (masses in conflict, a kinematic length of uncertain identity). `values` may be omitted. A restatement is context too: a value stated in several places is ledgered at each and checked once. The statement a param's `from` or a check reads stays in scope, a quote rather than a figure reading where both exist, since the matcher confirms a quote; each other statement of the same value is `context`, keeps its `values`, and its `reason` names the item it restates (`restates P2-toe-range`). Statements whose values differ are a conflict, not a restatement.
-
-Each item has an `id` no other item shares; a repeated one is `[evidence-id]`, naming it. Every item under a repeated id is still checked, counts toward coverage and is listed in the report, but a citation of that id reads neither item and is an error naming the id as repeated, raised whether or not the model builds: `[param-from]` for a param's `from`, `[check-config]` for a check's ledger value or pose, `[conflict-ref]` for a conflict's `evidence` and `[overlay-config]` for an overlay's `calibration.evidence`. A check or overlay citing it is not evaluated. Each item has a registered `source` (`[evidence-source]`) and a `locator` (`[evidence-locator]`), and is anchored by a quote from a text source, an image + reading, or a probe of a geometry source (`[evidence-anchor]`). A quote not found in its source, or not on its `page`, is `[quote-not-found]`; a quote from a source of several pages that gives no `page` raises the warning `[quote-page]`, which names the page it was found on. A probed item needs `values`, and a quoted item does unless it is `scope: context` or only [claim checks](#poses-and-the-mjcf-export) cite it (`[evidence-values]`). An image item needs its crop (`[image-missing]`), unchanged since `image_sha256` was printed (`[image-hash]`), and a `reading` (`[image-reading]`). A value that is not a number in its quote is `[value-not-in-quote]`; in its reading, `[value-not-in-reading]`. A `scope` needs a `reason` (`[evidence-scope]`).
-
-Every value of an in-scope item must be used by a param `from:` or compared by a check (`[evidence-unused]`); in a [known-first](#known-first) project, one that is not waits.
+- **A quote** is copied from `cadrev text` output, the text the matcher sees. Matching ignores case, whitespace, line-break hyphenation, dash variants and `×`/`x`; everything else is verbatim. Each value must appear as a number in the quote, matched whole: "37 mm" is not found in "137 mm".
+- **How numbers read.** A decimal comma is one number (`3,5 mm` is 3.5) and so is a fraction before a unit (`1 1/2 in` is 1.5); both ends of a range are values; a number labelling a figure, table, equation or section is not one. A cardinal from zero to ninety-nine in words is a number ("Eight tension springs" states 8, written `n: 8` or `n: eight`). A comma before exactly three digits (`1,250`) reads two ways, so take that value from where it is printed in another form.
+- **Image evidence** covers numbers that exist only in pixels: figure labels, drawing dimensions, video frames. The crop is hashed so the reviewed image cannot change under its reading. Until a named human writes `confirmed_by`, the reading holds the project at VERIFIED PENDING REVIEW. The image a `measured` param scales off is image evidence too and needs no `values`: its `reading` transcribes any label and names the reference it is scaled against.
+- **`scope`** sets a statement aside, with a `reason`:
+  - `not-modeled`: a real statement about something the reconstruction does not build: what lies outside the device (a test rig, the electronics), a part the target's configuration leaves out, or a part whose motion cadrev's joint types cannot model (a flexure). It keeps its `values`, so the report shows what was left unbuilt.
+  - `context`: a statement that informs interpretation but is not a dimension of a modelled feature. A restatement is context: a value stated in several places is ledgered at each, the statement a param or check reads stays in scope (a quote rather than a figure reading where both exist), and each other one says `restates <id>`. Statements whose values differ are a conflict, not a restatement.
+- Every value of an in-scope item is used by a param's `from` or compared by a check.
 
 ### Probes: released geometry
 
-A probe takes a value from a body of a geometry source and records its design value (`32.5`, not the file's `32.4999`), in the project's units:
+A probe takes a value from a body of a geometry source. cadrev evaluates it from the file on every run and compares it with the value the probe records, the design value (`32.5`, not the file's `32.4999`), in the project's units.
 
 ```yaml
 evidence:
@@ -132,31 +123,28 @@ evidence:
 datums:                        # on released bodies: <body>.<feature>: [x, y, z] in the file's frame
   rotor_step.hub_top: [0, 0, 20]
   rotor_step.hub_bottom: [0, 0, 0]
-  rotor_step.rim: [65, 0, 10]
   rotor_step.bore_wall: [16.25, 0, 10]
 ```
 
-- `probe` is `bbox` (with `axes`, one per value), `distance` (two datums in `between`, `along` optional), `angle` (three, the angle at the middle one, in degrees) or `diameter` (of the cylindrical face the datum `at` lies on), each recording one value except `bbox`, read as the check of that kind reads the built model, on the body. `body` names a body of its `source`, and may be left out where the file holds one solid.
-- Datums on a released body need no basis: each lies on its body's solid within `tolerance.length`, as a built part's does, else `[datum-off-solid]`, as is one naming no body. Name each `<body>.<feature>`.
-- A datum on a cut file lies on the sheet, not on one region: name it `<source>.<feature>` and give it as `[x, y]` in the sheet's frame (`[schema]` otherwise). It lies inside a region's outer contour, on the region or at the centre of one of its holes, else `[datum-off-solid]`.
-- cadrev evaluates every probe from its file on every run, `--no-build` included. A recorded value farther than `tolerance.length` (`tolerance.angle` for an angle) from what the body gives, or than the probe's own `tol`, is `[probe-mismatch]`, naming the probe, the evaluated value and the recorded one. `tol` is capped as a check's is (`[tolerance-cap]`). A probe that cannot be evaluated (a source that is not geometry, a cut file, an unknown body, datum or axis, a diameter's datum on no cylindrical face or on the edge of two) is `[evidence-anchor]`: a probe reads a solid, and a cut file's regions are compared by shape checks.
-- A probe needs no confirmation and never holds the project at VERIFIED PENDING REVIEW. A param takes its value with `from:` and basis `source`, like a quote's.
-- A probe that restates a quote is `context` (`restates T1-hub`), and the quote stays in scope; one that differs from a quote is a [conflict](#conflicts). A probe of a value no quote states is in scope, its value used by a param or compared by a check like a quote's.
+- `probe` is `bbox` (with `axes`, one per value), `distance` (two datums in `between`, `along` optional), `angle` (three datums, the angle at the middle one, in degrees) or `diameter` (of the cylindrical face the datum `at` lies on). Each reads the body as the check of that kind reads the built model. `body` may be left out where the file holds one solid.
+- A datum lies on its body's solid within `tolerance.length`, as a built part's does ([modeling.md](modeling.md#contract)). A cut file's datum lies on the sheet, named `<source>.<feature>` and given as `[x, y]`, inside a region's outer contour.
+- A probe may set its own `tol`, capped as a check's is. It needs no human confirmation. A param takes its value with `from:` and basis `source`, like a quote's.
+- A probe restating a quote is `context`; one that differs from a quote is a conflict. A probe reads a solid: a cut file's regions are compared by shape checks instead.
 
-### `skipped`: stated quantities that are not about the object
+### `skipped`: what is not about the object
 
-The coverage sweep lists every number, in digits or in words, printed with a unit from the table under `units` (`six turns`, `25 teeth`; a range, list or toleranced value as one candidate: `3–5 mm`, `1,5,10 mm`, `1.000 ± 0.005 in`), every `a×b×c` product, every diameter callout (`Ø 32.5`, `Ø3`: a length in the project's unit unless a unit follows) and every thread size (`M3`, printed with a capital M) in the text sources, leaving out digits inside a name (`L3`, the camera `E-M10`), figure, table, equation or section numbers, and these look-alikes: a number hyphenated to `bar` (a `four-bar` linkage; a pressure is `2 bar`), a moment (`T=0s`, `t = 2 s`), a one-letter unit SI writes in lower case printed as a capital (`8G` of memory, a `2S` battery), a lower-case `m` and digits (the gear modules `m1, m2`), a one-letter unit before a subscripted symbol (`m 2N r2 =`, a product of symbols; a load is `2 N`), and a number after a ratio's colon (`60:1 in unit increments`; a time keeps its unit: `1:30 min`). A count with no count unit (`3 planets`, a table cell) is not swept: it enters the ledger because a param or check uses it. Each one listed must fall inside an evidence quote or a skip; one that does not is `[coverage]`. A source with `coverage: false` is not swept and raises the warning `[coverage-off]`.
+The coverage sweep lists every stated quantity in the text sources: each number, in digits or words, printed with a unit from the table above (a range or a toleranced value as one), each `a×b×c` product, each diameter callout (`Ø 32.5`) and each thread size (`M3`). Each must fall inside an evidence quote or a skip. A count printed with no count unit (`3 planets`, a table cell) is not swept: it enters the ledger because a param or check uses it. In a geometry source, each body must be compared by a shape check or skipped.
 
 ```yaml
 skipped:
   - {source: paper, page: 12, quote: "servo output torque fixed at 1.2 kg ·cm", reason: "test setting"}
   - {source: supp, from: "Table S4.", to: "Movie S1.", reason: "grasp-test objects"}
   - {source: paper, pages: [12, 13], reason: "experimental methods and test rig"}
+  - {source: lid_step, body: "lid_step#3", reason: "a fit tester"}
+  - {source: plates, within: [[110, 30], [150, 70]], reason: "the controller's housing"}
 ```
 
-A geometry source is not swept for stated quantities: each of its bodies is compared by a [shape check](#checksyaml) or skipped, `{source: lid_step, body: "lid_step#3", reason: "a fit tester"}`, else `[coverage]`. A geometry source's skip names one of its bodies (`[skip-anchor]`, and `[skip-not-found]` for a body the file lacks). A cut file's skip names a region by a point inside it, `body: "plates@130,50"`, or every region wholly inside a rectangle, `within: [[110, 30], [150, 70]]` at two opposite corners in the sheet's frame, so a nested sheet's parts of other devices go in one skip; a region reaching outside the rectangle stays `[coverage]`, and a rectangle holding no whole region is `[skip-not-found]`.
-
-Skip by quote for single lines, by `from`/`to` for tables and blocks, by `pages` only for pages that carry nothing about the object. Every skip needs a `reason` (`[skip-reason]`) and one of `quote`, `pages` or `from` + `to` (`[skip-anchor]`). A skip's quote, or its `from` and `to`, must be found together on one page (its `page`, when given), copied from `cadrev text` like a quote; a skip that matches nothing is `[skip-not-found]`. Split a block that runs onto the next page into one skip per page.
+Skip by `quote` for a line, by `from` and `to` for a block on one page (split a block that runs onto the next), by `pages` only for pages that say nothing about the object. A cut file's skip names one region by `body`, or by `within` every region wholly inside a rectangle given by two opposite corners.
 
 ### `conflicts`
 
@@ -168,65 +156,43 @@ conflicts:
     resolution: Fig. 3B is the outer envelope of the palm with its covers; S1 is the bare frame.
 ```
 
-A conflict naming evidence the ledger does not hold is `[conflict-ref]`. A conflict without `resolution` stays the warning `[conflict-open]` and appears in the report as open.
+A conflict without a `resolution` stays open: a warning, listed in the report.
 
 ## params.yaml
 
-The only door numbers have into the model: a number written in model.py is `[model-literal]`, and one built there from params as a constant (`atan2(p.h, p.h)`) is `[model-constant]`; [`modeling.md`](modeling.md) says how to meet both.
+The only door numbers have into the model.
 
 ```yaml
 params:
-  link_L:   {basis: source,   from: T1-finger-link.L, interpretation: "overall length along part X"}
-  pin_d:    {basis: proposed, value: 2, rationale: "common 2 mm pin", gap: G-pins}
+  link_L:     {basis: source,   from: T1-finger-link.L, interpretation: "overall length along part X"}
+  pin_d:      {basis: proposed, value: 2, rationale: "common 2 mm pin", gap: G-pins}
   end_margin: {basis: proposed, value: 3, rationale: "pin centres 3 mm in from each end", gap: G-pitch}
-  pitch:    {basis: derived,  expr: link_L - 2 * end_margin, value: 34}
-  pin_x:    {basis: derived,  expr: link_L / 2, gap: G-pin-x, interpretation: "pin centred along the link"}
-  palm_w:   {basis: measured, from: v1-frame-316, value: 30.4, method: "mat grid scale, 10 px/mm", uncertainty: "±1.5 mm"}
-```
-
-| basis | required | meaning |
-|---|---|---|
-| `source` | `from` (an evidence value); `value` optional and must match | stated by a source |
-| `derived` | `expr`; `value` optional and must match; `gap` optional, and with it the param rests on proposed and needs `interpretation` | computed from other params; `pi sqrt sin cos tan asin acos atan atan2 radians degrees hypot min max abs` are available |
-| `measured` | `from` (an image evidence id), `value`, `method`, `uncertainty`; `gap` optional: the question whose answer would replace the measurement with a stated value | scaled off an image or video frame against a known reference |
-| `proposed` | `value`, `rationale`; `gap` expected | a reconstruction choice the sources do not make |
-
-A basis outside these four is `[param-basis]`. A missing requirement is `[param-from]` (`from` names no evidence value, or for `measured` no image evidence), `[param-measured]` or `[param-proposed]`; an `expr` that does not parse, names an undefined param, fails to evaluate, depends on itself or uses a param left without a value (the finding names that param) is `[param-derived]`, as is a derived param naming a `gap` without an `interpretation`. A `value` that differs from its evidence value or `expr` is `[param-mismatch]`. A proposed param that names no `gap` raises the warning `[param-gap]`, unless it is read only as a sweep's `steps`, a resolution no source could settle ([Ranges and sweeps](#ranges-and-sweeps)). A `gap` on a source param, which has no value for a gap to replace, or one naming a gap gaps.yaml lacks on any other basis, is the error `[param-gap]`.
-
-A proposed param whose value was changed to turn a check green says so in its `rationale`, naming the check: that check now confirms the choice rather than a source.
-
-Write `interpretation` on every `source` or `derived` param whose mapping onto geometry is a choice (which axis, envelope versus pitch, which feature). A derived param whose `expr` makes a placement choice (pins at the centres of the rounded ends, a frame centred in its sole, toes flush with the foot ends) also names the `gap` whose answer would settle it, so the choice rests on proposed rather than on its inputs. A choice that several params share can instead be one proposed param they all read (`end_margin` above).
-
-A derived param naming a gap rests on proposed; any other derived param rests on the weakest basis among the params its `expr` references (proposed < measured < source); an `expr` that references no param (`2.2`, `2 * pi`) is `[param-constant]`. The report's headline counts params by what they rest on, proposed physics values apart.
-
-### Physics values
-
-A value only the simulation reads (a joint's damping, stiffness, spring rest or friction, a tendon's stiffness or damping) is a param like any other, with a basis, marked `physics: true`:
-
-```yaml
-  knee_c:   {basis: proposed, value: 50, rationale: "light damping", gap: G-damping, physics: true}
-```
-
-- model.py names it where it applies ([`modeling.md`](modeling.md#joints-and-loops)). It is in the project's units of its quantity, per radian for a joint: a joint's `stiffness` in N·mm/rad by default, its `damping` in N·mm·s/rad, its `friction` a torque in N·mm, its `spring_rest` a joint value in the joint's own quantity (the project's angle unit on a revolute joint, its length on a slide), a tendon's `stiffness` in N/mm and its `damping` in N·s/mm. A value quoted in another unit of that quantity (`0.25 N·m/rad`) converts like any ledger value; one printed in a unit of another quantity is `[unit-quantity]`. The MJCF export converts each to the MJCF's units (the project's length, mass and time: g·mm²/s² per radian for a joint's stiffness by default); a `spring_rest` is MuJoCo's `springref`, converted as the joint's range is.
-- A param a joint or tendon names without `physics: true`, or one marked `physics: true` that model.py's geometry, a joint `range` or a check reads, is `[param-physics]`: a physics value shapes no geometry.
-- No check compares a physics value, so a source one raises no `[unchecked-source]`, nor does a source param read only on the way to one (a spring's wire diameter in a derived stiffness). One that model.py or a param of the geometry also reads is checked like any other.
-- Exact is judged over geometry and kinematics: a proposed physics value leaves a project exact, and the headline counts it apart from the proposed params (`physics_proposed`).
-
-### Mass model
-
-params.yaml's `parts` weighs each part by one param: `mass`, a datasheet mass, for a purchased part, or `density`, which its volume is multiplied by, for a printed one.
-
-```yaml
-parts:
+  pitch:      {basis: derived,  expr: link_L - 2 * end_margin, value: 34}
+  pin_x:      {basis: derived,  expr: link_L / 2, gap: G-pin-x, interpretation: "pin centred along the link"}
+  palm_w:     {basis: measured, from: v1-frame-316, value: 30.4, method: "mat grid scale, 10 px/mm", uncertainty: "±1.5 mm"}
+  knee_c:     {basis: proposed, value: 50, rationale: "light damping", gap: G-damping, physics: true}
+parts:                       # the mass model
   palm:  {density: resin_density}
   servo: {mass: servo_mass}
 ```
 
-cadrev computes each weighed part's centre of mass and inertia from its solid at that mass. The MJCF export writes these as each body's `<inertial>`, report.json lists them under `masses`, and a mass check without `density` weighs each of its instances by the same masses, as the export weighs each instance's body, so export, report and check never disagree. The params need no read in model.py. In a model with joints every part an instance places needs an entry: one without, an entry naming a param params.yaml does not define, or an entry naming no part `build` returns is `[part-mass]`. A part no instance places is no body of the MJCF, so it needs none ([modeling.md](modeling.md#contract)); an entry giving both `mass` and `density` is `[schema]`. A static model may leave `parts` out.
+| basis | takes | meaning |
+|---|---|---|
+| `source` | `from`, an evidence value; `value` optional and must match | stated by a source: a quote, a reading or a probe |
+| `derived` | `expr` over other params; `value` optional and must match; `gap` with `interpretation` where the expr is a choice | computed; `pi sqrt sin cos tan asin acos atan atan2 radians degrees hypot min max abs` are available |
+| `measured` | `from`, an image evidence id; `value`, `method`, `uncertainty`; `gap` optional | scaled off an image of the object against a known reference |
+| `proposed` | `value`, `rationale`; `gap` | a reconstruction choice the sources do not make |
+
+- **`interpretation`** says how a value maps onto geometry where that is a choice: which axis, envelope or pitch, which feature, which configuration.
+- **A derived param whose `expr` makes a placement choice** (pins at the centres of the rounded ends, a frame centred in its sole) names the `gap` whose answer would settle it. A choice several params share can instead be one proposed param they all read (`end_margin` above).
+- **Rests on.** A param rests on its own basis; a derived one on the weakest basis among the params its `expr` reads (proposed < measured < source), or on proposed where it names a gap. The report's headline counts params by what they rest on. An `expr` that reads no param traces to nothing: give the number its own basis.
+- **A proposed param changed to turn a check green** says so in its `rationale`, naming the check: that check now confirms the choice rather than a source.
+- **A physics value** is a param only the simulation reads (a joint's damping, stiffness, spring rest or friction, a tendon's stiffness or damping), marked `physics: true` and named by the joint or tendon that applies it ([modeling.md](modeling.md#joints-and-loops)). It is in the project's units of its quantity, per radian for a joint (stiffness in N·mm/rad by default); a `spring_rest` is a joint value, like a pose. It shapes no geometry, so no check compares it, and a proposed one leaves a project exact.
+- **The mass model**, `parts`, weighs each part by one param: `mass`, a datasheet mass, for a purchased part, or `density`, which its volume is multiplied by, for a printed one. The MJCF export, the report and a mass check without `density` all weigh by it, so they never disagree. In a model with joints every part an instance places needs an entry.
 
 ## checks.yaml
 
-Expected values always come from evidence, so a check compares the geometry with the source, never with params: a ledger value its `evidence` and `key` name, or one its `expect` works out from the ledger (see [Worked ledger values](#worked-ledger-values-expect)).
+A check compares the built geometry with the ledger, never with params: with the value its `evidence` and `key` name, or one its [`expect`](#worked-values-expect) works out from ledger values.
 
 ```yaml
 checks:
@@ -237,8 +203,7 @@ checks:
   - {id: tilt-link, kind: angle, between: [finger_link.pin_a, finger_link.pin_b, finger_link.tip],
      evidence: S2-tilt, key: theta, tol: 0.5}          # the angle at pin_b, in degrees
   - {id: bore-link, kind: diameter, at: finger_link.bore_wall, evidence: T1-pin, key: d}
-  - {id: env-foot, kind: bbox, instances: [sole_1, frame_1, shaft_1], evidence: T1-foot,
-     axes: {H: z}}                                     # their union, in the assembly frame
+  - {id: env-foot, kind: bbox, instances: [sole_1, frame_1, shaft_1], evidence: T1-foot, axes: {H: z}}
   - {id: span-feet, kind: distance, instances: [foot_l, foot_r],
      between: [foot_l.pivot, foot_r.pivot], evidence: S2-stance, key: w}
   - {id: gripper-mass, kind: mass, parts: [palm, finger_link], counts: {finger_link: n_links},
@@ -248,137 +213,61 @@ checks:
   - {id: rotor-shape, kind: shape, part: rotor, body: rotor_step,
      pairs: [[rotor.hub_top, rotor_step.hub_top], [rotor.hub_bottom, rotor_step.hub_bottom],
              [rotor.rim, rotor_step.rim]]}
-```
-
-- `bbox`: the part's axis-aligned bounding-box size in its own frame; under `instances`, that of their union in the assembly frame.
-- `distance`: between two datums of one part, in that part's frame. Datums of two different parts (`<part>.<feature>` naming different parts) sit in unrelated frames, so without `instances` such a check is `[check-config]`.
-- `angle`: `between: [a, vertex, b]`, three datums of one part (the same rule as `distance`); the angle at `vertex` between the directions to `a` and to `b`, in degrees (0 to 180). A datum that coincides with the vertex (within `tolerance.length`) leaves the angle undefined and is `[check-config]`. An angle a source states at another configuration than the one `target` names is checked posed (see [Poses](#poses-and-the-mjcf-export)); a stated range of motion is ledgered as source values and confirmed by a `range` check (see [Ranges and sweeps](#ranges-and-sweeps)).
-- `diameter`: the diameter of the cylindrical face its datum `at` lies on, in its part's frame: a bore or a hub. Place the datum on that face, not on its axis. A datum on no cylindrical face, or on the edge where two of different diameters meet, is `[check-config]`. A toothed gear has no face at its pitch circle, so its pitch diameter is a `distance` between two datums on opposite flanks at the pitch radius, half a turn apart, with `expect: "<module> * <teeth>"`. The pair assumes teeth half a pitch thick at the pitch circle (zero backlash, no profile shift). A gear modelled with backlash still takes it when its tooth count is even, since a flank then lies opposite a flank; with an odd count it does not, and the sun-to-planet axis `distance` check confirms its module and teeth instead.
-- `mass`: Σ volume × density over the instances it weighs, plus any `add` params; `tol_rel` is required. It weighs the instances its `instances` lists, else every instance of the assembly, and `parts` narrows them to those parts' instances; an unknown instance, or a `parts` entry none of whose instances it weighs, is `[check-config]`. Give each part it weighs in several instances a `counts` entry naming the param that states how many, so a stated count is ledgered like any other number; a bare number there is `[schema]`. The check confirms each count against the part's instances it weighs, compared exactly as a `count` check compares: one that differs is `[check-config]` and the check is not evaluated. A part weighed in several instances without a `counts` entry makes the check rest on proposed (below), since how many there are is then the model's choice. Its `density` and `add` params take their units from the quote (see `units` above). The check reads its `density`, `add` and `counts` params, so they need no read in model.py and no other check. Without `density`, each part weighs what the [mass model](#mass-model) gives it, and the check reads those params: it confirms the mass model, as exported, against a stated total. A part it weighs that the mass model leaves unweighed is then `[check-config]`.
-- `count`: how many instances of `part` the assembly places, compared exactly with the ledger value, a count (`units` above): one more or one fewer is `[check-failed]`. It takes no `tol` or `tol_rel` (`[check-config]`) and reads no params. Use it for an instance count a source states (planets, springs); a tooth count is checked through what it builds and couples, never by counting teeth on the solid.
-- `interference`: overlap volume between assembly instances; all pairs when `pairs` is omitted. Needs no evidence. Its result gives the worst overlap, the pair that produced it, and how many pairs it evaluated: `0 over 2145 pairs (all)` when `pairs` is omitted, `0.31 palm_1 ∩ finger_link_1 over 2 pairs (listed)` from a `pairs` list. An interference check with `sweep` is evaluated across a joint's range (see [Ranges and sweeps](#ranges-and-sweeps)). It passes when the overlap is at most `max_volume`, which defaults to `tolerance.length`³. This overlap limit compares with no ledger value, so it is not a tolerance and has no cap, but the report lists beside its check each limit other than cadrev's default: the default `tolerance.length`, 0.001, cubed. A project-wide `tolerance.length` therefore lists every interference check that sets no `max_volume`.
-- `shape`: a built part against a body of a geometry source, as a whole. `pairs` lists datum pairs `[<part>.<feature>, <body>.<feature>]`, at least three whose body datums are not on one line, else `[check-config]`; cadrev carries the part onto the body by the rigid motion (no mirroring) that best fits them. A pair left farther apart than `tolerance.length`, whatever the check's `tol`, fails the check (`[check-failed]`, saying how far the pairs fit). Once they fit, it compares the largest distance between the two surfaces, sampled across every face and edge of both, with `tolerance.length` or its `tol`, and gives the worst point. `tol` is capped at 1% of the body's bbox diagonal (`[tolerance-cap]`). It compares with no ledger value: it rests on source, reads no params and so checks none of its part's, which still need their own checks.
-- `shape` against a region of a cut file (`body: plates@30,41`): `along` names the axis, `x`, `y` or `z` of the part's frame, along which the part's outline is projected onto the sheet; a missing or other axis is `[check-config]`, as is `along` on a solid body. The outline is the union of the part's plane faces square to that axis, as a cut part's are. Each pair's sheet datum is `<source>.<feature>`, and its part datum is projected along the axis; the fit may turn the part over, as a cut part can lie either face up. Once they fit, it compares the largest distance between the outline's edges and the region's, sampled along every edge of both, so a hole the part lacks fails at that hole, and gives the worst point as `[x, y]` on the sheet. `tol` is capped at 1% of the region's bbox diagonal.
-
-```yaml
   - {id: plate-shape, kind: shape, part: plate, body: "plates@30,41", along: z,
      pairs: [[plate.a, plates.a], [plate.b, plates.b], [plate.d, plates.d]]}
 ```
 
-A dimension that spans several parts (an envelope of a subassembly, a spacing between parts) is checked over instances: a `bbox`, `distance` or `angle` check names `instances: [<instance>, ...]` in place of `part`, and is evaluated in the assembly frame, where the instances' `Location`s place them. Its datums are named `<instance>.<feature>`: the instance's part datum `<part>.<feature>`, moved by its `Location`. Under `instances` every name resolves against the assembly, so an instance named like its part is the instance. List each instance the check reads; there are no globs. An unknown instance, a feature its part has no datum for, or an empty list is `[check-config]`; a check naming both `part` and `instances` is `[schema]`. Each check has an `id` no other check shares, compared as the report prints it (`1` and `"1"` are one id); a repeated one is `[check-id]`. A check of another `kind` is `[check-kind]`; one naming a part, datum, axis or evidence value that does not exist is `[check-config]`. A check whose evaluated value strays from its ledger value by more than its tolerance is `[check-failed]`.
+- **`bbox`**: the part's axis-aligned bounding-box size in its own frame, one result per axis.
+- **`distance`**: between two datums; `along` takes it along one axis.
+- **`angle`**: `between: [a, vertex, b]`, the angle at `vertex`, in degrees, unsigned from 0 to 180.
+- **`diameter`**: of the cylindrical face its datum `at` lies on: a bore or a hub. A toothed gear has no face at its pitch circle, so its pitch diameter is a `distance` between two datums on opposite flanks at the pitch radius, half a turn apart, with `expect: "<module> * <teeth>"`.
+- **`mass`**: Σ volume × `density` over the instances it weighs, plus its `add` params, within `tol_rel`, which it must set. It weighs the instances `instances` lists, else the whole assembly, narrowed by `parts`. Each part weighed in several instances takes a `counts` entry naming the param that states how many, which the check holds to the instances it finds; without one the check rests on proposed, since how many there are is then the model's choice. Without `density` it weighs each part by the [mass model](#paramsyaml), and so confirms the model as exported against a stated total.
+- **`count`**: how many instances of `part` the assembly places, compared exactly. A tooth count is checked through what it builds and couples, not by counting teeth.
+- **`interference`**: the overlap volume between instances, over `pairs` or every pair, at most `max_volume` (default `tolerance.length`³). It needs no evidence.
+- **`shape`**: a built part against a released body, as a whole. `pairs` lists at least three datum pairs `[<part>.<feature>, <body>.<feature>]` not on one line; cadrev carries the part onto the body by the rigid motion that best fits them, which must fit within `tolerance.length`, then compares the largest distance between the two surfaces with `tol`. Against a cut file's region, `along` names the part axis its outline is projected along, and the part may be turned over. A shape check confirms the shape, not the params that build it: they still need their own checks.
 
-Every datum `build` returns, read by a check or not, lies on its part's solid within `tolerance.length`, else it is `[datum-off-solid]`; [`modeling.md`](modeling.md) says where to place datums.
+**Over instances.** A `bbox`, `distance` or `angle` check that names `instances: [...]` in place of `part` is evaluated in the assembly frame, with its datums named `<instance>.<feature>`: an envelope of a subassembly, a spacing between parts. Datums of two different parts are only comparable this way.
 
-Each check rests on the weakest basis among the params it reads (proposed < measured < source), or on source when it reads none. report.json gives each check result its `rests_on` and, in `rests_on_params`, the params it reads that rest on that basis; report.md's checks table shows "rests on <basis>: <params>" beside a check resting on less than source. A mass check on a proposed density then confirms the model against the stated mass given that chosen density, not the density itself. A mass check weighing a part in several instances with no `counts` entry rests on proposed whatever its params rest on: report.json names each such part and its instance count under `uncounted`, and report.md shows it as "<part> (<n> instances uncounted)" beside "rests on proposed". What a check rests on leaves its pass/fail and the status unchanged.
+**Tolerances.** `tol` overrides `tolerance.length` (or `tolerance.angle`, in degrees) for one check, and is how far its evidence lets the value stray. It is capped at 5% of each value the check compares, `tol_rel` at 0.25, a `range` check's `tol` at 5% of the span between its ends, and a shape check's at 1% of its body's bbox diagonal. The report lists every tolerance and overlap limit other than the default beside its check.
 
-`tol` overrides `tolerance.length` for one check, or `tolerance.angle` (degrees) for an angle check. A check's tolerance is capped: `tol` (or the project tolerance, where the check sets none) at 5% of each value the check compares, and `tol_rel` at 0.25; above either is `[tolerance-cap]`. A `range` check's `tol` is capped at 5% of the span between its two ends, since an end is often 0. The report lists every non-default tolerance beside its check: each `tol` other than 0.001 (0.01 for an angle check), and every `tol_rel`, which has no default. Each source param that is not checked raises `[unchecked-source]`. A check checks the params whose ledger values it compares, the params it reads, and every param those params' `expr`s read: stated counts a mass check reads through a derived product are checked. A check reads what the model gives it too: the range ends of the joint it sweeps, and the wheel's turn and closed values a cable moves at its pose. A run with `--no-build` has no model to give them, so there they stay `[unchecked-source]`.
+**What a check rests on.** A check rests on the weakest basis among the params it reads (a pose, a density, a count, its joint's range, the gears a pose moves through), or on source when it reads none; the report shows it. A mass check on a proposed density confirms the model given that density, not the density. A `source` param should be checked, its ledger value compared by a check or the param read by one; one that is not raises a warning.
 
-### Worked ledger values: `expect`
+### Worked values: `expect`
 
-Where a source states the numbers a value is worked out from rather than the value itself (a pitch diameter from a module and a tooth count, a carrier's turn from a stated ratio), a check names `expect: <expr>` in place of `evidence` and `key`:
-
-```yaml
-  - {id: pitch-sun, kind: distance, between: [sun.pitch_a, sun.pitch_b],
-     expect: "T1-gears.module * T1-gears.z_sun"}      # module × teeth
-  - {id: sun-planet, kind: distance, instances: [sun_1, planet_1],
-     between: [sun_1.axis, planet_1.axis],
-     expect: "T1-gears.module * (T1-gears.z_sun + T1-gears.z_planet) / 2"}
-```
-
-- The expression combines ledger values, each written `<entry>.<key>`, with numbers, arithmetic and the functions a derived `expr` may call. Quote it in YAML, and put a space before a `-` that precedes an entry, since an evidence id may hold a hyphen.
-- Each ledger value reads as a check compares it: one printed in an angle unit in degrees, one printed in another unit in the project's units, and one printed with no unit (a count, a ratio such as "7.2:1", ledgered as `{ratio: 7.2}`) as printed. The expression's value is in the check's own units: degrees for an angle check, the project's otherwise.
-- `distance`, `angle`, `diameter`, `mass` and `stroke` checks take `expect`, with or without `from`; `bbox`, `range`, `shape`, `count` and `interference` take none.
-- Each ledger value an expect names counts as compared, so a source param taking its value from it is checked. An expect reads no params: the check rests on what its pose and kind read, else on source.
-- An expect reads each ledger value in the project's units, a rate per second: with angles in degrees, "1000 rpm" reads as 6000 (°/s), so a lead from a stated speed and rpm is `E-vmax.v * 360 / E-rpm.rpm`.
-- The tolerance is capped at 5% of the value the expect works out to.
-- `[check-config]`, raised whether or not the model builds, and the check is not evaluated: an expect naming a param, a name that is neither a ledger value nor a function, an entry not in the ledger or a key its entry does not record, or one that does not parse or evaluate (a division by 0), each finding naming the reason; a check naming both `expect` and `evidence`; a check of a kind that takes one naming neither (a `stroke` check with a `claim` aside); `expect` on a kind that takes none.
-
-### Worked example: a planetary train
-
-A planetary train with one member fixed is a chain of [gears](modeling.md#joints-and-loops), each ratio derived from the stated tooth counts, and its checks compare with values `expect` works out from the ledger. COMPAct's single-stage gearbox ledgers Table I's `SSPG [25, 65, 155, 0.5, 3]` as `T1` (`{z_sun: 25, z_planet: 65, z_ring: 155, module: 0.5}`) and "7.2:1" as `R1` (`{ratio: 7.2}`). The ring is fixed (the root instance), the sun `actuated`, the carrier `passive` on the ring, and each planet a `passive` revolute joint on the carrier, so its angle is relative to the carrier:
+Where a source states the numbers a value is worked out from rather than the value, a `distance`, `angle`, `diameter`, `mass` or `stroke` check names `expect` in place of `evidence` and `key`: an expression over ledger values `<item>.<key>`, numbers and the functions a derived `expr` may call.
 
 ```yaml
-# params.yaml
-  z_sun:         {basis: source,  from: T1.z_sun}             # likewise z_planet, z_ring, module
-  carrier_ratio: {basis: derived, expr: z_sun / (z_sun + z_ring)}    # 25/180
-  planet_ratio:  {basis: derived, expr: -z_ring / z_planet}          # planet on the carrier
+  - {id: pitch-sun, kind: distance, between: [sun.flank_a, sun.flank_b],
+     expect: "T1.module * T1.z_sun"}                              # module × teeth
+  - {id: sun-planet, kind: distance, instances: [sun_1, planet_1], between: [sun_1.axis, planet_1.axis],
+     expect: "T1.module * (T1.z_sun + T1.z_planet) / 2"}
 ```
 
-```python
-# model.py: the planet axis lies module * (z_ring - z_planet) / 2 from the sun's, meshing the ring
-"gears": {
-    "sun_carrier": {"driver": "sun", "driven": "carrier", "ratio": "carrier_ratio"},
-    "carrier_planet_1": {"driver": "carrier", "driven": "planet_1", "ratio": "planet_ratio"},
-},
-```
+Each ledger value reads as a check compares it: in the project's units, an angle in degrees, a rate per second ("1000 rpm" is 6000 °/s), and one printed with no unit as printed. Quote the expression, and put a space before a `-` that precedes an item, since an id may hold a hyphen. An expect reads no params: a param never supplies an expected value.
 
-```yaml
-# checks.yaml
-  - {id: carrier-turn, kind: angle, instances: [ring_1, carrier_1],
-     between: [ring_1.d, ring_1.a, carrier_1.d], from: {}, pose: {sun: one_turn},
-     expect: "360 / R1.ratio"}                                  # 50° per sun turn
-  - {id: sun-pitch, kind: distance, between: [sun.flank_a, sun.flank_b],    # opposite flanks
-     expect: "T1.module * T1.z_sun"}
-  - {id: sun-planet-1, kind: distance, instances: [sun_1, planet_1],
-     between: [sun_1.a, planet_1.a], expect: "T1.module * (T1.z_sun + T1.z_planet) / 2"}
-```
+### Poses
 
-- The carrier's turn reads both gears' ratios, so the tooth counts they derive from are checked, while its expected value comes from the stated ratio: a wrong formula, a misread count, a sign error or a unit slip fails it. Place `ring_1.d` a quarter turn from the carrier's datum, so the 0–180° angle the check evaluates stays on one side through the turn.
-- The pitch diameter and the planet axis together fail a ring count that breaks `z_ring = z_sun + 2 * z_planet`.
-- A train with no member fixed (a differential) is out of reach: a gear ties only two joints.
-
-### Untested examples: a rack and pinion and a stepped planet
-
-No test or example project runs these two yet; they follow the rules above.
-
-**A rack and pinion** is a [lead gear](modeling.md#joints-and-loops): the pinion a revolute joint, the rack a slide, its lead the pinion's pitch circumference.
-
-```yaml
-# params.yaml
-  pinion_pitch_d: {basis: derived, expr: module * z_pinion}
-  rack_lead:      {basis: derived, expr: pi * pinion_pitch_d}       # negate where the rack moves toward its axis's first datum
-```
-
-```python
-"gears": {"rack_drive": {"driver": "pinion", "driven": "rack", "lead": "rack_lead"}},
-```
-
-**A stepped planet** (COMPAct's CPG, 14:1; its Table I prints Stage-1 `[18, 66, 0, 0.6, 3]` and Stage-2 `[0, 33, 117, 0.6, 3]`: sun 18, planet steps of 66 and 33 teeth, ring 117, module 0.6) is one instance with one joint, two gear steps on one body: its 66-tooth step meshes the sun, its 33-tooth step the fixed ring. The carrier → planet gear takes the step that meshes the ring, and the sun → carrier gear reads both steps:
-
-```yaml
-# params.yaml
-  carrier_ratio: {basis: derived, expr: z_sun * z_p2 / (z_sun * z_p2 + z_ring * z_p1)}
-  planet_ratio:  {basis: derived, expr: -z_ring / z_p2}    # the 33-tooth step
-```
-
-The carrier's turn is checked as in the single-stage train, `expect: "360 / R1.ratio"` against the stated 14:1, and each step's pitch diameter by its own `distance` across that step's opposite flanks.
-
-## Poses and the MJCF export
-
-A model whose `build` returns `joints` and `loops` ([`modeling.md`](modeling.md)) moves. A check posed at joint values names them in `pose`, each joint mapped to a param or a ledger value `<evidence>.<key>`, never a bare number (`[schema]`):
+A mechanism ([modeling.md](modeling.md#joints-and-loops)) can be checked moved. `pose` maps joints to values, each a param or a ledger value `<item>.<key>`:
 
 ```yaml
   - {id: reach-30, kind: distance, instances: [ground_1, rocker_1], between: [ground_1.a, rocker_1.a],
      evidence: S3-sweep, key: AC, pose: {input: S3-sweep.turn}}
+  - {id: travel, kind: distance, instances: [frame_1, carriage_1], between: [frame_1.a, carriage_1.a],
+     along: x, evidence: S2-screw, key: lead, from: {}, pose: {screw: one_turn}}
+  - {id: claw-stroke, kind: stroke, cable: claw, evidence: S1-servo, key: stroke, tol: 1.5}
+  - {id: perch, kind: stroke, cable: leg_cord, from: {shin: shin_max}, pose: {servo: turn},
+     evidence: P3-eq1, claim: shortens}
 ```
 
-- **A pose value moves its joint from the assembly as built**: a revolute joint's in the project's angle unit (`input: 30` turns it 30° from where `assembly` places its child), a slide's in its length unit (`piston: 12` slides it 12 mm along its axis). Build the assembly at the configuration the source measures its angles and strokes from (the zero of its joints), so a stated value is the pose value itself. A fixed joint takes no pose.
-- cadrev exports the assembly as MJCF, sets each joint the pose names, holds every other `actuated` joint as built (an input stays where its motor holds it, so a pose names only the inputs it moves), and lets MuJoCo move the `passive` joints until every loop's two datums coincide. A [gear](modeling.md#joints-and-loops) moves its other joint with the one a pose sets, ratio times as far or, a lead screw, its slide lead per full turn of its revolute joint, whatever that joint's drive, and on through any chain of gears; a [cable](modeling.md#joints-and-loops) wound on a wheel moves each joint it closes to closed × wheel ÷ turn, and a closed joint the pose sets moves the wheel back by the same proportion. It then places each instance where MuJoCo puts its body and evaluates the check on its own geometry, with the same rules as an unposed check. A check without `pose` is evaluated on the assembly as built.
-- A loop whose datums stay more than `tolerance.length` apart after solving is `[loop-open]`, naming the loop and the pose: the links cannot close there (too short, or past a toggle), and the checks at that pose are not evaluated.
-- **The mechanism stays within its ranges.** A joint with a `range` that ends a pose outside it by more than `tolerance.angle` (`tolerance.length` for a slide) is `[joint-range]`, naming the joint, how far it moved and the pose; the checks at that pose are not evaluated. The joint a `range` check or a sweep sets is where its check puts it, so only the others are held to their ranges there.
-- **The assembly is built closed.** A loop whose two datums lie more than `tolerance.length` apart where `assembly` places their instances is `[loop-open]`, saying "as built".
-- A `pose` naming no joint or a fixed one, a value that is neither a param nor a ledger value, both joints of a gear at values out of its ratio, two joints of a cable out of proportion, or alone a joint a cable closes to 0 (which cannot set its wheel), is `[check-config]`; so is a `pose` on a model with no joints. After `[model-joint]`, `[model-loop]`, `[model-gear]` or `[model-cable]` ([`modeling.md`](modeling.md#joints-and-loops)) no posed check is evaluated. A pose value is read by its check: a param it names needs no read in model.py, the check rests on it, and a ledger value it names counts as used. So is the `ratio` or `lead` of each gear a pose moves a joint through: the check rests on it and it is checked. A pose value printed in a unit of another quantity than its joint's (a length for a revolute joint, an angle for a slide) is `[unit-quantity]`.
-- Name `instances` on a posed check: a check in one part's own frame reads the same at every pose.
-- **`from`** on a `distance`, `angle` or `stroke` check names the pose its change is taken from: a joint→value mapping of the same form and rules as `pose`, held to joint ranges and loops alike (`[joint-range]` or `[loop-open]` naming that pose leaves the check unevaluated); `from: {}` takes it from as built. A `distance` or `angle` check with `from` compares the change between its two poses with its ledger value, as a slide's travel per screw turn or a carrier's turn per sun turn: `{id: travel, kind: distance, instances: [frame_1, carriage_1], between: [frame_1.a, carriage_1.a], along: x, evidence: S2-screw, key: lead, from: {}, pose: {screw: one_turn}}`. What either pose moves through a gear or a cable counts toward what the check rests on. `from` on any other kind is `[check-config]`.
-- **`stroke`** compares how far a cable shortens, its path's length as built minus its length posed, with a ledger value: `{id: claw-stroke, kind: stroke, cable: claw, evidence: S1-servo, key: stroke, tol: 1.5}`. Without `pose`, it is posed at the cable's wheel at its full turn; a cable with no wheel needs a `pose`, else `[check-config]`. Every joint the pose does not set stays as built, so a slide the path crosses leaves the stroke unchanged. It is a length check, toleranced and capped as the [other checks](#checksyaml) are. A stroke stated "approximately" takes a `tol` within that cap, its `interpretation` quoting the word: at the default 0.001 mm a stroke resting on proposed closed angles passes only with angles tuned to six digits, and a project-wide `tolerance.length` loose enough for it caps the other length checks. It rests on the wheel's turn and the closed-pose params where its pose moves the cable's joints, as well as the params it reads.
-  - **`from`** (above) takes the stroke from a second pose; without it, the stroke is taken from as built.
-  - **`claim: shortens`** or **`claim: lengthens`** replaces `key` where a source states a direction of change between two configurations but prints no length: `{id: perch, kind: stroke, cable: leg_cord, from: {shin: shin_max}, pose: {servo: turn}, evidence: P3-eq1, claim: shortens}`. It passes when the cable changes that way by more than `tolerance.length`, the model's resolution; a change within it, or the other way, is `[check-failed]`. Its `evidence` is the bare id of the item stating it. `key` and `claim` together, neither, another claim, a `tol` or `tol_rel` beside a claim, or a claim citing no evidence item is `[check-config]`, as is `claim` on any other kind.
-
-A verification run of a model with joints writes `build/model.mjcf` and one `build/meshes/<part>.stl` per part, and loads the MJCF in MuJoCo; MuJoCo rejecting it is `[mjcf-load]` with MuJoCo's reason, and then no posed check is evaluated. A part's mesh only feeds MuJoCo; checks read its solid. One over the 200,000 faces MuJoCo's STL decoder takes is exported coarser, at a linear tolerance (in the project's length unit) and angular tolerance (in radians) of 0.01 and 0.2, then 0.1 and 0.5, then 1 and 1, until it fits, and report.md's motion section names the part, its faces and the tolerance it was exported at; one still over at the coarsest is `[mjcf-load]`, naming the part, its faces and the limit, and MuJoCo is not loaded: build that part from fewer faces. Each instance is a body framed as its part, each revolute joint a hinge and each slide a slide joint, each fixed child a body inside its parent's with no joint, each loop a `connect` between two sites named after its datums, each gear a joint equality (`polycoef` 0, ratio, or a lead gear's lead ÷ 2π in the length unit per radian, inverted where the slide drives), each joint a cable closes a joint equality coupling it to the wheel by closed ÷ turn (named `<cable>_<joint>`), each tendon a spatial tendon through such sites, each cable one with no stiffness whose length MuJoCo reports, and each `actuated` joint has a motor (a fixed joint has none); [physics values](#physics-values) sit on the joint or tendon they apply to, in the MJCF's units. The MJCF is in the project's units (mm and g by default, not SI) without gravity: a kinematic model, its lengths the report's lengths. Each body's mass and inertia are its part's in the [mass model](#mass-model). A model with no joints is static: it writes no MJCF, and report.md says so under the headline, or says the motion was dropped after a finding that dropped it.
+- **A pose value moves its joint from the assembly as built**: a revolute joint's in the project's angle unit, a slide's in its length unit. Build the assembly at the configuration the source measures from, so a stated value is the pose value itself.
+- cadrev sets the joints the pose names, holds every other `actuated` joint as built, and lets MuJoCo move the `passive` joints until every loop closes. A gear moves its other joint with the one a pose sets, a cable its closed joints with its wheel, through any chain. The check is then evaluated on the model's own geometry, placed where MuJoCo puts each body. Name `instances` on a posed check: a part's own frame reads the same at every pose.
+- A pose the mechanism cannot reach is a finding, and its checks are not evaluated: a loop that stays open there (`[loop-open]`: links too short, or past a toggle), or a joint pushed outside its `range` (`[joint-range]`).
+- **`from`** on a `distance`, `angle` or `stroke` check names a second pose, and the check compares the change between the two: a slide's travel per screw turn, a carrier's turn per sun turn. `from: {}` is as built.
+- **`stroke`** compares how far a cable shortens, as built to posed, with a ledger value. Without `pose` it is posed at the cable's wheel at its full turn. Where a source states only a direction of change, `claim: shortens` or `claim: lengthens` replaces `key`, cites the item stating it in `evidence`, and passes when the cable changes that way by more than `tolerance.length`.
 
 ### Ranges and sweeps
 
-A joint's `range` is two params, each a pose value from the assembly as built, or one param for a one-ended motion (`a 180° rotation`, `385° of servo rotation`): a move from as built, its other end 0, either way. They are in the project's angle unit for a revolute joint, its length unit for a slide (another quantity is `[unit-quantity]`). Ledger a stated range of motion as source values and read them into those params; a `range` check then confirms it, and an interference check with `sweep` confirms nothing collides across it:
+A joint's `range` is two params, each a pose value from as built, or one param for a one-ended motion ("a 180° rotation"), its other end as built. Ledger a stated range and read it into those params; a `range` check confirms it, and an interference check with `sweep` shows nothing collides across it.
 
 ```yaml
   - {id: toe-reach, kind: range, joint: toe, ends: [S2-toe.min, S2-toe.max]}
@@ -387,10 +276,27 @@ A joint's `range` is two params, each a pose value from the assembly as built, o
   - {id: toe-clear, kind: interference, pairs: [[palm_1, toe_1]], sweep: {joint: toe, steps: sweep_steps}}
 ```
 
-- **`range`** names a `joint` and, in `ends`, the ledger values `<evidence>.<key>` its range's params must equal, one per param in that order (one for a one-ended range). It gives one result per end, `<id>.<range param>`, each with its pose. Without `between`, cadrev poses the model at each stated end itself and compares the joint's range param for that end with it, within `tolerance.angle` for a revolute joint and `tolerance.length` for a slide: a range param that stops short of or overshoots its end is `[check-failed]`, and the pose confirms the mechanism reaches the end, so a loop that cannot close there is `[loop-open]` and another joint pushed past its range is `[joint-range]` (that end then has no result). With `between` (and `instances`), cadrev poses the model at each end of the joint's range (each range param as a pose value) and compares the angle there, as an `angle` check reads it, or between two datums the distance, as a `distance` check reads it (`along` included), with that end's ledger value. A source range param whose `from` a range check's `ends` compares is checked; one no check checks is `[unchecked-source]`, like any source param. Compare the input's own range with `ends` alone, an end past 180° (`385°`) included, since an angle between datums reads 0 to 180°; compare a stated output angle (a toe that opens 0–40°) with `between`.
-- **A stated range of a distance** a joint changes, rather than of its own travel (a leg width from 20 to 50 mm that a slide sets), gives the joint's range params as `derived` from the stated ends, and a `range` check with `between` two datums compares the distance at each end; a one-ended range's as-built end is a `distance` check without `pose`.
-- **`sweep: {joint, steps}`** on an interference check evaluates it at `steps` poses evenly spaced from one end of the joint's range to the other, ends included, and reports the worst overlap with the pair and the pose it occurred at (`0.82 crank_1 ∩ post_1 at input 90 over 2 pairs (listed) across 5 poses of input`); a clear sweep says how many poses it evaluated. `steps` is a param, read by the check, never a bare number (`[schema]`). It is the sweep's resolution, a choice that states nothing about the object: one read only as `steps` is left out of what the check rests on and out of exact. A proposed one is still a proposed param, counted in the headline's "on proposed values" and listed in `rests_on_proposed`, and report.md names it beside **Exact**; one that is not a whole number of at least 2 is `[check-config]`. A pose the mechanism cannot reach (`[loop-open]`, `[joint-range]`) leaves the check unevaluated.
-- Both check kinds rest on their joint's range params as well as the params they read. A `range` or `sweep` naming no joint of the model, a joint with no `range`, or `ends` that are not one value per range param is `[check-config]`, as is either on a model with no joints. report.md shows each end's pose, and each sweep's joint, range and pose count, beside its interpretation.
+- **`range`** names a `joint` and, in `ends`, one ledger value per range param, in order. Without `between`, cadrev poses the model at each stated end, which shows the mechanism reaches it, and compares the joint's range param with it: use it for the input's own range, an end past 180° included. With `between`, it poses the model at each end of the joint's range and compares the angle there (three datums) or the distance (two) with that end's ledger value: use it for a stated output, such as a toe that opens 0–40°, or a leg width a slide sets from 20 to 50 mm, whose joint range params are then `derived` from the stated ends.
+- **`sweep: {joint, steps}`** evaluates an interference check at `steps` poses evenly spaced across the joint's range, ends included, and reports the worst overlap with its pair and pose. `steps` is a param, a whole number of at least 2. It is the sweep's resolution, a choice that states nothing about the object, so it needs no gap and is left out of what a check rests on and of exact.
+
+### Worked example: a planetary train
+
+A planetary train with one member fixed is a chain of [gears](modeling.md#joints-and-loops), each ratio derived from the stated tooth counts, checked against values `expect` works out. COMPAct's gearbox ledgers Table I's `SSPG [25, 65, 155, 0.5, 3]` as `T1` and "7.2:1" as `R1` (`{ratio: 7.2}`). The ring is fixed, the sun `actuated`, the carrier `passive` on the ring, and each planet a `passive` revolute joint on the carrier.
+
+```yaml
+# params.yaml
+  z_sun:         {basis: source,  from: T1.z_sun}             # likewise z_planet, z_ring, module
+  carrier_ratio: {basis: derived, expr: z_sun / (z_sun + z_ring)}
+  planet_ratio:  {basis: derived, expr: -z_ring / z_planet}          # planet on the carrier
+# model.py: "gears": {"sun_carrier": {"driver": "sun", "driven": "carrier", "ratio": "carrier_ratio"},
+#                     "carrier_planet_1": {"driver": "carrier", "driven": "planet_1", "ratio": "planet_ratio"}}
+# checks.yaml
+  - {id: carrier-turn, kind: angle, instances: [ring_1, carrier_1],
+     between: [ring_1.d, ring_1.a, carrier_1.d], from: {}, pose: {sun: one_turn},
+     expect: "360 / R1.ratio"}                                  # 50° per sun turn
+```
+
+The carrier's turn reads both gears' ratios, so the tooth counts are checked, while its expected value comes from the stated ratio: a wrong formula, a misread count or a sign error fails it. Place `ring_1.d` a quarter turn from the carrier's datum, so the unsigned angle stays on one side through the turn. The pitch diameter and planet-axis checks above then fail a ring count that breaks `z_ring = z_sun + 2 * z_planet`. A train with no member fixed is out of reach: a gear ties only two joints.
 
 ## gaps.yaml
 
@@ -399,15 +305,9 @@ gaps:
   - id: G-pitch
     question: What is the pin-to-pin pitch of the finger link?
     ask: authors     # authors | measure | datasheet | test
-  - id: G-pin-x
-    question: Where along the finger link does the pin sit?
-    ask: authors
-  - id: G-pins
-    question: What diameter are the link pins?
-    ask: datasheet
 ```
 
-The report lists every gap with the params that name it in their `gap`: this is the list of questions to send the authors. Only a param's `gap` names a gap, so a gap no param names is the warning `[gap-unused]` even when a conflict's text cites its id; when a resolution leaves a question open, put the gap on the param whose value the resolution chose. In a [known-first](#known-first) project, a gap no param names is a question a waiting part asks, listed under Waiting.
+A gap is a question whose answer would replace a proposed or measured value. The report lists each with the params whose `gap` names it, grouped as the questions to send the authors.
 
 ## overlays.yaml
 
@@ -417,60 +317,38 @@ overlays:
     image: figures/supp/image7.png
     part: palm              # a part in its own frame, or "assembly"; or instance: <instance>
     view: front             # front: X right, Z up · top: X right, Y up · right: Y right, Z up
-    origin: [412, 618]      # pixel where model (0, 0) lands
+    origin: [412, 618]      # the pixel where model (0, 0) lands
     calibration:
       pixels: [[120, 640], [705, 640]]   # two pixels spanning a known dimension
       evidence: S1-palm.L                 # that dimension
     mirror: false
 ```
 
-Renders `build/overlays/<id>.png`: model edges in magenta, calibration span in blue, under a title strip. Below that strip one PNG pixel is one pixel of `image`, so `origin` and `calibration.pixels` line up as written. An overlay names exactly one of `part: <part>`, the part in its own frame; `instance: <instance>`, that instance where the assembly places it; or `part: assembly`, every instance where the assembly places it. Where an instance shares its part's name, `part` draws the part and `instance` the instance. An overlay is visual evidence for a human; it adds no pass/fail. One that cannot be drawn (an unknown `view`, a `part` that is no part, an `instance` that is no instance, both keys or neither, a calibration that is no evidence value, an unreadable image) is `[overlay-config]`. One that draws no model edge on its image is still written, and is the warning `[overlay-empty]`, naming the pixel bounds its edges project to: correct its `origin`, `view` or calibration before reading anything from it.
+Renders `build/overlays/<id>.png`: model edges in magenta over the figure, the calibration span in blue, one PNG pixel per image pixel below the title strip. It is visual evidence for a human and adds no pass or fail.
 
 ## Statuses
 
-Every verification run ends on one status: `cadrev check` prints it last, and report.md and report.json carry it.
+`cadrev check` prints one status last, and report.md and report.json carry it.
 
 | status | when | exit |
 |---|---|---|
-| **VERIFIED** | no error finding and no figure reading awaiting confirmation: every number is accounted for and every check passes, even if some params are proposed | 0 |
+| **VERIFIED** | no error: every number is accounted for and every check passes, even if some params are proposed | 0 |
 | **VERIFIED PENDING REVIEW** | VERIFIED but for figure readings without `confirmed_by` | 0 |
-| **NOT VERIFIED** | at least one error finding, including a project cadrev refuses (`[project-missing]`, `[format-missing]`, `[format-unknown]`) | 1 |
+| **NOT VERIFIED** | at least one error | 1 |
 | **PARTIAL** | `--no-build` or `--no-coverage` skipped part of the run, so it makes no claim and writes no report | 1 |
 
-**Exact** is not a status: it qualifies VERIFIED when no param rests on a proposed value, [physics values](#physics-values) and a sweep's `steps` ([Ranges and sweeps](#ranges-and-sweeps)) aside. report.md then prints **Exact** under the status, naming the proposed physics values and sweep resolutions it set aside, and report.json sets `exact` to true.
+**Exact** qualifies VERIFIED: no param rests on a proposed value, physics values and a sweep's `steps` aside. report.md prints it under the status.
 
 ## Known first
 
-A project whose project.yaml sets `known_first: true` builds only the parts whose every dimension the sources settle: quoted, worked out from quotes, probed from released geometry, or measured. A part needing any value they leave open waits, listed with the question that would settle it. While it is set:
+`known_first: true` holds a project to what the sources settle: the parts whose every dimension is quoted, worked out from quotes, probed or measured.
 
-- **No proposed value in the model.** Each param resting on proposed is `[known-first]`, naming it. Physics values and a sweep's `steps` are set aside, and `measured` is allowed, as [Exact](#statuses) sets them aside and allows it, so a known-first project that is VERIFIED is exact.
-- **What waits is listed.** An in-scope ledger value that no param uses and no check compares or poses at **waits**: report.md lists it under Waiting, and report.json under `waiting`, in place of `[evidence-unused]`. A gap no param names is listed beside the waiting values, the question a waiting part asks, in place of `[gap-unused]`; a gap a param names (a measured one's) stays under the open gaps. Every other rule holds: the coverage sweep, quotes, probes and skips still harvest the whole ledger.
-- **A settled part whose place is open** is placed by no instance, as [the assembly](modeling.md#contract) says, with a gap asking where it sits.
-- **The status says known first.** `cadrev check` prints the status, then how many stated values wait: `VERIFIED: 0 errors, 0 warnings, 10/10 checks pass. Known first: 7 stated values wait. Report: build/report.md`. report.md prints a **Known first** line under the status and a Waiting section, and report.json sets `known_first`. A project with no part settled yet builds nothing and still reports the ledger, its params and what waits.
+- A param resting on proposed is an error, physics values and a sweep's `steps` aside, so a known-first project that is VERIFIED is exact.
+- An in-scope ledger value nothing uses **waits**, and so does a gap no param names, the question a waiting part asks. The report lists both under Waiting. Everything else holds: the whole ledger is still harvested and covered.
+- A settled part whose place the sources leave open is built in its own frame and placed by no instance, with a gap asking where it sits.
 
-Removing `known_first` returns the project to every rule above: each waiting value is `[evidence-unused]` until a param uses it or a check compares it, and each gap no param names `[gap-unused]`. A value the user supplies is `proposed`, its `rationale` naming them as its source, so `known_first` is removed first; one scaled off a figure is `measured`, which known first allows.
+Removing `known_first` returns the project to the full rules. A value the user supplies is `proposed`, its `rationale` naming them, so remove `known_first` first.
 
 ## build/report.json
 
-The machine-readable report `cadrev check` writes beside `report.md`, which renders the same data. A PARTIAL run writes neither. Its top-level keys:
-
-| key | holds |
-|---|---|
-| `status` | the run's status (see [Statuses](#statuses)) |
-| `exact` | whether the project is exact (see [Statuses](#statuses)) |
-| `known_first` | whether project.yaml sets `known_first` (see [Known first](#known-first)) |
-| `waiting` | in a known-first project, what waits: its `values`, each stated value no param uses and no check compares, as its `evidence`, `key`, `value` as written in the ledger, `source` and `locator`; and its `gaps`, each gap no param names, as its `gap`, `question` and `ask`; null in any other project |
-| `counts` | `errors`, `warnings`, `checks`, `checks_passed`, `params`, the params resting on each basis: `source`, `measured`, `proposed`, and the proposed physics values counted apart from `proposed`: `physics_proposed` |
-| `findings` | every finding as `level`, `rule`, `message` |
-| `checks` | every geometry check with its result, expected and evaluated values, the basis it `rests_on`, and the params it reads resting on that basis (`rests_on_params`); for a mass check, each part it weighs in several instances with no `counts` entry and its instance count (`uncounted`); for an interference check, also the number of pairs it evaluated (`pairs`); for a posed check, its `pose`: each joint with the param or ledger value it is set `from` and that `value`; for a check with `from`, its `from_pose` in the same form (`{}` for as built); for a swept interference check, its `sweep` (`joint`, the range params it is swept `from`, their values as `range`, and the number of `poses`), and as `pose` the one with the worst overlap; for a shape check, its `shape`: the `residual` its datum pairs fit within and, once they fit, the largest surface `distance` and the `worst_point` where it occurs, in the body's frame (against a cut file's region, the largest outline `distance` and `worst_point` as `[x, y]` on the sheet); for a check with an `expect`, its `expect`: the expression (`expr`) and the `value` it works out to |
-| `tolerances` | each check with a non-default tolerance: its `check` id, `kind`, and `tol` or `tol_rel` |
-| `overlap_limits` | each interference check with a non-default overlap limit: its `check` id and `max_volume` |
-| `motion` | how the model moves, as `build/model.mjcf` exports it: its `joints`, each with its `type`, `parent`, `child` and `drive` (none for a fixed joint), its `range` as the params it is `from` (`as built` for a one-ended range's other end) and their `value`s in the joint's unit, low first, and each physics value it names (`damping`, `stiffness`, `spring_rest`, `friction`) as `{from, value}` in the project's units; its `loops`, each as its two datums; its `gears`, each with its `driver`, `driven` and `ratio` or `lead` as `{from, value}`; its `tendons`, each with its `path` and physics values; its `cables`, each with its `path` and, wound on a wheel, its `wheel` and `closes` as `{joint: {from, value}}`, listed in report.md's motion section too; `coarsened`, each part whose mesh was exported coarser to fit MuJoCo's STL decoder, with its `faces`, the `default_faces` it had at build123d's default tessellation, and the `tolerance` and `angular_tolerance` it was exported at, listed in report.md's motion section too; and `dropped`, true when a `[model-joint]`, `[model-loop]`, `[model-gear]`, `[model-cable]` or `[model-return]` dropped them. No joints and not dropped means static; null when no model was built |
-| `masses` | each part the [mass model](#mass-model) weighs: its `mass`, the param it is weighed `from` (`{mass: <param>}` or `{density: <param>}`), and its `center` of mass and `inertia` about it (ixx iyy izz ixy ixz iyz) in the part's frame and the project's units: the numbers `build/model.mjcf` exports; null when no model was built |
-| `model_literals` | project.yaml's `model_literals` when it differs from the default, else null |
-| `params` | each param's spec, its resolved `value` and the basis it `rests_on` |
-| `bases` | how many params declare each basis |
-| `rests_on_proposed` | the params resting on a proposed value, a sweep's proposed `steps` among them though no check rests on it |
-| `measured` | each measured param with its `value`, `from`, `method` and `uncertainty` |
-| `awaiting_confirmation` | each unconfirmed figure reading with its `evidence`, `locator`, `reading` and `image` |
-| `probes` | each value a probe records: its `evidence` and `key`, the `body` and kind (`probe`) it reads, the `recorded` value, the `value` cadrev evaluates, its `tol`, and whether it is `ok` |
+The machine-readable twin of report.md: `status`, `exact`, `known_first`, `counts` (errors, warnings, checks, params by what they rest on, `physics_proposed`), `findings`, `checks` (each result with what it rests on and its pose), `tolerances`, `overlap_limits`, `motion`, `masses`, `params`, `rests_on_proposed`, `measured`, `awaiting_confirmation`, `probes`, and for a known-first project `waiting`.
