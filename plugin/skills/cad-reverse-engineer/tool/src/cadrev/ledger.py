@@ -176,11 +176,12 @@ def _probe_values(p: Project, e: dict, body: str) -> dict[str, float]:
         raise Fault(f"a {kind} probe records one value, not {len(values)}")
     (key,) = values
     if kind == "diameter":
-        if released.at_point(body):
-            raise Fault("a probe of a cut file's region is bbox, distance or angle, not diameter")
         if "at" not in e:
             raise Fault("a diameter probe names the datum it is taken at in at")
-        at, point = str(e["at"]), p.datum_on(e["at"], body)
+        at = str(e["at"])
+        if not isinstance(p.datums.get(at), dict) and released.at_point(body):
+            raise Fault(f"a diameter of a cut file's region is taken at a circle datum, not {at}")
+        point = p.datum_on(at, body)
         if not isinstance(p.datums.get(at), dict):
             return {key: released.diameter_at(shape, point, p.length_tol, at)}
         diameter = p.derived_datum(at)[2]
@@ -244,7 +245,7 @@ def _probe(p: Project, e: dict) -> None:
 def _released_datums(p: Project) -> None:
     """[datum-off-solid] for each datum declared on released geometry that lies on no body, each
     derived datum the datums it names give no point, and each datum a derived one is worked out
-    from that lies on no triangle corner of an STL."""
+    from that lies on no triangle corner of an STL or on no region's edge of a cut file."""
     unread = p.unread_geometry
     sheets = [
         sid
@@ -261,8 +262,8 @@ def _released_datums(p: Project) -> None:
     }
     for name, point in p.datums.items():
         sheet = next((s for s in sheets if name.startswith(f"{s}.")), None)
-        derived = isinstance(point, dict)  # on a solid only
-        misshapen = sheet is not None if derived else len(point) != (3 if sheet is None else 2)
+        derived = isinstance(point, dict)
+        misshapen = not derived and len(point) != (3 if sheet is None else 2)
         if misshapen:
             shape = "[x, y, z]" if sheet is None else f"[x, y] on cut file {sheet}"
             p.error("schema", f"evidence.yaml datums.{name}: must be {shape}, not {point}")
@@ -272,10 +273,22 @@ def _released_datums(p: Project) -> None:
             with p.filing("datum-off-solid", f"datum {name}: "):
                 p.derived_datum(name)
         elif sheet is not None:
-            if not released.outlines_at(p.regions[sheet], (point[0], point[1]), p.length_tol):
+            found = p.regions[sheet]
+            holding = released.outlines_at(found, (point[0], point[1]), p.length_tol)
+            if not holding:
                 p.error(
                     "datum-off-solid",
                     f"datum {name} of cut file {sheet}: lies inside no region's outer contour",
+                )
+            elif name in deriving and (
+                gap := released.off_edge(
+                    [found[i] for i in holding], (point[0], point[1]), p.length_tol
+                )
+            ):
+                p.error(
+                    "datum-off-solid",
+                    f"datum {name} of cut file {sheet}: lies on no region's edge, {gap:.4g} from "
+                    "the nearest; a datum derived from it is pinned on a sheet only by edges",
                 )
         elif (named := p.released_datum(name)) is None:
             p.error(

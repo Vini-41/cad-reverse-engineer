@@ -383,6 +383,14 @@ LINK_FINDINGS = {
     "datum-off-solid: a released datum naming no body": lambda r, t: add(
         r, datums="nowhere.a: [0, 0, 0]"
     ),
+    "datum-off-solid: a probe's sheet datum off its region's edge": _sheet(
+        _ledger(SHEET_PROBE | {"between": ["sheet.a", "sheet.b"]})
+    ),
+    "datum-off-solid: a sheet datum a derived one names off every region's edge": _sheet(
+        lambda r, t: add(
+            r, datums={"sheet.x": [30, 42.5], "sheet.m": {"mid": ["sheet.x", "sheet.side"]}}
+        )
+    ),
     "datum-off-solid: a cut file's datum outside every region": _sheet(
         lambda r, t: add(r, datums="sheet.far: [1, 1]")
     ),
@@ -531,12 +539,12 @@ LINK_FINDINGS = {
     "evidence-anchor: a probe of a cut file naming no region": _sheet(
         _ledger(PROBE | {"source": "sheet", "axes": {"L": "x", "W": "y"}, "values": {"L": 40}})
     ),
-    "evidence-anchor: a diameter probe of a cut file's region": _sheet(
-        _ledger(SHEET_PROBE | {"probe": "diameter", "at": "sheet.a"})
+    "evidence-anchor: a diameter probe of a region at no circle datum": _sheet(
+        _ledger(SHEET_PROBE | {"probe": "diameter", "at": "sheet.side"})
     ),
     "evidence-anchor: a probe of a region at a datum outside it": _sheet(
         lambda r, t: add(r, datums={"sheet.plate": [130, 50]}),
-        _ledger(SHEET_PROBE | {"between": ["sheet.a", "sheet.plate"]}),
+        _ledger(SHEET_PROBE | {"between": ["sheet.bore_a", "sheet.plate"]}),
     ),
     "evidence-anchor: a probe of a body that is none": _probed(body="link_step#2"),
     "evidence-anchor: a probe of a kind that is none": _probed(probe="volume"),

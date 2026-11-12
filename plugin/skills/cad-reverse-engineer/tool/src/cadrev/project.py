@@ -345,10 +345,10 @@ class Project:
         points = []
         for datum in through:
             if isinstance(self.datums.get(datum), dict):
-                raise Fault(f"{datum} is itself derived; derive it from [x, y, z] datums")
+                raise Fault(f"{datum} is itself derived; derive it from datums given as points")
             named = self.released_datum(datum)
             if named is None:
-                raise Fault(f"{datum} is no [x, y, z] datum declared on a body")
+                raise Fault(f"{datum} is no datum given as a point on a body")
             if named[0] != body:
                 raise Fault(f"{datum} lies on body {named[0]}, not {body}")
             points.append(named[1])
@@ -359,18 +359,27 @@ class Project:
         return body, centre, diameter
 
     def _body_named(self, name: str) -> str | None:
-        """The solid body a datum's name <body>.<feature> names, if any."""
-        return max((b for b in self.bodies if name.startswith(f"{b}.")), key=len, default=None)
+        """The released body a datum's name <body>.<feature> names, if any: a solid, or a cut
+        file's sheet."""
+        named = (b for b in [*self.bodies, *self.regions] if name.startswith(f"{b}."))
+        return max(named, key=len, default=None)
 
     def datum_on(self, name: str, body: str) -> tuple[float, float, float]:
         """The point of a datum declared on released body `body`: on a cut file's region, a datum
-        of its sheet inside the region's outer contour."""
+        of its sheet inside the region's outer contour and, unless derived, on its edge."""
         named = self.released_datum(str(name))
         at = released.at_point(body)
         if at is not None and named is not None and named[0] == at[0]:
             sid, index = self.region(body)
             if index not in released.outlines_at(self.regions[sid], named[1][:2], self.length_tol):
                 raise Fault(f"{name} lies outside the outer contour of region {body}")
+            region, derived = self.regions[sid][index], isinstance(self.datums.get(name), dict)
+            if not derived and (gap := released.off_edge([region], named[1], self.length_tol)):
+                raise Fault(
+                    f"{name} is {gap:.4g} from the nearest edge of region {body}; place it on the "
+                    "outer contour or a hole's edge",
+                    "datum-off-solid",
+                )
         elif named is None or named[0] != body:
             raise Fault(f"{name} is not a datum declared on {body}")
         return named[1]

@@ -534,8 +534,19 @@ SHEET = """\
 """
 LINK_AT = "sheet@30,41"
 # The link's hole centres and the middle of its long edge at y 45, where the built link's datums
-# a, b and side project along Z.
-SHEET_DATUMS = {"sheet.a": [25, 42.5], "sheet.b": [55, 42.5], "sheet.side": [40, 45]}
+# a, b and side project along Z; and three points on each hole's edge, with the circle through
+# them, whose centre a probe reads.
+SHEET_DATUMS = {
+    "sheet.a": [25, 42.5],
+    "sheet.b": [55, 42.5],
+    "sheet.side": [40, 45],
+    **{
+        f"sheet.{h}{i}": [x + dx, 42.5 + dy]
+        for h, x in (("a", 25), ("b", 55))
+        for i, (dx, dy) in enumerate(((-1.5, 0), (0, -1.5), (1.5, 0)), 1)
+    },
+    **{f"sheet.bore_{h}": {"circle": [f"sheet.{h}{i}" for i in (1, 2, 3)]} for h in "ab"},
+}
 # A probe of the sheet's link: the spacing of its holes.
 SHEET_PROBE = {
     "id": "P-s",
@@ -543,7 +554,7 @@ SHEET_PROBE = {
     "body": LINK_AT,
     "locator": "link",
     "probe": "distance",
-    "between": ["sheet.a", "sheet.b"],
+    "between": ["sheet.bore_a", "sheet.bore_b"],
     "values": {"v": 30},
     "scope": "context",
     "reason": "restates pitch",

@@ -313,6 +313,17 @@ def off_corner(solid, point: tuple[float, float, float], tol: float) -> float | 
     return None if nearest <= tol else nearest
 
 
+def off_edge(regions, point: tuple[float, ...], tol: float) -> float | None:
+    """How far point is on the sheet from the nearest edge of regions, an outer contour or a hole's,
+    or None if it lies on one within tol."""
+    from build123d import Compound, Vector
+
+    at = Vector(point[0], point[1], 0)
+    edges = (_kept("edges", region, lambda r: Compound(r.edges())) for region in regions)
+    nearest = min((e.distance_to(at) for e in edges), default=math.inf)
+    return None if nearest <= tol else nearest
+
+
 def off(gap: float) -> str:
     """What a [datum-off-solid] finding says of a datum off_solid finds gap away."""
     return (
