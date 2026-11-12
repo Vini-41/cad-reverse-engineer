@@ -15,12 +15,12 @@ from conftest import (
     FOLD,
     INPUT_RANGE,
     KNEE,
-    LINK_AT,
     LOOP,
     PAPER,
     PROBE,
     SCREW,
     SHEET,
+    SHEET_PROBE,
     SLIDE,
     SKILL,
     WOUND,
@@ -149,20 +149,6 @@ def _released(*then, **kwargs):
 
 def _probed(**entry):
     return lambda r, t: probed(r, t, **entry)
-
-
-# A probe of the sheet's link: the spacing of its holes.
-SHEET_PROBE = {
-    "id": "P-s",
-    "source": "sheet",
-    "body": LINK_AT,
-    "locator": "link",
-    "probe": "distance",
-    "between": ["sheet.a", "sheet.b"],
-    "values": {"v": 30},
-    "scope": "context",
-    "reason": "restates pitch",
-}
 
 
 def _sheet(*then, **kwargs):

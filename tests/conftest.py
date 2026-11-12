@@ -536,6 +536,18 @@ LINK_AT = "sheet@30,41"
 # The link's hole centres and the middle of its long edge at y 45, where the built link's datums
 # a, b and side project along Z.
 SHEET_DATUMS = {"sheet.a": [25, 42.5], "sheet.b": [55, 42.5], "sheet.side": [40, 45]}
+# A probe of the sheet's link: the spacing of its holes.
+SHEET_PROBE = {
+    "id": "P-s",
+    "source": "sheet",
+    "body": LINK_AT,
+    "locator": "link",
+    "probe": "distance",
+    "between": ["sheet.a", "sheet.b"],
+    "values": {"v": 30},
+    "scope": "context",
+    "reason": "restates pitch",
+}
 
 
 def sheet(root: Path, tmp_path: Path, svg: str = SHEET, **shape) -> None:

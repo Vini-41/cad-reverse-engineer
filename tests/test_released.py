@@ -21,10 +21,10 @@ from build123d import (
 )
 from conftest import (
     FACE_DATUMS,
-    LINK_AT,
     PROBE,
     REPO,
     SHEET,
+    SHEET_PROBE,
     add,
     add_quote,
     change,
@@ -439,8 +439,9 @@ def test_coverage_names_each_region_by_a_point_a_skip_can_copy(proj_dir, tmp_pat
 
 
 def _sheet_probe(eid: str, kind: str, values: dict, **fields) -> dict:
-    entry = {"id": eid, "source": "sheet", "body": LINK_AT, "locator": "link", "probe": kind}
-    return entry | fields | {"values": values, "scope": "context", "reason": "probed"}
+    """SHEET_PROBE as probe kind of values, with fields in place of its datums."""
+    entry = {k: v for k, v in SHEET_PROBE.items() if k != "between"}
+    return entry | {"id": eid, "probe": kind, "values": values} | fields
 
 
 def test_probe_reads_a_region_of_a_cut_file_in_the_sheets_plane(proj_dir, tmp_path):
@@ -475,16 +476,11 @@ def test_angle_probe_reads_the_angle_at_the_middle_of_three_sheet_datums(proj_di
 
 
 def test_param_taken_from_a_probe_of_a_cut_file_rests_on_source(proj_dir, tmp_path):
-    # The pin's bore, which no quote states, spans hole a's rim at (23.5, 42.5) and (26.5, 42.5).
     sheet(proj_dir, tmp_path)
-    add(proj_dir, datums={"sheet.a_left": [23.5, 42.5], "sheet.a_right": [26.5, 42.5]})
-    rim = ["sheet.a_left", "sheet.a_right"]
-    probe = _sheet_probe("P-bore", "distance", {"d": 3}, between=rim)
-    add(proj_dir, evidence={k: v for k, v in probe.items() if k not in ("scope", "reason")})
-    change(proj_dir, "params", "hole_d", basis="source", value=None, rationale=None, gap=None)
-    change(proj_dir, "params", "hole_d", **{"from": "P-bore.d"})
-    add(proj_dir, checks="{id: bore, kind: diameter, at: link.wall, evidence: P-bore, key: d}")
-    write(proj_dir, "gaps.yaml", "gaps: []\n")
+    probe = {k: v for k, v in SHEET_PROBE.items() if k not in ("scope", "reason")}
+    add(proj_dir, evidence=probe)
+    change(proj_dir, "params", "pitch", **{"from": "P-s.v"})
     run = check(proj_dir)
     assert run.status == "VERIFIED", run.out
-    assert run.report["params"]["hole_d"]["rests_on"] == "source" and run.report["exact"]
+    assert run.report["params"]["pitch"]["rests_on"] == "source"
+    assert run.report["probes"][0]["value"] == pytest.approx(30)
