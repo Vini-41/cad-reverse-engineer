@@ -24,7 +24,7 @@ _OCP = {
     for name in (
         "BRep",
         "BRepAdaptor",
-        "BRepClass",
+        "IntTools",
         "BRepTools",
         "GeomAbs",
         "ShapeAnalysis",
@@ -272,7 +272,30 @@ def _bound(points: np.ndarray, surface: _Surface, slack: float, need: float) -> 
     to OCC. A point whose bound already lies below need, a distance already found, can never
     reach OCC, so the costly bounds, the lines' and the cut faces', leave it as it is."""
     extra = slack + _TOLERANCES * surface.tolerance
-    out = np.full(len(points), np.inf)
+    # First each point's distance to the nearest of surface's own sample points, which lie on it:
+    # a bound that settles most points at once, so the faces bound only the rest.
+    settled = _samples_bound(points, surface)
+    rest = np.flatnonzero(settled + extra >= need)
+    if len(rest):
+        settled[rest] = _faces_bound(points[rest], surface, settled[rest], extra, need)
+    return settled + extra
+
+
+def _samples_bound(points: np.ndarray, surface: _Surface) -> np.ndarray:
+    """Each point's distance to the nearest of surface's sample points that lie on their face."""
+    from scipy.spatial import KDTree
+
+    on = surface.points[surface.on_face]
+    if not len(on) or not len(points):
+        return np.full(len(points), np.inf)
+    return KDTree(on).query(points)[0] + _ON_FACE
+
+
+def _faces_bound(
+    points: np.ndarray, surface: _Surface, out: np.ndarray, extra: float, need: float
+) -> np.ndarray:
+    """The bounds out, lowered to each point's distance to a point on a face of surface that
+    gives one (_bound)."""
     triangles = [c for c in surface.triangles if c is not None]
     if triangles:
         out = np.minimum(out, _triangles_bound(points, np.array(triangles)))
@@ -296,7 +319,9 @@ def _bound(points: np.ndarray, surface: _Surface, slack: float, need: float) -> 
         out, lines = np.minimum(out, over), lines + edges
     # A plane face's lines bound the points over no face, and those over one but high above it.
     loose = np.flatnonzero((out > _NEAR_FACE) & (out + extra >= need))
-    for start, end in lines:
+    for n, (start, end) in enumerate(lines):
+        if n % _CHUNK == 0:  # a point the lines so far have settled needs no more of them
+            loose = loose[out[loose] + extra >= need]
         out[loose] = np.minimum(
             out[loose], _segment_distance(points[loose], start, end, out[loose])
         )
@@ -306,10 +331,11 @@ def _bound(points: np.ndarray, surface: _Surface, slack: float, need: float) -> 
     for face, kind in cut:
         on, uv = _nearest_on(points, face, kind)
         gap = np.linalg.norm(points - on, axis=1)
+        classify = _OCP["IntTools"].IntTools_FClass2d(face.wrapped, _ON_FACE)
         for n in np.flatnonzero((gap < out) & (out + extra >= need)):
-            if _on_face(face, on[n], uv[n]):
+            if _on_face(classify, face, on[n], uv[n]):
                 out[n] = gap[n]
-    return out + extra
+    return out
 
 
 def _triangle_distance(p, a, b, c) -> np.ndarray:
@@ -406,15 +432,14 @@ def _clamp_angle(angle: np.ndarray, first: float, last: float) -> np.ndarray:
     return np.where(nearer_first, first, np.minimum(angle, last))
 
 
-def _on_face(face, point: np.ndarray, uv: np.ndarray) -> bool:
-    """Whether point, a point of a face's surface at the face's parameters uv, lies on the face.
-    OCC's classifier, at uv, finds it in the face or out of it, as distance_to within _ON_FACE
-    does, but computes no distance, which against a face with B-spline edges takes a millisecond.
-    On an edge it strays either way, so there distance_to settles it. A point the classifier
-    finds in the face lies on the face's surface within its pcurves, which stray from its edges
-    by no more than the tolerance _bound allows for."""
-    at = _OCP["gp"].gp_Pnt2d(float(uv[0]), float(uv[1]))
-    state = _OCP["BRepClass"].BRepClass_FaceClassifier(face.wrapped, at, _ON_FACE).State()
+def _on_face(classify, face, point: np.ndarray, uv: np.ndarray) -> bool:
+    """Whether point, a point of a face's surface at the face's parameters uv, lies on the face,
+    by classify, OCC's classifier of the face's parameters, built once for the face. It finds uv
+    in the face or out of it, as distance_to within _ON_FACE does, but computes no distance. On an
+    edge it strays either way, so there distance_to settles it. A point it finds in the face lies
+    on the face's surface within its pcurves, which stray from its edges by no more than the
+    tolerance _bound allows for."""
+    state = classify.Perform(_OCP["gp"].gp_Pnt2d(float(uv[0]), float(uv[1])))
     if state == _ON:
         return face.distance_to(tuple(point)) <= _ON_FACE
     return state == _IN

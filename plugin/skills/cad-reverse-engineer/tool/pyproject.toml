@@ -10,6 +10,8 @@ dependencies = [
     "pypdf>=4",
     "matplotlib>=3.8",
     "mujoco>=3.3",
+    # A shape check's nearest-sample bound (distance.py); build123d brings it in too.
+    "scipy>=1.11",
     # A cut file's SVG: svgelements reads it, ocpsvg turns its contours into wires.
     "ocpsvg>=0.6",
     "svgelements>=1.9",
