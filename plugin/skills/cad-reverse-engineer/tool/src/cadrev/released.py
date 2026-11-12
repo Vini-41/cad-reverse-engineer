@@ -349,12 +349,9 @@ def circle(points, tol: float, names) -> tuple[tuple[float, float, float], float
 
     for (i, a), (j, b) in itertools.combinations(enumerate(points), 2):
         if math.dist(a, b) <= tol:
-            raise Fault(
-                f"its inputs {names[i]} and {names[j]} coincide, so no circle passes through them"
-            )
+            raise Fault(f"{names[i]} and {names[j]} coincide, so no circle passes through them")
     if collinear(list(points), tol):
-        inputs = ", ".join(names)
-        raise Fault(f"its inputs {inputs} lie on one line, so no circle passes through them")
+        raise Fault(f"{', '.join(names)} lie on one line, so no circle passes through them")
     a, b, c = (np.asarray(q, float) for q in points)
     u, w = a - c, b - c
     normal = np.cross(u, w)

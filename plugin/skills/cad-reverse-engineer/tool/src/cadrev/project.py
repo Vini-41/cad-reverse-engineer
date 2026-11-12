@@ -328,32 +328,32 @@ class Project:
     def derived_datum(self, name: str) -> tuple[str, tuple[float, float, float], float | None]:
         """The body a derived datum lies on, its point and, for a circle, the circle's diameter:
         the centre of the circle through three datums, or the midpoint of two. A Fault saying
-        why where its inputs give none."""
+        why where the datums it names give none."""
         entry = self.datums[name]
         assert isinstance(entry, dict)  # called for a derived datum alone
         form = next((f for f in ("circle", "mid") if f in entry), None)
         if form is None:
             raise Fault("give {circle: [a, b, c]} or {mid: [a, b]}")
-        inputs, count = [str(i) for i in entry[form]], 3 if form == "circle" else 2
-        if len(inputs) != count:
-            raise Fault(f"{form} takes {count} datums, not {len(inputs)}")
+        through, count = [str(d) for d in entry[form]], 3 if form == "circle" else 2
+        if len(through) != count:
+            raise Fault(f"{form} takes {count} datums, not {len(through)}")
         body = self._body_named(name)
         if body is None:
             raise Fault("names no body of a geometry source; name it <body>.<feature>")
         points = []
-        for i in inputs:
-            if isinstance(self.datums.get(i), dict):
-                raise Fault(f"its input {i} is itself derived; derive it from [x, y, z] datums")
-            named = self.released_datum(i)
+        for datum in through:
+            if isinstance(self.datums.get(datum), dict):
+                raise Fault(f"{datum} is itself derived; derive it from [x, y, z] datums")
+            named = self.released_datum(datum)
             if named is None:
-                raise Fault(f"its input {i} is no [x, y, z] datum declared on a body")
+                raise Fault(f"{datum} is no [x, y, z] datum declared on a body")
             if named[0] != body:
-                raise Fault(f"its input {i} lies on body {named[0]}, not {body}")
+                raise Fault(f"{datum} lies on body {named[0]}, not {body}")
             points.append(named[1])
         if form == "mid":
             (ax, ay, az), (bx, by, bz) = points
             return body, ((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2), None
-        centre, diameter = released.circle(points, self.length_tol, inputs)
+        centre, diameter = released.circle(points, self.length_tol, through)
         return body, centre, diameter
 
     def _body_named(self, name: str) -> str | None:
