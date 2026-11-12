@@ -20,8 +20,8 @@ GitHub issues on `Vini-41/cad-reverse-engineer`. See `docs/agents/issue-tracker.
 
 ### Triage labels
 
-The five default labels. See `docs/agents/triage-labels.md`.
+Each triage role is the label of the same name: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.
 
 ### Domain docs
 
-Single-context: one root `GLOSSARY.md` plus `docs/adr/`. See `docs/agents/domain.md`.
+Single-context: one root `GLOSSARY.md` plus `docs/adr/`. Read the glossary, and the ADRs on the area you will change, before exploring. Name each domain concept by its glossary term, in place of any word its _Avoid_ line lists, and say so where your output contradicts an ADR.

@@ -33,10 +33,10 @@ def test_broken_markdown_link_in_skill_fails(tmp_path):
 
 
 def test_broken_backticked_path_in_agent_docs_fails(tmp_path):
-    root = repo(tmp_path, {"docs/agents/domain.md": f"Read `{SKILL}/GONE.md`.\n"})
+    root = repo(tmp_path, {"docs/agents/workflow.md": f"Read `{SKILL}/GONE.md`.\n"})
     result = check(root)
     assert result.returncode == 1
-    assert f"docs/agents/domain.md:1: {SKILL}/GONE.md" in result.stdout
+    assert f"docs/agents/workflow.md:1: {SKILL}/GONE.md" in result.stdout
 
 
 def test_guard_pointers_that_name_files_or_no_repo_path_pass(tmp_path):
