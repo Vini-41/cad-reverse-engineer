@@ -462,6 +462,7 @@ def test_probe_reads_a_region_of_a_cut_file_in_the_sheets_plane(proj_dir, tmp_pa
     values = {f"{q['evidence']}.{q['key']}": q["value"] for q in run.report["probes"]}
     expected = {"P-env.L": 40, "P-env.W": 5, "P-side.v": 15.2069, "P-drop.v": 2.5}
     assert values == pytest.approx(expected | {"P-pitch.v": 30, "P-bore.d": 3}, abs=1e-4)
+    # A circle datum on an arc of the file gives its centre and diameter to float precision.
     assert values["P-pitch.v"] == pytest.approx(30, abs=1e-6)
     assert values["P-bore.d"] == pytest.approx(3, abs=1e-6)
 
@@ -500,6 +501,14 @@ def test_probe_at_a_sheet_datum_off_its_regions_edge_is_a_datum_off_solid(proj_d
     (message,) = run.messages("datum-off-solid")
     assert "sheet.a " in message and "1.5" in message
     assert run.result("shape")["ok"]
+
+
+def test_shape_check_pairs_a_built_part_with_circle_datums_at_a_sheets_holes(proj_dir, tmp_path):
+    pairs = [["link.a", "sheet.bore_a"], ["link.b", "sheet.bore_b"], ["link.side", "sheet.side"]]
+    sheet(proj_dir, tmp_path, pairs=pairs)
+    run = check(proj_dir)
+    assert run.status == "VERIFIED", run.out
+    assert run.result("shape")["shape"]["residual"] < 1e-6
 
 
 def test_param_taken_from_a_probe_of_a_cut_file_rests_on_source(proj_dir, tmp_path):

@@ -366,20 +366,25 @@ class Project:
 
     def datum_on(self, name: str, body: str) -> tuple[float, float, float]:
         """The point of a datum declared on released body `body`: on a cut file's region, a datum
-        of its sheet inside the region's outer contour and, unless derived, on its edge."""
+        of its sheet inside the region's outer contour, on its edge or derived from datums on it."""
         named = self.released_datum(str(name))
         at = released.at_point(body)
         if at is not None and named is not None and named[0] == at[0]:
             sid, index = self.region(body)
             if index not in released.outlines_at(self.regions[sid], named[1][:2], self.length_tol):
                 raise Fault(f"{name} lies outside the outer contour of region {body}")
-            region, derived = self.regions[sid][index], isinstance(self.datums.get(name), dict)
-            if not derived and (gap := released.off_edge([region], named[1], self.length_tol)):
-                raise Fault(
-                    f"{name} is {gap:.4g} from the nearest edge of region {body}; place it on the "
-                    "outer contour or a hole's edge",
-                    "datum-off-solid",
-                )
+            entry = self.datums.get(name)
+            through = [str(d) for f in entry.values() for d in f] if isinstance(entry, dict) else []
+            for datum in through or [name]:
+                point = (self.released_datum(datum) or named)[1]
+                gap = released.off_edge([self.regions[sid][index]], point, self.length_tol)
+                if gap:
+                    of = "" if datum == name else f", which {name} is derived from,"
+                    raise Fault(
+                        f"{datum}{of} is {gap:.4g} from the nearest edge of region {body}; place "
+                        "it on the outer contour or a hole's edge",
+                        "datum-off-solid",
+                    )
         elif named is None or named[0] != body:
             raise Fault(f"{name} is not a datum declared on {body}")
         return named[1]
