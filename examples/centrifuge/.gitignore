@@ -1,18 +1,3 @@
 build/
-# Sources are pinned by sha256 in project.yaml. `cadrev source` un-ignores each one whose license allows redistribution.
-sources/*
 figures/*/
 !figures/crops/
-!sources/SomaPoor2022_centrifuge.pdf
-!sources/body_step.step
-!sources/body_compat_step.step
-!sources/arrows_step.step
-!sources/plate_step.step
-!sources/rotor325_step.step
-!sources/rotor_pcr325_step.step
-!sources/fit325_step.step
-!sources/rotor366_step.step
-!sources/rotor_pcr366_step.step
-!sources/fit366_step.step
-!sources/adapter05_step.step
-!sources/adapter02_step.step

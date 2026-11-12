@@ -68,7 +68,7 @@ def test_source_copies_the_file_pins_its_hash_and_lists_it_last(proj_dir, tmp_pa
 
 def test_registering_an_id_again_refreshes_its_entry_and_keeps_its_other_keys(proj_dir, tmp_path):
     change(proj_dir, "sources", "paper", url="https://doi.org/x")
-    # A clone holds no source its license keeps out of git: the finding says where to get it.
+    # A clone lacks any source the user keeps out of git: the finding says where to get it.
     (proj_dir / "sources" / "paper.txt").unlink()
     assert "download from https://doi.org/x" in check(proj_dir).messages("source-missing")[0]
     paper = tmp_path / "paper.txt"
@@ -78,11 +78,6 @@ def test_registering_an_id_again_refreshes_its_entry_and_keeps_its_other_keys(pr
     assert entry["sha256"] == sha256(paper) and entry["kind"] == "supplement"
     assert entry["url"] == "https://doi.org/x"
     assert check(proj_dir).status == "VERIFIED"
-
-
-# A license, and whether its terms let anyone redistribute the file, so git may hold it.
-LICENSES = {"CC0-1.0": True, "CC-BY-4.0": True, "cc-by-sa-3.0": True, "CC-BY-NC-4.0": False}
-LICENSES |= {"MIT": False, None: False}
 
 
 def test_source_rewrites_a_sources_list_however_it_was_written(proj_dir, tmp_path):
@@ -98,18 +93,15 @@ def test_source_rewrites_a_sources_list_however_it_was_written(proj_dir, tmp_pat
     assert "# kept\nname: demo\n" in text and check(proj_dir).status == "VERIFIED"
 
 
-@pytest.mark.parametrize("license", LICENSES)
-def test_source_anyone_may_redistribute_is_committed_and_any_other_stays_ignored(
-    proj_dir, tmp_path, license
-):
+def test_every_registered_source_is_committed(proj_dir, tmp_path):
     notes = tmp_path / "field notes.md"
     notes.write_text("No dimensions.\n")
-    register(proj_dir, notes, "notes", "other", *(["--license", license] if license else []))
+    register(proj_dir, notes, "notes", "other")
     subprocess.run(["git", "init", "-q", str(proj_dir)], check=True)
-    ignored = ["git", "-C", str(proj_dir), "check-ignore", "-q", "sources/field notes.md"]
-    assert (subprocess.run(ignored).returncode != 0) == LICENSES[license]
-    kept = ["git", "-C", str(proj_dir), "check-ignore", "-q", "sources/paper.txt"]
-    assert subprocess.run(kept).returncode == 0  # the paper, registered with no license
+    for path in ("sources/field notes.md", "sources/paper.txt"):
+        assert subprocess.run(["git", "-C", str(proj_dir), "check-ignore", "-q", path]).returncode
+    with pytest.raises(SystemExit):  # nor does cadrev source take a licence
+        register(proj_dir, notes, "notes", "other", "--license", "MIT")
 
 
 @pytest.mark.parametrize("what", ["no file", "no project", "a project.yaml that does not parse"])

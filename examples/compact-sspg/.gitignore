@@ -1,15 +1,3 @@
 build/
-# Sources are pinned by sha256 in project.yaml. `cadrev source` un-ignored the CC BY paper; the MIT STL and their licence were un-ignored by hand, since its pattern leaves MIT out (#102).
-sources/*
 figures/*/
 !figures/crops/
-!sources/Singh2025_COMPAct.pdf
-!sources/sspg_bearing_retainer.STL
-!sources/sspg_carrier.STL
-!sources/sspg_carrier_updated.STL
-!sources/sspg_gearbox_casing.STL
-!sources/sspg_motor_casing.STL
-!sources/sspg_planet.STL
-!sources/sspg_sec_carrier.STL
-!sources/sspg_sun.STL
-!sources/LICENSE-COMPAct.txt

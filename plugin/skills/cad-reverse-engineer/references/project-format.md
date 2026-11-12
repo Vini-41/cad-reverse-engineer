@@ -34,13 +34,12 @@ sources:                 # written by `cadrev source`; keep it the last key
     sha256: …
     citation: …
     url: https://doi.org/…
-    license: CC-BY-4.0
     coverage: false      # optional: leave this source out of the coverage sweep (a 200-page catalogue)
 ```
 
 - `target` names the object, its version and its configuration, and where the authors released several variants, the one built.
 - `tolerance` is a modelling tolerance, not a manufacturing one. `tolerance.angle` is in degrees whatever `units.angle` says.
-- `cadrev source` with an id already registered refreshes that entry: its file, hash and whatever the command states. That is how a source is restored into a clone or replaced by a new download. A source licensed CC0, CC-BY or CC-BY-SA is un-ignored in the project's `.gitignore`, so it is committed and the project reruns from a clone.
+- `cadrev source` with an id already registered refreshes that entry: its file, hash and whatever the command states. That is how a source is restored into a clone or replaced by a new download.
 - **Text sources** are quote-checked and swept: PDF, DOCX, TXT, MD, HTML (read as its rendered text). Save a web datasheet as HTML or TXT to quote it. Video and image files anchor image evidence only.
 - **Geometry sources** (`kind: geometry`) are what the authors released: STEP or STL, read in millimetres and converted to the project's length unit. A **body** is named by its source's id where the file holds one solid, else `<source>#<n>`, the nth solid in file order from 1. Where a part ships as both, register the STEP: an STL holds only flat triangles, so it has no axis for a datum and no cylindrical face for a diameter, only a [derived datum](#probes-released-geometry) through its triangle corners.
 - **A cut file** is a laser-cut sheet, an SVG registered as `kind: geometry`. Its bodies are its regions, each an outer contour with the holes inside it, named by a point inside it: `<source>@<x>,<y>` (`plates@30,41`). Points are in the sheet's frame: from the page's top-left corner, x right and y down, at the scale the file declares with every transform applied, in the project's length unit. The coverage findings name each region by such a point, ready to copy.

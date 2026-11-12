@@ -61,7 +61,7 @@ def record(fields: str, exclusive: tuple = (), **nested) -> Record:
     return Record(specs, tuple(required), exclusive)
 
 
-SOURCE = record("id! kind path sha256 citation url license coverage:bool")
+SOURCE = record("id! kind path sha256 citation url coverage:bool")
 EVIDENCE = record(
     "id! source page:int locator quote values:{word} scope reason image image_sha256 reading:any "
     "confirmed_by probe body axes:{str} between:[str] along at tol:number"

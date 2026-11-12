@@ -11,10 +11,8 @@ sources:
     path: ../legclaw-links/sources/Cheng2026_LegClaw.pdf
     sha256: b8f0e5f959caea2ec1b79a2fe0488279552ace379df3a9a899894bf50326f408
     citation: "Cheng et al. 2026, LegClaw"
-    license: CC-BY-4.0
   - id: supp
     kind: supplement
     path: ../legclaw-links/sources/Cheng2026_LegClaw_supplementary.docx
     sha256: 929378a5eca8454155e4a1be9dfd0c33952873f66b46124b54a06869f3e587c1
     citation: "Cheng et al. 2026, LegClaw, supplementary materials"
-    license: CC-BY-4.0
