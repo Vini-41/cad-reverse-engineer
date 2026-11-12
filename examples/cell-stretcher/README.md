@@ -2,7 +2,7 @@
 
 The six-well uniaxial cell stretcher from Kah et al., *A low-cost uniaxial cell stretcher for six parallel wells*, HardwareX 9 (2021) e00162. [doi:10.1016/j.ohx.2020.e00162](https://doi.org/10.1016/j.ohx.2020.e00162). CC BY 4.0. Its laser-cut SVG sheets and STL files are on Mendeley Data, [doi:10.17632/mgkbmytx63.1](https://doi.org/10.17632/mgkbmytx63.1), also CC BY 4.0.
 
-A fresh agent reconstructed it from the skill and these sources alone, in dogfood run 12 ([run log](../../docs/dogfood/cell-stretcher-run-log.md)). It is the stretcher unit, with its 3D-printed clamps, and the mould its PDMS substrates are cast in; the electronics and controller unit is left out. It shows a lead screw and cut files as sources:
+A fresh agent reconstructed it from the skill and these sources alone. It is the stretcher unit, with its 3D-printed clamps, and the mould its PDMS substrates are cast in; the electronics and controller unit is left out. It shows a lead screw and cut files as sources:
 
 - Two stepper motors, each turning its own lead screw, both moving one carriage on a slide: two `lead` gears, each reading the stated "8 mm per revolution", exported to `build/model.mjcf` as joint equalities.
 - Posed `distance` checks with `from`, the carriage's travel per turn of each screw, against the stated lead; a third compares the right screw's with the lead `expect` works out from the stated top speed and motor speed.

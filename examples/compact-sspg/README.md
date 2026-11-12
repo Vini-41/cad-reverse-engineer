@@ -2,7 +2,7 @@
 
 The single-stage planetary gearbox of the 7.2:1 SSPG actuator from Singh, Kapa, Joshi and Kolathaya, *COMPAct: Computational Optimization and Automated Modular design of Planetary Actuators*, arXiv:2510.07197v2 (2025). [arXiv:2510.07197](https://arxiv.org/abs/2510.07197). CC BY 4.0. Its STL files are in the authors' repository, [github.com/singhaman1750/COMPAct](https://github.com/singhaman1750/COMPAct), `CADs/Actuator_STL_files/sspg_7.2`, under the MIT licence.
 
-A fresh agent reconstructed it from the skill and these sources alone, in dogfood run 26 ([run log](../../docs/dogfood/compact-run-log.md)). It is the gearbox as built: the sun, three planets, the primary carrier with its secondary carrier, the gearbox casing with the ring cut inside it, and the output-bearing retainer. The motor and the purchased bearings and bolts are left out. It shows a planetary train, counts and worked ledger values:
+A fresh agent reconstructed it from the skill and these sources alone. It is the gearbox as built: the sun, three planets, the primary carrier with its secondary carrier, the gearbox casing with the ring cut inside it, and the output-bearing retainer. The motor and the purchased bearings and bolts are left out. It shows a planetary train, counts and worked ledger values:
 
 - Table I's design vector `[25, 65, 155, 0.5, 3]`: sun 25, planet 65 and ring 155 teeth, module 0.5, 3 planets, each a count.
 - The ring fixed, the sun the input and the carrier the output, quoting the paper. The train is a chain of gears: sun → carrier at `z_sun / (z_sun + z_ring)`, and carrier → each planet at `-z_ring / z_planet`, exported to `build/model.mjcf` as joint equalities.
