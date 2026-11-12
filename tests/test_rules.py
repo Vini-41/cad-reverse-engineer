@@ -15,6 +15,7 @@ from conftest import (
     FOLD,
     INPUT_RANGE,
     KNEE,
+    LINK_AT,
     LOOP,
     PAPER,
     PROBE,
@@ -148,6 +149,20 @@ def _released(*then, **kwargs):
 
 def _probed(**entry):
     return lambda r, t: probed(r, t, **entry)
+
+
+# A probe of the sheet's link: the spacing of its holes.
+SHEET_PROBE = {
+    "id": "P-s",
+    "source": "sheet",
+    "body": LINK_AT,
+    "locator": "link",
+    "probe": "distance",
+    "between": ["sheet.a", "sheet.b"],
+    "values": {"v": 30},
+    "scope": "context",
+    "reason": "restates pitch",
+}
 
 
 def _sheet(*then, **kwargs):
@@ -527,8 +542,15 @@ LINK_FINDINGS = {
     "tolerance-cap: a probe's tol": _probed(tol=0.5),
     "probe-mismatch": _probed(values={"L": 40.002, "W": 5, "H": 8}),
     "evidence-anchor: a probe of a source that is no geometry": _probed(source="paper"),
-    "evidence-anchor: a probe of a cut file": _sheet(
-        _ledger(PROBE | {"source": "sheet"}), check=False
+    "evidence-anchor: a probe of a cut file naming no region": _sheet(
+        _ledger(PROBE | {"source": "sheet", "axes": {"L": "x", "W": "y"}, "values": {"L": 40}})
+    ),
+    "evidence-anchor: a diameter probe of a cut file's region": _sheet(
+        _ledger(SHEET_PROBE | {"probe": "diameter", "at": "sheet.a"})
+    ),
+    "evidence-anchor: a probe of a region at a datum outside it": _sheet(
+        lambda r, t: add(r, datums={"sheet.plate": [130, 50]}),
+        _ledger(SHEET_PROBE | {"between": ["sheet.a", "sheet.plate"]}),
     ),
     "evidence-anchor: a probe of a body that is none": _probed(body="link_step#2"),
     "evidence-anchor: a probe of a kind that is none": _probed(probe="volume"),

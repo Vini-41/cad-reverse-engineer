@@ -363,9 +363,15 @@ class Project:
         return max((b for b in self.bodies if name.startswith(f"{b}.")), key=len, default=None)
 
     def datum_on(self, name: str, body: str) -> tuple[float, float, float]:
-        """The point of a datum declared on released body `body`."""
+        """The point of a datum declared on released body `body`: on a cut file's region, a datum
+        of its sheet inside the region's outer contour."""
         named = self.released_datum(str(name))
-        if named is None or named[0] != body:
+        at = released.at_point(body)
+        if at is not None and named is not None and named[0] == at[0]:
+            sid, index = self.region(body)
+            if index not in released.outlines_at(self.regions[sid], named[1][:2], self.length_tol):
+                raise Fault(f"{name} lies outside the outer contour of region {body}")
+        elif named is None or named[0] != body:
             raise Fault(f"{name} is not a datum declared on {body}")
         return named[1]
 

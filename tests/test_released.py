@@ -21,6 +21,7 @@ from build123d import (
 )
 from conftest import (
     FACE_DATUMS,
+    LINK_AT,
     PROBE,
     REPO,
     SHEET,
@@ -435,3 +436,55 @@ def test_coverage_names_each_region_by_a_point_a_skip_can_copy(proj_dir, tmp_pat
     skips = [{"source": "sheet", "body": n, "reason": "another device"} for n in named]
     add(proj_dir, skipped=skips)
     assert check(proj_dir).status == "VERIFIED"
+
+
+def _sheet_probe(eid: str, kind: str, values: dict, **fields) -> dict:
+    entry = {"id": eid, "source": "sheet", "body": LINK_AT, "locator": "link", "probe": kind}
+    return entry | fields | {"values": values, "scope": "context", "reason": "probed"}
+
+
+def test_probe_reads_a_region_of_a_cut_file_in_the_sheets_plane(proj_dir, tmp_path):
+    # The sheet's link lies at x 20..60, y 40..45, its holes 30 apart along x at y 42.5, and its
+    # side datum at (40, 45).
+    sheet(proj_dir, tmp_path)
+    between = {"between": ["sheet.a", "sheet.side"]}
+    probes = [
+        _sheet_probe("P-env", "bbox", {"L": 40, "W": 5}, axes={"L": "x", "W": "y"}),
+        _sheet_probe("P-pitch", "distance", {"v": 30}, between=["sheet.a", "sheet.b"]),
+        _sheet_probe("P-side", "distance", {"v": 15.2069}, **between, tol=1e-4),
+        _sheet_probe("P-drop", "distance", {"v": 2.5}, **between, along="y"),
+    ]
+    add(proj_dir, evidence=probes)
+    run = check(proj_dir)
+    assert run.status == "VERIFIED", run.out
+    values = {f"{q['evidence']}.{q['key']}": q["value"] for q in run.report["probes"]}
+    expected = {"P-env.L": 40, "P-env.W": 5, "P-pitch.v": 30, "P-side.v": 15.2069, "P-drop.v": 2.5}
+    assert values == pytest.approx(expected, abs=1e-4)
+
+
+def test_angle_probe_reads_the_angle_at_the_middle_of_three_sheet_datums(proj_dir, tmp_path):
+    # From hole b at (55, 42.5), hole a lies along -x and the link's lower edge at (55, 45)
+    # along +y on the sheet.
+    sheet(proj_dir, tmp_path)
+    add(proj_dir, datums={"sheet.under": [55, 45]})
+    corner = ["sheet.a", "sheet.b", "sheet.under"]
+    add(proj_dir, evidence=_sheet_probe("P-square", "angle", {"v": 90}, between=corner))
+    run = check(proj_dir)
+    assert run.status == "VERIFIED", run.out
+    assert run.report["probes"][0]["value"] == pytest.approx(90)
+
+
+def test_param_taken_from_a_probe_of_a_cut_file_rests_on_source(proj_dir, tmp_path):
+    # The pin's bore, which no quote states, spans hole a's rim at (23.5, 42.5) and (26.5, 42.5).
+    sheet(proj_dir, tmp_path)
+    add(proj_dir, datums={"sheet.a_left": [23.5, 42.5], "sheet.a_right": [26.5, 42.5]})
+    rim = ["sheet.a_left", "sheet.a_right"]
+    probe = _sheet_probe("P-bore", "distance", {"d": 3}, between=rim)
+    add(proj_dir, evidence={k: v for k, v in probe.items() if k not in ("scope", "reason")})
+    change(proj_dir, "params", "hole_d", basis="source", value=None, rationale=None, gap=None)
+    change(proj_dir, "params", "hole_d", **{"from": "P-bore.d"})
+    add(proj_dir, checks="{id: bore, kind: diameter, at: link.wall, evidence: P-bore, key: d}")
+    write(proj_dir, "gaps.yaml", "gaps: []\n")
+    run = check(proj_dir)
+    assert run.status == "VERIFIED", run.out
+    assert run.report["params"]["hole_d"]["rests_on"] == "source" and run.report["exact"]

@@ -160,13 +160,12 @@ def _stated(p: Project, eid: str, text: str, kind: str, values: dict) -> None:
             p.error(f"value-not-in-{kind}", f"{eid}.{key} = {value:g} is not in its {kind}")
 
 
-def _probe_values(p: Project, e: dict, body: str) -> dict[str, float]:
-    """What a probe evaluates on its released body: each value key's value, in the project's
-    units, an angle in degrees."""
+def _probe_values(p: Project, e: dict, body: str, shape) -> dict[str, float]:
+    """What a probe evaluates on its released body, a solid or a region of a cut file: each value
+    key's value, in the project's units, an angle in degrees."""
     kind, values = e["probe"], e.get("values") or {}
-    solid = p.bodies[body]
     if kind == "bbox":
-        axes, size = e.get("axes") or {}, solid.bounding_box().size
+        axes, size = e.get("axes") or {}, shape.bounding_box().size
         for key in [*(axes.keys() - values.keys()), *values]:
             if axes.get(key) not in AXES or key not in values:
                 raise Fault(f"axes gives each value its axis x, y or z, and {key} has none")
@@ -176,12 +175,14 @@ def _probe_values(p: Project, e: dict, body: str) -> dict[str, float]:
     if len(values) != 1:
         raise Fault(f"a {kind} probe records one value, not {len(values)}")
     (key,) = values
+    if kind == "diameter" and released.at_point(body):
+        raise Fault("a probe of a cut file's region is bbox, distance or angle, not diameter")
     if kind == "diameter":
         if "at" not in e:
             raise Fault("a diameter probe names the datum it is taken at in at")
         at, point = str(e["at"]), p.datum_on(e["at"], body)
         if not isinstance(p.datums.get(at), dict):
-            return {key: released.diameter_at(solid, point, p.length_tol, at)}
+            return {key: released.diameter_at(shape, point, p.length_tol, at)}
         diameter = p.derived_datum(at)[2]
         if diameter is None:
             raise Fault(f"{at} is a midpoint; take a diameter at a circle or on a cylindrical face")
@@ -201,15 +202,18 @@ def _probe(p: Project, e: dict) -> None:
         raise Fault(f"a probe reads a geometry source, and {sid} is not one")
     if sid in p.unread_geometry:
         raise Fault()  # its source's own finding says why
-    if sid in p.regions:
-        raise Fault(
-            f"{sid} is a cut file, whose regions a shape check compares; a probe reads a solid"
-        )
     body = str(e.get("body", sid))
-    names = [b for b in p.bodies if released.source_of(b) == sid]
-    if body not in names:
-        raise Fault(f"{body} is not a body of {sid}; its bodies are {', '.join(names)}")
-    evaluated = _probe_values(p, e, body)
+    if sid in p.regions:
+        at = released.at_point(body)
+        if at is None or at[0] != sid:
+            raise Fault(f"{body} is not a region of cut file {sid}; name one {sid}@<x>,<y>")
+        shape = p.body(body)
+    else:
+        names = [b for b in p.bodies if released.source_of(b) == sid]
+        if body not in names:
+            raise Fault(f"{body} is not a body of {sid}; its bodies are {', '.join(names)}")
+        shape = p.bodies[body]
+    evaluated = _probe_values(p, e, body, shape)
     quantity = PROBE_QUANTITY[e["probe"]]
     for key, value in evaluated.items():
         recorded = p.stated(f"{eid}.{key}", quantity)
