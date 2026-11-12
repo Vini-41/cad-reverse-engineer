@@ -122,3 +122,7 @@ Run as `codex exec --sandbox workspace-write -c sandbox_workspace_write.network_
 **Status against the example's.** Both runs end where run 10 did before review: VERIFIED PENDING REVIEW, 0 errors, 0 warnings, each with Fig. 8's "130.0 x 130.0 x 34.0 mm" among its readings. `examples/centrifuge`'s VERIFIED comes from a named reviewer confirming that reading, which a run cannot do.
 
 **The gate is not yet passed on Codex.** Run 28 reached its status only with `--add-dir ~/.cache/uv`, which the README does not give, and with a `CODEX_HOME` the sandbox can write, which a stranger's `~/.codex` is not. Codex's gate stays open until ticket A lands and a rerun from the marketplace follows only what the README then says.
+
+## Runs 29–31: the model benchmark
+
+Fable 5.2 (run 29), Opus 5.5 (run 30) and Sol (run 31). Skill and tool at `b8ac5d2` (main after #184), each at `xhigh` effort, briefed as above plus the two lines [the benchmark's method](../benchmark.md#method) names. Projects kept at `~/Documents/Projects/cadrev/dogfood/run-<n>`. Each ended VERIFIED PENDING REVIEW, and a re-check from a copy agreed. Their counts, audit and trips are in [docs/benchmark.md](../benchmark.md), where the trips are grouped into tickets for approval.

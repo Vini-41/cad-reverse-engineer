@@ -58,3 +58,7 @@ Skill and tool at `a3a699c` (main, after run 11's fixes). Project kept at `~/Doc
 The project's name is `cell-stretcher`.
 
 **CI.** About three minutes, so the example is checked nightly; `examples/legclaw-links` and `examples/centrifuge` stay on every push.
+
+## Runs 35–37: the model benchmark
+
+Fable 5.2 (run 35), Opus 5.5 (run 36) and Sol (run 37). Skill and tool at `b8ac5d2` (main after #184), each at `xhigh` effort, briefed as above plus the two lines [the benchmark's method](../benchmark.md#method) names. Projects kept at `~/Documents/Projects/cadrev/dogfood/run-<n>`. Each ended VERIFIED PENDING REVIEW, and a re-check from a copy agreed. Their counts, audit and trips are in [docs/benchmark.md](../benchmark.md), where the trips are grouped into tickets for approval.
