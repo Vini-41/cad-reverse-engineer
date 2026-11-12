@@ -38,7 +38,7 @@ from build123d import (
     import_step,
 )
 
-from cadrev import cli
+from cadrev import cli  # noqa: TID251
 
 REPO = Path(__file__).resolve().parents[1]
 SKILL = REPO / "plugin" / "skills" / "cad-reverse-engineer"
@@ -8172,8 +8172,7 @@ def test_planetary_train_exports_one_joint_equality_per_gear_in_its_chain(proj_d
 
 
 # Every rule beside its near miss: the change to the fixture that raises it, and the closest changes
-# it must accept. scripts/rule-coverage fails unless each rule the tool emits has a row here with a
-# near miss, the only kind of test it counts as asserting a rule absent.
+# it must accept.
 
 
 def raised(root: Path) -> list[tuple[str, str]]:

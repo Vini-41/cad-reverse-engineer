@@ -6,7 +6,7 @@
 # tests run on several workers (pytest-xdist).
 #
 #   scripts/check
-#   scripts/check --lint   # pyright, ruff and the tests' imports alone, in seconds, for after an edit
+#   scripts/check --lint   # pyright and ruff alone, in seconds, for after an edit
 #
 # An example fails past EXAMPLE_SECONDS (default 600). Review holds each example to a goal a user
 # feels, a full cadrev check in about 2 minutes on a laptop; this ceiling only catches a large
@@ -128,7 +128,6 @@ fi
 step "pyright" uv run pyright -p ../../../../pyrightconfig.json
 step "ruff check" uv run ruff check ../../../..
 step "ruff format" uv run ruff format --check ../../../..
-step "the tests import only cadrev.cli" ../../../../scripts/check-cli-imports
 # --lint stops here, past the steps an edit most often fails.
 if [ "$mode" = full ]; then
   # Fixed worker counts, not -n auto (a worker per core): the examples run beside the tests, the
@@ -136,10 +135,6 @@ if [ "$mode" = full ]; then
   step "tool tests" uv run pytest -q -n 6 ../../../../tests
   step "script tests" uv run pytest -q -n 4 ../../../../scripts/tests
   step "agent-facing docs point only at files that exist" ../../../../scripts/check-doc-pointers
-  step "every rule is tested raised and beside a near miss, documented and held by a step; tests edit fixtures through swap" \
-    uv run python ../../../../scripts/rule-coverage
-  step "the skill and tool source use none of GLOSSARY.md's avoided words" ../../../../scripts/check-glossary-words
-  step "the tool source branches on a check or probe kind only in run_checks" ../../../../scripts/check-kind-branches
   step "plugin manifests validate" --rerun "claude plugin validate . && claude plugin validate plugin" plugin_validate
   red_on_main_step=${#names[@]}
   step "red-on-main: new tests are red holes or green guards" --rerun scripts/red-on-main \

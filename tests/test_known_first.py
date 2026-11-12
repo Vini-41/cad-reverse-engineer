@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from cadrev import cli
+from cadrev import cli  # noqa: TID251
 
 # The link's every dimension is stated; the pin's length is, but not its diameter, so it waits.
 PAPER = """\
