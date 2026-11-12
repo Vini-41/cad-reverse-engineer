@@ -3510,6 +3510,23 @@ def test_guard_shipped_docs_give_crops_call_with_the_positional_box_its_help_pri
     assert not [doc.name for doc in docs if "--box" in doc.read_text()], "crop takes no --box"
 
 
+# Model and harness names a skill can outlive: the READMEs and run logs name them, the skill never.
+MODEL_NAMES = re.compile(
+    r"\b(Claude|Codex|Fable|Opus|Sonnet|Haiku|GPT|Astra|Sol|Terra|Luna|Gemini|Grok|Llama)\b"
+)
+
+
+def test_guard_shipped_skill_names_no_model():
+    docs = [SKILL / "SKILL.md", *sorted((SKILL / "references").glob("*.md"))]
+    named = [
+        f"{doc.name}:{n}: {match.group()}"
+        for doc in docs
+        for n, line in enumerate(doc.read_text().splitlines(), 1)
+        for match in MODEL_NAMES.finditer(line)
+    ]
+    assert named == []
+
+
 # Trips from the dogfood run (docs/dogfood/legclaw-run-log.md): each is a place a fresh agent
 # reconstructing the full LegClaw met a crash, a false finding or a silent wrong answer.
 
