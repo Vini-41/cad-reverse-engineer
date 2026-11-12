@@ -81,7 +81,7 @@ for c in [
     out.append(flow(c))
 out.append("  # ---- motion: the carrier's turn per sun turn, the output of the 7.2:1 train")
 out.append(flow({"id": "carrier-turn", "kind": "angle", "instances": ["casing_1", "carrier_1"],
-                 "between": ["casing_1.ang_ref", "casing_1.ang_axis", "carrier_1.pin_axis_lo"], "from": {}, "pose": {"sun": "one_turn"},
+                 "between": ["casing_1.ang_ref", "casing_1.ang_axis", "carrier_1.pin_axis_lo"], "from": {}, "pose": {"sun": 360},
                  "expect": "360 / R1.ratio", "interpretation": "the carrier's pin 1 starts a quarter turn from the casing's reference; one sun turn moves it 50 deg on"}))
 out.append(flow({"id": "mesh-clear", "kind": "interference", "pairs": [["sun_1", "planet_1"], ["sun_1", "planet_2"], ["sun_1", "planet_3"],
                  ["planet_1", "casing_1"], ["planet_2", "casing_1"], ["planet_3", "casing_1"], ["carrier_1", "casing_1"], ["sec_1", "casing_1"],

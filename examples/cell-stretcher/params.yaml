@@ -181,7 +181,6 @@ params:
   screw_lead: {basis: source, from: E-lead.lead, interpretation: "left screw: carriage travel per screw turn, + away from the stationary bar for + motor turn"}
   screw_lead_r: {basis: source, from: E-lead.lead, interpretation: "right screw, the same Anet A8 screw"}
   stretch_max: {basis: source, from: E-T2.a, interpretation: "the carriage's travel from zero stretch, the largest amplitude Table 2 runs; the rail travel itself is not stated"}
-  one_turn: {basis: proposed, value: 360, rationale: "one full screw turn, the turn the stated lead is per"}
   sweep_steps: {basis: proposed, value: 6, rationale: "sweep resolution"}
   # ---------------------------------------------------------------- mass model
   rho_pmma: {basis: proposed, value: 0.00118, rationale: "acrylic glass, 1.18 g/cm3", gap: G-mass}

@@ -23,8 +23,8 @@ One small example shows each kind of evidence, and four full reconstructions wer
 - `examples/legclaw-links`: three linkages of the LegClaw (Cheng et al., Advanced Science 2026), with Table S2 envelopes from the DOCX supplement, methods quotes, a figure-label crop, two source conflicts and proposed pin pitches. Expected status: `VERIFIED: 0 errors, 2 warnings, 10/10 checks pass`.
 - `examples/legclaw`: the full LegClaw, both legs and their mounts with their motion and tendons, exported to MuJoCo. Expected status: `VERIFIED: 0 errors, 0 warnings, 73/73 checks pass`.
 - `examples/centrifuge`: the mini benchtop centrifuge (Soma Poór, HardwareX 2022), a static project checked against the authors' released STEP files. Expected status: `VERIFIED: 0 errors, 0 warnings, 88/88 checks pass`.
-- `examples/cell-stretcher`: the uniaxial cell stretcher (Kah et al., HardwareX 2021), two lead screws driving one carriage, checked against laser-cut SVG sheets and STL. Expected status: `VERIFIED: 0 errors, 1 warnings, 119/119 checks pass`.
-- `examples/compact-sspg`: the COMPAct 7.2:1 single-stage planetary gearbox (Singh et al., arXiv 2025), its train checked by tooth counts and the output's posed turn. Expected status: `VERIFIED: 0 errors, 1 warnings, 123/123 checks pass`.
+- `examples/cell-stretcher`: the uniaxial cell stretcher (Kah et al., HardwareX 2021), two lead screws driving one carriage, checked against laser-cut SVG sheets and STL. Expected status: `VERIFIED: 0 errors, 0 warnings, 119/119 checks pass`.
+- `examples/compact-sspg`: the COMPAct 7.2:1 single-stage planetary gearbox (Singh et al., arXiv 2025), its train checked by tooth counts and the output's posed turn. Expected status: `VERIFIED: 0 errors, 0 warnings, 123/123 checks pass`.
 
 ### Install
 

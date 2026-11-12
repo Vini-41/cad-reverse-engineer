@@ -254,19 +254,20 @@ Each ledger value reads as a check compares it: in the project's units, an angle
 
 ### Poses
 
-A mechanism ([modeling.md](modeling.md#joints-and-loops)) can be checked moved. `pose` maps joints to values, each a param or a ledger value `<item>.<key>`:
+A mechanism ([modeling.md](modeling.md#joints-and-loops)) can be checked moved. `pose` maps joints to values, each a param, a ledger value `<item>.<key>` or a number:
 
 ```yaml
   - {id: reach-30, kind: distance, instances: [ground_1, rocker_1], between: [ground_1.a, rocker_1.a],
      evidence: S3-sweep, key: AC, pose: {input: S3-sweep.turn}}
   - {id: travel, kind: distance, instances: [frame_1, carriage_1], between: [frame_1.a, carriage_1.a],
-     along: x, evidence: S2-screw, key: lead, from: {}, pose: {screw: one_turn}}
+     along: x, evidence: S2-screw, key: lead, from: {}, pose: {screw: 360}}    # one turn, in degrees
   - {id: claw-stroke, kind: stroke, cable: claw, evidence: S1-servo, key: stroke, tol: 1.5}
   - {id: perch, kind: stroke, cable: leg_cord, from: {shin: shin_max}, pose: {servo: turn},
      evidence: P3-eq1, claim: shortens}
 ```
 
 - **A pose value moves its joint from the assembly as built**: a revolute joint's in the project's angle unit, a slide's in its length unit. Build the assembly at the configuration the source measures from, so a stated value is the pose value itself.
+- **A number** is a pose fixed by definition, not a ledger value: the one turn a lead "per turn" is stated over, which no source gives a number for. It reads in its joint's unit and adds nothing to what the check rests on. A pose a source states ("turned 30° on") names its ledger value.
 - cadrev sets the joints the pose names, holds every other `actuated` joint as built, and lets MuJoCo move the `passive` joints until every loop closes. A gear moves its other joint with the one a pose sets, a cable its closed joints with its wheel, through any chain. The check is then evaluated on the model's own geometry, placed where MuJoCo puts each body. Name `instances` on a posed check: a part's own frame reads the same at every pose.
 - A pose the mechanism cannot reach is a finding, and its checks are not evaluated: a loop that stays open there (`[loop-open]`: links too short, or past a toggle), or a joint pushed outside its `range` (`[joint-range]`).
 - **`from`** on a `distance`, `angle` or `stroke` check names a second pose, and the check compares the change between the two: a slide's travel per screw turn, a carrier's turn per sun turn. `from: {}` is as built.
@@ -299,7 +300,7 @@ A planetary train with one member fixed is a chain of [gears](modeling.md#joints
 #                     "carrier_planet_1": {"driver": "carrier", "driven": "planet_1", "ratio": "planet_ratio"}}
 # checks.yaml
   - {id: carrier-turn, kind: angle, instances: [ring_1, carrier_1],
-     between: [ring_1.d, ring_1.a, carrier_1.d], from: {}, pose: {sun: one_turn},
+     between: [ring_1.d, ring_1.a, carrier_1.d], from: {}, pose: {sun: 360},
      expect: "360 / R1.ratio"}                                  # 50° per sun turn
 ```
 

@@ -117,7 +117,8 @@ def plan(p: Project) -> set[int]:
             _held(p, c)
         for key in POSES:
             for ref in (c.get(key) or {}).values():
-                p.hold(str(ref), ("angle", "length"), f"in check {cid}'s {key}")
+                if isinstance(ref, str):  # a number is a pose fixed by definition
+                    p.hold(ref, ("angle", "length"), f"in check {cid}'s {key}")
     return unplanned
 
 
@@ -291,6 +292,7 @@ class Checks:
                 (j, ref, f"in check {c['id']}'s {key}")
                 for key in POSES
                 for j, ref in (c.get(key) or {}).items()
+                if isinstance(ref, str)
             ]
             if c.get("kind") == "range" and "between" not in c:
                 named += [(c.get("joint"), ref, f"check {c['id']}") for ref in c.get("ends") or []]
@@ -321,7 +323,8 @@ class Checks:
     ) -> tuple[Model, dict | None]:
         """The assembly check c is evaluated on, with its pose as the report shows it: as built,
         or placed at the joint values its `key` names and those set_to gives, each joint as (its
-        value, what that is from). A joint set_to names is where its check puts it."""
+        value, what that is from). A number `key` gives is the joint's value in the project's
+        units, from nothing. A joint set_to names is where its check puts it."""
         p, model, named = self.p, self.model, c.get(key) or {}
         if not named and not set_to:
             self.read_at.append(model)
@@ -334,10 +337,14 @@ class Checks:
         for joint, ref in named.items():
             if joint not in model.moving:
                 raise Fault(f"{key} names {joint}, which is {unmoving(model, joint)}")
-            value = p.values[ref] if ref in p.params else p.value(ref)
-            if value is None:
-                raise Fault(f"{key} {joint}: {ref} names neither a param nor a ledger value")
-            values[joint], pose[joint] = value, {"from": ref, "value": printed(value)[0]}
+            source = ref if isinstance(ref, str) else None
+            if source is None:
+                value = float(ref)
+            else:
+                value = p.values[source] if source in p.params else p.value(source)
+                if value is None:
+                    raise Fault(f"{key} {joint}: {ref} names neither a param nor a ledger value")
+            values[joint], pose[joint] = value, {"from": source, "value": printed(value)[0]}
         for joint, (value, label) in (set_to or {}).items():
             values[joint], pose[joint] = value, {"from": label, "value": printed(value)[0]}
         try:

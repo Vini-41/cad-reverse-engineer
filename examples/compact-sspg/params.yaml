@@ -16,7 +16,6 @@ params:
   sun_phase:    {basis: derived, expr: 90 / z_sun + degrees(tan(radians(pressure_angle)) - radians(pressure_angle)), gap: G-clock, interpretation: "tooth 0's centre angle (deg) from the part's 0 deg axis: half the tooth's angular thickness at the base circle, so the involute starts on the 0 deg axis, as in all three released gears"}
   planet_phase: {basis: derived, expr: 90 / z_planet + degrees(tan(radians(pressure_angle)) - radians(pressure_angle)), gap: G-clock, interpretation: "as sun_phase, for the planet"}
   ring_phase:   {basis: derived, expr: 90 / z_ring + degrees(tan(radians(pressure_angle)) - radians(pressure_angle)), gap: G-clock, interpretation: "as sun_phase, for the ring's tooth spaces, from the casing's bolt-pattern 0 deg"}
-  one_turn:      {basis: proposed, value: 360, rationale: "one full sun turn, the turn the 7.2:1 ratio is stated per (a test pose, no dimension)"}
 
   # ---- planet
   planet_w:    {basis: source, from: P-w.w, interpretation: "face width = overall length along the planet axis"}

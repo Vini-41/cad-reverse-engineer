@@ -11,9 +11,7 @@ A fresh agent reconstructed it from the skill and these sources alone. It is the
 - An `interference` check, `mesh-clear`, at `max_volume: 0.001` rather than the default `tolerance.length`³: the polyline involutes mesh at zero backlash and overlap by up to 0.00078 mm³ (`planet_2 ∩ casing_1`).
 - All eight STL registered as `kind: geometry`, with 107 probes. Six are shape-checked against the built parts, the casing with its ring among them. The earlier carrier, superseded by the updated one, and the motor casing, outside the target, are skipped with that reason.
 
-Expected status: `VERIFIED: 0 errors, 1 warnings, 123/123 checks pass`
-
-The warning is `[param-gap]` on `one_turn`, the sun turn `carrier-turn` is posed at, which no source states (#121).
+Expected status: `VERIFIED: 0 errors, 0 warnings, 123/123 checks pass`
 
 The Fig. 4(a) reading, `R1-fig4`'s "(a) SSPG (MN8014, 7.2:1)", was checked against `figures/crops/fig4a-label.png` by a named reviewer, recorded as `confirmed_by` on it in `ledger_paper.yaml`, which `ledger.py` carries into `evidence.yaml`. It restates R1, the quoted 7.2:1 that `carrier-turn` compares with, so it is context. Without that field the status would be VERIFIED PENDING REVIEW.
 

@@ -74,7 +74,7 @@ PARAM = record(
 CHECK = record(
     "id!:any kind part instances:[str] parts:[str] evidence key expect axes:{str} between:[str] "
     "along at density counts:{str} add:[str] tol:number tol_rel:number max_volume:number "
-    "pairs:[[str]] pose:{str} from:{str} claim joint cable body ends:[str] interpretation",
+    "pairs:[[str]] pose:{any} from:{any} claim joint cable body ends:[str] interpretation",
     exclusive=(("part", "instances"),),
     sweep=record("joint! steps!"),
 )

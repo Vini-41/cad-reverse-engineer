@@ -10,9 +10,9 @@ A fresh agent reconstructed it from the skill and these sources alone. It is the
 - Two cut files registered as `kind: geometry`: every region of `Acryl6MM.svg` (54) and the mould's regions of `Acryl3MM.svg` are shape-checked against the built plates, and the controller housing's regions are skipped by two rectangles.
 - Both STL, `Clamp.stl` and `MoldFrame.stl`, shape-checked against the built clamp and mould frame, whose dimensions are probed.
 
-Expected status: `VERIFIED: 0 errors, 1 warnings, 119/119 checks pass`
+Expected status: `VERIFIED: 0 errors, 0 warnings, 119/119 checks pass`
 
-No figure reading is needed, so no reviewer confirms one. The warning is `[param-gap]` on `one_turn`, the screw turn the lead checks are posed at, which no source states (#121).
+No figure reading is needed, so no reviewer confirms one.
 
 `cadrev check` on this directory takes under a minute: the shape check against `MoldFrame.stl`'s 18,000 triangles computes in OCC the distance of only the sample points near the largest (#123). `scripts/check` checks it and fails if it prints anything else. A change that moves the status updates the line above.
 

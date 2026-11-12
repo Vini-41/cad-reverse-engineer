@@ -119,8 +119,8 @@ def compared_refs(c: dict) -> list[str]:
 
 def pose_refs(c: dict) -> list[str]:
     """The joint values a check's poses name, its from pose's then its pose's: each a param or a
-    ledger value."""
-    return [str(v) for key in POSES for v in (c.get(key) or {}).values()]
+    ledger value. A number a pose gives is neither: it is where the check is read."""
+    return [v for key in POSES for v in (c.get(key) or {}).values() if isinstance(v, str)]
 
 
 @dataclass
