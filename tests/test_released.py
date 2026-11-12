@@ -445,34 +445,61 @@ def _sheet_probe(eid: str, kind: str, values: dict, **fields) -> dict:
 
 
 def test_probe_reads_a_region_of_a_cut_file_in_the_sheets_plane(proj_dir, tmp_path):
-    # The sheet's link lies at x 20..60, y 40..45, its holes 30 apart along x at y 42.5, and its
-    # side datum at (40, 45).
+    # The sheet's link lies at x 20..60, y 40..45, its holes centred 30 apart along x at y 42.5,
+    # and its side datum on its lower edge at (40, 45).
     sheet(proj_dir, tmp_path)
-    between = {"between": ["sheet.a", "sheet.side"]}
+    between = {"between": ["sheet.bore_a", "sheet.side"]}
     probes = [
         _sheet_probe("P-env", "bbox", {"L": 40, "W": 5}, axes={"L": "x", "W": "y"}),
-        _sheet_probe("P-pitch", "distance", {"v": 30}, between=["sheet.a", "sheet.b"]),
+        _sheet_probe("P-pitch", "distance", {"v": 30}, between=["sheet.bore_a", "sheet.bore_b"]),
         _sheet_probe("P-side", "distance", {"v": 15.2069}, **between, tol=1e-4),
         _sheet_probe("P-drop", "distance", {"v": 2.5}, **between, along="y"),
+        _sheet_probe("P-bore", "diameter", {"d": 3}, at="sheet.bore_a"),
     ]
     add(proj_dir, evidence=probes)
     run = check(proj_dir)
     assert run.status == "VERIFIED", run.out
     values = {f"{q['evidence']}.{q['key']}": q["value"] for q in run.report["probes"]}
-    expected = {"P-env.L": 40, "P-env.W": 5, "P-pitch.v": 30, "P-side.v": 15.2069, "P-drop.v": 2.5}
-    assert values == pytest.approx(expected, abs=1e-4)
+    expected = {"P-env.L": 40, "P-env.W": 5, "P-side.v": 15.2069, "P-drop.v": 2.5}
+    assert values == pytest.approx(expected | {"P-pitch.v": 30, "P-bore.d": 3}, abs=1e-4)
+    assert values["P-pitch.v"] == pytest.approx(30, abs=1e-6)
+    assert values["P-bore.d"] == pytest.approx(3, abs=1e-6)
 
 
 def test_angle_probe_reads_the_angle_at_the_middle_of_three_sheet_datums(proj_dir, tmp_path):
-    # From hole b at (55, 42.5), hole a lies along -x and the link's lower edge at (55, 45)
-    # along +y on the sheet.
+    # From hole b's centre at (55, 42.5), hole a's lies along -x and the link's lower edge at
+    # (55, 45) along +y on the sheet.
     sheet(proj_dir, tmp_path)
     add(proj_dir, datums={"sheet.under": [55, 45]})
-    corner = ["sheet.a", "sheet.b", "sheet.under"]
+    corner = ["sheet.bore_a", "sheet.bore_b", "sheet.under"]
     add(proj_dir, evidence=_sheet_probe("P-square", "angle", {"v": 90}, between=corner))
     run = check(proj_dir)
     assert run.status == "VERIFIED", run.out
     assert run.report["probes"][0]["value"] == pytest.approx(90)
+
+
+def test_distance_from_a_mid_datum_on_a_sheet_reads_from_the_midpoint_of_its_two(
+    proj_dir, tmp_path
+):
+    # The middle of the link's edges at x 40 is (40, 42.5), 15 from hole a's centre.
+    sheet(proj_dir, tmp_path)
+    add(proj_dir, datums={"sheet.top": [40, 40], "sheet.mid": {"mid": ["sheet.top", "sheet.side"]}})
+    between = ["sheet.bore_a", "sheet.mid"]
+    add(proj_dir, evidence=_sheet_probe("P-mid", "distance", {"v": 15}, between=between))
+    run = check(proj_dir)
+    assert run.status == "VERIFIED", run.out
+    assert run.report["probes"][0]["value"] == pytest.approx(15, abs=1e-6)
+
+
+def test_probe_at_a_sheet_datum_off_its_regions_edge_is_a_datum_off_solid(proj_dir, tmp_path):
+    # Hole a's centre lies inside the link's outer contour, 1.5 from the hole's edge; a shape
+    # check's pair may still name it.
+    sheet(proj_dir, tmp_path)
+    add(proj_dir, evidence=SHEET_PROBE | {"between": ["sheet.a", "sheet.bore_b"]})
+    run = check(proj_dir)
+    (message,) = run.messages("datum-off-solid")
+    assert "sheet.a " in message and "1.5" in message
+    assert run.result("shape")["ok"]
 
 
 def test_param_taken_from_a_probe_of_a_cut_file_rests_on_source(proj_dir, tmp_path):
