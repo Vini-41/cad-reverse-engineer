@@ -160,6 +160,26 @@ def test_mass_check_counting_by_a_param_from_a_distance_probe_is_a_unit_quantity
     assert "P-pitch.v" in message and "length" in message
 
 
+@pytest.mark.parametrize(
+    ("expr", "filed"), [("360 / a", False), ("a / 90", True)], ids=["count", "scaled"]
+)
+def test_count_derived_as_a_turn_over_an_angle_probe_reads_as_a_count(
+    proj_dir, tmp_path, expr, filed
+):
+    # 360 over a pitch angle counts features about an axis; an angle scaled by a constant stays one.
+    probed(proj_dir, tmp_path)
+    add(proj_dir, evidence=PROBES.split("- {id: P-bore")[0])
+    resin = "The link weighs 1.8 g in resin of 1.2 g/cm3."
+    add_quote(proj_dir, tmp_path, resin, values={"m": 1.8, "rho": 1.2})
+    add(proj_dir, params={"rho": {"basis": "source", "from": "N1.rho"}})
+    add(proj_dir, params={"a": {"basis": "source", "from": "P-square.v"}})
+    add(proj_dir, params={"n": {"basis": "derived", "expr": expr}})
+    weighed = "kind: mass, evidence: N1, key: m, density: rho, tol_rel: 10, counts: {link: n}"
+    add(proj_dir, checks=f"{{id: m, {weighed}}}")
+    messages = check(proj_dir).messages("unit-quantity")
+    assert bool(messages) == filed and all("P-square.v" in m and "angle" in m for m in messages)
+
+
 def test_probe_recording_another_value_than_its_body_gives_is_a_mismatch(proj_dir, tmp_path):
     probed(proj_dir, tmp_path, values={"L": 40.2, "W": 5, "H": 8})
     run = check(proj_dir)

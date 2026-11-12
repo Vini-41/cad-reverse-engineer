@@ -479,7 +479,8 @@ class Project:
 
     def traced(self, name: str, through: tuple[str, ...] = ()) -> tuple[str, str] | None:
         """The source param a param's value copies, and the evidence value it is from: itself for
-        basis source, or for a derived one the one param its expr scales by constants."""
+        basis source, or for a derived one the one param its expr scales by constants. A constant
+        over a param (360 / pitch_angle) is no scaling: it changes the quantity."""
         spec = self.params.get(name) or {}
         if spec.get("basis") == "source":
             return name, str(spec.get("from", ""))
@@ -487,10 +488,16 @@ class Project:
             return None
         expr = str(spec.get("expr", ""))
         try:
+            nodes = list(ast.walk(ast.parse(expr, mode="eval")))
             scales = all(
                 isinstance(n, (ast.Expression, ast.Name, ast.Load, ast.Constant, ast.UnaryOp))
                 or isinstance(n, (ast.UAdd, ast.USub, ast.BinOp, ast.Mult, ast.Div))
-                for n in ast.walk(ast.parse(expr, mode="eval"))
+                for n in nodes
+            ) and not any(
+                isinstance(n, ast.BinOp)
+                and isinstance(n.op, ast.Div)
+                and expr_names(ast.unparse(n.right))
+                for n in nodes
             )
         except (SyntaxError, ValueError):
             return None
