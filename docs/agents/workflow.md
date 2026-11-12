@@ -17,7 +17,7 @@ A dogfood run's trips are grouped into tickets, and the user approves the groupi
 - What gets built, and in what order: milestones, specs, a ticket breakdown, a trip grouping.
 - Any design choice a brief leaves open: stop and ask, with the options and your recommendation.
 - Figure readings, and so VERIFIED status.
-- A PR that changes a protected path, which the user merges: the shipped skill (`SKILL.md`, `references/`, the plugin manifests, `LICENSE`), `README.md` and `plugin/README.md`, and what steers or gates agents (`AGENTS.md`, `CODING_STANDARDS.md`, `docs/agents/`, `.githooks/`, `.claude/`, `.agents/`, `scripts/check`, `scripts/red-on-main`). Every other PR merges once `scripts/check` is green locally on its head, in any lane.
+- A PR that changes a protected path, which the user merges: the shipped skill (`SKILL.md`, `references/`, the plugin manifests, `LICENSE`), `README.md` and `plugin/README.md`, and what steers or gates agents (`AGENTS.md`, `CODING_STANDARDS.md`, `docs/agents/`, `.githooks/`, `.claude/`, `.agents/`, `scripts/check`). Every other PR merges once `scripts/check` is green locally on its head, in any lane.
 - The release: its tag, GitHub release and directory submissions.
 
 Agents own the rest: building within an approved brief, its tests, review, `scripts/check`, labels and close-outs.

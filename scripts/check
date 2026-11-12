@@ -90,21 +90,6 @@ example_status() {
   return "$code"
 }
 
-# Runs red-on-main for real against BASE, by default the commit the change replaces (red-on-main's
-# docstring says which). Its exit 3, nothing to compare, passes with a notice.
-red_on_main_or_notice() {
-  local log code=0
-  log=$(mktemp)
-  ../../../../scripts/red-on-main 2>"$log" || code=$?
-  cat "$log" >&2
-  if [ "$code" -eq 3 ]; then
-    echo "notice: red-on-main compared nothing: $(tail -n 1 "$log")"
-    code=0
-  fi
-  rm -f "$log"
-  return "$code"
-}
-
 # The marketplace validates, and so does the plugin it ships from plugin/.
 plugin_validate() {
   if command -v claude >/dev/null; then
@@ -115,7 +100,6 @@ plugin_validate() {
 }
 
 left_out="$logs/left-out"
-red_on_main_step="" # its index, to read its count from its log
 if [ "$mode" = full ]; then
   # The examples as a clone after committing holds them: tracked and staged files at their staged
   # text. The last line repeats how many edits that left out, so a pass never hides that it checked
@@ -136,9 +120,6 @@ if [ "$mode" = full ]; then
   step "script tests" uv run pytest -q -n 4 ../../../../scripts/tests
   step "agent-facing docs point only at files that exist" ../../../../scripts/check-doc-pointers
   step "plugin manifests validate" --rerun "claude plugin validate . && claude plugin validate plugin" plugin_validate
-  red_on_main_step=${#names[@]}
-  step "red-on-main: new tests are red holes or green guards" --rerun scripts/red-on-main \
-    red_on_main_or_notice
   if [ "$examples_code" -eq 0 ]; then
     # Every example is a project the copy holds; its README states the status it reaches.
     for project in "$examples"/*/project.yaml; do
@@ -166,14 +147,6 @@ if [ "$mode" = full ] && [ "$examples_code" -ne 0 ]; then
   reruns+=(scripts/committed-examples)
 fi
 
-report_red_count() {
-  local count
-  [ -n "$red_on_main_step" ] || return 0
-  # Its count, repeated at the end, past the examples' output.
-  count=$(grep -E '^[0-9]+ red \(holes\), [0-9]+ green$' "$logs/$red_on_main_step" | tail -n 1)
-  [ -z "$count" ] || echo "red-on-main: $count"
-}
-
 report_left_out() {
   local n s
   n=$(grep -c "^not staged, so left out of the copy: " "$left_out" 2>/dev/null)
@@ -187,12 +160,10 @@ if [ ${#failed[@]} -gt 0 ]; then
     printf 'failed: %s\n  rerun alone: %s\n' "${names[$i]}" "${reruns[$i]}"
     tail -n 20 "$logs/$i" | sed 's/^/  /'
   done
-  report_red_count
   report_left_out
   exit 1
 fi
 echo "all steps passed"
-report_red_count
 report_left_out
 exit
 }

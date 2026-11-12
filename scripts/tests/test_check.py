@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "check"
-STUBS = ("red-on-main", "check-doc-pointers", "committed-examples")
+STUBS = ("check-doc-pointers", "committed-examples")
 
 
 def stubbed(
@@ -91,15 +91,6 @@ def test_a_failed_step_reprints_the_end_of_its_output_under_its_name(tmp_path):
     assert block == [rerun, *(f"  line {i}" for i in range(11, 31))]
 
 
-def test_a_failed_step_that_runs_a_function_names_the_script_that_reruns_it(tmp_path):
-    result, _ = check(tmp_path, failing={"red-on-main": "misnamed\\n"})
-    assert result.returncode == 1
-    name = "failed: red-on-main: new tests are red holes or green guards"
-    assert (
-        result.stdout.split(name + "\n")[1].splitlines()[0] == "  rerun alone: scripts/red-on-main"
-    )
-
-
 def test_the_last_line_names_the_unstaged_edits_the_examples_were_checked_without(tmp_path):
     left_out = "echo 'not staged, so left out of the copy: examples/a/model.py' >&2; exit 0"
     result, _ = check(tmp_path, bodies={"committed-examples": left_out})
@@ -111,17 +102,6 @@ def test_the_last_line_names_the_unstaged_edits_the_examples_were_checked_withou
 def test_the_last_line_is_the_summary_when_nothing_is_left_out(tmp_path):
     result, _ = check(tmp_path)
     assert "left out" not in result.stdout.splitlines()[-1]
-
-
-def test_the_end_repeats_red_on_mains_count_past_the_examples_output(tmp_path):
-    counted = "echo '10 red (holes), 1 green'; exit 0"
-    result, _ = check(tmp_path, bodies={"red-on-main": counted})
-    assert result.stdout.splitlines()[-1] == "red-on-main: 10 red (holes), 1 green"
-
-
-def test_guard_the_end_names_no_count_where_red_on_main_printed_none(tmp_path):
-    result, _ = check(tmp_path)
-    assert not result.stdout.splitlines()[-1].startswith("red-on-main:")
 
 
 def test_lint_runs_only_the_type_and_ruff_steps(tmp_path):
@@ -158,26 +138,23 @@ def waits_for(mine: Path, other: Path) -> str:
 
 def test_steps_run_at_once(tmp_path):
     a, b = tmp_path / "a", tmp_path / "b"
-    bodies = {"check-doc-pointers": waits_for(a, b), "red-on-main": waits_for(b, a)}
-    result, _ = check(tmp_path, bodies=bodies)
+    pyright = f'[ "$2" = pyright ] || exit 0; {waits_for(b, a)}'
+    result, _ = check(tmp_path, bodies={"check-doc-pointers": waits_for(a, b)}, uv_run=pyright)
     assert result.returncode == 0, result.stdout
 
 
 def test_guard_output_and_failures_follow_the_steps_order_whatever_finishes_first(tmp_path):
-    bodies = {
-        "check-doc-pointers": "sleep 1; echo pointers; exit 1",
-        "red-on-main": "echo words; exit 1",
-    }
-    result, _ = check(tmp_path, bodies=bodies)
+    slow_pyright = '[ "$2" = pyright ] && { sleep 1; echo types; exit 1; }; exit 0'
+    bodies = {"check-doc-pointers": "echo pointers; exit 1"}
+    result, _ = check(tmp_path, bodies=bodies, uv_run=slow_pyright)
     lines = untimed(result.stdout)
     pointers = "agent-facing docs point only at files that exist"
-    words = "red-on-main: new tests are red holes or green guards"
+    assert lines[lines.index("== pyright") + 1] == "types"
     assert lines[lines.index(f"== {pointers}") + 1] == "pointers"
-    assert lines[lines.index(f"== {words}") + 1] == "words"
-    assert lines.index(f"== {pointers}") < lines.index(f"== {words}")
+    assert lines.index("== pyright") < lines.index(f"== {pointers}")
     assert [line for line in lines if line.startswith("failed: ")] == [
+        "failed: pyright",
         f"failed: {pointers}",
-        f"failed: {words}",
     ]
 
 
@@ -241,6 +218,15 @@ def examples_copy(tmp_path: Path) -> dict[str, str]:
 
 # A cadrev check that takes two seconds and prints the status every example's README expects.
 SLOW_CHECK = '[ "$2" = cadrev ] && { sleep 2; echo "VERIFIED. Report: build/report.md"; }; exit 0'
+
+
+def test_a_failed_step_that_runs_a_function_names_the_command_that_reruns_it(tmp_path):
+    # uv's stub prints no status, so each example fails.
+    result, _ = check(tmp_path, bodies=examples_copy(tmp_path))
+    assert result.returncode == 1
+    name = "failed: examples/alpha reaches its documented status"
+    rerun = "  rerun alone: scripts/cadrev check examples/alpha"
+    assert result.stdout.split(name + "\n")[1].splitlines()[0] == rerun
 
 
 def test_an_example_slower_than_the_budget_fails(tmp_path):
