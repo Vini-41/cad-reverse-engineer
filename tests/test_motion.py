@@ -19,6 +19,7 @@ from conftest import (
     add_quote,
     change,
     check,
+    edit,
     number,
     open_chain,
     remodel,
@@ -125,17 +126,17 @@ def test_check_compares_a_pose_or_the_change_between_two_with_what_the_ledger_wo
     assert "from input at 30 (S2.turn) to input at -10 (back)" in run.messages("check-failed")[0]
 
 
-UNREACHED = {
-    "loop-open": (f"kind: distance, {RAIL}, key: reach, pose: {{slide: S1.L}}", "slide at 40"),
-    "joint-range": (f"kind: angle, {STANDS}, key: stand, pose: {{input: beyond}}", "input at 55"),
-}
+UNREACHED = [
+    ("loop-open", f"kind: distance, {RAIL}, key: reach, pose: {{slide: S1.L}}", "slide at 40"),
+    ("joint-range", f"kind: angle, {STANDS}, key: stand, pose: {{input: beyond}}", "input at 55"),
+    ("joint-range", f"kind: angle, {STANDS}, key: stand, pose: {{input: 360}}", "input at 360"),
+]
 
 
-@pytest.mark.parametrize("rule", UNREACHED)
+@pytest.mark.parametrize("rule, far, named", UNREACHED)
 def test_pose_the_mechanism_cannot_reach_names_itself_and_leaves_its_check_unevaluated(
-    mech_dir, rule
+    mech_dir, rule, far, named
 ):
-    far, named = UNREACHED[rule]
     add(mech_dir, params="beyond: {basis: derived, expr: input_max + 5}")
     add(mech_dir, checks=f"{{id: far, evidence: S2, {far}}}")
     run = check(mech_dir)
@@ -200,6 +201,37 @@ def test_gear_moves_one_joint_with_the_other_by_its_ratio_and_a_screw_by_its_lea
         "fold": ("knee", "input", [0, -2, 0, 0, 0]),
         "screw": ("slide", "input", pytest.approx([0, 12 / math.tau, 0, 0, 0])),
     }
+
+
+def test_pose_at_a_number_is_a_test_condition_that_adds_no_basis_to_its_check(mech_dir, tmp_path):
+    # "Per turn" fixes the turn by definition: the screw's travel posed at 360°, one full turn of
+    # the crank, rests on the lead and the fold it moves through, both stated. With the crank's
+    # range left out and the bars worked out from L, nothing is proposed and the project is exact.
+    quote = "The screw carries the slider 12 mm per turn, and the coupler folds back at -2 times."
+    add_quote(mech_dir, tmp_path, quote, values={"v": 12, "fold": -2})
+    gears = FOLD.replace("}},", "}, ") + SCREW.removeprefix('"gears": {')
+    stated = {
+        name: f"{{basis: source, from: N1.{key}}}"
+        for name, key in [("fold", "fold"), ("lead", "v")]
+    }
+    open_chain(mech_dir, gears, **stated)
+    remodel(mech_dir, INPUT_RANGE + ",", "")
+    edit(
+        mech_dir, "params.yaml", lambda d: [d["params"].pop(n) for n in ("input_min", "input_max")]
+    )
+    edit(mech_dir, "checks.yaml", lambda d: d["checks"].pop(4))  # swing, the range's check
+    change(mech_dir, "evidence", "S3", scope="not-modeled", reason="this test turns the crank on")
+    for name, expr in {"W": "L / 8", "H": "L / 10", "hole": "L / 20"}.items():
+        change(mech_dir, "params", name, basis="derived", expr=expr, value=None, rationale=None)
+        change(mech_dir, "params", name, gap=None)
+    write(mech_dir, "gaps.yaml", "gaps: []\n")
+    travel = f"kind: distance, {RAIL}, from: {{}}, pose: {{input: 360}}, evidence: N1, key: v"
+    add(mech_dir, checks=f"{{id: travel, {travel}}}")
+    run = check(mech_dir)
+    assert run.status == "VERIFIED" and run.report["exact"] is True
+    travel = run.result("travel")
+    assert number(travel) == 12 and travel["pose"] == {"input": {"from": None, "value": 360}}
+    assert (travel["rests_on"], travel["rests_on_params"]) == ("source", ["fold", "lead"])
 
 
 def test_cable_wound_on_a_wheel_closes_its_joints_in_proportion_and_a_stroke_reads_it(

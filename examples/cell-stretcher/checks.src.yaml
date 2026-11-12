@@ -43,13 +43,13 @@ checks:
      interpretation: "the substrate's post holes, stationary to mobile mounting, at zero stretch"}
   # ---------------------------------------------------------------- motion
   - {id: travel-per-turn-l, kind: distance, instances: [profile_long_1, carriage_back], between: [profile_long_1.end_a, carriage_back.brg_l], along: y,
-     evidence: E-lead, key: lead, from: {}, pose: {motor_l: one_turn},
+     evidence: E-lead, key: lead, from: {}, pose: {motor_l: 360},
      interpretation: "one turn of the left motor and screw moves the carriage one lead along the rods"}
   - {id: travel-per-turn-r, kind: distance, instances: [profile_long_1, carriage_back], between: [profile_long_1.end_a, carriage_back.brg_l], along: y,
-     evidence: E-lead, key: lead, from: {}, pose: {motor_r: one_turn},
+     evidence: E-lead, key: lead, from: {}, pose: {motor_r: 360},
      interpretation: "one turn of the right motor and screw moves the carriage one lead along the rods"}
   - {id: travel-speed-r, kind: distance, instances: [profile_long_1, carriage_back], between: [profile_long_1.end_a, carriage_back.brg_l], along: y,
-     expect: "E-vmax.v * 360 / E-rpm.rpm", from: {}, pose: {motor_r: one_turn},
+     expect: "E-vmax.v * 360 / E-rpm.rpm", from: {}, pose: {motor_r: 360},
      interpretation: "the right screw's lead worked out from the stated top speed and motor speed: 133.33 mm/s at 1000 rpm is 8 mm per turn"}
   - {id: substrate-stretch, kind: stroke, cable: substrate_1, from: {carriage: E-frames.hi}, pose: {carriage: E-frames.lo}, evidence: E-frames, key: hi,
      interpretation: "a substrate between stationary and mobile posts lengthens by the carriage travel: 5 mm stretch from 0"}

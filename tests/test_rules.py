@@ -192,7 +192,6 @@ LINK_FINDINGS = {
     ),
     "schema: a value that is no number": _evidence("pitch", values={"pitch": "about thirty"}),
     "schema: part and instances together": _checks("env", instances=["link_1"]),
-    "schema: a pose value that is a bare number": _checks("pitch", pose={"input": 30}),
     "schema: a count that is a bare number": _weighed(RESIN, "counts: {link: 1}", rho=1.2),
     "schema: a mass model entry with both": lambda r, t: add(
         r, parts="link: {mass: pitch, density: pitch}"

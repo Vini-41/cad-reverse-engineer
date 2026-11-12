@@ -32,8 +32,12 @@ COARSER = ((0.01, 0.2), (0.1, 0.5), (1.0, 1.0))
 
 
 def pose_text(pose: dict) -> str:
-    """A pose as findings and report.md name it: `input at 60 (turn_60)`, or `as built`."""
-    return ", ".join(f"{j} at {s['value']:g} ({s['from']})" for j, s in pose.items()) or "as built"
+    """A pose as findings and report.md name it: `input at 60 (turn_60)`, `input at 360` for a
+    number the pose gives, or `as built`."""
+    named = [
+        f"{j} at {s['value']:g}" + (f" ({s['from']})" if s["from"] else "") for j, s in pose.items()
+    ]
+    return ", ".join(named) or "as built"
 
 
 def _num(*values: float) -> str:
