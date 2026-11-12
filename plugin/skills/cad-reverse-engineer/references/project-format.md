@@ -121,6 +121,8 @@ evidence:
      at: rotor_step.bore_wall, values: {d: 32.5}}
   - {id: H-bore, source: hub_stl, locator: "hub, 13-sided bore", probe: diameter,
      at: hub_stl.bore, values: {d: 5}}
+  - {id: S-pitch, source: plates, body: "plates@30,41", locator: "link plate, hole spacing",
+     probe: distance, between: [plates.link_a, plates.link_b], values: {pitch: 30}}
 datums:                        # on released bodies: <body>.<feature>: [x, y, z] in the file's frame
   rotor_step.hub_top: [0, 0, 20]
   rotor_step.hub_bottom: [0, 0, 0]
@@ -129,14 +131,17 @@ datums:                        # on released bodies: <body>.<feature>: [x, y, z]
   hub_stl.rim_5: [-0.8865, 2.3375, 0]
   hub_stl.rim_9: [-1.8713, -1.6578, 0]
   hub_stl.bore: {circle: [hub_stl.rim_1, hub_stl.rim_5, hub_stl.rim_9]}
+  plates.link_a: [25, 42.5]          # on a cut file's sheet: <source>.<feature>: [x, y]
+  plates.link_b: [55, 42.5]
 ```
 
 - `probe` is `bbox` (with `axes`, one per value), `distance` (two datums in `between`, `along` optional), `angle` (three datums, the angle at the middle one, in degrees) or `diameter` (of the circle a circle datum `at` names, else of the cylindrical face the datum `at` lies on). Each reads the body as the check of that kind reads the built model. `body` may be left out where the file holds one solid.
+- A probe of a cut file names its region in `body` (`<source>@<x>,<y>`) and reads it in the sheet's frame: `bbox` with `axes` x and y, the region's outer contour, and `distance` (`along` x or y) or `angle` between datums of the sheet inside that region's outer contour. It takes no `diameter`: probe a hole as a `distance` across its rim.
 - A datum lies on its body's solid within `tolerance.length`, as a built part's does ([modeling.md](modeling.md#contract)). A cut file's datum lies on the sheet, named `<source>.<feature>` and given as `[x, y]`, inside a region's outer contour.
 - A **derived datum** on a STEP or STL body is worked out from `[x, y, z]` datums declared on that same body: `{circle: [a, b, c]}` is the circle through three, more than `tolerance.length` apart and off one line, and `{mid: [a, b]}` the midpoint of two. A `distance` or `angle` probe, or a shape check's pair, reads a circle datum at its centre, and a `diameter` probe at it reads the circle's diameter. The datums it names lie on the solid; the derived point lies in air by design.
 - On an STL, each datum a derived datum names also lies within `tolerance.length` of a triangle corner, since corners are the points a mesh stores on the true surface.
 - A probe may set its own `tol`, capped as a check's is. It needs no human confirmation. A param takes its value with `from:` and basis `source`, like a quote's.
-- A probe restating a quote is `context`; one that differs from a quote is a conflict. A probe reads a solid: a cut file's regions are compared by shape checks instead.
+- A probe restating a quote is `context`; one that differs from a quote is a conflict.
 
 ### `skipped`: what is not about the object
 
