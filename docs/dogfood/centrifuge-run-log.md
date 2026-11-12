@@ -126,3 +126,24 @@ Run as `codex exec --sandbox workspace-write -c sandbox_workspace_write.network_
 ## Runs 29–31: the model benchmark
 
 Fable 5.2 (run 29), Opus 5.5 (run 30) and Sol (run 31). Skill and tool at `b8ac5d2` (main after #184), each at `xhigh` effort, briefed as above plus the two lines [the benchmark's method](../benchmark.md#method) names. Projects kept at `~/Documents/Projects/cadrev/dogfood/run-<n>`. Each ended VERIFIED PENDING REVIEW, and a re-check from a copy agreed. Their counts, audit and trips are in [docs/benchmark.md](../benchmark.md), where the trips are grouped into tickets for approval.
+
+### Run 41: Codex, the gate rerun
+
+Codex CLI 0.167.1, its default model (gpt-6.1-sol), at main `7b56024`, after #182, #191 and #194. A fresh `CODEX_HOME` under `$HOME`, which the sandbox cannot write, as a stranger's `~/.codex` is, holding only the login and the one entry the README gives:
+
+```toml
+[sandbox_workspace_write]
+network_access = true
+```
+
+Installed with `codex plugin marketplace add Vini-41/cad-reverse-engineer --ref 7b56024faa81ef04be741b7a4f90574372196620` and `codex plugin add cad-reverse-engineer@cad-reverse-engineer`, run as `codex exec --skip-git-repo-check --sandbox workspace-write -C <run dir>`, with no `--add-dir`. Brief: the centrifuge entry, installing as above and building the complete model. Project kept at `~/Documents/Projects/cadrev/dogfood/run-41`, log at `codex-logs/run-41`. 39 commands, 17 minutes.
+
+**End state:** VERIFIED PENDING REVIEW, not exact: 0 errors, 0 warnings, 210/210 checks pass, and a re-check from a copy with the installed plugin's `cadrev` agreed. 325 params, resting on 281 source, 0 measured and 44 proposed. The six-tube 32.5 mm rotor; its mass, 13.15 g against the stated 16 g, failed at a tolerance the density's spread allows, so the run kept the 16 g as context under conflict K-mass, naming the PCR-strip rotor's 16.02 g, rather than widen it, as #194's step 7 says. Three readings await confirmation.
+
+**The gate passes on Codex:** the README's install and its one config entry were enough.
+
+| # | Trip | Kind | Fix |
+|---|---|---|---|
+| 1 | Helper scripts run as `uv run --project <skill>/tool python <script>`, as SKILL.md step 4 says, failed on uv's cache and the plugin's `.venv`: that route skips the launcher's redirects to `TMPDIR`. The run redirected them by hand. | skill | not filed: run helper scripts through the launcher, or have it export its redirects. |
+| 2 | Step 3's header-unit guidance checks a scaled cell through `expect`, which a `bbox` check does not take. The run used distance checks between exterior datums. | skill | not filed: step 3 names the distance check for an envelope. |
+| 3 | No count probe, so seven tabs stay proposed (#144). | filed | #144. |
