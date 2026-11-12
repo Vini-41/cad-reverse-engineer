@@ -180,7 +180,7 @@ parts:                       # the mass model
 |---|---|---|
 | `source` | `from`, an evidence value; `value` optional and must match | stated by a source: a quote, a reading or a probe |
 | `derived` | `expr` over other params; `value` optional and must match; `gap` with `interpretation` where the expr is a choice | computed; `pi sqrt sin cos tan asin acos atan atan2 radians degrees hypot min max abs` are available |
-| `measured` | `from`, an image evidence id; `value`, `method`, `uncertainty`; `gap` optional | scaled off an image of the object against a known reference |
+| `measured` | `from`, an image evidence id whose source is not a geometry source; `value`, `method`, `uncertainty`; `gap` optional | scaled off a figure of the object against a known reference |
 | `proposed` | `value`, `rationale`; `gap` | a reconstruction choice the sources do not make |
 
 - **`interpretation`** says how a value maps onto geometry where that is a choice: which axis, envelope or pitch, which feature, which configuration.

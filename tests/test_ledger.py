@@ -16,6 +16,8 @@ from conftest import (
     ledgered,
     meta,
     pdf,
+    png,
+    sheet,
     write,
 )
 
@@ -272,6 +274,24 @@ def test_figure_reading_awaits_a_named_human_and_a_measured_param_scales_off_it(
     change(proj_dir, "evidence", "F2", confirmed_by="A. Reviewer")
     run = check(proj_dir)
     assert run.status == "VERIFIED" and run.report["awaiting_confirmation"] == []
+
+
+@pytest.mark.parametrize("figure", ["paper", "photo", "sheet"])
+def test_a_measured_param_scales_a_figure_of_the_object_not_a_render_of_released_geometry(
+    proj_dir, tmp_path, figure
+):
+    sheet(proj_dir, tmp_path)
+    if figure == "photo":
+        add_source(proj_dir, tmp_path, "photo.png", png(), "photo", "other")
+    add_reading(proj_dir, source=figure, confirmed_by="A. Reviewer")
+    foot = "{basis: measured, from: F2, value: 5.5, method: by scale, uncertainty: ±0.3 mm}"
+    add(proj_dir, params=f"foot: {foot}")
+    run = check(proj_dir)
+    if figure == "sheet":  # the cut file, a geometry source
+        assert run.errors == ["param-from"]
+        assert all(name in run.messages("param-from")[0] for name in ("foot", "sheet"))
+    else:
+        assert run.status == "VERIFIED" and run.report["measured"][0]["param"] == "foot"
 
 
 def no_proposed(root) -> None:

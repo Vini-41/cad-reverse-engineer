@@ -491,6 +491,13 @@ def _params(p: Project) -> None:
             item = p.item(str(spec.get("from", "")).partition(".")[0])
             if item is None or "image" not in item:
                 p.error("param-from", f"param {name}: measured needs from: an image evidence id")
+            elif (p.sources.get(str(item.get("source"))) or {}).get("kind") == "geometry":
+                # A geometry source holds no figure: an image anchored to it is a render of it.
+                p.error(
+                    "param-from",
+                    f"param {name}: from: {item['id']} is a render of geometry source "
+                    f"{item['source']}, not a figure of the object",
+                )
             for key in ("value", "method", "uncertainty"):
                 if key not in spec:
                     p.error("param-measured", f"param {name}: measured needs {key}")
