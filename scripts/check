@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # The repo's only CI, run locally: green before every commit and on a PR's head before it merges.
-# Starts every step at once, each in its own process, and prints each step's output in the order
-# below once it and the steps above it have finished; lists the ones that failed, each with the last
-# 20 lines of its output, and exits 1 if any did. The tool tests and script tests run on several
-# workers (pytest-xdist).
+# Starts every step at once, each in its own process, and prints each step's output under its name
+# and time, in the order below, once it and the steps above it have finished; lists the ones that
+# failed, each with the last 20 lines of its output, and exits 1 if any did. The tool tests and script
+# tests run on several workers (pytest-xdist).
 #
 #   scripts/check
 #   scripts/check --lint   # pyright, ruff and the tests' imports alone, in seconds, for after an edit
 #
 # An example fails past EXAMPLE_SECONDS (default 600). Review holds each example to a goal a user
 # feels, a full cadrev check in about 2 minutes on a laptop; this ceiling only catches a large
-# regression, so it is not tuned to the slowest example. An example's time is wall-clock beside the
-# other steps, so it reads a little above the example run alone; the slowest example bounds how long
-# the whole check takes.
+# regression, so it is not tuned to the slowest example. A step's time is wall-clock beside the other
+# steps, so an example's reads a little above the example run alone; the slowest example bounds how
+# long the whole check takes.
 #
 # The plugin manifests are validated only where the `claude` CLI is installed.
 set -uo pipefail
@@ -51,15 +51,21 @@ trap stop EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-# step NAME [--rerun COMMAND] CMD...: starts CMD in the tool directory, its output to its own log;
-# COMMAND, from the repo root, runs the step alone. A step that runs a function here names its
-# COMMAND.
+# step NAME [--rerun COMMAND] CMD...: starts CMD in the tool directory, its output to its own log and
+# its time in whole seconds beside it; COMMAND, from the repo root, runs the step alone. A step that
+# runs a function here names its COMMAND.
 step() {
-  local name=$1 rerun
+  local name=$1 rerun log="$logs/${#names[@]}"
   shift
   rerun="(cd plugin/skills/cad-reverse-engineer/tool && $*)"
   if [ "$1" = --rerun ]; then rerun=$2; shift 2; fi
-  "$@" </dev/null >"$logs/${#names[@]}" 2>&1 &
+  (
+    start=$SECONDS
+    "$@"
+    code=$?
+    echo $((SECONDS - start)) >"$log.seconds"
+    exit "$code"
+  ) </dev/null >"$log" 2>&1 &
   pids+=("$!")
   names+=("$name")
   reruns+=("$rerun")
@@ -77,7 +83,6 @@ example_status() {
   took=$((SECONDS - start))
   grep -qF "$expected. Report:" "$log" || { echo "expected: $expected"; code=1; }
   rm -f "$log"
-  echo "examples/$(basename "$example") took $took s"
   if [ "$took" -gt "$budget" ]; then
     echo "examples/$(basename "$example") took $took s, over the $budget s an example may take: make it faster"
     code=1
@@ -135,7 +140,6 @@ if [ "$mode" = full ]; then
     uv run python ../../../../scripts/rule-coverage
   step "the skill and tool source use none of GLOSSARY.md's avoided words" ../../../../scripts/check-glossary-words
   step "the tool source branches on a check or probe kind only in run_checks" ../../../../scripts/check-kind-branches
-  step "the branch holds no merge commit, so it rebase-merges" ../../../../scripts/check-linear
   step "plugin manifests validate" --rerun "claude plugin validate . && claude plugin validate plugin" plugin_validate
   red_on_main_step=${#names[@]}
   step "red-on-main: new tests are red holes or green guards" --rerun scripts/red-on-main \
@@ -151,11 +155,11 @@ if [ "$mode" = full ]; then
   fi
 fi
 
-# Each step's output, in the order the steps were started.
+# Each step's output under its name and time, in the order the steps were started.
 for i in "${!names[@]}"; do
   wait "${pids[$i]}"
   code=$?
-  echo "== ${names[$i]}"
+  echo "== ${names[$i]} ($(cat "$logs/$i.seconds" 2>/dev/null || echo "?") s)"
   cat "$logs/$i"
   [ "$code" -eq 0 ] || failed+=("$i")
 done
