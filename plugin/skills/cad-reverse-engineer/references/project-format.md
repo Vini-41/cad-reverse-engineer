@@ -52,9 +52,9 @@ A ledger value is written as printed (`values: {L: 4}` for "4 cm"). cadrev reads
 - A value with no unit after it, such as a table cell, is already in project units. Where the table prints its unit in a header (`(cm)` over `13*13*10`), ledger the cell as printed, give the dimension a `derived` param scaled to the project's unit (`t_w * 10`) whose `interpretation` names the header, and check it through `expect` (`T2.W * 10`).
 - `in` and `"` read as inches, except `in` before a determiner ("4 in total").
 - A value printed in two different units in one quote, or once with a unit and once without, is ambiguous: quote only the part that states it.
-- A **count** (a gear's teeth, a train's planets) is a whole number printed with no unit or a count unit, read as a pure number: Table I's `SSPG [25, 65, 155, 0.5, 3]` gives `z_sun` 25, not 25 mm. A ratio is ledgered as its number: "7.2:1" is `{ratio: 7.2}`.
+- A **count** (a gear's teeth, a train's planets) is a whole number printed with no unit or a count unit, read as a pure number: a table's `25` for the sun's teeth gives `z_sun` 25, not 25 mm. A ratio is ledgered as its number: "7.2:1" is `{ratio: 7.2}`.
 
-Each use expects one quantity, and a value printed in a unit of another, or a probe of another (`bbox`, `distance` and `diameter` probe a length, `angle` an angle), is a `[unit-quantity]` finding: a length for `bbox`, `distance`, `diameter` and `stroke` checks, overlay calibrations and lead params; an angle for `angle` checks; a length, angle or count for a param `model.py` reads; a mass or a density where the mass model or a mass check takes one; a count for `count` checks, a mass check's `counts`, and the params a gear ratio is derived from (which may also be lengths, as a belt's pulley diameters are); a joint's own quantity (an angle for a revolute joint, a length for a slide) for its range, its poses and a cable's closed value.
+Each use expects one quantity (a length for a `distance` check, an angle for an `angle` check, a count for a `count` check, a revolute joint's angle or a slide's length for its range and poses), and a value printed in a unit of another, or a probe of another, is a `[unit-quantity]` finding naming the quantity expected.
 
 | quantity | units read, spelled-out names included |
 |---|---|
@@ -297,7 +297,7 @@ A joint's `range` is two params, each a pose value from as built, or one param f
 
 ### Worked example: a planetary train
 
-A planetary train with one member fixed is a chain of [gears](modeling.md#joints-and-loops), each ratio derived from the stated tooth counts, checked against values `expect` works out. COMPAct's gearbox ledgers Table I's `SSPG [25, 65, 155, 0.5, 3]` as `T1` and "7.2:1" as `R1` (`{ratio: 7.2}`). The ring is fixed, the sun `actuated`, the carrier `passive` on the ring, and each planet a `passive` revolute joint on the carrier.
+A planetary train with one member fixed is a chain of [gears](modeling.md#joints-and-loops), each ratio derived from the stated tooth counts, checked against values `expect` works out. Here a table of the module and tooth counts is ledgered as `T1`, and a stated "7.2:1" as `R1` (`{ratio: 7.2}`). The ring is fixed, the sun `actuated`, the carrier `passive` on the ring, and each planet a `passive` revolute joint on the carrier.
 
 ```yaml
 # params.yaml
@@ -361,10 +361,9 @@ Renders `build/overlays/<id>.png`: model edges in magenta over the figure, the c
 
 - A param resting on proposed is an error, physics values and a sweep's `steps` aside, so a known-first project that is VERIFIED is exact.
 - An in-scope ledger value nothing uses **waits**, and so does a gap no param names, the question a waiting part asks. The report lists both under Waiting. Everything else holds: the whole ledger is still harvested and covered.
-- A settled part whose place the sources leave open is built in its own frame and placed by no instance, with a gap asking where it sits.
 
 Removing `known_first` returns the project to the full rules. A value the user supplies is `proposed`, its `rationale` naming them, so remove `known_first` first.
 
 ## build/report.json
 
-The machine-readable twin of report.md: `status`, `exact`, `known_first`, `counts` (errors, warnings, checks, params by what they rest on, `physics_proposed`), `findings`, `checks` (each result with what it rests on, its pose and `seconds`, the wall time of its check summed over its poses), `build_seconds` (null where no build ran), `tolerances`, `overlap_limits`, `motion`, `masses`, `params`, `rests_on_proposed`, `measured`, `awaiting_confirmation`, `probes`, and for a known-first project `waiting`.
+The machine-readable twin of report.md: the status, counts, findings, each check's result and what it rests on, the params, and what awaits confirmation or waits.

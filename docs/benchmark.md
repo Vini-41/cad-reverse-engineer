@@ -61,7 +61,7 @@ Status is the re-check's. "Proposed" counts the params resting on proposed value
 - **Sol was the fastest, 25 to 40 active minutes against 44 to 69**, and twice reached the status by a route the rules did not close: COMPAct's parts are the authors' meshes (run 34), and the cell stretcher's sheet vertices are 13,426 `measured` params (run 37). Each passes every rule at `b8ac5d2`. #189 has the skill say why neither verifies anything, and #195 and #196 have the tool refuse both.
 - **Every model widened a mass check to pass a mismatch at least once.** All three passed the centrifuge's 13.15 g rotor against the stated 16 g at ±20%, though the PCR-strip rotor's released body weighs the 16 g; only Fable recorded the mismatch as a conflict naming that rotor. On the LegClaw, Fable and Sol held mass checks at ±25% and Opus at ±15%, where the example holds ±10%. #189 has the skill say a tolerance is what the evidence allows, and what to do past it.
 - **The same trips recur across models**, so they belong to the skill and the tool rather than to any model: below.
-- **Times are active minutes, not wall clock.** An account limit stopped every Claude run once, for about an hour and a half in the first wave and eight hours in the second, and Sol's run 37 once; each was resumed with its context, and the minutes include the resumed run re-reading it.
+- **Times are active minutes, not wall clock.** A run an account limit stopped was resumed with its context, and its minutes include re-reading it.
 
 ## What the runs tripped on
 
@@ -88,6 +88,6 @@ The two routes the rules left open come first, both filed, then the trips severa
 ## Adding a model
 
 1. Check out the commit under test once per run (`git worktree add --detach <checkout> <sha>`) and make each run's empty directory, numbered as [`dogfood/brief.md`](dogfood/brief.md) says.
-2. Brief one fresh agent per object with the brief and the two lines above, at the effort the other rows used, and no more agents at once than the account's limit carries: two limits stopped this benchmark's runs.
+2. Brief one fresh agent per object with the brief and the two lines above, at the effort the other rows used, and no more agents at once than the account's limit carries.
 3. Re-check each project from a copy without `build/`, with the run's own `cadrev`, and take its row from `build/report.json`: `status`, `counts`, `tolerances` and `overlap_limits`, and the ledger's probes.
 4. Audit it as above, and add its rows and any trip to the run log of the object, grouped into tickets for the owner's approval.
