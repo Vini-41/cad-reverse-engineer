@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import sys
+import time
 from pathlib import Path
 
 import yaml
@@ -190,12 +191,14 @@ def cmd_check(args) -> int:
         ledger.coverage(p)
     # A partial run makes no claim, so it writes nothing to build/.
     partial = args.no_build or args.no_coverage
-    results, images, model, coarsened = [], [], None, {}
+    results, images, model, coarsened, build_seconds = [], [], None, {}, None
     read = {name for c in p.checks for name in ledger.named_by_checks(p, c)}
     if modelled and not args.no_build:
         from . import build, motion, overlay
 
+        start = time.perf_counter()
         model = build.build(p)
+        build_seconds = round(time.perf_counter() - start, 1)
         if model is not None:
             mechanism = motion.Mechanism(p, model) if model.joints else None
             results, read = checks.Checks(p, model, mechanism, unplanned).run()
@@ -210,6 +213,9 @@ def cmd_check(args) -> int:
     status = report.status(p, partial)
     headline = report.counts(p, results)
     _print(p.findings)
+    if results:
+        slowest = max(results, key=lambda r: r.seconds)
+        print(f"slowest check: {slowest.id} {slowest.seconds:.1f} s")
     found = f"{status}: {headline['errors']} errors, {headline['warnings']} warnings"
     if partial:
         skipped = " and ".join(
@@ -219,7 +225,7 @@ def cmd_check(args) -> int:
         )
         print(f"\n{found}; skipped {skipped}, so no claim is made and no report was written.")
         return 1
-    path = report.write(p, status, results, images, model, coarsened)
+    path = report.write(p, status, results, images, model, coarsened, build_seconds)
     known_first = f"Known first: {report.waiting_clause(p)}. " if p.known_first else ""
     print(
         f"\n{found}, {headline['checks_passed']}/{headline['checks']} checks pass. {known_first}"

@@ -229,8 +229,10 @@ def write(
     images: list[Path],
     model: Model | None,
     coarsened: dict,
+    build_seconds: float | None,
 ) -> Path:
-    """Write build/report.md and build/report.json; model is None when none was built."""
+    """Write build/report.md and build/report.json; model is None when none was built, and
+    build_seconds is None where no build ran."""
     out = p.root / "build"
     out.mkdir(exist_ok=True)
     findings = sorted(p.findings, key=lambda f: f.level != "error")  # errors first
@@ -488,6 +490,7 @@ def write(
         "findings": [asdict(f) for f in findings],
         # A result gives the keys that apply to its kind alone only where they do.
         "checks": [{k: v for k, v in asdict(r).items() if v is not None} for r in results],
+        "build_seconds": build_seconds,
         "tolerances": tolerances,
         "overlap_limits": limits,
         "model_literals": literals,
