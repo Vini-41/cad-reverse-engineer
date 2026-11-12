@@ -271,7 +271,7 @@ def test_check_prints_each_finding_then_the_status_line_with_its_counts(proj_dir
 REPORT_KEYS = {
     "status", "exact", "known_first", "waiting", "counts", "findings", "checks", "tolerances",
     "overlap_limits", "motion", "masses", "model_literals", "params", "bases",
-    "rests_on_proposed", "measured", "awaiting_confirmation", "probes",
+    "rests_on_proposed", "measured", "awaiting_confirmation", "probes", "build_seconds",
 }  # fmt: skip
 
 
@@ -303,7 +303,7 @@ def test_report_json_holds_the_run_as_data(proj_dir):
         ("pitch", "distance", True),
         ("clear", "interference", True),
     ]
-    assert report["checks"][3] | {"measured": "", "expected": ""} == {
+    assert report["checks"][3] | {"measured": "", "expected": "", "seconds": 0} == {
         "id": "pitch",
         "kind": "distance",
         "ok": True,
@@ -312,6 +312,7 @@ def test_report_json_holds_the_run_as_data(proj_dir):
         "note": "",
         "rests_on": "source",
         "rests_on_params": [],
+        "seconds": 0,
     }
     assert report["tolerances"] == [{"check": "pitch", "kind": "distance", "tol": 1.51}]
     assert report["params"]["pitch"] == {
@@ -333,6 +334,23 @@ def test_report_json_holds_the_run_as_data(proj_dir):
         "dropped": False,
     }
     assert (report["masses"], report["model_literals"], report["probes"]) == ({}, None, [])
+
+
+def test_check_names_its_slowest_check_from_the_seconds_report_json_gives_each(mech_dir):
+    # A sweep of every pair across 30 poses, so one check takes long enough to be the slowest.
+    add(
+        mech_dir,
+        params="steps: {basis: proposed, value: 30, rationale: every 2.4°}",
+        checks="{id: swept, kind: interference, sweep: {joint: input, steps: steps}}",
+    )
+    run = check(mech_dir)
+    seconds = {c["id"]: c["seconds"] for c in run.report["checks"]}
+    assert min(seconds.values()) >= 0 and run.report["build_seconds"] >= 0
+    assert max(seconds, key=seconds.__getitem__) == "swept" and seconds["swept"] > 0
+    lines = run.out.splitlines()
+    assert lines[-3].startswith("slowest check: swept ") and not lines[-2]
+    edit(mech_dir, "checks.yaml", lambda d: d.update(checks=[]))
+    assert "slowest check: " not in check(mech_dir).out
 
 
 def test_report_md_renders_what_report_json_holds(proj_dir):

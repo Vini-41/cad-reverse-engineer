@@ -359,4 +359,4 @@ Removing `known_first` returns the project to the full rules. A value the user s
 
 ## build/report.json
 
-The machine-readable twin of report.md: `status`, `exact`, `known_first`, `counts` (errors, warnings, checks, params by what they rest on, `physics_proposed`), `findings`, `checks` (each result with what it rests on and its pose), `tolerances`, `overlap_limits`, `motion`, `masses`, `params`, `rests_on_proposed`, `measured`, `awaiting_confirmation`, `probes`, and for a known-first project `waiting`.
+The machine-readable twin of report.md: `status`, `exact`, `known_first`, `counts` (errors, warnings, checks, params by what they rest on, `physics_proposed`), `findings`, `checks` (each result with what it rests on, its pose and `seconds`, the wall time of its check summed over its poses), `build_seconds` (null where no build ran), `tolerances`, `overlap_limits`, `motion`, `masses`, `params`, `rests_on_proposed`, `measured`, `awaiting_confirmation`, `probes`, and for a known-first project `waiting`.

@@ -7,6 +7,7 @@ besides (a pose, a density, a joint's range) decides what its result rests on.
 
 from __future__ import annotations
 
+import time
 from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -55,6 +56,7 @@ class Result:
     # What the check rests on, and the params it reads that rest on that basis.
     rests_on: str = "source"
     rests_on_params: list[str] = field(default_factory=list)
+    seconds: float = 0.0  # its check's wall time, at every pose it was evaluated at
     # Given only for the checks they apply to:
     pairs: int | None = None  # how many instance pairs an interference check evaluated
     pose: dict | None = None  # joint -> {from, value} it was posed at
@@ -251,7 +253,7 @@ class Checks:
         p, results, read = self.p, [], set()
         self._hold_joint_values()
         for i, c in enumerate(p.checks):
-            cid, found = c["id"], []
+            cid, found, start = c["id"], [], time.perf_counter()
             self.read_at, self.weighs, self.uncounted = [], None, ()
             evaluate = self._kinds.get(str(c.get("kind")))
             if evaluate is None:
@@ -267,11 +269,13 @@ class Checks:
                         p.error(fault.rule or "check-config", f"check {cid}: {fault.message}")
                 except (KeyError, TypeError, ValueError) as exc:
                     p.error("check-config", f"check {cid}: missing or unknown {exc}")
+            seconds = round(time.perf_counter() - start, 1)
             reads = ledger.named_by_checks(p, c, weighs=self.weighs) + self._given(c)
             read |= set(reads)
             basis, params = rests_on(p, reads, self.uncounted)
             for r in found:
                 r.rests_on, r.rests_on_params, r.note = basis, params, c.get("interpretation", "")
+                r.seconds = seconds
                 if not r.ok:
                     moved = "" if r.from_pose is None else f" from {pose_text(r.from_pose)}"
                     moved += f" to {pose_text(r.pose)}" if moved and r.pose else ""
