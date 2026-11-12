@@ -231,3 +231,7 @@ Rerunning `cadrev check` on a copy of the project at `e165679` gives the end sta
 | 8 | No datasheets for the springs, bearings or resin; the Feetech page swaps the paper's part numbers (K-servo). | inherent | Gaps on the densities, the spring modulus and the servo (close by: datasheet). |
 
 `cadrev text` piped to a reader that closes early ends in a `BrokenPipeError` traceback, found while confirming trip 1: #87.
+
+## Runs 38–40: the model benchmark
+
+Fable 5.2 (run 38), Opus 5.5 (run 39) and Sol (run 40). Skill and tool at `b8ac5d2` (main after #184), each at `xhigh` effort, briefed as above plus the two lines [the benchmark's method](../benchmark.md#method) names. Projects kept at `~/Documents/Projects/cadrev/dogfood/run-<n>`. Each ended VERIFIED PENDING REVIEW, and a re-check from a copy agreed. Their counts, audit and trips are in [docs/benchmark.md](../benchmark.md), where the trips are grouped into tickets for approval.
