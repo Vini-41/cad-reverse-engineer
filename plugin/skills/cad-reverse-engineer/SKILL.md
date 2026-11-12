@@ -27,7 +27,7 @@ The CLI ships in this skill's `tool/` directory and needs [`uv`](https://docs.as
 
 - `cadrev check <dir>` runs every rule, builds the model, evaluates the checks and writes `build/`. `cadrev check <dir> --no-build` runs the ledger's rules alone in seconds, for the stages before there is a model. Each finding names its rule in brackets and says what is wrong and where.
 - Read [`references/project-format.md`](references/project-format.md) before writing project YAML and [`references/modeling.md`](references/modeling.md) before writing model.py. They give the formats; the findings give the rules as you meet them.
-- A script that writes project YAML (checks repeated per leg, per toe) lives in the project directory, and the file it writes names it in a comment, so the project alone shows how it was written.
+- A script that writes project YAML (checks repeated per instance) lives in the project directory, and the file it writes names it in a comment, so the project alone shows how it was written.
 
 ## The work
 
@@ -40,7 +40,7 @@ Ask the user where the project directory goes and which build they want, unless 
 - **The complete model**: every part built, each value the sources leave open proposed beside the gap that would close it.
 - **Known first**: only the parts whose every dimension the sources settle, built and checked; every other part waits with the question that would settle it ([Known first](#known-first)).
 
-Run `cadrev init <dir>` and write `target` in project.yaml: the object, its version and its configuration. Papers often show earlier iterations beside the reported one; the target names the one the ledger describes. A target narrows the object, not its parts: a cut sheet nesting all of a unit's plates is that many parts to build.
+Run `cadrev init <dir>` and write `target` in project.yaml: the object, its version and its configuration. Papers often show earlier iterations beside the reported one; the target names the one the ledger describes. A target narrows the object, not its parts: a file holding many parts is that many parts to build.
 
 ### 2. Sources
 
@@ -65,7 +65,7 @@ Done when every figure has been viewed and its labels ledgered, and `cadrev chec
 Geometry the authors released settles values no text states: probe them rather than propose them. A project with none goes to stage 5.
 
 - **Datums** on each body go under `datums` in evidence.yaml, at coordinates read from the file by a short script of your own, run as `uv run --project <the directory holding this SKILL.md>/tool python <script>`: one that loads the file with build123d, reads an STL's triangle corners, or reads a cut file's contours in the sheet's frame ([project-format.md](references/project-format.md)).
-- **Probes** take each value a body settles (a hole spacing, a bore, an envelope, a thickness), recording the design value: `32.5`, not the file's `32.4999`. A cut file's region is probed in the sheet's plane, between datums on its edges; a hole's centre and diameter are a circle datum through three points of its edge.
+- **Probes** take each value a body settles (a hole spacing, a bore, an envelope, a thickness), recording the design value: `32.5`, not the file's `32.4999`.
 - **An STL body** holds only flat triangles: no cylindrical face, no axis, and a point mid-facet sits inside the true circle by the facet's sag. So every input to a [derived datum](references/project-format.md#probes-released-geometry) on it is a triangle corner read from the file, and a curved part's shape check takes a `tol` of that sag. Its routes:
   - **A bore or a fillet:** a `diameter` probe `at` a `circle` datum through three corners on its rim or arc.
   - **A bore's axis or a hole's centre:** that circle datum, whose centre a `distance` or `angle` probe reads.

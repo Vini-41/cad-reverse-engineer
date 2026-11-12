@@ -18,13 +18,13 @@ It is built for Fable 5.2 and [benchmarked](docs/benchmark.md) across Anthropic'
 
 ### Examples
 
-One small example shows each kind of evidence, and four full reconstructions were each built by a fresh agent from the skill and the sources alone. `scripts/check` holds every one to its expected status before each merge.
+One small example shows each kind of evidence, and four full reconstructions were each built by a fresh agent from the skill and the sources alone. `scripts/check` holds every one to the status its README states.
 
-- `examples/legclaw-links`: three linkages of the LegClaw (Cheng et al., Advanced Science 2026), with Table S2 envelopes from the DOCX supplement, methods quotes, a figure-label crop, two source conflicts and proposed pin pitches. Expected status: `VERIFIED: 0 errors, 2 warnings, 10/10 checks pass`.
-- `examples/legclaw`: the full LegClaw, both legs and their mounts with their motion and tendons, exported to MuJoCo. Expected status: `VERIFIED: 0 errors, 0 warnings, 73/73 checks pass`.
-- `examples/centrifuge`: the mini benchtop centrifuge (Soma Poór, HardwareX 2022), a static project checked against the authors' released STEP files. Expected status: `VERIFIED: 0 errors, 0 warnings, 88/88 checks pass`.
-- `examples/cell-stretcher`: the uniaxial cell stretcher (Kah et al., HardwareX 2021), two lead screws driving one carriage, checked against laser-cut SVG sheets and STL. Expected status: `VERIFIED: 0 errors, 0 warnings, 119/119 checks pass`.
-- `examples/compact-sspg`: the COMPAct 7.2:1 single-stage planetary gearbox (Singh et al., arXiv 2025), its train checked by tooth counts and the output's posed turn. Expected status: `VERIFIED: 0 errors, 0 warnings, 123/123 checks pass`.
+- `examples/legclaw-links`: three linkages of the LegClaw (Cheng et al., Advanced Science 2026), with Table S2 envelopes from the DOCX supplement, methods quotes, a figure-label crop, two source conflicts and proposed pin pitches.
+- `examples/legclaw`: the full LegClaw, both legs and their mounts with their motion and tendons, exported to MuJoCo.
+- `examples/centrifuge`: the mini benchtop centrifuge (Soma Poór, HardwareX 2022), a static project checked against the authors' released STEP files.
+- `examples/cell-stretcher`: the uniaxial cell stretcher (Kah et al., HardwareX 2021), two lead screws driving one carriage, checked against laser-cut SVG sheets and STL.
+- `examples/compact-sspg`: the COMPAct 7.2:1 single-stage planetary gearbox (Singh et al., arXiv 2025), its train checked by tooth counts and the output's posed turn.
 
 ### Install
 
@@ -34,4 +34,4 @@ One small example shows each kind of evidence, and four full reconstructions wer
 
 ### Requirements
 
-The CLI runs locally through [uv](https://docs.astral.sh/uv/) on Python 3.10 to 3.13. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute) at the versions in the shipped lockfile, so it needs network access then. Under Codex, allow it with `network_access = true` under `[sandbox_workspace_write]` in `~/.codex/config.toml`; `cadrev` moves each cache and environment the sandbox will not let it write (uv's cache, the plugin's `tool/.venv`, Matplotlib's and fontconfig's caches) to a directory of the user's under `TMPDIR`.
+The CLI runs locally through [uv](https://docs.astral.sh/uv/) on Python 3.10 to 3.13. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute) at the versions in the shipped lockfile, so it needs network access then. Under Codex, allow it with `network_access = true` under `[sandbox_workspace_write]` in `~/.codex/config.toml`; `cadrev` moves any cache the sandbox will not let it write under `TMPDIR`.

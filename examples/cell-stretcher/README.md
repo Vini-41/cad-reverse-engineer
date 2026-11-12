@@ -14,7 +14,7 @@ Expected status: `VERIFIED: 0 errors, 0 warnings, 119/119 checks pass`
 
 No figure reading is needed, so no reviewer confirms one.
 
-`cadrev check` on this directory takes under a minute: the shape check against `MoldFrame.stl`'s 18,000 triangles computes in OCC the distance of only the sample points near the largest (#123). `scripts/check` checks it and fails if it prints anything else. A change that moves the status updates the line above.
+`cadrev check` on this directory takes under a minute. `scripts/check` checks it and fails if it prints anything else. A change that moves the status updates the line above.
 
 `gen_cutfile.py` writes `evidence.yaml` and `checks.yaml` from the hand-written `evidence.src.yaml` and `checks.src.yaml`, adding a shape check and its sheet datums for each cut-file region a part reproduces; edit the `.src.yaml` files and rerun it (`uv run --project ../../plugin/skills/cad-reverse-engineer/tool python -I gen_cutfile.py`) rather than editing those two files.
 

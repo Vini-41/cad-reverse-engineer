@@ -1,6 +1,6 @@
 # CAD reverse-engineering
 
-Rebuilding a published object, from a single part up to a mechanism like the LegClaw, from its sources (including geometry its authors released) as parametric CAD, optionally with a kinematic model that exports to MuJoCo. Every number is traced to a quoted source or named as a reconstruction choice, and every stated value, motion included, is checked against the built model. The result can be modified and simulated kinematically. It does not cover the reconstructor's own measurements of a physical object, behavioural simulation, fabrication-ready tolerances, or whole robots (ADR-0007).
+Rebuilding a published object, from a single part up to a mechanism, from its sources (including geometry its authors released) as parametric CAD, optionally with a kinematic model that exports to MuJoCo. Every number is traced to a quoted source or named as a reconstruction choice, and every stated value, motion included, is checked against the built model. The result can be modified and simulated kinematically. It does not cover the reconstructor's own measurements of a physical object, behavioural simulation, fabrication-ready tolerances, or whole robots (ADR-0007).
 
 ## Evidence
 
@@ -93,7 +93,7 @@ An inextensible cord laid through datums on several instances, whose length the 
 _Avoid_: tendon (for an inextensible cord)
 
 **Wheel**:
-The joint a cable is wound on and driven by: any joint that moves, actuated or passive, revolute or slide, whose one-ended range is its full turn (a slide's, its stroke). A servo's horn is one; so is a shin's compression slide that pulls a passive cord. Each joint a cable closes is closed by that one cable alone.
+The joint a cable is wound on and driven by: any joint that moves, actuated or passive, revolute or slide, whose one-ended range is its full turn (a slide's, its stroke). A servo's horn is one; so is a slide whose stroke pulls a cord. Each joint a cable closes is closed by that one cable alone.
 _Avoid_: spool (for the joint itself)
 
 **Closed pose**:
