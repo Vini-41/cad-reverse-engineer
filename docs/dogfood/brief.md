@@ -31,7 +31,7 @@ Sources: <sources>. Read nothing else under that checkout: not `examples/` (apar
 
 Your project directory: `~/Documents/Projects/cadrev/dogfood/run-<n>` (empty, kept after the run).
 
-No one will answer step 1's question: build the complete model, and leave `known_first` out of project.yaml.
+No one will answer stage 1's question: build the complete model, and leave `known_first` out of project.yaml.
 
 Work until `cadrev check` ends VERIFIED PENDING REVIEW (figure readings await a human), or VERIFIED where no figure reading is needed, or you are truly stuck. Where the skill is unclear or wrong, or the tool misbehaves (a traceback, a finding you think is false, a rule you had to work around, a step whose instruction didn't match what happened), note it as a trip and keep going if you can.
 

@@ -17,7 +17,7 @@ The warning is `[param-gap]` on `one_turn`, the sun turn `carrier-turn` is posed
 
 The Fig. 4(a) reading, `R1-fig4`'s "(a) SSPG (MN8014, 7.2:1)", was checked against `figures/crops/fig4a-label.png` by a named reviewer, recorded as `confirmed_by` on it in `ledger_paper.yaml`, which `ledger.py` carries into `evidence.yaml`. It restates R1, the quoted 7.2:1 that `carrier-turn` compares with, so it is context. Without that field the status would be VERIFIED PENDING REVIEW.
 
-A full `cadrev check` of this directory takes about 2 minutes on a laptop, about half of it the casing's shape check. `scripts/check` checks it and fails if it prints anything else. A change that moves the status updates the line above.
+A full `cadrev check` of this directory takes about a minute on a laptop, half of it the casing's shape check. `scripts/check` checks it and fails if it prints anything else. A change that moves the status updates the line above.
 
 `ledger.py` writes `evidence.yaml` from the hand-written `ledger_paper.yaml` (the paper's quotes and the figure reading) and the probes and datums it reads from the STL; `checks_gen.py` writes `checks.yaml`. Edit those and rerun them (`uv run --project ../../plugin/skills/cad-reverse-engineer/tool python -I ledger.py` and `python3 checks_gen.py`) rather than editing the two files they write.
 
