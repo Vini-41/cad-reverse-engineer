@@ -8,7 +8,10 @@ each point's distance from above, and OCC computes the distance of only the poin
 reaches the largest distance yet found: the result computing every point's distance gives. Flat
 triangles, plane faces bounded by lines and circles, and cylinder, cone and torus faces give a
 bound, a cut one only where the point's nearest point on it is on the face; a point near only
-other faces, or over a cut face's hole, is left to OCC."""
+other faces, or over a cut face's hole, is left to OCC. A file may give an edge, where two faces
+meet, by a curve that strays from them within the edge's BRep tolerance; such an edge is read
+where its faces meet, so its sample points are moved there, and a point near it is read against
+its faces."""
 
 from __future__ import annotations
 
@@ -27,6 +30,7 @@ _OCP = {
         "IntTools",
         "BRepTools",
         "GeomAbs",
+        "GeomAPI",
         "ShapeAnalysis",
         "TopAbs",
         "TopExp",
@@ -40,6 +44,13 @@ _PLANE = _OCP["GeomAbs"].GeomAbs_SurfaceType.GeomAbs_Plane
 _CYLINDER = _OCP["GeomAbs"].GeomAbs_SurfaceType.GeomAbs_Cylinder
 _CONE = _OCP["GeomAbs"].GeomAbs_SurfaceType.GeomAbs_Cone
 _TORUS = _OCP["GeomAbs"].GeomAbs_SurfaceType.GeomAbs_Torus
+# The kinds of curve a file approximates an edge by, where its faces meet in no line or conic.
+_FREE_FORM = (
+    _OCP["GeomAbs"].GeomAbs_CurveType.GeomAbs_BezierCurve,
+    _OCP["GeomAbs"].GeomAbs_CurveType.GeomAbs_BSplineCurve,
+    _OCP["GeomAbs"].GeomAbs_CurveType.GeomAbs_OffsetCurve,
+    _OCP["GeomAbs"].GeomAbs_CurveType.GeomAbs_OtherCurve,
+)
 _IN = _OCP["TopAbs"].TopAbs_State.TopAbs_IN
 _ON = _OCP["TopAbs"].TopAbs_State.TopAbs_ON
 # How far from its face a grid point may lie and still be on it.
@@ -53,6 +64,9 @@ _SAME_PARAMETER = 1e-9
 _SAME_CORNER = 1e-9
 # How far numpy's rounding may leave a bound below OCC's distance, per unit of the shapes' size.
 _ROUNDING = 1e-9
+# How many times, at most, a sample on an edge is projected onto each of its faces' surfaces in
+# turn, to find where they meet.
+_ROUNDS = 50
 # How many times a shape's tolerance OCC's distance to it may stray from numpy's: over three
 # times was seen on a STEP body, so a bound allows ten.
 _TOLERANCES = 10
@@ -65,13 +79,10 @@ def surface_distance(a, b, samples: int) -> tuple[float, tuple[float, float, flo
     point where it occurs: of the points an samples × samples grid over each face's parameters
     gives, where they fall on the face rather than in a hole of it, and those samples + 1 along
     each edge, a's then b's, the first point farthest from the other surface."""
-    from build123d import Compound
-
     surfaces = (_Surface(a, samples), _Surface(b, samples))
     boxes = [s.bounding_box() for s in (a, b)]
     size = max(abs(v) for box in boxes for corner in (box.min, box.max) for v in corner)
     slack = _ROUNDING * max(1.0, size)
-    others = [Compound(s.shape.faces()) for s in reversed(surfaces)]
     first = len(surfaces[0].points)
     worst: tuple[float, tuple[float, float, float]] = (0.0, (0.0, 0.0, 0.0))
     found = -1
@@ -99,7 +110,7 @@ def surface_distance(a, b, samples: int) -> tuple[float, tuple[float, float, flo
         point = surfaces[k].point(int(n) - k * first)
         if point is None:
             continue
-        gap = others[k].distance_to(point)
+        gap = surfaces[1 - k].distance_to(point)
         # Of points equally far, the first in order, as computing every point's in turn finds.
         if gap > worst[0] or (gap == worst[0] > 0 and n < found):
             worst, found = (gap, (point.X, point.Y, point.Z)), n
@@ -158,16 +169,21 @@ def _triangle(face, kind):
 
 
 class _Surface:
-    """A shape's surface, read once: its faces and edges, each flat triangle's corners, and its
-    sample points (surface_distance), numpy's where it can compute them, in order."""
+    """A shape's surface, read once: its faces and edges, each flat triangle's corners, its loose
+    edges, and its sample points (surface_distance), numpy's where it can compute them, in order;
+    and a point's distance to it."""
 
     def __init__(self, shape, samples: int):
+        from build123d import Compound
+
         self.shape, self.samples = shape, samples
         self.faces, self.edges = shape.faces(), shape.edges()
+        self._faces = Compound(self.faces)
         self._adapted = [_OCP["BRepAdaptor"].BRepAdaptor_Surface(f.wrapped) for f in self.faces]
         self.kinds = [a.GetType() for a in self._adapted]
         self.triangles = [_triangle(f, kind) for f, kind in zip(self.faces, self.kinds)]
         self.mesh = self._mesh()
+        self._loose = self._loose_edges()
         self.points, self._places, self._given, own_distance = self._sample()
         # Whether each point lies on its face: numpy settles a grid point near its triangle, and
         # OCC (point) the few that lie farther, as it does where numpy bounds the distance.
@@ -196,6 +212,26 @@ class _Surface:
             vertices, triangles = face.tessellate(1.0)
             out.append(np.array([tuple(v) for v in vertices])[np.array(triangles)])
         return np.concatenate(out) if out else None
+
+    def _loose_edges(self) -> dict[int, tuple[float, list]]:
+        """Each loose edge's BRep tolerance and the faces it bounds, with their surfaces, by the
+        edge's index. An edge is loose where its file approximates where its faces meet by a
+        free-form curve, which its tolerance lets stray from them farther than _ON_FACE, as
+        another CAD's intersection curve can. Where the faces meet, not its curve, is the edge."""
+        out: dict[int, tuple[float, list]] = {}
+        for e, edge in enumerate(self.edges):
+            tolerance = _OCP["BRep"].BRep_Tool.Tolerance_s(edge.wrapped)
+            if tolerance > _ON_FACE and _curve(edge.wrapped)[1] in _FREE_FORM:
+                out[e] = (tolerance, [])
+        if not out:
+            return out
+        index = {self.edges[e]: e for e in out}
+        for face in self.faces:
+            for edge in face.edges():
+                if edge in index:
+                    surface = _OCP["BRep"].BRep_Tool.Surface_s(face.wrapped)
+                    out[index[edge]][1].append((face, surface))
+        return out
 
     def _sample(self):
         """The sample points, each with its place: (face, i, j) for a triangle's grid point,
@@ -233,6 +269,9 @@ class _Surface:
                 places += [(-2, e, i) for i in range(s + 1)]
             else:
                 along = [edge.position_at(i / s) for i in range(s + 1)]
+                if e in self._loose:
+                    meeting = [surface for _, surface in self._loose[e][1]]
+                    along = [_meet(p, meeting) for p in along]
                 places += [(-1, len(given) + i) for i in range(s + 1)]
                 given += along
                 blocks.append(np.array([tuple(p) for p in along]))
@@ -249,6 +288,21 @@ class _Surface:
         places = [p for p, o in zip(places, off) if not o]
         return points[~off], places, given, own_distance[~off]
 
+    def distance_to(self, point) -> float:
+        """point's distance to the surface, as OCC computes it, unless a loose edge
+        (_loose_edges) lies as near: OCC takes the edge's curve, so the point's distance is then
+        also read to each face of the edge, at its nearest point on the face's surface where that
+        lies within the edge's tolerance of the face."""
+        gap = self._faces.distance_to(point)
+        for e, (tolerance, faces) in self._loose.items():
+            if gap <= _ON_FACE or self.edges[e].distance_to(point) > gap + _ON_FACE:
+                continue
+            for face, surface in faces:
+                found = _onto(point, surface)
+                if found and face.distance_to(_xyz(found.NearestPoint())) <= tolerance + _ON_FACE:
+                    gap = min(gap, found.LowerDistance())
+        return gap
+
     def point(self, n: int):
         """The n-th sample point as OCC gives it, or None where it falls off its face."""
         place = self._places[n]
@@ -262,15 +316,41 @@ class _Surface:
         return point if face.distance_to(point) <= _ON_FACE else None
 
 
+def _onto(point, surface):
+    """OCC's projection of point onto surface, or None where it finds none."""
+    found = _OCP["GeomAPI"].GeomAPI_ProjectPointOnSurf(_OCP["gp"].gp_Pnt(*point), surface)
+    return found if found.NbPoints() else None
+
+
+def _meet(point, surfaces):
+    """The point near point where surfaces meet, found by projecting it onto each in turn until a
+    turn moves it no farther than _ON_FACE; after _ROUNDS turns, where it last lies. point itself
+    where a surface has no point nearest it."""
+    from build123d import Vector
+
+    at = tuple(point)
+    for _ in range(_ROUNDS):
+        moved = 0.0
+        for surface in surfaces:
+            found = _onto(at, surface)
+            if found is None:
+                return point
+            at, moved = _xyz(found.NearestPoint()), max(moved, found.LowerDistance())
+        if moved <= _ON_FACE:
+            break
+    return Vector(*at)
+
+
 def _bound(points: np.ndarray, surface: _Surface, slack: float, need: float) -> np.ndarray:
     """An upper bound on each point's distance to surface: its distance to a point on a flat
     triangle, a plane face bounded by lines and circles, or a cylinder, cone or torus face of it,
     whichever is nearest, plus slack for rounding and for surface's tolerance, within which OCC's
-    distance strays. B-spline and other faces give no bound, nor does a plane face with other
-    edges, nor a cut cylinder, cone or torus face where the point's nearest point on its surface
-    falls in a hole: a point near only those is bounded by the others, however far, and so left
-    to OCC. A point whose bound already lies below need, a distance already found, can never
-    reach OCC, so the costly bounds, the lines' and the cut faces', leave it as it is."""
+    distance strays, and its sample points moved onto where a loose edge's faces meet. B-spline
+    and other faces give no bound, nor does a plane face with other edges, nor a cut cylinder,
+    cone or torus face where the point's nearest point on its surface falls in a hole: a point
+    near only those is bounded by the others, however far, and so left to OCC. A point whose
+    bound already lies below need, a distance already found, can never reach OCC, so the costly
+    bounds, the lines' and the cut faces', leave it as it is."""
     extra = slack + _TOLERANCES * surface.tolerance
     # First each point's distance to the nearest of surface's own sample points, which lie on it:
     # a bound that settles most points at once, so the faces bound only the rest.
