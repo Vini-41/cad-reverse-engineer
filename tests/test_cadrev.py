@@ -3466,7 +3466,7 @@ def test_guard_shipped_skill_names_no_model():
     assert named == []
 
 
-# Trips from the dogfood run (docs/dogfood/legclaw-run-log.md): each is a place a fresh agent
+# Trips from the LegClaw dogfood run (its run log): each is a place a fresh agent
 # reconstructing the full LegClaw met a crash, a false finding or a silent wrong answer.
 
 

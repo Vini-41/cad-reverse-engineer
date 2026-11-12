@@ -1,6 +1,6 @@
 # Dogfood brief
 
-The prompt a dogfood run's subagent gets, word for word, so every run is briefed and reports alike whatever the object. Each object has one entry under [Objects](#objects) giving its fields, and one run log, `<object>-run-log.md` beside this file. Before the run:
+The prompt a dogfood run's subagent gets, word for word, so every run is briefed and reports alike whatever the object. Each object has one entry under [Objects](#objects) giving its fields, and one run log, `~/Documents/Projects/cadrev/dogfood/<object>-run-log.md`. Before the run:
 
 1. Check out the commit under test as a detached worktree outside the repo: `git worktree add --detach <checkout> <sha>`. The run reads the skill from there.
 2. Create the empty project directory `~/Documents/Projects/cadrev/dogfood/run-<n>`, numbered one past the highest `run-<n>` already in that directory: run numbers are shared across objects, and a log can lag its runs.
@@ -11,7 +11,7 @@ An object's sources that no example holds yet are downloaded to `~/Documents/Pro
 - A paper in PubMed Central: find its PMC id with Europe PMC's search API (`https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=DOI:<doi>&format=json`), then fetch `https://pmc-oa-opendata.s3.amazonaws.com/PMC<id>.1/PMC<id>.1.pdf`.
 - A Mendeley Data dataset: `https://data.mendeley.com/public-api/datasets/<id>/files?folder_id=root&version=<v>` lists each file's `download_url` and `sha256_hash`; check each download against its hash. An empty list means the files sit in folders: `https://data.mendeley.com/public-api/datasets/<id>/folders/<v>` lists each folder's `id`, to pass as `folder_id`.
 
-After the run, its report becomes the run's section in the object's log, each trip it names is reproduced and filed as [repro-brief.md](repro-brief.md) says, and then the checkout worktree is removed. An object's first run starts its log, headed as [legclaw-run-log.md](legclaw-run-log.md) is: the object, the spec and issue behind its runs, and how each run was briefed.
+After the run, its report becomes the run's section in the object's log, each trip it names is reproduced and filed as [repro-brief.md](repro-brief.md) says, and then the checkout worktree is removed. An object's first run starts its log, headed as `legclaw-run-log.md` is: the object, the spec and issue behind its runs, and how each run was briefed.
 
 A run that ends VERIFIED PENDING REVIEW, or VERIFIED, becomes `examples/<object>`:
 
@@ -48,7 +48,7 @@ Report at the end (≤40 lines):
 
 ### LegClaw
 
-Log: [legclaw-run-log.md](legclaw-run-log.md).
+Log: `legclaw-run-log.md`.
 
 - **goal:** reconstruct the full LegClaw, both legs and their mount, with its motion.
 - **sources:** (CC-BY) `<checkout>/examples/legclaw-links/sources/Cheng2026_LegClaw.pdf` and `Cheng2026_LegClaw_supplementary.docx` beside it
@@ -61,7 +61,7 @@ Log: [legclaw-run-log.md](legclaw-run-log.md).
 
 ### Centrifuge
 
-Log: [centrifuge-run-log.md](centrifuge-run-log.md).
+Log: `centrifuge-run-log.md`.
 
 - **goal:** reconstruct the mini benchtop centrifuge as a static project, with one rotor variant of your choosing.
 - **sources:** (CC-BY) the paper `~/Documents/Projects/cadrev/centrifuge-sources/SomaPoor2022_centrifuge.pdf` and the authors' released STEP and STL files beside it (Mendeley Data, doi:10.17632/sy2vrhj227.1)
@@ -75,7 +75,7 @@ Log: [centrifuge-run-log.md](centrifuge-run-log.md).
 
 ### Cell stretcher
 
-Log: [cell-stretcher-run-log.md](cell-stretcher-run-log.md).
+Log: `cell-stretcher-run-log.md`.
 
 - **goal:** reconstruct the uniaxial cell stretcher with its lead-screw motion: the stretcher unit with its clamps, and the mould its substrates are cast in.
 - **sources:** (CC-BY) the paper `~/Documents/Projects/cadrev/cell-stretcher-sources/Kah2021_cell_stretcher.pdf` and the authors' released laser-cut SVG sheets and STL files beside it (Mendeley Data, doi:10.17632/mgkbmytx63.1)
@@ -90,7 +90,7 @@ Log: [cell-stretcher-run-log.md](cell-stretcher-run-log.md).
 
 ### COMPAct
 
-Log: [compact-run-log.md](compact-run-log.md).
+Log: `compact-run-log.md`.
 
 - **goal:** reconstruct the COMPAct 7.2:1 single-stage planetary gearbox with its motion: the sun, the planets, the ring inside the gearbox casing, and the carrier.
 - **sources:** (CC-BY) the paper `~/Documents/Projects/cadrev/compact-sources/Singh2025_COMPAct.pdf` and the authors' released STL files for the 7.2:1 design beside it (MIT, github.com/singhaman1750/COMPAct, `CADs/Actuator_STL_files/sspg_7.2`)
