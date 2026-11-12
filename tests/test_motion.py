@@ -431,3 +431,17 @@ def test_mass_check_without_a_density_weighs_each_instance_by_the_mass_model(mec
     assert not mass["ok"] and number(mass) == pytest.approx(7.11)
     assert (mass["rests_on"], mass["rests_on_params"]) == ("proposed", ["slider_m"])
     assert run.report["masses"]["slider"]["mass"] == 3
+
+
+def test_part_no_instance_places_is_exported_in_its_own_frame_and_neither_weighed_nor_posed(
+    mech_dir,
+):
+    # A settled part whose place the sources leave open needs no mass-model entry.
+    pin = '    parts["pin"] = Cylinder(p.hole / 2, p.L)\n'
+    remodel(mech_dir, "    datums = {", f"{pin}    datums = {{")
+    run = check(mech_dir)
+    assert run.status == "VERIFIED" and run.rules == []
+    assert (mech_dir / "build" / "parts" / "pin.step").exists()
+    assert number(run.result("mass")) == pytest.approx(6.11) and "pin" not in run.report["masses"]
+    meshes = {g.get("mesh") for g in mjcf(mech_dir).iter("geom")}
+    assert "crank" in meshes and "pin" not in meshes
