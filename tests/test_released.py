@@ -256,6 +256,17 @@ def test_distance_from_a_mid_datum_reads_from_the_midpoint_of_its_two(proj_dir, 
     assert run.status == "VERIFIED" and run.report["probes"][0]["value"] == pytest.approx(5)
 
 
+
+def test_angle_along_an_axis_reads_at_a_circle_datums_centre(proj_dir, tmp_path):
+    # At hole a's centre, hole b's centre lies on +x and a bottom corner of the plate's end 4 below
+    # the top: 135° about z, 128.0° in 3-D.
+    _faceted(proj_dir, tmp_path, datums=HOLES | {"e": (-20, 5, -2)})
+    at = {"between": ["link_step.b", "link_step.a", "link_step.e"]}
+    add(proj_dir, evidence=_probe("angle", 135, along="z", **at))
+    run = check(proj_dir)
+    assert run.status == "VERIFIED", run.out
+    assert run.report["probes"][0]["value"] == pytest.approx(135, abs=1e-6)
+
 @pytest.mark.parametrize(
     ("length_tol", "off", "found"),
     [(0.001, 0.4, True), (0.01, 0.005, False), (0.01, 0.02, True)],
@@ -299,6 +310,34 @@ def test_derived_datum_whose_datums_give_no_circle_is_a_finding_naming_it(
     _faceted(proj_dir, tmp_path, link_body(), faces, derived, name="link.step")
     (message,) = check(proj_dir).messages("datum-off-solid")
     assert message.startswith("datum link_step.bad: ")
+
+
+def test_angle_probe_along_an_axis_reads_the_angle_about_it(proj_dir, tmp_path):
+    # #143's disc: a Ø28 flange with a Ø5 bore, a Ø4 hole on +x and a lug turned 4.454° about
+    # the axis. The hole's datum lies on its axis 3 mm above the bore's, so the 3-D angle is not
+    # the lug's phase about the axis.
+    disc = Cylinder(14, 4) - Cylinder(2.5, 4) - Pos(11.5, 0, 0) * Cylinder(2, 4)
+    disc += Rot(0, 0, 4.454) * Pos(14.5, 0, 0) * Box(1.5, 2, 4)
+    export_step(disc, str(tmp_path / "disc.step"))
+    register(proj_dir, tmp_path / "disc.step", "disc", "geometry")
+    datums = {
+        "disc.hole": [11.5, 0, 1.5],
+        "disc.axis": [0, 0, -1.5],
+        "disc.lug": [15.20395, 1.1843, 0],
+    }
+    add(proj_dir, datums=datums, skipped="{source: disc, body: disc, reason: probed only}")
+    phase = {"source": "disc", "locator": "lug", "probe": "angle", "scope": "context"}
+    phase |= {"between": ["disc.hole", "disc.axis", "disc.lug"], "reason": "the lug's phase"}
+    add(
+        proj_dir,
+        evidence=[
+            phase | {"id": "P-about", "values": {"v": 4.454}, "along": "z"},
+            phase | {"id": "P-3d", "values": {"v": 10.012}},
+        ],
+    )
+    run = check(proj_dir)
+    assert run.status == "VERIFIED", run.out
+    assert [q["value"] for q in run.report["probes"]] == pytest.approx([4.45402, 10.01207])
 
 
 @pytest.mark.parametrize("name", ["both.step", "both.stl"])

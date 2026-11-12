@@ -194,6 +194,7 @@ def _weighed(text: str, check: str, **values):
 RESIN = "The link weighs 1.8 g in resin of 1.2 g/cm3."
 EXTRA = "{id: extra, source: paper, locator: Sec. 3, quote: branches of 60 mm diameter"
 ANGLE = "{id: n, kind: angle, between: [link.b, link.a, link.top], evidence: N1, key: v"
+SQUARE = ["link_step.b", "link_step.a", "link_step.top"]  # top lies above a, along z
 
 LINK_FINDINGS = {
     # The project and its files.
@@ -457,6 +458,12 @@ LINK_FINDINGS = {
     "check-config: an angle whose datum is its vertex": _quoted_check(
         "The holes stand 90° square.", ANGLE.replace("link.b,", "link.a,") + "}", v=90
     ),
+    "check-config: an angle whose datum projects onto its vertex": _quoted_check(
+        "The holes stand 90° square.", ANGLE + ", along: z}", v=90
+    ),
+    "check-config: an angle along no axis": _quoted_check(
+        "The holes stand 90° square.", ANGLE + ", along: w}", v=90
+    ),
     "check-config: a diameter on no cylindrical face": _quoted_check(
         "The holes are 3 mm bores.",
         "{id: n, kind: diameter, at: link.side, evidence: N1, key: v}",
@@ -580,6 +587,12 @@ LINK_FINDINGS = {
     ),
     "evidence-anchor: an angle probe between two datums": _probed(
         probe="angle", between=["link_step.a", "link_step.b"], values={"v": 90}
+    ),
+    "evidence-anchor: an angle probe whose datum projects onto its vertex": _probed(
+        probe="angle", between=SQUARE, values={"v": 90}, along="z"
+    ),
+    "evidence-anchor: an angle probe along no axis": _probed(
+        probe="angle", between=SQUARE, values={"v": 90}, along="w"
     ),
     "evidence-anchor: a diameter probe at no datum": _probed(probe="diameter", values={"v": 3}),
     "evidence-anchor: a diameter probe on no cylindrical face": _probed(
