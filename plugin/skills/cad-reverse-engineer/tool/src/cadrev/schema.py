@@ -78,6 +78,8 @@ CHECK = record(
     exclusive=(("part", "instances"),),
     sweep=record("joint! steps!"),
 )
+# A datum on a released body: a point, or one derived from datums declared on the same body.
+DATUM = (Items(NUMBER), record("circle:[str] mid:[str]", exclusive=(("circle", "mid"),)))
 # A part's mass: its datasheet mass, or a density its volume is weighed by; one param either way.
 PART = record("mass density", exclusive=(("mass", "density"),))
 GAP = record("id! question ask")
@@ -108,7 +110,7 @@ FILES = {
         "evidence": (EVIDENCE, list),
         "skipped": (SKIP, list),
         "conflicts": (CONFLICT, list),
-        "datums": (Items(NUMBER), dict),
+        "datums": (DATUM, dict),
     },
     "params.yaml": {"params": (PARAM, dict), "parts": (PART, dict)},
     "checks.yaml": {"checks": (CHECK, list)},
@@ -153,8 +155,11 @@ def _is(value, spec) -> bool:
 def conform(value, spec, where: str, problems: list[str]) -> Any:
     """value with null record keys dropped; each mismatch appended to problems as `where: why`."""
     if isinstance(spec, tuple):
-        if any(_is(value, s) for s in spec):
-            return value
+        for alternative in spec:
+            found: list[str] = []
+            conformed = conform(value, alternative, where, found)
+            if not found:
+                return conformed
     elif isinstance(spec, Items):
         if isinstance(value, (list, tuple)):
             return [conform(v, spec.of, f"{where}[{i}]", problems) for i, v in enumerate(value)]

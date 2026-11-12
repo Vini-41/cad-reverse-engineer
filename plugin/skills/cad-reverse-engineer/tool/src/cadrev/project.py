@@ -134,8 +134,9 @@ class Project:
     checks: list[dict]
     gaps: dict[str, dict]
     overlays: list[dict]
-    # Datums declared on released bodies: <body>.<feature> -> its point in the body's frame.
-    datums: dict[str, list]
+    # Datums declared on released bodies: <body>.<feature> -> its point in the body's frame, or
+    # {circle: [a, b, c]} or {mid: [a, b]} of datums declared on that body.
+    datums: dict[str, list | dict]
     # The mass model: part -> {mass: param} or {density: param}.
     parts: dict[str, dict]
     findings: list[Finding] = field(default_factory=list)
@@ -309,15 +310,55 @@ class Project:
         """The body a datum declared in evidence.yaml lies on, and its point there; None for one
         declared on no body. A cut file's datum lies on its sheet, at [x, y]."""
         point = self.datums.get(name)
+        if isinstance(point, dict):
+            try:
+                return self.derived_datum(name)[:2]
+            except Fault:
+                return None  # the datum's own finding says why
         if not isinstance(point, list):
             return None
         sheet = next((s for s in self.regions if name.startswith(f"{s}.")), None)
         if sheet is not None:
             return (sheet, (float(point[0]), float(point[1]), 0.0)) if len(point) == 2 else None
-        body = max((b for b in self.bodies if name.startswith(f"{b}.")), key=len, default=None)
+        body = self._body_named(name)
         if body is None or len(point) != 3:
             return None
         return body, (float(point[0]), float(point[1]), float(point[2]))
+
+    def derived_datum(self, name: str) -> tuple[str, tuple[float, float, float], float | None]:
+        """The body a derived datum lies on, its point and, for a circle, the circle's diameter:
+        the centre of the circle through three datums, or the midpoint of two. A Fault saying
+        why where its inputs give none."""
+        entry = self.datums[name]
+        assert isinstance(entry, dict)  # called for a derived datum alone
+        form = next((f for f in ("circle", "mid") if f in entry), None)
+        if form is None:
+            raise Fault("give {circle: [a, b, c]} or {mid: [a, b]}")
+        inputs, count = [str(i) for i in entry[form]], 3 if form == "circle" else 2
+        if len(inputs) != count:
+            raise Fault(f"{form} takes {count} datums, not {len(inputs)}")
+        body = self._body_named(name)
+        if body is None:
+            raise Fault("names no body of a geometry source; name it <body>.<feature>")
+        points = []
+        for i in inputs:
+            if isinstance(self.datums.get(i), dict):
+                raise Fault(f"its input {i} is itself derived; derive it from [x, y, z] datums")
+            named = self.released_datum(i)
+            if named is None:
+                raise Fault(f"its input {i} is no [x, y, z] datum declared on a body")
+            if named[0] != body:
+                raise Fault(f"its input {i} lies on body {named[0]}, not {body}")
+            points.append(named[1])
+        if form == "mid":
+            (ax, ay, az), (bx, by, bz) = points
+            return body, ((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2), None
+        centre, diameter = released.circle(points, self.length_tol, inputs)
+        return body, centre, diameter
+
+    def _body_named(self, name: str) -> str | None:
+        """The solid body a datum's name <body>.<feature> names, if any."""
+        return max((b for b in self.bodies if name.startswith(f"{b}.")), key=len, default=None)
 
     def datum_on(self, name: str, body: str) -> tuple[float, float, float]:
         """The point of a datum declared on released body `body`."""

@@ -73,7 +73,7 @@ One placement of a part in the assembly; a check over several instances reads th
 _Avoid_: copy, occurrence
 
 **Datum**:
-A named point on a part's solid that distance and angle checks read: on the axis of a cylindrical face (a pin, a hole, a pivot) or on a face.
+A named point on a part's solid that distance and angle checks read: on the axis of a cylindrical face (a pin, a hole, a pivot) or on a face. A released body's datum may instead be derived from datums on it, and so lie off its solid: the circle through three, read at its centre, or the midpoint of two.
 _Avoid_: reference point, marker
 
 **Joint**:

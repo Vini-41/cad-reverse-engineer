@@ -178,7 +178,9 @@ def _probe_values(p: Project, e: dict, body: str) -> dict[str, float]:
     if kind == "diameter":
         if "at" not in e:
             raise Fault("a diameter probe names the datum it is taken at in at")
-        return {key: released.diameter_at(solid, p.datum_on(e["at"], body), p.length_tol, e["at"])}
+        at, point = str(e["at"]), p.datum_on(e["at"], body)
+        circle = p.derived_datum(at)[2] if isinstance(p.datums.get(at), dict) else None
+        return {key: circle or released.diameter_at(solid, point, p.length_tol, at)}
     between = e.get("between") or []
     points = [p.datum_on(name, body) for name in between]
     if kind == "distance":
@@ -233,20 +235,30 @@ def _probe(p: Project, e: dict) -> None:
 
 
 def _released_datums(p: Project) -> None:
-    """[datum-off-solid] for each datum declared on released geometry that lies on no body."""
+    """[datum-off-solid] for each datum declared on released geometry that lies on no body, each
+    derived datum its inputs give no point, and each input of one that lies on no triangle corner
+    of an STL."""
     unread = p.unread_geometry
     sheets = [
         sid
         for sid, s in p.sources.items()
         if s.get("kind") == "geometry" and released.is_sheet(p.source_path(sid))
     ]
+    inputs = {
+        str(i) for d in p.datums.values() if isinstance(d, dict) for f in d.values() for i in f
+    }
     for name, point in p.datums.items():
         sheet = next((s for s in sheets if name.startswith(f"{s}.")), None)
-        if len(point) != (3 if sheet is None else 2):
+        # A datum is derived on a solid only.
+        derived = isinstance(point, dict)
+        if not (sheet is None if derived else len(point) == (3 if sheet is None else 2)):
             shape = "[x, y, z]" if sheet is None else f"[x, y] on cut file {sheet}"
             p.error("schema", f"evidence.yaml datums.{name}: must be {shape}, not {point}")
         elif released.source_of(name.partition(".")[0]) in unread or sheet in unread:
             continue  # its source's own finding says why
+        elif derived:
+            with p.filing("datum-off-solid", f"datum {name}: "):
+                p.derived_datum(name)
         elif sheet is not None:
             if not released.outlines_at(p.regions[sheet], (point[0], point[1]), p.length_tol):
                 p.error(
@@ -260,6 +272,16 @@ def _released_datums(p: Project) -> None:
             )
         elif (gap := released.off_solid(p.bodies[named[0]], named[1], p.length_tol)) is not None:
             p.error("datum-off-solid", f"datum {name} of body {named[0]}: {released.off(gap)}")
+        elif (
+            name in inputs
+            and released.is_mesh(p.source_path(released.source_of(named[0])))
+            and (gap := released.off_corner(p.bodies[named[0]], named[1], p.length_tol))
+        ):
+            p.error(
+                "datum-off-solid",
+                f"datum {name} of body {named[0]}: lies on no triangle corner, {gap:.4g} from the "
+                "nearest; a datum derived from it is pinned on an STL only by corners",
+            )
 
 
 def _offsets(text: str, needle: str) -> list[int]:
