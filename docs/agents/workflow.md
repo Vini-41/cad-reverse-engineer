@@ -45,4 +45,4 @@ The user clears what waits on them in one daily pass:
 
 ## Changing the rules
 
-A rule joins `AGENTS.md`, `CODING_STANDARDS.md` or `docs/agents/` once the same mistake has happened twice, in the PR that needs it. A mechanical rule becomes a check in `scripts/check` instead.
+A rule joins `AGENTS.md`, `CODING_STANDARDS.md` or `docs/agents/` once the same mistake has happened twice, in the PR that needs it.
