@@ -1,11 +1,24 @@
 """Geometry the authors released: a STEP's or STL's bodies, probes of them and shape checks
 against them, and a cut file's regions."""
 
+import importlib
 import math
 import re
 
 import pytest
-from build123d import Box, Compound, Location, Polygon, Pos, Sphere, export_step, extrude
+from build123d import (
+    Box,
+    Compound,
+    Cylinder,
+    GeomType,
+    Location,
+    Polygon,
+    Pos,
+    Rot,
+    Sphere,
+    export_step,
+    extrude,
+)
 from conftest import (
     FACE_DATUMS,
     PROBE,
@@ -185,6 +198,44 @@ def test_shape_check_reports_its_distance_where_no_point_needs_a_faces_bound(tmp
     run = check(root)
     assert run.status == "VERIFIED"
     assert run.result("shape")["shape"]["distance"] == pytest.approx(0.2, abs=1e-6)
+
+
+def test_shape_check_reads_a_released_edge_on_its_faces_not_its_curve(tmp_path):
+    # A drum with a hole drilled across it, as built and as released. The file gives one rim's
+    # curve, where the hole meets the drum's wall, only 0.003 mm off the hole's wall, within the
+    # tolerance it sets for that edge, as another CAD's intersection curve can be. The rim is
+    # where the two faces meet, so the same drum reads within tolerance.length.
+    paper = "The drum is 20 mm across and 8 mm tall, with a 3 mm hole drilled across it.\n"
+    quote = "20 mm across and 8 mm tall, with a 3 mm hole"
+    files = {
+        "evidence.yaml": f"evidence:\n  - {{id: S1, source: paper, locator: Sec. 1, "
+        f'quote: "{quote}", values: {{d: 20, h: 8, hole: 3}}}}\n'
+        "datums: {body.top: [0, 0, 4], body.x: [10, 0, 4], body.y: [0, 10, 4]}\n",
+        "params.yaml": "params:\n"
+        + "".join(f"  {k}: {{basis: source, from: S1.{k}}}\n" for k in ("d", "h", "hole")),
+        "checks.yaml": "checks:\n"
+        "  - {id: env, kind: bbox, part: drum, evidence: S1, axes: {d: x, h: z}}\n"
+        "  - {id: hole, kind: diameter, at: drum.wall, evidence: S1, key: hole}\n"
+        "  - {id: shape, kind: shape, part: drum, body: body,\n"
+        "     pairs: [[drum.top, body.top], [drum.x, body.x], [drum.y, body.y]]}\n",
+        "model.py": "from build123d import *\n\n\ndef build(p):\n"
+        "    drum = Cylinder(p.d / 2, p.h) - Rot(0, 90, 0) * Cylinder(p.hole / 2, 2 * p.d)\n"
+        '    datums = {"drum.top": (0, 0, p.h / 2), "drum.x": (p.d / 2, 0, p.h / 2),\n'
+        '              "drum.y": (0, p.d / 2, p.h / 2), "drum.wall": (0, 0, -p.hole / 2)}\n'
+        '    return {"parts": {"drum": drum}, "datums": datums,\n'
+        '            "assembly": {"drum_1": ("drum", Location())}}\n',
+    }
+    root = project(tmp_path, paper, files, "A demo drum, as")
+    drum = Cylinder(10, 8) - Rot(0, 90, 0) * Cylinder(1.5, 40)
+    rim = next(e for e in drum.edges() if e.geom_type == GeomType.BSPLINE)
+    brep, gp = (importlib.import_module(f"OCP.{name}") for name in ("BRep", "gp"))
+    curve = brep.BRep_Tool.Curve_s(rim.wrapped, 0.0, 0.0)
+    brep.BRep_Builder().UpdateEdge(rim.wrapped, curve.Translated(gp.gp_Vec(0, 0, 0.003)), 0.003)
+    export_step(drum, str(tmp_path / "body.step"))
+    register(root, tmp_path / "body.step", "body", "geometry")
+    run = check(root)
+    assert run.status == "VERIFIED", run.out
+    assert run.result("shape")["shape"]["distance"] < 1e-6
 
 
 STROKED = SHEET.replace('fill="black"', 'fill="none" stroke="black"')
