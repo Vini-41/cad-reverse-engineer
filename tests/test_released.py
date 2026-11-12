@@ -256,7 +256,6 @@ def test_distance_from_a_mid_datum_reads_from_the_midpoint_of_its_two(proj_dir, 
     assert run.status == "VERIFIED" and run.report["probes"][0]["value"] == pytest.approx(5)
 
 
-
 def test_angle_along_an_axis_reads_at_a_circle_datums_centre(proj_dir, tmp_path):
     # At hole a's centre, hole b's centre lies on +x and a bottom corner of the plate's end 4 below
     # the top: 135° about z, 128.0° in 3-D.
@@ -266,6 +265,7 @@ def test_angle_along_an_axis_reads_at_a_circle_datums_centre(proj_dir, tmp_path)
     run = check(proj_dir)
     assert run.status == "VERIFIED", run.out
     assert run.report["probes"][0]["value"] == pytest.approx(135, abs=1e-6)
+
 
 @pytest.mark.parametrize(
     ("length_tol", "off", "found"),
