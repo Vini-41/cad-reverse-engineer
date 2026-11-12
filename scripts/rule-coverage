@@ -2,8 +2,8 @@
 """Fail when test coverage of the tool's rules has eroded. Checks that:
 
 - every rule name the tool emits (the literal rule of each p.error, p.warn and Finding) is asserted
-  present by one test and asserted absent by another, and is documented as `[rule-name]` in
-  plugin/skills/cad-reverse-engineer/references/*.md;
+  present by a test and asserted absent by a near miss in its row of the test suite's FINDINGS
+  table, and is documented as `[rule-name]` in plugin/skills/cad-reverse-engineer/references/*.md;
 - every error rule is named by a completion criterion of SKILL.md (a "Done when" line, or the line
   of criteria every step shares), as `[rule-name]` or `[prefix-*]`;
 - the rows of the test suite's FINDINGS table are in alphabetical order of their rule;
@@ -18,9 +18,13 @@
 A rule counts as asserted where its name, or `[name]`, appears in an assert's comparison: directly,
 through a variable or helper whose value names it, or through a parametrize argument. The comparison
 asserts it absent when it uses `not in` or compares with an empty literal (`== []`), present
-otherwise; `not` flips it. A conditional assert (`a if c else b`) asserts only what both branches
-do. A parametrize argument names the rules of the cases its case list makes, evaluated against the
-module's tables where it can be; a test or case marked skip, skipif or xfail asserts nothing.
+otherwise; `not` flips it. Only a test whose case list reads FINDINGS, as the one that runs its near
+misses does, asserts a rule absent, and only for the cases the list can be read to make: a near miss
+is the closest change the rule must accept, which an assert that some unchanged project raises
+nothing does not show. A conditional assert
+(`a if c else b`) asserts only what both branches do. A parametrize argument names the rules of the
+cases its case list makes, evaluated against the module's tables where it can be; a test or case
+marked skip, skipif or xfail asserts nothing.
 """
 
 from __future__ import annotations
@@ -102,6 +106,17 @@ def shape(node: ast.AST, tables: dict):
                 return Opaque()
         return out
     return Opaque()
+
+
+def reads_findings(deco: ast.AST) -> bool:
+    """Whether a decorator parametrises its test with a case list that reads the FINDINGS table."""
+    return (
+        isinstance(deco, ast.Call)
+        and ast.unparse(deco.func).endswith("parametrize")
+        and len(deco.args) >= 2
+        and isinstance(deco.args[0], ast.Constant)
+        and any(isinstance(n, ast.Name) and n.id == "FINDINGS" for n in ast.walk(deco.args[1]))
+    )
 
 
 def unrun(deco: ast.AST) -> bool:
@@ -290,10 +305,19 @@ class Asserts:
         for fn in functions:
             if any(unrun(d) for d in fn.decorator_list):
                 continue
+            # A case list it cannot read would name every FINDINGS key, so it credits no near miss.
+            runs_near_misses = any(
+                reads_findings(d)
+                and self.cases(d.args[1], str(d.args[0].value).split(","), tables) is not None
+                for d in fn.decorator_list
+                if isinstance(d, ast.Call)
+            )
             env = self.local(fn, module, helpers, tables)
             for node in ast.walk(fn):
                 if isinstance(node, ast.Assert):
                     for rule, absent in self.claims(node.test, False, env, helpers):
+                        if absent and not runs_near_misses:
+                            continue
                         (self.absent if absent else self.present)[rule].add(fn.name)
 
     def claims(self, node: ast.AST, negated: bool, env, helpers) -> set[tuple[str, bool]]:
@@ -438,13 +462,10 @@ def main() -> int:
                 f"{rule}\n  present: {', '.join(sorted(asserts.present[rule])) or '-'}"
                 f"\n  absent:  {', '.join(sorted(asserts.absent[rule])) or '-'}"
             )
-        missing = [
-            k
-            for k, side in (("present", asserts.present), ("absent", asserts.absent))
-            if not side[rule]
-        ]
-        if missing:
-            problems.append(f"[{rule}] no test asserts it {' or '.join(missing)}")
+        if not asserts.present[rule]:
+            problems.append(f"[{rule}] no test asserts it present")
+        if not asserts.absent[rule]:
+            problems.append(f"[{rule}] no near miss in its FINDINGS row asserts it absent")
     problems += [
         f"[{rule}] is not documented as [{rule}] in references/*.md"
         for rule in sorted(rules - documented())
