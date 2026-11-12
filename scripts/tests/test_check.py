@@ -12,15 +12,7 @@ from pathlib import Path
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "check"
-STUBS = (
-    "red-on-main",
-    "check-cli-imports",
-    "check-doc-pointers",
-    "check-glossary-words",
-    "check-kind-branches",
-    "committed-examples",
-    "rule-coverage",
-)
+STUBS = ("red-on-main", "check-doc-pointers", "committed-examples")
 
 
 def stubbed(
@@ -88,13 +80,13 @@ def test_a_failed_sync_stops_before_any_step(tmp_path):
 
 def test_a_failed_step_reprints_the_end_of_its_output_under_its_name(tmp_path):
     lines = "".join(f"line {i}\\n" for i in range(1, 31))
-    result, _ = check(tmp_path, failing={"check-glossary-words": lines})
+    result, _ = check(tmp_path, failing={"check-doc-pointers": lines})
     assert result.returncode == 1
-    name = "failed: the skill and tool source use none of GLOSSARY.md's avoided words"
+    name = "failed: agent-facing docs point only at files that exist"
     block = result.stdout.split(name + "\n")[1].split("failed: ")[0].splitlines()
     rerun = (
         "  rerun alone: "
-        "(cd plugin/skills/cad-reverse-engineer/tool && ../../../../scripts/check-glossary-words)"
+        "(cd plugin/skills/cad-reverse-engineer/tool && ../../../../scripts/check-doc-pointers)"
     )
     assert block == [rerun, *(f"  line {i}" for i in range(11, 31))]
 
@@ -132,12 +124,11 @@ def test_guard_the_end_names_no_count_where_red_on_main_printed_none(tmp_path):
     assert not result.stdout.splitlines()[-1].startswith("red-on-main:")
 
 
-def test_lint_runs_only_the_type_ruff_and_import_steps(tmp_path):
+def test_lint_runs_only_the_type_and_ruff_steps(tmp_path):
     result, calls = check(tmp_path, args=["--lint"])
     assert result.returncode == 0
     assert calls[0] == "uv sync --locked --extra test"
     assert sorted(calls[1:]) == [
-        "check-cli-imports ",
         "uv run pyright -p ../../../../pyrightconfig.json",
         "uv run ruff check ../../../..",
         "uv run ruff format --check ../../../..",
@@ -167,7 +158,7 @@ def waits_for(mine: Path, other: Path) -> str:
 
 def test_steps_run_at_once(tmp_path):
     a, b = tmp_path / "a", tmp_path / "b"
-    bodies = {"check-doc-pointers": waits_for(a, b), "check-glossary-words": waits_for(b, a)}
+    bodies = {"check-doc-pointers": waits_for(a, b), "red-on-main": waits_for(b, a)}
     result, _ = check(tmp_path, bodies=bodies)
     assert result.returncode == 0, result.stdout
 
@@ -175,12 +166,12 @@ def test_steps_run_at_once(tmp_path):
 def test_guard_output_and_failures_follow_the_steps_order_whatever_finishes_first(tmp_path):
     bodies = {
         "check-doc-pointers": "sleep 1; echo pointers; exit 1",
-        "check-glossary-words": "echo words; exit 1",
+        "red-on-main": "echo words; exit 1",
     }
     result, _ = check(tmp_path, bodies=bodies)
     lines = untimed(result.stdout)
     pointers = "agent-facing docs point only at files that exist"
-    words = "the skill and tool source use none of GLOSSARY.md's avoided words"
+    words = "red-on-main: new tests are red holes or green guards"
     assert lines[lines.index(f"== {pointers}") + 1] == "pointers"
     assert lines[lines.index(f"== {words}") + 1] == "words"
     assert lines.index(f"== {pointers}") < lines.index(f"== {words}")
@@ -278,5 +269,5 @@ def test_guard_an_example_within_the_budget_passes(tmp_path):
 def test_an_edit_to_the_script_while_it_runs_takes_effect_only_on_the_next_run(tmp_path):
     # A step empties scripts/check partway through; the run still reaches its summary.
     emptied = ': > "$(dirname "$0")/check"; exit 0'
-    result, _ = check(tmp_path, bodies={"check-glossary-words": emptied})
+    result, _ = check(tmp_path, bodies={"check-doc-pointers": emptied})
     assert result.stdout.splitlines()[-1] == "all steps passed"
