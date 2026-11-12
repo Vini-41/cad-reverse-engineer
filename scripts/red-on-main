@@ -5,8 +5,9 @@
 # the counts and each misnamed test, and exits 1 if there is one: a test_guard_* that goes red, or
 # a test function new since BASE that stays green without the name. It exits 2 if pytest ran no
 # test, so a missing pytest or an empty selection never reads as a clean comparison, and 3 if there
-# is nothing to compare: BASE is HEAD with the tool source and launcher unchanged, no test function is new or
-# changed since BASE, or BASE is not in this clone (the null commit a new branch's push names, or a
+# is nothing to compare: the tool source and launcher in the working tree, untracked files included,
+# are as at BASE (as on a branch that changes only tests, docs or scripts), no test function is new
+# or changed since BASE, or BASE is not in this clone (the null commit a new branch's push names, or a
 # commit a force-push dropped), or BASE holds no tool source at plugin/ (it predates the move there).
 # 0 is a clean comparison. New rows of a test function BASE already has (the QUOTES, UNITS and
 # FINDINGS tables) carry near misses, so only their red guards count.
@@ -55,8 +56,10 @@ else
     base=$created
   fi
 fi
-if [ "$base" = "$(git -C "$repo" rev-parse HEAD)" ] && git -C "$repo" diff --quiet HEAD -- "$tool/src" "$tool/../cadrev"; then
-  echo "BASE is HEAD and the tool source is unchanged, so there is no fix to compare; set BASE=<ref>" >&2
+# The working tree against BASE, so an uncommitted fix counts, a new untracked file too.
+if git -C "$repo" diff --quiet "$base" -- "$tool/src" "$tool/../cadrev" &&
+  [ -z "$(git -C "$repo" ls-files --others --exclude-standard -- "$tool/src" "$tool/../cadrev")" ]; then
+  echo "the tool source and launcher are unchanged since $label, so there is no fix to compare; set BASE=<ref>" >&2
   exit 3
 fi
 
