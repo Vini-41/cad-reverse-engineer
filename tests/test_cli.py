@@ -99,9 +99,11 @@ def test_every_registered_source_is_committed(proj_dir, tmp_path):
     register(proj_dir, notes, "notes", "other")
     subprocess.run(["git", "init", "-q", str(proj_dir)], check=True)
     for path in ("sources/field notes.md", "sources/paper.txt"):
-        assert subprocess.run(["git", "-C", str(proj_dir), "check-ignore", "-q", path]).returncode
-    with pytest.raises(SystemExit):  # nor does cadrev source take a licence
+        ignored = subprocess.run(["git", "-C", str(proj_dir), "check-ignore", "-q", path])
+        assert ignored.returncode == 1  # git found no pattern that ignores it
+    with pytest.raises(SystemExit) as refused:  # nor does cadrev source take a license
         register(proj_dir, notes, "notes", "other", "--license", "MIT")
+    assert refused.value.code == 2
 
 
 @pytest.mark.parametrize("what", ["no file", "no project", "a project.yaml that does not parse"])
