@@ -33,6 +33,8 @@ AXES = {"x": 0, "y": 1, "z": 2}
 # The keys of a check that name a pose: the one a change is taken from, then the one it is
 # evaluated at.
 POSES = ("from", "pose")
+# What each kind of probe evaluates.
+PROBE_QUANTITY = {"bbox": "length", "distance": "length", "diameter": "length", "angle": "angle"}
 SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "geometry", "other")
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}
 MATH_NAMES = {
@@ -354,8 +356,18 @@ class Project:
         stated = sources.quantities_in(text)
         return list(dict.fromkeys(u for v, u in stated if math.isclose(v, value, rel_tol=1e-9)))
 
+    def probe_of(self, ref: str) -> str | None:
+        """The kind of probe an evidence value is recorded by; None for a quote or a reading."""
+        if self._ledgered(ref) is None:
+            return None
+        kind = (self.item(str(ref).partition(".")[0]) or {}).get("probe")
+        return kind if kind in PROBE_QUANTITY else None
+
     def unit_of(self, ref: str) -> str | None:
-        """The unit an evidence value is printed in; None, the project's, where none is."""
+        """The unit an evidence value is printed in; None, the project's, where none is. A probe
+        records its value in the project's unit of the quantity it evaluates."""
+        if kind := self.probe_of(ref):
+            return self.units[PROBE_QUANTITY[kind]]
         printed = self.printed_units(ref)
         return printed[0] if printed else None
 
@@ -370,11 +382,12 @@ class Project:
         )
 
     def value(self, ref: str) -> float | None:
-        """An evidence value in the project's units, converted from the unit its quote prints."""
+        """An evidence value in the project's units, converted from the unit its quote prints; a
+        probe records its value in them, so it is read as recorded."""
         ledgered = self._ledgered(ref)
         if ledgered is None:
             return None
-        unit = self.unit_of(ref)
+        unit = None if self.probe_of(ref) else self.unit_of(ref)
         return ledgered[0] if unit is None else units.convert(ledgered[0], unit, self.units)
 
     def stated(self, ref: str, quantity: str | None = None) -> float:
@@ -444,11 +457,12 @@ class Project:
             if what in self.params:
                 source = (self.traced(what) or (what,))[0]
                 by = f"param {source}{'' if source == what else f' through {what}'} "
+            kind = self.probe_of(str(ref))
+            printed = f"{_a(kind)} probe's value in" if kind else "printed in"
             self.error(
                 "unit-quantity",
-                f"{ref} is printed in {unit}, a unit of {units.quantity(unit)}, where "
-                f"{' or '.join(f'an {q}' if q[0] in 'aeiou' else f'a {q}' for q in expected)} "
-                f"is expected ({by}{use})",
+                f"{ref} is {printed} {unit}, a unit of {units.quantity(unit)}, where "
+                f"{' or '.join(_a(q) for q in expected)} is expected ({by}{use})",
             )
         elif expected == ("count",):
             value = self.values.get(what) if what in self.params else self.value(what)
@@ -458,6 +472,10 @@ class Project:
                     "unit-quantity",
                     f"{named} = {value:g} is not a whole number, where a count is expected ({use})",
                 )
+
+
+def _a(word: str) -> str:
+    return f"an {word}" if word[0] in "aeiou" else f"a {word}"
 
 
 def _read_yaml(root: Path, name: str, findings: list[Finding]) -> dict:

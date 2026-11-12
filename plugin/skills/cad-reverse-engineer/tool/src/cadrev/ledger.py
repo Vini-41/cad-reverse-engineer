@@ -9,6 +9,7 @@ from . import Fault, released, sources, units
 from .project import (
     AXES,
     BASES,
+    PROBE_QUANTITY,
     RESTS_ON,
     SOURCE_KINDS,
     Project,
@@ -170,7 +171,7 @@ def _probe_values(p: Project, e: dict, body: str) -> dict[str, float]:
             if axes.get(key) not in AXES or key not in values:
                 raise Fault(f"axes gives each value its axis x, y or z, and {key} has none")
         return {key: tuple(size)[AXES[axes[key]]] for key in values}
-    if kind not in ("distance", "angle", "diameter"):
+    if kind not in PROBE_QUANTITY:
         raise Fault(f"probe must be bbox, distance, angle or diameter, not {kind!r}")
     if len(values) != 1:
         raise Fault(f"a {kind} probe records one value, not {len(values)}")
@@ -202,8 +203,9 @@ def _probe(p: Project, e: dict) -> None:
     names = [b for b in p.bodies if released.source_of(b) == sid]
     if body not in names:
         raise Fault(f"{body} is not a body of {sid}; its bodies are {', '.join(names)}")
-    quantity = "angle" if e["probe"] == "angle" else "length"
-    for key, value in _probe_values(p, e, body).items():
+    evaluated = _probe_values(p, e, body)
+    quantity = PROBE_QUANTITY[e["probe"]]
+    for key, value in evaluated.items():
         recorded = p.stated(f"{eid}.{key}", quantity)
         tol = float(e.get("tol", p.tolerance(quantity)))
         if above_cap(tol, recorded):
