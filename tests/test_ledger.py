@@ -363,3 +363,22 @@ def test_known_first_holds_no_proposed_param_but_allows_a_measured_one(proj_dir,
     assert run.errors == ["known-first"] and "param pin_d" in run.messages("known-first")[0]
     assert run.report["waiting"]["gaps"] == []  # a gap a param names is an open gap again
     assert check(proj_dir, "--no-build").errors == ["known-first"]
+
+
+def test_known_first_project_with_no_part_settled_builds_nothing_and_ends_on_a_report(proj_dir):
+    meta(proj_dir, known_first=True)
+    write(proj_dir, "params.yaml", "params: {}\n")
+    write(proj_dir, "checks.yaml", "checks: []\n")
+    write(proj_dir, "gaps.yaml", "gaps:\n  - {id: G-link, question: 'How thick is the link?'}\n")
+    write(proj_dir, "model.py", 'def build(p):\n    return {"parts": {}}\n')
+    run = check(proj_dir)
+    assert run.status == "VERIFIED" and run.rules == [] and run.report["exact"]
+    assert "0/0 checks pass. Known first: 4 stated values wait. Report:" in run.out
+    waiting = run.report["waiting"]
+    assert [(v["evidence"], v["key"]) for v in waiting["values"]] == [
+        ("T1-link", "L"),
+        ("T1-link", "H"),
+        ("T1-link", "W"),
+        ("pitch", "pitch"),
+    ]
+    assert [g["gap"] for g in waiting["gaps"]] == ["G-link"]
