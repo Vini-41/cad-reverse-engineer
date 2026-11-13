@@ -17,7 +17,7 @@ The Fig. 4(a) reading, `R1-fig4`'s "(a) SSPG (MN8014, 7.2:1)", was checked again
 
 A full `cadrev check` of this directory takes about a minute. `scripts/check` checks it and fails if it prints anything else. A change that moves the status updates the line above.
 
-`ledger.py` writes `evidence.yaml` from the hand-written `ledger_paper.yaml` (the paper's quotes and the figure reading) and the probes and datums it reads from the STL; `checks_gen.py` writes `checks.yaml`. Edit those and rerun them (`uv run --project ../../plugin/skills/cad-reverse-engineer/tool python -I ledger.py` and `python3 checks_gen.py`) rather than editing the two files they write.
+`ledger.py` writes `evidence.yaml` from the hand-written `ledger_paper.yaml` (the paper's quotes and the figure reading) and the probes and datums it reads from the STL; `checks_gen.py` writes `checks.yaml`. Edit those and rerun them (`../../scripts/cadrev python -I ledger.py` and `python3 checks_gen.py`) rather than editing the two files they write.
 
 ## Sources
 

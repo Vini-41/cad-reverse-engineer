@@ -17,7 +17,7 @@ The product is an honest report. `build/report.md` separates what the sources st
 
 ## Tool
 
-The CLI ships in this skill's `tool/` directory and needs [`uv`](https://docs.astral.sh/uv/). Run the `cadrev` script beside this file by its full path on every call, since shell functions and aliases do not carry between calls:
+The CLI is the `cadrev` script beside this file, and needs [`uv`](https://docs.astral.sh/uv/). Run it by its full path on every call, since shell functions and aliases do not carry between calls:
 
 ```bash
 <the directory holding this SKILL.md>/cadrev --help
@@ -27,7 +27,7 @@ The CLI ships in this skill's `tool/` directory and needs [`uv`](https://docs.as
 
 - `cadrev check <dir>` runs every rule, builds the model, evaluates the checks and writes `build/`. `cadrev check <dir> --no-build` runs the ledger's rules alone in seconds, for the stages before there is a model. Each finding names its rule in brackets and says what is wrong and where.
 - Read [`references/project-format.md`](references/project-format.md) before writing project YAML and [`references/modeling.md`](references/modeling.md) before writing model.py. They give the formats; the findings give the rules as you meet them.
-- A script that writes project YAML (checks repeated per instance) lives in the project directory, and the file it writes names it in a comment, so the project alone shows how it was written.
+- `cadrev python <script>` runs a script of your own on the CLI's Python, with build123d, numpy and matplotlib. One that writes project YAML (checks repeated per instance) lives in the project directory, and the file it writes names it in a comment, so the project alone shows how it was written.
 
 ## The work
 
@@ -64,7 +64,7 @@ Done when every figure has been viewed and its labels ledgered, and `cadrev chec
 
 Geometry the authors released settles values no text states: probe them rather than propose them. A project with none goes to stage 5.
 
-- **Datums** on each body go under `datums` in evidence.yaml, at coordinates read from the file by a short script of your own, run as `uv run --project <the directory holding this SKILL.md>/tool python <script>`: one that loads the file with build123d, reads an STL's triangle corners, or reads a cut file's contours in the sheet's frame ([project-format.md](references/project-format.md)).
+- **Datums** on each body go under `datums` in evidence.yaml, at coordinates read from the file by a short script of your own (`cadrev python <script>`): one that loads the file with build123d, reads an STL's triangle corners, or reads a cut file's contours in the sheet's frame ([project-format.md](references/project-format.md)).
 - **Probes** take each value a body settles (a hole spacing, a bore, an envelope, a thickness), recording the design value: `32.5`, not the file's `32.4999`.
 - **An STL body** holds only flat triangles: no cylindrical face, no axis, and a point mid-facet sits inside the true circle by the facet's sag. So every input to a [derived datum](references/project-format.md#probes-released-geometry) on it is a triangle corner read from the file, and a curved part's shape check takes a `tol` of that sag. Its routes:
   - **A bore or a fillet:** a `diameter` probe `at` a `circle` datum through three corners on its rim or arc.

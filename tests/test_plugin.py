@@ -76,11 +76,15 @@ def test_every_relative_link_in_the_skill_names_a_file_and_a_heading_in_it():
 
 
 def test_cadrev_script_runs_the_tool_from_any_directory_at_the_locked_versions_only(tmp_path):
-    def run(script):
-        return subprocess.run([str(script), "--help"], cwd=tmp_path, capture_output=True, text=True)
+    def run(script, *args):
+        command = [str(script), *(args or ["--help"])]
+        return subprocess.run(command, cwd=tmp_path, capture_output=True, text=True)
 
     result = run(SKILL / "cadrev")
     assert result.returncode == 0 and "usage: cadrev" in result.stdout, result.stderr
+    # `cadrev python` is the Python the CLI runs on, for a script of the agent's own.
+    result = run(SKILL / "cadrev", "python", "-c", "import build123d, cadrev; print('own')")
+    assert result.returncode == 0 and result.stdout == "own\n", result.stderr
     # A copy whose pyproject.toml asks for more than its lock holds is refused, not re-resolved.
     skill = tmp_path / "cad-reverse-engineer"
     shutil.copytree(SKILL, skill, ignore=shutil.ignore_patterns(".venv", "__pycache__"))
