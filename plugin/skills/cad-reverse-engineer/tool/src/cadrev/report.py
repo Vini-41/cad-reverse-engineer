@@ -10,7 +10,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from . import checks, ledger
-from .build import GEAR_BY, PHYSICS, Model, printed, range_ends
+from .build import GEAR_BY, Model, physics_of, printed, range_ends
 from .checks import Result
 from .lint import MODEL_LITERALS
 from .motion import pose_text
@@ -112,7 +112,7 @@ def motion(p: Project, model: Model, coarsened: dict) -> dict:
         if "range" in j:
             (low, lo), (high, hi) = range_ends(p, j)
             joints[name]["range"] = {"from": [low, high], "value": list(printed(lo, hi))}
-        joints[name] |= valued(j, PHYSICS["joint"])
+        joints[name] |= valued(j, physics_of("joint", j))
     cables = {}
     for name, c in model.cables.items():
         cables[name] = {"path": list(c["path"])}
@@ -126,7 +126,7 @@ def motion(p: Project, model: Model, coarsened: dict) -> dict:
             for name, g in model.gears.items()
         },
         "tendons": {
-            name: {"path": list(t["path"])} | valued(t, PHYSICS["tendon"])
+            name: {"path": list(t["path"])} | valued(t, physics_of("tendon", t))
             for name, t in model.tendons.items()
         },
         "cables": cables,

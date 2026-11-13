@@ -65,6 +65,17 @@ def test_shape_check_fails_at_the_feature_the_built_part_lacks(proj_dir, tmp_pat
     assert run.errors == ["check-failed"] and not run.result("shape")["ok"]
     assert shape["distance"] == pytest.approx(2.5, abs=1e-6)
     assert math.hypot(*shape["worst_point"][:2]) == pytest.approx(1, abs=1e-6)
+    assert run.result("shape")["measured"].endswith(") on body link_step")
+
+
+def test_shape_check_names_the_part_where_its_worst_point_lies_on_the_part(proj_dir, tmp_path):
+    # The built link with a hole at its middle that the released link lacks.
+    remodel(
+        proj_dir, "    datums = {", "    link -= Cylinder(p.hole_d / 2, p.link_H)\n    datums = {"
+    )
+    released(proj_dir, tmp_path, at=Location())
+    measured = check(proj_dir).result("shape")["measured"]
+    assert measured.endswith(") on part link, in body link_step's frame")
 
 
 def test_shape_check_whose_datum_pairs_do_not_fit_fails_before_comparing_surfaces(

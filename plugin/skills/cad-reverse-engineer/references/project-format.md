@@ -199,7 +199,7 @@ parts:                       # the mass model
 - **`interpretation`** says how a value maps onto geometry where that is a choice: which axis, envelope or pitch, which feature, which configuration.
 - **A derived param whose `expr` makes a placement choice** (pins at the centres of the rounded ends, a frame centred in its sole) names the `gap` whose answer would settle it. A choice several params share can instead be one proposed param they all read (`end_margin` above).
 - **Rests on.** A param rests on its own basis; a derived one on the weakest basis among the params its `expr` reads (proposed < measured < source), or on proposed where it names a gap. The report's headline counts params by what they rest on. An `expr` that reads no param traces to nothing: give the number its own basis.
-- **A physics value** is a param only the simulation reads (a joint's damping, stiffness, spring rest or friction, a tendon's stiffness or damping), marked `physics: true` and named by the joint or tendon that applies it ([modeling.md](modeling.md#joints-and-loops)). It is in the project's units of its quantity, per radian for a joint (stiffness in N·mm/rad by default); a `spring_rest` is a joint value, like a pose. It shapes no geometry, so no check compares it, and a proposed one leaves a project exact.
+- **A physics value** is a param only the simulation reads (a joint's damping, stiffness, spring rest or friction, a tendon's stiffness or damping), marked `physics: true` and named by the joint or tendon that applies it ([modeling.md](modeling.md#joints-and-loops)). It is in the project's units of its quantity, per radian on a revolute joint (stiffness in N·mm/rad by default) and per length on a slide (N/mm), a friction a torque or a force; a `spring_rest` is a joint value, like a pose. It shapes no geometry, so no check compares it, and a proposed one leaves a project exact.
 - **The mass model**, `parts`, weighs each part by one param: `mass`, a datasheet mass, for a purchased part, or `density`, which its volume is multiplied by, for a printed one. The MJCF export, the report and a mass check without `density` all weigh by it, so they never disagree. In a model with joints every part an instance places needs an entry.
 
 ## checks.yaml
@@ -274,7 +274,7 @@ A mechanism ([modeling.md](modeling.md#joints-and-loops)) can be checked moved. 
 - **A pose value moves its joint from the assembly as built**: a revolute joint's in the project's angle unit, a slide's in its length unit. Build the assembly at the configuration the source measures from, so a stated value is the pose value itself.
 - **A number** is a pose fixed by definition, not a ledger value: the one turn a lead "per turn" is stated over, which no source gives a number for. It reads in its joint's unit and adds nothing to what the check rests on. A pose a source states ("turned 30° on") names its ledger value.
 - cadrev sets the joints the pose names, holds every other `actuated` joint as built, and moves the `passive` joints until every loop closes, on MuJoCo's model of the exported mechanism. A gear moves its other joint with the one a pose sets, a cable its closed joints with its wheel, through any chain. The check is then evaluated on the model's own geometry, placed where MuJoCo puts each body. Name `instances` on a posed check: a part's own frame reads the same at every pose.
-- A pose the mechanism cannot reach is a finding, and its checks are not evaluated: a loop that stays open there (`[loop-open]`: links too short, or past a toggle), or a joint pushed outside its `range` (`[joint-range]`).
+- A pose the mechanism cannot reach is a finding, and its checks are not evaluated: a loop that stays open there, or a gear or cable the loops do not allow (`[loop-open]`: links too short, past a toggle, or coupled against the ring), or a joint pushed outside its `range` (`[joint-range]`).
 - **`from`** on a `distance`, `angle` or `stroke` check names a second pose, and the check compares the change between the two: a slide's travel per screw turn, a carrier's turn per sun turn. `from: {}` is as built.
 - **`stroke`** compares how far a cable shortens, as built to posed, with a ledger value. Without `pose` it is posed at the cable's wheel at its full turn. Where a source states only a direction of change, `claim: shortens` or `claim: lengthens` replaces `key`, cites the item stating it in `evidence`, and passes when the cable changes that way by more than `tolerance.length`.
 
@@ -320,7 +320,7 @@ gaps:
     ask: authors     # authors | measure | datasheet | test
 ```
 
-A gap is a question whose answer would replace a proposed or measured value. The report lists each with the params whose `gap` names it, grouped as the questions to send the authors.
+A gap is a question whose answer would replace a proposed or measured value. The report lists each with its `ask` and the params whose `gap` names it.
 
 ## overlays.yaml
 

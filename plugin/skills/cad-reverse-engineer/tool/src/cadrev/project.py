@@ -616,6 +616,7 @@ def load(root: Path) -> Project:
         findings=findings,
     )
     for what, rule, ids in (
+        ("source", "source-id", [s["id"] for s in meta.get("sources", [])]),
         ("evidence", "evidence-id", [e["id"] for e in p.evidence]),
         ("check", "check-id", [str(c["id"]) for c in p.checks]),
     ):

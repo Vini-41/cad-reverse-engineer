@@ -20,6 +20,7 @@ from conftest import (
     change,
     check,
     edit,
+    meta,
     number,
     open_chain,
     remodel,
@@ -143,6 +144,19 @@ def test_pose_the_mechanism_cannot_reach_names_itself_and_leaves_its_check_uneva
     assert run.errors == [rule] and named in run.messages(rule)[0]
     ids = [c["id"] for c in run.report["checks"]]
     assert "far" not in ids and len(ids) == 7  # every other check is evaluated as before
+
+
+def test_gear_the_loops_do_not_allow_leaves_its_poses_unreached(mech_dir):
+    # A screw from the slide to the knee, which the loop already sets as the crank turns: both
+    # cannot hold. The loop's rows outweigh the screw's in the solve, so the loop closes within a
+    # loose tolerance.length while the screw slips.
+    screw = '"gears": {"slip": {"driver": "slide", "driven": "knee", "lead": "lead"}},'
+    remodel(mech_dir, LOOP, f"{LOOP}\n        {screw}")
+    add(mech_dir, params="lead: {basis: proposed, value: 3600, rationale: a screw, gap: G1}")
+    meta(mech_dir, tolerance={"length": 0.1})
+    run = check(mech_dir)
+    assert set(run.errors) == {"loop-open"} and "gear slip" in run.messages("loop-open")[0]
+    assert [c["id"] for c in run.report["checks"]] == ["length", "rest", "mass"]
 
 
 BAD_TENDON = LOOP + '\n        "tendons": {"band": {"path": ["rail_1.up", "x.y"]}},'
@@ -358,6 +372,25 @@ def test_physics_values_reach_the_mjcf_in_its_units_and_shape_no_geometry(mech_d
     )
     (spatial,) = mjcf(mech_dir).iter("spatial")
     assert (float(spatial.get("stiffness", 0)), float(spatial.get("damping", 0))) == (3e5, 1e3)
+
+
+def test_a_slides_physics_values_are_a_force_per_length_and_a_force(mech_dir, tmp_path):
+    quote = "The slider's spring is 0.5 N/mm, its damper 0.01 N·s/mm, its friction 2 N."
+    add_quote(mech_dir, tmp_path, quote, values={"k": 0.5, "c": 0.01, "f": 2})
+    sprung = '"stiffness": "slide_k", "damping": "slide_c", "friction": "slide_f", "drive"'
+    remodel(mech_dir, '"slider_1.x"], "drive"', '"slider_1.x"], ' + sprung)
+    add(
+        mech_dir,
+        params={
+            f"slide_{key}": {"basis": "source", "from": f"N1.{key}", "physics": True}
+            for key in "kcf"
+        },
+    )
+    run = check(mech_dir)
+    assert run.status == "VERIFIED" and run.rules == []
+    (joint,) = [j for j in mjcf(mech_dir).iter("joint") if j.get("name") == "slide"]
+    written = ("stiffness", "damping", "frictionloss")
+    assert [float(joint.get(k, 0)) for k in written] == pytest.approx([5e5, 1e4, 2e6])
 
 
 RANGED = "The crank stands from 10° to 80° above the rail, the slider 78.7846 mm to 13.8919 mm out."

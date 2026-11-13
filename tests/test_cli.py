@@ -131,6 +131,7 @@ def test_text_prints_each_page_as_the_quote_matcher_reads_it(proj_dir, tmp_path)
 # A source file's name, its content, and the text cadrev reads from it.
 FORMATS = {
     "paper.docx": (docx(PAPER), PAPER),
+    "ds.docx": (docx("Servo &amp; horn &lt; 20.6 g"), "Servo & horn < 20.6 g\n"),
     "ds.html": (DATASHEET, "Servo & horn\nWeight\n20.6 g\n"),
     "ds.md": (DATASHEET, DATASHEET + "\n"),
 }
@@ -149,6 +150,11 @@ def test_text_refuses_a_source_that_is_none_or_holds_no_text(proj_dir, tmp_path)
     assert code == 1 and "paper" in out and "link_step" in out  # the sources it could read
     code, out = cadrev("text", proj_dir, "link_step")
     assert code == 1 and "not a text source" in out
+    # A page the source does not have, and a pattern that is not a regex, are named.
+    code, out = cadrev("text", proj_dir, "paper", "--page", 2)
+    assert code == 1 and "paper has 1 page" in out
+    code, out = cadrev("text", proj_dir, "paper", "--grep", "[")
+    assert code == 1 and "--grep" in out
 
 
 FIGURES = {
@@ -192,6 +198,10 @@ def test_coverage_lists_each_unledgered_quantity_and_exits_by_whether_there_is_o
     lines = out.splitlines()
     assert code == 1 and lines[-1] == "1 unledgered stated quantities"
     assert lines[0].startswith("paper p1: 60 mm") and "branches of 60 mm diameter" in lines[0]
+    # A source it cannot read is swept for nothing, and says so.
+    (proj_dir / "sources" / "paper.txt").unlink()
+    code, out = cadrev("coverage", proj_dir)
+    assert code == 1 and "[source-missing]" in out
 
 
 def _confirmed(root):

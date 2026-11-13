@@ -201,6 +201,8 @@ def conform_file(name: str, data, problems: list[str]) -> dict:
         problems.append(f"{name}: must be a mapping of keys, not {_given(data)}")
         return {}
     out = dict(data)
+    for key in data.keys() - FILES[name].keys() - {"format"}:  # format: project.yaml's own rules
+        problems.append(f"{name}: unknown key {key!r}")
     for key, (spec, collection) in FILES[name].items():
         value, where = data.get(key), f"{name} {key}"
         if value is None:

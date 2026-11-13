@@ -8,7 +8,6 @@ import math
 import re
 import unicodedata
 import zipfile
-from dataclasses import dataclass
 from functools import cache
 from html.parser import HTMLParser
 from pathlib import Path
@@ -23,9 +22,11 @@ _TIMES = dict.fromkeys(map(ord, "×✕✖⨯"), "x")
 # stays a value, and a number followed by a unit ("section 4 mm thick") is a value; "in" and
 # the inch mark are left out there, so "Fig. 2 in" stays a label.
 _UNIT = units.spelling()
-# A number as printed: 3.5, or a fraction before a unit (1/4 inch, 1 1/2 in, 1/4-in.; a bare 1/50
-# is two).
-_NUMBER = re.compile(rf"-?(?:\d+\s)?\d+/[1-9]\d*(?={units.UNIT_GAP}{_UNIT})|-?\d+(?:\.\d+)?")
+# A number as printed: 3.5 or .5, not the 5 of Fig.5; or a fraction before a unit (1/4 inch,
+# 1 1/2 in, 1/4-in.; a bare 1/50 is two).
+_NUMBER = re.compile(
+    rf"-?(?:\d+\s)?\d+/[1-9]\d*(?={units.UNIT_GAP}{_UNIT})|-?(?:\d+(?:\.\d+)?|(?<![\w.])\.\d+)"
+)
 # The cardinals zero to ninety-nine in words, whole: eight is not read inside eighteen or weight,
 # nor seven inside seventy. A compound may be hyphenated, spaced, or re-joined across a line break.
 _ONES = "zero one two three four five six seven eight nine".split()
@@ -227,16 +228,15 @@ def _whole(needle: str) -> re.Pattern[str]:
     return re.compile(head + re.escape(needle) + tail)
 
 
-@dataclass(frozen=True)
-class Match:
-    page: int  # 1-based; 1 for single-page formats
-    mode: str  # "exact" (whitespace-normalized) or "squashed" (whitespace ignored)
+_WORD = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
 def _docx_text(path: Path) -> str:
-    xml = zipfile.ZipFile(path).read("word/document.xml").decode("utf8")
-    paragraphs = re.findall(r"<w:p[ >].*?</w:p>", xml, re.S)
-    lines = ("".join(re.findall(r"<w:t[^>]*>([^<]*)</w:t>", p)) for p in paragraphs)
+    """A DOCX's text runs, a line per paragraph, entities decoded."""
+    import xml.etree.ElementTree as ET
+
+    body = ET.fromstring(zipfile.ZipFile(path).read("word/document.xml"))
+    lines = ("".join(t.text or "" for t in p.iter(f"{_WORD}t")) for p in body.iter(f"{_WORD}p"))
     return "\n".join(line for line in lines if line.strip())
 
 
@@ -305,19 +305,21 @@ def _pages(path: Path, digest: str) -> tuple[str, ...]:
     raise ValueError(f"unsupported source format: {path.name}")
 
 
-def find_quote(path: Path, quote: str, page: int | None = None) -> Match | None:
-    """Locate a verbatim quote, on the cited page when one is given. A line-break hyphen ends a
-    split word (inter-|toe) or belongs to a compound (dual-|axis), so both readings are tried."""
+def find_quote(path: Path, quote: str, page: int | None = None) -> int | None:
+    """The page a verbatim quote is on, 1-based, looking only on the cited page when one is given;
+    None where it is not found. Whitespace is matched as one space, then ignored. A line-break
+    hyphen ends a split word (inter-|toe) or belongs to a compound (dual-|axis), so both readings
+    are tried."""
     texts = pages(path)
     candidates = [n for n in ([page] if page else range(1, len(texts) + 1)) if 1 <= n <= len(texts)]
-    for mode, squashed in (("exact", False), ("squashed", True)):
+    for squashed in (False, True):
         forms = needles(quote)
         patterns = [_whole(re.sub(r"\s+", "", f) if squashed else f) for f in forms]
         for n in candidates:
             for hyphen in ("", "-"):
                 text = (squash if squashed else normalize)(texts[n - 1], hyphen)
                 if any(pattern.search(text) for pattern in patterns):
-                    return Match(n, mode)
+                    return n
     return None
 
 

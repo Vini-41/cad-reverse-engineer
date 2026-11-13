@@ -120,12 +120,12 @@ def _anchor(p: Project, e: dict, values: dict) -> None:
             raise Fault()  # its source's own finding says why
         if not p.is_text(sid):
             raise Fault(f"{sid} is not a text source; anchor it by image + reading, or a probe")
-        match = sources.find_quote(p.source_path(sid), e["quote"], e.get("page"))
-        if match is None:
+        found = sources.find_quote(p.source_path(sid), e["quote"], e.get("page"))
+        if found is None:
             where = f" on page {e['page']}" if e.get("page") else ""
             raise Fault(f"quote not found in {sid}{where}: {e['quote']!r}", "quote-not-found")
         if not e.get("page") and len(sources.pages(p.source_path(sid))) > 1:
-            p.warn("quote-page", f"{eid}: add page: {match.page}")
+            p.warn("quote-page", f"{eid}: add page: {found}")
         _stated(p, eid, e["quote"], "quote", values)
     elif "probe" in e:
         _probe(p, e)

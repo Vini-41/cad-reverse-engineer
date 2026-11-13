@@ -26,6 +26,11 @@ class Params:
     def __init__(self, values: dict[str, float], declared):
         self._values, self._declared, self.used = values, set(declared), set()
 
+    def __setattr__(self, name: str, value) -> None:
+        if not name.startswith("_") and name != "used":
+            raise AttributeError(f"param {name!r} is set in params.yaml, not in model.py")
+        super().__setattr__(name, value)
+
     def __getattr__(self, name: str) -> float:
         if name.startswith("_"):
             raise AttributeError(name)
@@ -49,15 +54,20 @@ JOINT_TYPES = {
     "fixed": JointType(None, None, "stays"),
 }
 DRIVES = ("actuated", "passive")
-# The physics values a joint or tendon may name, each a param: the MJCF attribute it is written
-# to, and its quantity, None for the joint's own: an angle on a revolute joint, a length on a
-# slide.
+# The physics values a revolute joint, a slide or a tendon may name, each a param: the MJCF
+# attribute it is written to, and its quantity.
 PHYSICS = {
-    "joint": {
+    "revolute": {
         "damping": ("damping", "torsional damping"),
         "stiffness": ("stiffness", "torsional stiffness"),
         "friction": ("frictionloss", "torque"),
-        "spring_rest": ("springref", None),
+        "spring_rest": ("springref", "angle"),
+    },
+    "slide": {
+        "damping": ("damping", "linear damping"),
+        "stiffness": ("stiffness", "linear stiffness"),
+        "friction": ("frictionloss", "force"),
+        "spring_rest": ("springref", "length"),
     },
     "tendon": {
         "stiffness": ("stiffness", "linear stiffness"),
@@ -163,17 +173,22 @@ def gear_by(gear: dict) -> tuple[str, str]:
     return key, gear[key]
 
 
-def physics_slots(model: Model) -> dict[str, list[tuple[str, str, str | None]]]:
+def physics_of(kind: str, entry: dict) -> dict[str, tuple[str, str]]:
+    """The physics values a joint or tendon may name, from PHYSICS; none for a fixed joint."""
+    return PHYSICS.get(entry["type"] if kind == "joint" else kind, {})
+
+
+def physics_slots(model: Model) -> dict[str, list[tuple[str, str, str]]]:
     """Each param a joint or tendon names as a physics value, with each place it applies: what a
     finding calls the place, the MJCF attribute, and its quantity."""
     slots: dict[str, list] = {}
     for kind, entries in (("joint", model.joints), ("tendon", model.tendons)):
         for name, entry in entries.items():
-            own = JOINT_TYPES[entry["type"]].quantity if kind == "joint" else None
-            for key, (attr, quantity) in PHYSICS[kind].items():
+            for key, (attr, quantity) in physics_of(kind, entry).items():
                 if key in entry:
-                    place = (f"{kind} {name}'s {key}", attr, quantity or own)
-                    slots.setdefault(entry[key], []).append(place)
+                    slots.setdefault(entry[key], []).append(
+                        (f"{kind} {name}'s {key}", attr, quantity)
+                    )
     return slots
 
 

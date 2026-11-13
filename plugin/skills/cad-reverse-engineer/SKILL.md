@@ -25,7 +25,7 @@ The CLI is the `cadrev` script beside this file, and needs [`uv`](https://docs.a
 
 `cadrev` below stands for that path. The first run installs build123d and MuJoCo (about a minute).
 
-- `cadrev check <dir>` runs every rule, builds the model, evaluates the checks and writes `build/`. `cadrev check <dir> --no-build` runs the ledger's rules alone in seconds, for the stages before there is a model. Each finding names its rule in brackets and says what is wrong and where.
+- `cadrev check <dir>` runs every rule, builds the model, evaluates the checks and writes `build/`. `cadrev check <dir> --no-build` runs every rule that needs no build in seconds, for the stages before there is a model. Each finding names its rule in brackets and says what is wrong and where.
 - Read [`references/project-format.md`](references/project-format.md) before writing project YAML and [`references/modeling.md`](references/modeling.md) before writing model.py. They give the formats; the findings give the rules as you meet them.
 - `cadrev python <script>` runs a script of your own on the CLI's Python, with build123d, numpy and matplotlib. One that writes project YAML (checks repeated per instance) lives in the project directory, and the file it writes names it in a comment, so the project alone shows how it was written.
 

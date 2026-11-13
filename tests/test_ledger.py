@@ -61,6 +61,7 @@ READING = {
     "Hole spacing 5–10 mm": ([5, 10], [-10]),
     "tilted from -10 to -5 deg": ([-10, -5], [10, 5]),
     "The pin is 3.7 mm wide and 137 mm long.": ([3.7, 137], [37, 7]),
+    "a .250 in pin, -.5 mm off, from Fig.5": ([0.25, -0.5], [250, 5, 0.5]),
     "Link 40×8×5": ([40, 8, 5], [408]),
     "Walls 3,5 mm": ([3.5], [5, 3]),
     "widths 1,5,10 mm": ([1, 5, 10], [1.5]),

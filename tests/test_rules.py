@@ -217,6 +217,9 @@ LINK_FINDINGS = {
     ),
     "schema: a source with a license": lambda r, t: change(r, "sources", "paper", license="MIT"),
     "schema: a file that is a list": lambda r, t: write(r, "params.yaml", "- a\n- b\n"),
+    "schema: a file's key that is none": lambda r, t: edit(
+        r, "params.yaml", lambda d: d.update(parmas=d.pop("params"))
+    ),
     "schema: a released datum of two numbers": _released(
         lambda r, t: add(r, datums="link_step.a: [1, 2]")
     ),
@@ -228,6 +231,9 @@ LINK_FINDINGS = {
     # Sources.
     "source-kind": lambda r, t: change(r, "sources", "paper", kind="book"),
     "source-citation": lambda r, t: change(r, "sources", "paper", citation=""),
+    "source-id": lambda r, t: add(
+        r, sources={"id": "paper", "kind": "paper", "path": "x.txt", "sha256": "0", "citation": "c"}
+    ),
     "source-missing": lambda r, t: (r / "sources" / "paper.txt").unlink(),
     "source-hash": lambda r, t: (r / "sources" / "paper.txt").write_text(PAPER + "Errata.\n"),
     "source-unreadable: a PDF that is none": lambda r, t: add_source(r, t, "x.pdf", b"%PDF-1.4 no"),
@@ -379,6 +385,7 @@ LINK_FINDINGS = {
     "model-import: a part loaded from a file": _line('link = import_step("link.step")'),
     "model-build: a param params.yaml lacks": _line("extra = p.pitch_2"),
     "model-build: an exception": _line("raise ValueError(p.pitch)"),
+    "model-build: a param set in model.py": _line("p.pitch = p.link_L"),
     "model-build: a param left without a value": lambda r, t: (
         add(r, params="half: {basis: source, from: T1-link.D}"),
         add_line(r, "extra = p.half"),
@@ -432,6 +439,7 @@ LINK_FINDINGS = {
     "check-config: an axis that is none": _checks("pitch", along="w"),
     "check-config: a part that is none": _checks("env", part="pin"),
     "check-config: a bbox axis that is none": _checks("env", axes={"L": "w"}),
+    "check-config: a bbox with no axes": _checks("env", axes={}),
     "check-config: a ledger value that is none": _checks("pitch", key="nope"),
     "check-config: a datum that is none": _checks("pitch", between=["link.a", "link.z"]),
     "check-config: one datum where a distance needs two": _checks("pitch", between=["link.a"]),
