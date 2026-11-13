@@ -110,7 +110,7 @@ skipped:
   - {"source": "paper", "page": 3, "quote": "Rotor – 32.5 mm Centrifuge rotor for 7 bladed fans with 32.5 mm hub diameter.", "reason": "the six-tube rotor, a variant not modelled"}
   - {"source": "paper", "page": 3, "from": "Rotor – 32.5 mm -ﬁt tester", "to": "Rotor – 36.6 mm Centrifuge rotor for 7 bladed fans with 36.6 mm hub diameter.", "reason": "the fit tester and the 36.6 mm six-tube rotor, not modelled"}
   - {"source": "paper", "page": 3, "from": "Rotor 36.6 mm – ﬁt tester The bottom part", "to": "Adapter for 0.2 ml (200 ll) tubes.", "reason": "fit tester and tube adapters, not part of the modelled device"}
-  - {"source": "paper", "page": 4, "quote": "for 3D printing /C24 100 g", "reason": "filament bought for all printed parts; not a mass of the built device"}
+  - {"source": "paper", "page": 4, "quote": "for 3D printing 100 g", "reason": "filament bought for all printed parts; not a mass of the built device"}
   - {"source": "paper", "page": 4, "quote": "allows using containers with 105 mm of minimum and 127 mm of maximum diameter", "reason": "the broader-compatibility body, a variant not modelled"}
   - {"source": "paper", "page": 4, "quote": "Cook&Lock round container 400 ml", "reason": "an alternative lid, not modelled"}
   - {"source": "paper", "page": 5, "quote": "build plate size at least 13*13 cm", "reason": "printer requirement"}

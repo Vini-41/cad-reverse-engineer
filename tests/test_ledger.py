@@ -50,6 +50,14 @@ def test_quote_matches_across_line_breaks_spacing_case_and_dashes_but_never_insi
     assert uncovered == ["137 mm", "3.7 mm", "16 mm", "17 mm"]
 
 
+def test_pdf_quote_matches_a_word_hyphenated_across_lines_either_way(proj_dir, tmp_path):
+    add_source(proj_dir, tmp_path, "notes.pdf", pdf(["with an inter-\ntoe gap of 14 mm"]), "notes")
+    for i, quote in enumerate(["an intertoe gap of 14 mm", "an inter-toe gap of 14 mm"]):
+        entry = {"id": f"N{i}", "source": "notes", "locator": "p. 1", "quote": quote}
+        add(proj_dir, evidence=entry | {"values": {"g": 14}, "scope": "context", "reason": "test"})
+    assert check(proj_dir).messages("quote-not-found") == []
+
+
 # The numbers a quote states, and near misses it does not: quote -> (values in it, values not).
 READING = {
     "Fig. 2 shows the 4 cm link": ([4], [2]),
@@ -182,6 +190,7 @@ SWEPT = {
     "At 5 MPa and 1.2 kg·cm.": ["5 mpa", "1.2 kg·cm"],
     "It runs at 300 rpm for 9 s at 40%.": ["300 rpm", "9 s", "40%"],
     "Walls 3,5 mm, 3–5 mm or 10,20,30 mm.": ["3,5 mm", "3-5 mm", "10,20,30 mm"],
+    "Efficiency was 60–\n80% for SSPG.": ["60-80%"],
     "A 2-in. plate on a 5-mm pin, 1.000 ± 0.005 in long.": ["2-in", "5-mm", "1.000 ± 0.005 in"],
     "Wound six turns on 25 teeth by three degrees.": ["six turns", "25 teeth", "three degrees"],
     "Bores Ø 32.5 and Ø3, then Ø6 mm.": ["ø 32.5", "ø3", "ø6 mm"],
@@ -197,6 +206,9 @@ SWEPT = {
     "Fig. 2 shows 2 in each leg of L14 beside an M3a cell (doi:10.1088/ada2cc).": [],
     "An Olympus OM-D E-M10 camera on gear modules m1, m2.": [],
     "CPG:m 2N r2 =m 1(N s1 +N p1 ) +m 2N p2 ,": [],
+    # A subscript on a line of its own, as PDFium extracts one, and a modulo between symbols.
+    "WPG: N\nr\n1 = N\ns\n1 + 2N\np\n1, SSPG: 2(R\ns\ni + R\np\ni) sin π\n2N\np\ni": [],
+    "CPG: N\ns\n1 % n\np\n1 = 0, Nr\n2 % n\np\n1 = 0, (N\ns\ni + N\nr\ni\n) % n\np\ni = 0": [],
     "Ratios from 4:1 to 60:1 in unit increments, 4:1 in total.": [],
     # Numbers that state no quantity: no unit, a count noun, a table cell.
     "The part is 32.5 here, built at Ørsted 3.": [],

@@ -203,16 +203,18 @@ skipped:
   - {source: paper, page: 3, quote: "mounted on a UAV with a 450 mm wheelbase and a total takeoff weight of approximately 1.2 kg (recommended range, 1–1.5 kg)", reason: "the carrier UAV"}
   - {source: paper, page: 3, quote: "For the drone to achieve passive perching, the maximum tendon elongation must exceed the shortening produced during branch grasping", reason: "the passive (red, Fig. 2A) leg tendon, whose only statement is this inequality (Eq. 1); nothing checks it, so it is not built"}
   - {source: paper, page: 3, quote: "the landing gear accounts for ∼ 24.7 % of the total vehicle mass", reason: "mass fraction relative to the UAV, a derived result"}
-  - {source: paper, page: 5, from: "At tilt angles of 0◦ and 10◦", to: "improvement of ∼ 567 %", reason: "perching test loads, tilt angles, branch diameters and results"}
+  - {source: paper, page: 5, from: "At tilt angles of 0◦ and 10◦", to: "improvement of ∼567 %", reason: "perching test loads, tilt angles, branch diameters and results"}
   - {source: paper, pages: [6, 7, 8, 9], reason: "test results, torque and energy experiments, grasping and flight experiments"}
-  - {source: paper, page: 10, from: "diameter, positioned 3 m", to: "lifts the object to ∼ 1.5 m", reason: "flight experiment targets and trajectories"}
+  - {source: paper, page: 10, from: "diameter, positioned 3 m", to: "lifts the object to ∼1.5 m", reason: "flight experiment targets and trajectories"}
   - {source: paper, page: 10, quote: "On 60–80 mm branches, it withstands tilts of at least ± 5.5◦. This capability supports UAVs weighing up to 1.2 kg.", reason: "test result and UAV mass"}
-  - {source: paper, page: 10, from: "output torque of only 1.2 kg ·cm", to: "∼ 93 % success rate", reason: "torque test setting and grasping results"}
+  - {source: paper, page: 10, from: "output torque of only 1.2 kg·cm", to: "∼93 % success rate", reason: "torque test setting and grasping results"}
   - {source: paper, page: 11, quote: "optimized for a 1.2 kg takeoff weight", reason: "the carrier UAV"}
   - {source: paper, page: 12, quote: "The rotation of each servo (360◦) was discretized into 4096 steps", reason: "servo control resolution, not a motion of the object"}
-  - {source: paper, page: 12, from: "equivalent to ∼ 13.17◦ per second", to: "2200 mAh lithium-ion battery", reason: "control speed setting and the electronics battery"}
+  - {source: paper, page: 12, from: "equivalent to ∼13.17◦ per second", to: "2200 mAh lithium-ion battery", reason: "control speed setting and the electronics battery"}
   - {source: paper, page: 12, quote: "within ± 5 % of the reference values", reason: "sensor calibration"}
-  - {source: paper, page: 12, quote: "servo output torque fixed at 1.2 kg ·cm", reason: "grasping-test setting"}
+  - {source: paper, page: 12, quote: "servo output torque fixed at 1.2 kg·cm", reason: "grasping-test setting"}
+  - {source: paper, page: 12, quote: "Fa3 = 0 mg sin γ + Fa2", reason: "equilibrium equation (10): mg is mass times gravity, not milligrams"}
+  - {source: paper, page: 12, quote: "= 0 mg sin γ − Fn1 sin θ5", reason: "equilibrium equation (11): mg is mass times gravity, not milligrams"}
   - {source: paper, pages: [13, 14, 15], reason: "grasping protocol, UAV hardware, motion capture and references"}
   - {source: supp, page: 1, from: "Table S4.", to: "Movie S1.", reason: "grasp-test objects"}
   - {source: supp, page: 1, from: "Applied load: 350 g", to: "No load (0 g)", reason: "stress-test loads"}
