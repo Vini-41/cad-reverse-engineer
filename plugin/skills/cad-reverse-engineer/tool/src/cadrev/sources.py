@@ -80,6 +80,7 @@ def normalize(text: str, hyphen: str = "", cased: bool = False) -> str:
     single spaces, lower case unless cased."""
     text = unicodedata.normalize("NFKC", text).translate(_DASHES).translate(_TIMES)
     text = text.replace("­", "")
+    text = re.sub(r"(\d)-\s*\n\s*(?=\d)", r"\1-", text)  # a range broken over a line: 60-80%
     text = re.sub(r"(\w)-\s*\n\s*(\w)", rf"\1{hyphen}\2", text)
     text = re.sub(r"\s+", " ", text).strip()
     # A product: 40 x 8, 40X8, or 19*12.5 written with an asterisk, never spaced (3500* 500 is a
@@ -295,9 +296,12 @@ def _pages(path: Path, digest: str) -> tuple[str, ...]:
     """pages(path), cached by its content: a source rewritten in place is read afresh."""
     suffix = path.suffix.lower()
     if suffix == ".pdf":
-        from pypdf import PdfReader
+        import pypdfium2
 
-        return tuple(page.extract_text() or "" for page in PdfReader(path).pages)
+        # PDFium ends a line with \r\n, and writes a hyphen that ends one as U+FFFE with no break.
+        pdf = pypdfium2.PdfDocument(path)
+        texts = (page.get_textpage().get_text_range() for page in pdf)
+        return tuple(t.replace("\r\n", "\n").replace("\ufffe", "-\n") for t in texts)
     if suffix == ".docx":
         return (_docx_text(path),)
     if suffix in {".html", ".htm"}:
@@ -333,16 +337,17 @@ def extract_figures(path: Path, out: Path) -> list[Path]:
     written = []
     if path.suffix.lower() == ".pdf":
         import pypdfium2
-        from pypdf import PdfReader
 
-        rendered = pypdfium2.PdfDocument(path)
-        for n, page in enumerate(PdfReader(path).pages, 1):
+        for n, page in enumerate(pypdfium2.PdfDocument(path), 1):
             whole = out / f"p{n:03d}.png"
-            rendered[n - 1].render(scale=2).to_pil().save(whole)  # 144 dpi
+            page.render(scale=2).to_pil().save(whole)  # 144 dpi
             written.append(whole)
-            for i, image in enumerate(page.images, 1):
-                name = f"p{n:03d}_{i:02d}{Path(image.name).suffix or '.png'}"
-                written.append(_write_viewable(out / name, image.data))
+            images = [o for o in page.get_objects() if isinstance(o, pypdfium2.PdfImage)]
+            for i, image in enumerate(images, 1):
+                data = io.BytesIO()
+                image.extract(data)  # JPEG and JPEG 2000 as stored, the rest as PNG or TIFF
+                suffix = _MAGIC.get(data.getvalue()[:2], ".jp2")
+                written.append(_write_viewable(out / f"p{n:03d}_{i:02d}{suffix}", data.getvalue()))
     elif path.suffix.lower() == ".docx":
         with zipfile.ZipFile(path) as z:
             for name in sorted(z.namelist()):
@@ -364,6 +369,7 @@ def pixel_size(path: Path) -> tuple[int, int] | None:
 
 
 VIEWABLE = {".png", ".jpg", ".jpeg", ".gif", ".webp"}  # formats an image viewer shows as they are
+_MAGIC = {b"\xff\xd8": ".jpg", b"\x89P": ".png", b"II": ".tif", b"MM": ".tif"}  # else JPEG 2000
 
 
 def _write_viewable(target: Path, data: bytes) -> Path:
@@ -391,8 +397,9 @@ _THREAD = re.compile(r"(?<![a-z0-9.])(?<![a-z]-)m\d+(?:\.\d+)?(?:x\d+(?:\.\d+)?)
 _DIAMETER = re.compile(r"(?<!\w)[ø⌀∅] ?$")
 # A moment, when something happens (t = 2 s, a video frame's T=0s), not how long it lasts (Δt).
 _MOMENT = re.compile(r"(?<!\w)t ?= ?$")
-# A subscripted symbol (r2, p2, s1) after a one-letter unit: 2N r2 is a product of symbols.
-_SUBSCRIPTED = re.compile(r" [a-z]+\d+(?![a-z0-9])")
+# A subscripted symbol (r2, p2, s1) after a one-letter unit: 2N r2 is a product of symbols, as is
+# 2N p 1, its subscript on a line of its own as PDFium extracts it.
+_SUBSCRIPTED = re.compile(r" (?:[a-z]+\d+|[a-z] [a-z0-9])(?![a-z0-9])")
 # The colon of a ratio (60:1), whose second number takes no unit; a time's (1:30 min) does.
 _RATIO = re.compile(r"\d:$")
 # Units whose spelling, hyphened to a number, names a thing instead: a four-bar or 4-bar linkage

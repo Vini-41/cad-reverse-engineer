@@ -204,11 +204,16 @@ skipped:
   - {source: paper, page: 4, quote: "CPG and WPG in under five seconds", reason: "optimiser run time"}
   - {source: paper, page: 5, from: "The RMS error for SSPG", to: "respectively.", reason: "mass-model validation results"}
   - {source: paper, page: 5, from: "with RMS errors of 0.01 kg", to: "0.028 kg (WPG)", reason: "mass-model validation results (Fig. 5 caption)"}
-  - {source: paper, page: 6, from: "uses an MN8014 motor", to: "motor (72mm OD)", reason: "the motors, outside the gearbox target"}
+  - {source: paper, page: 6, from: "uses an MN8014 motor", to: "motor (72 mm OD)", reason: "the motors, outside the gearbox target"}
+  - {source: paper, page: 6, quote: "with 100% infill", reason: "print settings"}
+  - {source: paper, page: 6, quote: "predicted efficiencies of 96% for SSPG and 93.8% for CPG", reason: "the optimiser's predicted efficiencies"}
   - {source: paper, page: 6, from: "Tests were performed", to: "steady-state data", reason: "efficiency test settings"}
-  - {source: paper, page: 7, from: "exhibits a backlash of", to: "(0.59 ◦)", reason: "backlash test results (Fig. 8 caption)"}
+  - {source: paper, page: 7, from: "exhibits a backlash of", to: "0.010 rad (0.59◦", reason: "backlash test results (Fig. 8 caption)"}
   - {source: paper, page: 7, from: "The measured values were", to: "as shown in Fig. 8.", reason: "backlash test results"}
-  - {source: paper, page: 7, quote: "reported1468 Nm/radand Humanoid Lite [26]319 Nm/rad", reason: "other works' stiffness"}
+  - {source: paper, page: 7, quote: "reported 1468 Nm/rad and Humanoid Lite [26] 319 Nm/rad", reason: "other works' stiffness"}
+  - {source: paper, page: 7, from: "the mechanical efficiency was lower", to: "about 60% for CPG", reason: "efficiency test results"}
+  - {source: paper, page: 7, quote: "ramping from 0 to ±20 Nm and back", reason: "stiffness test settings"}
+  - {source: paper, page: 7, from: "stiffness values (Table II) were", to: "201.6 Nm/rad for CPG", reason: "stiffness test results"}
   - {source: carrier, body: carrier, reason: "the earlier release of the primary carrier; sspg_carrier_updated.STL (same envelope, nut traps 0.5 mm deeper) supersedes it and is the one built"}
   - {source: motor_casing, body: motor_casing, reason: "the motor subassembly's casing, outside the gearbox target"}
 
