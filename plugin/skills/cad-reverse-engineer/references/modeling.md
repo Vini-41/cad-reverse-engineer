@@ -25,8 +25,7 @@ def build(p):
 - **Every part is built from `p`** with build123d's primitives and operations. model.py imports only `build123d` and `math` and reads no file: a part loaded from the authors' STEP or STL would be compared with itself, and its params would check nothing.
 - **Parts live in their own frame**, placed where their checks read them: a bbox check with `axes: {L: x}` reads the part's X extent. Put the part's natural datum (a pivot, a mounting face) at the origin where the source defines one. A part is one valid solid; bodies that do not touch are separate parts, each placed in the assembly.
 - **Datums** are the named points checks and joints read: pin centres, pivots, mounting holes, tips. Name each `<part>.<feature>` and compute it from the same params that place the feature. A datum lies on its part's solid within `tolerance.length`: on a face, or on the axis of a cylindrical face between that face's ends (a bore's centre at mid-thickness is safe). One off the solid usually means the feature was built somewhere other than where its datum says, so move the feature.
-- **The assembly** places instances of parts with `Location`, as many of each part as the object has, at the configuration the sources measure their angles and strokes from. Instances are what interference and mass checks, checks over `instances`, joints and overlays of the assembly read. A part whose shape is settled but whose place the sources leave open is built and placed by no instance, with a gap asking where it sits.
-- A param neither the model, a check nor the export reads is a warning.
+- **The assembly** places instances of parts with `Location`, as many of each part as the object has, at the configuration the sources measure their angles and strokes from. Instances are what interference and mass checks, checks over `instances`, joints and overlays of the assembly read.
 
 ## Joints and loops
 

@@ -97,9 +97,9 @@ Done when every part is built and `cadrev check <dir>` reports nothing about the
 
 Add a check for every stated value the geometry should realise: `bbox` for an envelope, `distance` for a pitch or spacing, `angle`, `diameter` for a bore or a `Ø` callout, `count` for a stated number of instances, `mass` for a stated mass, and `interference` across the assembly. Where a source states the numbers a value is worked out from (a pitch diameter from a module and a tooth count), the check compares with [`expect`](references/project-format.md#worked-values-expect). Where a figure shows a modelled part in a near-orthographic view, add an overlay and look at the rendered PNG.
 
-A check that is red is information. Turn it green by changing the model or its params, and say so in a changed proposed param's `rationale`. The evidence changes only to correct a transcription.
+A check that is red is information. Turn it green by changing the model or its params. A proposed param changed to do so names the check in its `rationale`, since that check then confirms the choice rather than a source. The evidence changes only to correct a transcription.
 
-- **A tolerance is what the evidence allows**: an STL's facet sag, a STEP body's spline edges off their nominal circles, a value printed "approximately" or with a ±. Set each `tol` from its evidence and name that evidence in the check's `interpretation`.
+- **A tolerance is what the evidence allows**: an STL's facet sag, a value printed "approximately" or with a ±. Set each `tol` from its evidence and name that evidence in the check's `interpretation`.
 - **A check that passes only past that marks a disagreement.** Between the model and a source, revisit the choice behind it: another released variant may match. Between two sources (a stated mass against a released body's volume), record the conflict, check the source you build from, and keep the other statement as `context` naming the conflict.
 - **A stated total mass** gets its mass check even where a density or a count it reads is proposed. Keep that value at its rationale rather than tuning it until the check passes: the report then shows the check rests on a proposed value, and the gap is what closes it.
 

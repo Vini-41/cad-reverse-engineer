@@ -41,7 +41,7 @@ sources:                 # written by `cadrev source`; keep it the last key
 - `tolerance` is a modelling tolerance, not a manufacturing one. `tolerance.angle` is in degrees whatever `units.angle` says.
 - `cadrev source` with an id already registered refreshes that entry: its file, hash and whatever the command states. That is how a source is restored into a clone or replaced by a new download.
 - **Text sources** are quote-checked and swept: PDF, DOCX, TXT, MD, HTML (read as its rendered text). Save a web datasheet as HTML or TXT to quote it. Video and image files anchor image evidence only.
-- **Geometry sources** (`kind: geometry`) are what the authors released: STEP or STL, read in millimetres and converted to the project's length unit. A **body** is named by its source's id where the file holds one solid, else `<source>#<n>`, the nth solid in file order from 1. Where a part ships as both, register the STEP: an STL holds only flat triangles, so it has no axis for a datum and no cylindrical face for a diameter, only a [derived datum](#probes-released-geometry) through its triangle corners.
+- **Geometry sources** (`kind: geometry`) are what the authors released: STEP or STL, read in millimetres and converted to the project's length unit. A **body** is named by its source's id where the file holds one solid, else `<source>#<n>`, the nth solid in file order from 1. Where a part ships as both, register the STEP, which keeps the cylindrical faces and axes an STL flattens into triangles ([derived datums](#probes-released-geometry)).
 - **A cut file** is a laser-cut sheet, an SVG registered as `kind: geometry`. Its bodies are its regions, each an outer contour with the holes inside it, named by a point inside it: `<source>@<x>,<y>` (`plates@30,41`). Points are in the sheet's frame: from the page's top-left corner, x right and y down, at the scale the file declares with every transform applied, in the project's length unit. The coverage findings name each region by such a point, ready to copy.
 
 ## Units come from the quote
@@ -49,7 +49,7 @@ sources:                 # written by `cadrev source`; keep it the last key
 A ledger value is written as printed (`values: {L: 4}` for "4 cm"). cadrev reads the unit printed after the number, or after a hyphen (`5-mm pin`), and converts the value to the project's units wherever a param, a check or an overlay uses it; a `value` written on that param is in project units (40).
 
 - The numbers of a range or a product share its last unit ("3–5 mm", "40×8×5 mm"), and a nominal its tolerance's ("1.000 ± 0.005 in").
-- A value with no unit after it, such as a table cell, is already in project units. Where the table prints its unit in a header (`(cm)` over `13*13*10`), ledger the cell as printed, give the dimension a `derived` param scaled to the project's unit (`t_w * 10`) whose `interpretation` names the header, and check it through `expect` (`T2.W * 10`).
+- A value with no unit after it, such as a table cell, is already in project units. Where the table prints its unit in a header (`(cm)` over `13*13*10`), ledger the cell as printed, give the dimension a `derived` param scaled to the project's unit (`t_w * 10`) whose `interpretation` names the header, and check it through `expect` (`T2.W * 10`) on a `distance` check between datums on opposite faces, since a `bbox` check takes no `expect`.
 - `in` and `"` read as inches, except `in` before a determiner ("4 in total").
 - A value printed in two different units in one quote, or once with a unit and once without, is ambiguous: quote only the part that states it.
 - A **count** (a gear's teeth, a train's planets) is a whole number printed with no unit or a count unit, read as a pure number: a table's `25` for the sun's teeth gives `z_sun` 25, not 25 mm. A ratio is ledgered as its number: "7.2:1" is `{ratio: 7.2}`.
@@ -99,7 +99,7 @@ evidence:
     confirmed_by: <reviewer>     # written by the human who checked the crop
 ```
 
-- **A quote** is copied from `cadrev text` output, the text the matcher sees. Matching ignores case, whitespace, line-break hyphenation, dash variants and `×`/`x`; everything else is verbatim. Each value must appear as a number in the quote, matched whole: "37 mm" is not found in "137 mm".
+- **A quote** is matched against the text `cadrev text` prints, ignoring case, whitespace, line-break hyphenation, dash variants and `×`/`x`; everything else is verbatim. Each value must appear as a number in the quote, matched whole: "37 mm" is not found in "137 mm".
 - **How numbers read.** A decimal comma is one number (`3,5 mm` is 3.5) and so is a fraction before a unit (`1 1/2 in` is 1.5); both ends of a range are values; a number labelling a figure, table, equation or section is not one. A cardinal from zero to ninety-nine in words is a number ("Eight tension springs" states 8, written `n: 8` or `n: eight`). A comma before exactly three digits (`1,250`) reads two ways, so take that value from where it is printed in another form.
 - **Image evidence** covers numbers that exist only in pixels: figure labels, drawing dimensions, video frames. The crop is hashed so the reviewed image cannot change under its reading. Until a named human writes `confirmed_by`, the reading holds the project at VERIFIED PENDING REVIEW. The image a `measured` param scales off is image evidence too and needs no `values`: its `reading` transcribes any label and names the reference it is scaled against.
 - **`scope`** sets a statement aside, with a `reason`:
@@ -148,7 +148,7 @@ datums:                        # on released bodies: <body>.<feature>: [x, y, z]
 
 ### `skipped`: what is not about the object
 
-The coverage sweep lists every stated quantity in the text sources: each number, in digits or words, printed with a unit from the table above (a range or a toleranced value as one), each `a×b×c` product, each diameter callout (`Ø 32.5`) and each thread size (`M3`). Each must fall inside an evidence quote or a skip. A count printed with no count unit (`3 planets`, a table cell) is not swept: it enters the ledger because a param or check uses it. In a geometry source, each body must be compared by a shape check or skipped.
+The coverage sweep lists every stated quantity in the text sources: each number, in digits or words, printed with a unit from the table above (a range or a toleranced value as one), each `a×b×c` product, each diameter callout (`Ø 32.5`) and each thread size (`M3`). Each must fall inside an evidence quote or a skip. In a geometry source, each body must be compared by a shape check or skipped.
 
 ```yaml
 skipped:
@@ -175,8 +175,6 @@ A conflict without a `resolution` stays open: a warning, listed in the report.
 
 ## params.yaml
 
-The only door numbers have into the model.
-
 ```yaml
 params:
   link_L:     {basis: source,   from: T1-finger-link.L, interpretation: "overall length along part X"}
@@ -201,7 +199,6 @@ parts:                       # the mass model
 - **`interpretation`** says how a value maps onto geometry where that is a choice: which axis, envelope or pitch, which feature, which configuration.
 - **A derived param whose `expr` makes a placement choice** (pins at the centres of the rounded ends, a frame centred in its sole) names the `gap` whose answer would settle it. A choice several params share can instead be one proposed param they all read (`end_margin` above).
 - **Rests on.** A param rests on its own basis; a derived one on the weakest basis among the params its `expr` reads (proposed < measured < source), or on proposed where it names a gap. The report's headline counts params by what they rest on. An `expr` that reads no param traces to nothing: give the number its own basis.
-- **A proposed param changed to turn a check green** says so in its `rationale`, naming the check: that check now confirms the choice rather than a source.
 - **A physics value** is a param only the simulation reads (a joint's damping, stiffness, spring rest or friction, a tendon's stiffness or damping), marked `physics: true` and named by the joint or tendon that applies it ([modeling.md](modeling.md#joints-and-loops)). It is in the project's units of its quantity, per radian for a joint (stiffness in N·mm/rad by default); a `spring_rest` is a joint value, like a pose. It shapes no geometry, so no check compares it, and a proposed one leaves a project exact.
 - **The mass model**, `parts`, weighs each part by one param: `mass`, a datasheet mass, for a purchased part, or `density`, which its volume is multiplied by, for a printed one. The MJCF export, the report and a mass check without `density` all weigh by it, so they never disagree. In a model with joints every part an instance places needs an entry.
 
@@ -363,7 +360,3 @@ Renders `build/overlays/<id>.png`: model edges in magenta over the figure, the c
 - An in-scope ledger value nothing uses **waits**, and so does a gap no param names, the question a waiting part asks. The report lists both under Waiting. Everything else holds: the whole ledger is still harvested and covered.
 
 Removing `known_first` returns the project to the full rules. A value the user supplies is `proposed`, its `rationale` naming them, so remove `known_first` first.
-
-## build/report.json
-
-The machine-readable twin of report.md: the status, counts, findings, each check's result and what it rests on, the params, and what awaits confirmation or waits.

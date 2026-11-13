@@ -1,5 +1,5 @@
-# Every number the sources state about the object. Each item is a verbatim quote
-# (text sources) or a pinned figure crop with its reading (figures, video frames).
+# Every number the sources state about the object. Each item is a verbatim quote, a pinned
+# figure crop with its reading, or a probe of geometry the authors released.
 evidence: []
 
 # Stated quantities that are not about the object (test conditions, results, other designs).
