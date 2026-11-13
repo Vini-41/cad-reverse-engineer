@@ -12,9 +12,7 @@ The example is deliberately small. It models the compression, bent and plain lin
 
 Expected status: `VERIFIED: 0 errors, 2 warnings, 10/10 checks pass`
 
-The Fig. 2A reading was checked against `figures/crops/fig2a-foot-sole.png` by a named reviewer, recorded as `confirmed_by` on `fig2a-foot-sole` in `evidence.yaml`. Without that field the status would be VERIFIED PENDING REVIEW.
-
-`scripts/check` runs `cadrev check` on this directory and fails if it prints anything else. A change that moves the status updates this line.
+The Fig. 2A reading was checked against `figures/crops/fig2a-foot-sole.png` by a named reviewer, recorded as `confirmed_by` on `fig2a-foot-sole` in `evidence.yaml`.
 
 ## Sources
 
@@ -24,7 +22,5 @@ Both sources are CC BY 4.0, so they are committed and a fresh clone needs no dow
 sources/Cheng2026_LegClaw.pdf                  the article PDF
 sources/Cheng2026_LegClaw_supplementary.docx   Supporting Information (advs74831-sup-0001-suppmat.docx)
 ```
-
-`cadrev check .` compares each file with the SHA-256 hash in `project.yaml`, so a `[source-hash]` finding means a source file was changed.
 
 The crop `figures/crops/fig2a-foot-sole.png` is reproduced from Fig. 2A of the article under CC BY 4.0, credit Cheng et al. 2026.

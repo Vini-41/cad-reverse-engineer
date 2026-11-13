@@ -13,14 +13,12 @@ A fresh agent reconstructed it from the skill and these sources alone. It is the
 
 Expected status: `VERIFIED: 0 errors, 0 warnings, 123/123 checks pass`
 
-The Fig. 4(a) reading, `R1-fig4`'s "(a) SSPG (MN8014, 7.2:1)", was checked against `figures/crops/fig4a-label.png` by a named reviewer, recorded as `confirmed_by` on it in `ledger_paper.yaml`, which `ledger.py` carries into `evidence.yaml`. It restates R1, the quoted 7.2:1 that `carrier-turn` compares with, so it is context. Without that field the status would be VERIFIED PENDING REVIEW.
-
-A full `cadrev check` of this directory takes about a minute. `scripts/check` checks it and fails if it prints anything else. A change that moves the status updates the line above.
+The Fig. 4(a) reading, `R1-fig4`'s "(a) SSPG (MN8014, 7.2:1)", was checked against `figures/crops/fig4a-label.png` by a named reviewer, recorded as `confirmed_by` on it in `ledger_paper.yaml`, which `ledger.py` carries into `evidence.yaml`. It restates R1, the quoted 7.2:1 that `carrier-turn` compares with, so it is context.
 
 `ledger.py` writes `evidence.yaml` from the hand-written `ledger_paper.yaml` (the paper's quotes and the figure reading) and the probes and datums it reads from the STL; `checks_gen.py` writes `checks.yaml`. Edit those and rerun them (`../../scripts/cadrev python -I ledger.py` and `python3 checks_gen.py`) rather than editing the two files they write.
 
 ## Sources
 
-The paper and the eight STL are committed, so a fresh clone needs no download. `cadrev check .` compares each with the SHA-256 hash in `project.yaml`, so a `[source-hash]` finding means a source file was changed. `sources/LICENSE-COMPAct.txt` is the MIT licence the STL ship under.
+The paper and the eight STL are committed, so a fresh clone needs no download. `sources/LICENSE-COMPAct.txt` is the MIT licence the STL ship under.
 
 The crop `figures/crops/fig4a-label.png` is reproduced from Fig. 4 of the article under CC BY 4.0, credit Singh et al. 2025.

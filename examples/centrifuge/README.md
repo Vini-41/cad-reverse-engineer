@@ -13,14 +13,12 @@ A fresh agent reconstructed it from the skill and these sources alone. It is a s
 
 Expected status: `VERIFIED: 0 errors, 0 warnings, 88/88 checks pass`
 
-The Fig. 8 reading was checked against `figures/crops/fig8-body-dims.png` by a named reviewer, recorded as `confirmed_by` on `fig8-body-dims` in `evidence.yaml`. Without that field the status would be VERIFIED PENDING REVIEW.
-
-`scripts/check` runs `cadrev check` on this directory and fails if it prints anything else. A change that moves the status updates this line.
+The Fig. 8 reading was checked against `figures/crops/fig8-body-dims.png` by a named reviewer, recorded as `confirmed_by` on `fig8-body-dims` in `evidence.yaml`.
 
 `gen_ledger.py` writes `evidence.yaml`, `params.yaml`, `checks.yaml` and `gaps.yaml`, reading `skips.json`; edit it and rerun it (`python3 gen_ledger.py`) rather than editing those files.
 
 ## Sources
 
-The paper and the twelve STEP files are committed, so a fresh clone needs no download. `cadrev check .` compares each with the SHA-256 hash in `project.yaml`, so a `[source-hash]` finding means a source file was changed.
+The paper and the twelve STEP files are committed, so a fresh clone needs no download.
 
 The crop `figures/crops/fig8-body-dims.png` is reproduced from Fig. 8 of the article under CC BY 4.0, credit Soma Poór 2022.
