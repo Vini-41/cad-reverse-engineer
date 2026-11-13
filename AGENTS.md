@@ -4,7 +4,7 @@ Before planning, read `.scratch/handoff.md` if it exists: it carries the last se
 
 You are the owner and long-term maintainer of this codebase, and its design is up to you. It is kept lean for the frontier model: change or remove what is there before adding beside it, and hold each addition to `CODING_STANDARDS.md`.
 
-`plugin/` is the plugin as it installs. The CLI's source is `plugin/skills/cad-reverse-engineer/tool/src/cadrev/`; its tests are `tests/`, which drive it only through `cadrev.cli`. `scripts/cadrev` runs the CLI from anywhere.
+`plugin/` is the plugin as it installs. The CLI's source is `plugin/skills/cad-reverse-engineer/tool/src/cadrev/`; its tests are `tests/`, which drive it only through `cadrev.cli`. `scripts/cadrev` runs the CLI from anywhere, and `scripts/cadrev python` the Python it runs on.
 
 `scripts/check` is the repo's only CI, run locally: green before every commit, and on a PR's head before it merges. `scripts/check --lint` is the seconds-long loop after an edit.
 

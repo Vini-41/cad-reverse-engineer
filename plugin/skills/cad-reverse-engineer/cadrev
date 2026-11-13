@@ -5,7 +5,7 @@
 # A sandbox such as Codex's workspace-write lets cadrev write the workspace and TMPDIR, but not
 # ~/.cache, ~/.local/share, the Matplotlib directory under HOME, or the installed plugin's
 # tool/.venv. Each of those that cannot be written moves to a directory of this user's under
-# TMPDIR (#181).
+# TMPDIR.
 tool=$(CDPATH='' cd -- "$(dirname -- "$0")/tool" && pwd) || exit 1
 
 # writable PATH: whether a file can be made in PATH, or in the nearest directory above it that

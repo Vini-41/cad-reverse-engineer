@@ -221,6 +221,9 @@ def cmd_check(args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["python"]:  # what follows is Python's to parse, and its exit is cadrev's
+        os.execv(sys.executable, [sys.executable, *argv[1:]])
     parser = argparse.ArgumentParser(prog="cadrev", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -262,6 +265,7 @@ def main(argv: list[str] | None = None) -> int:
     s = command("check", cmd_check, "verify everything, build the model, write build/report.md")
     s.add_argument("--no-build", action="store_true", help="skip model build and geometry checks")
     s.add_argument("--no-coverage", action="store_true", help="skip the coverage sweep")
+    sub.add_parser("python", help="run the Python cadrev runs on: a script of your own")
 
     try:
         args = parser.parse_args(argv)
