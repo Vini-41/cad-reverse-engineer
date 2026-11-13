@@ -365,7 +365,6 @@ quotes = [
      "reading": "130.0 x 130.0 x 34.0 mm", "values": {"W": 130.0, "L": 130.0, "H": 34.0},
      "confirmed_by": "Vini Rezanejad"},
 ]
-ARROW_CROP = None  # filled below when the crop exists
 evidence = quotes + evidence
 
 conflicts = [

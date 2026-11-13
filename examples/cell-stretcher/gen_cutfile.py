@@ -1,6 +1,6 @@
 """Writes the cut-file shape checks and their sheet datums.
 
-Run:  uv run --project <skill>/tool python -I gen_cutfile.py
+Run:  ../../scripts/cadrev python -I gen_cutfile.py   (from this directory)
 Reads evidence.src.yaml and checks.src.yaml (hand-written) and writes evidence.yaml and
 checks.yaml with, appended, one shape check per cut-file region a part reproduces and the
 sheet datums those checks pair with. Each part's anchors are given in the frame of one
