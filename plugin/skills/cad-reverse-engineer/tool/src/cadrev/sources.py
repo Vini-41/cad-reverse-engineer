@@ -322,13 +322,20 @@ def find_quote(path: Path, quote: str, page: int | None = None) -> Match | None:
 
 
 def extract_figures(path: Path, out: Path) -> list[Path]:
-    """Write every embedded image to out/, named by page, so figures can be viewed."""
+    """Write every embedded image to out/, so figures can be viewed: a PDF's named by page, after
+    that page rendered whole, which shows what no embedded image holds (a figure drawn as vector
+    graphics, a table's layout)."""
     out.mkdir(parents=True, exist_ok=True)
     written = []
     if path.suffix.lower() == ".pdf":
+        import pypdfium2
         from pypdf import PdfReader
 
+        rendered = pypdfium2.PdfDocument(path)
         for n, page in enumerate(PdfReader(path).pages, 1):
+            whole = out / f"p{n:03d}.png"
+            rendered[n - 1].render(scale=2).to_pil().save(whole)  # 144 dpi
+            written.append(whole)
             for i, image in enumerate(page.images, 1):
                 name = f"p{n:03d}_{i:02d}{Path(image.name).suffix or '.png'}"
                 written.append(_write_viewable(out / name, image.data))

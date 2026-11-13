@@ -249,7 +249,7 @@ def main(argv: list[str] | None = None) -> int:
     command(
         "figures",
         cmd_figures,
-        "extract a source's images to figures/<source>/, with each one's pixel size",
+        "render a PDF's pages and extract a source's images to figures/<source>/, with sizes",
         "source",
     )
     s = command(

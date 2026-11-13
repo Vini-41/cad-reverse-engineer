@@ -120,7 +120,7 @@ alias cadrev="$PWD/cad-reverse-engineer/plugin/skills/cad-reverse-engineer/cadre
 cadrev init my-project
 cadrev source my-project paper.pdf --id paper --kind paper --citation "Doe et al. 2026"
 cadrev text my-project paper --page 4      # the exact text quotes are matched against
-cadrev figures my-project paper            # extract embedded figures
+cadrev figures my-project paper            # render each page, extract each figure
 cadrev crop my-project figures/paper/p004_01.jpg 850 160 1240 385 --name fig2a --zoom 2
 cadrev coverage my-project                 # stated quantities not yet ledgered or skipped
 cadrev check my-project                    # everything; writes build/
