@@ -53,7 +53,7 @@ def test_skill_frontmatter_names_itself_its_license_and_what_it_needs():
     assert front["name"] == SKILL.name and front["license"] == "MIT"
     assert 0 < len(front["description"]) <= 1024
     needs = front["compatibility"]
-    assert len(needs) <= 500 and all(word in needs for word in ("uv", "3.10", "3.13", "network"))
+    assert len(needs) <= 500 and all(word in needs for word in ("uv", "3.12", "3.14", "network"))
 
 
 def test_every_relative_link_in_the_skill_names_a_file_and_a_heading_in_it():

@@ -34,4 +34,4 @@ One small example shows each kind of evidence, and four full reconstructions wer
 
 ### Requirements
 
-The CLI runs locally through [uv](https://docs.astral.sh/uv/) on Python 3.10 to 3.13. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute) at the versions in the shipped lockfile, so it needs network access then. Under Codex, allow it with `network_access = true` under `[sandbox_workspace_write]` in `~/.codex/config.toml`; `cadrev` moves any cache the sandbox will not let it write under `TMPDIR`.
+The CLI runs locally through [uv](https://docs.astral.sh/uv/) on Python 3.12 to 3.14. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute) at the versions in the shipped lockfile, so it needs network access then. Under Codex, allow it with `network_access = true` under `[sandbox_workspace_write]` in `~/.codex/config.toml`; `cadrev` moves any cache the sandbox will not let it write under `TMPDIR`.

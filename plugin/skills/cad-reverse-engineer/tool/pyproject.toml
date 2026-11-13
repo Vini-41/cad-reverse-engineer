@@ -3,17 +3,23 @@ name = "cadrev"
 version = "0.1.0"
 description = "Reverse-engineer CAD from a paper, with every dimension traceable to a quoted source."
 license = "MIT"
-requires-python = ">=3.10,<3.14"
+# One resolution: every Python in this range installs the versions scripts/check runs.
+requires-python = ">=3.12,<3.15"
 dependencies = [
-    "build123d>=0.9",
+    "build123d>=0.13",
     "pyyaml>=6",
-    "pypdf>=4",
-    "matplotlib>=3.8",
-    "mujoco>=3.3",
-    # A shape check's nearest-sample bound (distance.py); build123d brings it in too.
-    "scipy>=1.11",
+    "pypdf>=6.21",
+    # Overlays, and the plots a run's own scripts draw (`cadrev python`).
+    "matplotlib>=3.11",
+    # MuJoCo's bindings without its viewer: the kinematics motion.py poses a mechanism with.
+    "mujoco-core>=4.0.1",
+    # Imported by name, though build123d and matplotlib bring them in too: distance.py's and
+    # motion.py's arrays, a shape check's nearest-sample bound, `cadrev crop` and `figures`.
+    "numpy>=2.5",
+    "scipy>=1.18",
+    "pillow>=13",
     # A cut file's SVG: svgelements reads it, ocpsvg turns its contours into wires.
-    "ocpsvg>=0.6",
+    "ocpsvg>=0.7",
     "svgelements>=1.9",
 ]
 
