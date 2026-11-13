@@ -402,12 +402,15 @@ class Mechanism:
                     "that; the loops do not allow both, so checks at this pose are not evaluated",
                 )
                 reached = False
+        moved = set(values)  # and each joint the loops move from as built
         for name, joint in model.moving.items() if reached else ():
-            if "range" not in joint or name in free:
-                continue
             quantity = model.quantity(name)
             slack = p.tolerance(quantity) / p.degrees(quantity)  # in the project's unit
             turned = float(d.qpos[m.jnt_qposadr[jid[name]]]) / size[name]
+            if abs(turned) > slack:
+                moved.add(name)
+            if "range" not in joint or name in free:
+                continue
             (low_name, low), (high_name, high) = range_ends(p, joint)
             if not low - slack <= turned <= high + slack:
                 p.error(
@@ -427,4 +430,4 @@ class Mechanism:
                 origin=tuple(d.xpos[bid]), x_dir=tuple(frame[:, 0]), z_dir=tuple(frame[:, 2])
             )
             assembly[inst] = (part, Location(plane))
-        return replace(model, assembly=assembly, moved=frozenset(values))
+        return replace(model, assembly=assembly, moved=frozenset(moved))

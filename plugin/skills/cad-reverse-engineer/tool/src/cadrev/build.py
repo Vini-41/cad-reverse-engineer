@@ -112,7 +112,8 @@ class Model:
     masses: dict[str, Mass] = field(default_factory=dict)
     # True when a finding dropped the joints, loops, gears, cables and tendons build() returned.
     dropped: bool = False
-    # The joints the pose this assembly is placed at moves, itself or through a gear or cable.
+    # The joints the pose this assembly is placed at moves, itself or through a gear, cable or
+    # loop.
     moved: frozenset[str] = frozenset()
 
     @property

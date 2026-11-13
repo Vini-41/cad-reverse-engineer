@@ -217,6 +217,34 @@ def test_gear_moves_one_joint_with_the_other_by_its_ratio_and_a_screw_by_its_lea
     }
 
 
+def test_a_check_rests_on_a_gear_driven_by_a_passive_joint_its_poses_loop_moves(mech_dir):
+    # A pin on the coupler, geared to the knee: turning the crank, the loop moves the knee, and
+    # the gear the pin.
+    remodel(
+        mech_dir, "    datums = {", '    parts["pin"] = Cylinder(p.hole / 2, p.H)\n    datums = {'
+    )
+    remodel(mech_dir, '"slider": 0}', '"slider": 0, "pin": 0}')
+    pin = '"pin_1": ("pin", Location((bx, by, 2 * p.H))),'
+    remodel(mech_dir, '"slider_1": ("slider",', f'{pin}\n            "slider_1": ("slider",')
+    remodel(
+        mech_dir,
+        LOOP,
+        LOOP + '"gears": {"wind": {"driver": "knee", "driven": "spin", "ratio": "wind"}},',
+    )
+    spin = '"spin": {"type": "revolute", "parent": "coupler_1", "child": "pin_1",'
+    spin += ' "axis": ["pin_1.a", "pin_1.up"], "drive": "passive"},'
+    remodel(mech_dir, KNEE, f'"drive": "passive"}}, {spin}')
+    add(
+        mech_dir,
+        params={"wind": {"basis": "proposed", "value": 3, "rationale": "a guess", "gap": "G1"}},
+        parts={"pin": {"density": "rho"}},
+    )
+    run = check(mech_dir)
+    assert run.status == "VERIFIED" and run.rules == []
+    assert run.result("stand")["rests_on_params"] == ["wind"]
+    assert run.result("rest")["rests_on_params"] == []
+
+
 def test_pose_at_a_number_is_a_test_condition_that_adds_no_basis_to_its_check(mech_dir, tmp_path):
     # "Per turn" fixes the turn by definition: the screw's travel posed at 360°, one full turn of
     # the crank, rests on the lead and the fold it moves through, both stated. With the crank's
@@ -432,6 +460,32 @@ def test_range_check_holds_each_end_of_a_joints_range_to_what_the_source_states(
     assert not short["ok"] and (short["expected"], number(short)) == ("50 (S3.high)", 45)
     assert (short["rests_on"], short["rests_on_params"]) == ("proposed", ["input_max"])
     assert run.result("swing.input_min")["ok"]
+
+
+TRAVEL = "The slider travels -5 mm to 5 mm from rest."
+
+
+def test_range_check_of_a_slides_own_value_is_held_to_tolerance_length(mech_dir, tmp_path):
+    # tolerance.angle at 1° is 10% of the slide's 10 mm travel, but the slide's ends are lengths:
+    # the check is planned, compared and reported against tolerance.length alone. Geared, not
+    # looped, the slider travels on its own.
+    fold = "{basis: proposed, value: -2, rationale: 'meshed to fold back', gap: G1}"
+    open_chain(mech_dir, FOLD, fold=fold)
+    meta(mech_dir, tolerance={"angle": 1})
+    add_quote(mech_dir, tmp_path, TRAVEL, values={"back": -5, "out": 5})
+    add(
+        mech_dir,
+        params={
+            "slide_min": {"basis": "source", "from": "N1.back"},
+            "slide_max": {"basis": "source", "from": "N1.out"},
+        },
+        checks="{id: travel, kind: range, joint: slide, ends: [N1.back, N1.out]}",
+    )
+    remodel(mech_dir, '"slider_1.x"],', '"slider_1.x"], "range": ["slide_min", "slide_max"],')
+    run = check(mech_dir)
+    assert run.status == "VERIFIED" and run.rules == []
+    assert [number(run.result(f"travel.{end}")) for end in ("slide_min", "slide_max")] == [-5, 5]
+    assert "travel" not in [t["check"] for t in run.report["tolerances"]]
 
 
 SWEEP = "kind: interference, sweep: {joint: input, steps: steps}"
