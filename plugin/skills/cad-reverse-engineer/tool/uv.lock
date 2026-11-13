@@ -130,7 +130,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.5" },
     { name = "ocpsvg", specifier = ">=0.7" },
     { name = "pillow", specifier = ">=13" },
-    { name = "pypdf", specifier = ">=6.21" },
+    { name = "pypdf", specifier = ">=6.21,<7" },
     { name = "pyright", marker = "extra == 'test'", specifier = ">=1.1.414" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8" },
     { name = "pytest-xdist", marker = "extra == 'test'", specifier = ">=3" },
