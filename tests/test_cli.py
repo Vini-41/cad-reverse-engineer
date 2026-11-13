@@ -198,10 +198,24 @@ def test_coverage_lists_each_unledgered_quantity_and_exits_by_whether_there_is_o
     lines = out.splitlines()
     assert code == 1 and lines[-1] == "1 unledgered stated quantities"
     assert lines[0].startswith("paper p1: 60 mm") and "branches of 60 mm diameter" in lines[0]
-    # A source it cannot read is swept for nothing, and says so.
-    (proj_dir / "sources" / "paper.txt").unlink()
+
+
+@pytest.mark.parametrize(
+    "rule, damage",
+    [
+        (
+            "source-id",
+            lambda r: edit(r, "project.yaml", lambda d: d["sources"].append(d["sources"][0])),
+        ),
+        ("source-missing", lambda r: (r / "sources" / "paper.txt").unlink()),
+    ],
+)
+def test_coverage_of_a_source_registered_twice_or_missing_names_it_and_exits_1(
+    proj_dir, rule, damage
+):
+    damage(proj_dir)
     code, out = cadrev("coverage", proj_dir)
-    assert code == 1 and "[source-missing]" in out
+    assert code == 1 and f"[{rule}]" in out
 
 
 def _confirmed(root):
