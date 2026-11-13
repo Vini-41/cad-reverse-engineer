@@ -50,10 +50,10 @@ Done when every document the reconstruction will cite is registered.
 
 ### 3. Ledger
 
-Read every page with `cadrev text <dir> <source>`, and view every image `cadrev figures <dir> <source>` extracts. Ledger each statement about the object:
+Read every page with `cadrev text <dir> <source>`, and view every image `cadrev figures <dir> <source>` writes: each page of a PDF whole, which shows its vector drawings and tables as printed, and each image embedded in it at full resolution. Ledger each statement about the object:
 
 - Copy each quote from `cadrev text` output, the text the matcher sees.
-- A number printed only inside a figure is image evidence. Crop its label with `cadrev crop <dir> <image> LEFT TOP RIGHT BOTTOM --name <name>`, which prints the `image` and `image_sha256` the item takes. The box is in pixels of the extracted file, whose size `cadrev figures` prints, so scale it from the size you viewed the image at. View the crop, and write the `reading` exactly as printed. A scale bar is evidence only where an overlay or a measured param calibrates from it.
+- A number printed only inside a figure is image evidence. Crop its label with `cadrev crop <dir> <image> LEFT TOP RIGHT BOTTOM --name <name>`, which prints the `image` and `image_sha256` the item takes. The box is in pixels of the file you crop, whose size `cadrev figures` prints, so scale it from the size you viewed the image at. View the crop, and write the `reading` exactly as printed. A scale bar is evidence only where an overlay or a measured param calibrates from it.
 - The coverage sweep lists numbers printed with a unit. A count printed without one (a table cell, `3 planets`) and a ratio (`7.2:1`) are yours to find: ledger each one a param or a check will use.
 - Stated ranges of motion and physics values (a spring's stiffness) are ledgered too; the motion stage reads them.
 - A value stated in several places is ledgered at each, one in scope and the rest restatements. A disagreement between sources is a conflict. A stated quantity about something else (a test object, a load, a rig, a result) is skipped with a reason.

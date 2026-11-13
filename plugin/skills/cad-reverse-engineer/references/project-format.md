@@ -11,7 +11,7 @@ gaps.yaml       what the sources leave open
 overlays.yaml   optional: model edges drawn over figures
 model.py        the build123d model (modeling.md)
 sources/        registered source files, pinned by sha256
-figures/        extracted images; figures/crops/ holds the pinned evidence crops
+figures/        the pages and images `cadrev figures` writes; figures/crops/ holds the pinned evidence crops
 build/          STEP files, overlays, report.md, report.json; model.mjcf and meshes/ for a mechanism
 ```
 

@@ -11,6 +11,8 @@ dependencies = [
     # Quotes are matched against the text pypdf extracts, and 7.0 reads some pages differently:
     # it leaves examples/compact-sspg three coverage errors. A new major is taken on purpose.
     "pypdf>=6.21,<7",
+    # Renders a PDF's pages for `cadrev figures`: PDFium, under a permissive license.
+    "pypdfium2>=5.15",
     # Overlays, and the plots a run's own scripts draw (`cadrev python`).
     "matplotlib>=3.11",
     # MuJoCo's bindings without its viewer: the kinematics motion.py poses a mechanism with.

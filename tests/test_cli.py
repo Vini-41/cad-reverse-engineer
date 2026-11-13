@@ -152,19 +152,24 @@ def test_text_refuses_a_source_that_is_none_or_holds_no_text(proj_dir, tmp_path)
 
 
 FIGURES = {
-    "paper.pdf": (pdf(PAGES, image=True), "figures/doc/p001_01.png  2 x 2 px"),
+    # Each page whole, as printed, beside the images embedded in it.
+    "paper.pdf": (
+        pdf(PAGES, image=True),
+        "figures/doc/p001.png  1224 x 1584 px\nfigures/doc/p001_01.png  2 x 2 px\n"
+        "figures/doc/p002.png  1224 x 1584 px",
+    ),
     "paper.docx": (docx(PAPER, png((4, 2))), "figures/doc/image1.png  4 x 2 px"),
 }
 
 
 @pytest.mark.parametrize("name", FIGURES)
-def test_figures_extracts_a_sources_images_and_prints_each_ones_pixel_size(
+def test_figures_writes_a_sources_pages_and_images_and_prints_each_ones_pixel_size(
     proj_dir, tmp_path, name
 ):
     content, written = FIGURES[name]
     add_source(proj_dir, tmp_path, name, content)
     assert cadrev("figures", proj_dir, "doc") == (0, written + "\n")
-    assert (proj_dir / written.split()[0]).is_file()
+    assert all((proj_dir / line.split()[0]).is_file() for line in written.splitlines())
 
 
 def test_crop_writes_the_region_and_prints_the_hash_evidence_pins(proj_dir):
