@@ -1,6 +1,6 @@
 """Writes evidence.yaml: the paper's ledger (hand-copied quotes) and the probes of the released STL bodies.
 
-Run: uv run --project <skill>/tool python -I ledger.py   (from this directory)
+Run: ../../scripts/cadrev python -I ledger.py   (from this directory)
 Each STL datum is snapped to a triangle corner of its body (corners lie on the true surface, see SKILL.md step 4),
 or, for a point mid-flat on a planar face, checked to lie on a triangle.
 """
@@ -48,35 +48,6 @@ def V(body, feat, x, y, z, tol=0.03):
     if d[i] > tol:
         problems.append(f"{body}.{feat}: nearest corner {d[i]:.4f} from {(x, y, z)}")
     datums[name(body, feat)] = [round(float(c), 5) for c in v[i]]
-    return name(body, feat)
-
-
-def F(body, feat, x, y, z):
-    """A point on a planar face (not a corner): check it lies on a triangle."""
-    p = np.array([x, y, z])
-    best = 1e9
-    for t in TRI[body]:
-        a, b, c = t
-        n = np.cross(b - a, c - a)
-        nn = np.linalg.norm(n)
-        if nn < 1e-12:
-            continue
-        n /= nn
-        dist = abs((p - a) @ n)
-        if dist > 1e-3:
-            continue
-        q = p - ((p - a) @ n) * n
-        # barycentric
-        v0, v1, v2 = c - a, b - a, q - a
-        d00, d01, d11, d02, d12 = v0 @ v0, v0 @ v1, v1 @ v1, v0 @ v2, v1 @ v2
-        den = d00 * d11 - d01 * d01
-        u = (d11 * d02 - d01 * d12) / den
-        w = (d00 * d12 - d01 * d02) / den
-        if u >= -1e-6 and w >= -1e-6 and u + w <= 1 + 1e-6:
-            best = min(best, dist)
-    if best > 1e-3:
-        problems.append(f"{body}.{feat}: point {(x, y, z)} on no triangle")
-    datums[name(body, feat)] = [x, y, z]
     return name(body, feat)
 
 
