@@ -68,10 +68,16 @@ class Result:
     miss: str | None = None  # how far a failed comparison is off, beside its tolerance
 
 
-def quantity(c: dict) -> str:
-    """What check c compares in: its kind's, or a length for a range check between two datums."""
-    two = c.get("kind") == "range" and len(c.get("between") or ()) == 2
-    return "length" if two else KINDS[c["kind"]].quantity
+def quantity(c: dict, model: Model | None = None) -> str:
+    """What check c compares in: its kind's, a length for a range check between two datums, or
+    for one of its joint's own value, that joint's quantity where model moves it."""
+    if c.get("kind") == "range":
+        between, joint = c.get("between") or (), c.get("joint")
+        if len(between) == 2:
+            return "length"
+        if not between and model is not None and joint in model.moving:
+            return model.quantity(str(joint))
+    return KINDS[c["kind"]].quantity
 
 
 def tolerance(p: Project, c: dict, compared: str | None = None) -> tuple[str, float] | None:
@@ -85,10 +91,10 @@ def tolerance(p: Project, c: dict, compared: str | None = None) -> tuple[str, fl
     return "tol", float(c.get("tol", p.tolerance(compared or quantity(c))))
 
 
-def default_tolerance(c: dict) -> tuple[str, float] | None:
+def default_tolerance(c: dict, compared: str | None = None) -> tuple[str, float] | None:
     """cadrev's own tolerance for check c, where neither project.yaml nor the check sets one."""
     return (
-        ("tol", DEFAULT_TOL[quantity(c)])
+        ("tol", DEFAULT_TOL[compared or quantity(c)])
         if c.get("kind") in KINDS.keys() - {"mass", "count"}
         else None
     )
@@ -178,7 +184,14 @@ def _held(p: Project, c: dict) -> None:
             p.hold_param(str(param), ("count",), f"in check {cid}")
     if name == "count" and c.keys() & {"tol", "tol_rel"}:
         p.error("check-config", f"check {cid}: a count check compares exactly, so it takes no tol")
-    found = tolerance(p, c)
+    if not joint_valued:  # capped once built, in its joint's quantity
+        capped(p, c, compared)
+
+
+def capped(p: Project, c: dict, compared: str) -> None:
+    """[tolerance-cap] where check c's tolerance, in the quantity it compares, is above the cap."""
+    cid, name = c["id"], c["kind"]
+    found = tolerance(p, c, compared)
     if found is None:
         return
     key, tol = found
@@ -292,7 +305,8 @@ class Checks:
     def _hold_joint_values(self) -> None:
         """[unit-quantity] for each pose value, and each end of a range check of a joint's own
         value, printed as the other quantity than its joint's: a length for a revolute joint.
-        Printed as any other quantity, it is plan's finding already."""
+        Printed as any other quantity, it is plan's finding already. And such a range check's
+        tolerance, in its joint's quantity, held to its cap."""
         for c in self.p.checks:
             named = [
                 (j, ref, f"in check {c['id']}'s {key}")
@@ -302,6 +316,8 @@ class Checks:
             ]
             if c.get("kind") == "range" and "between" not in c:
                 named += [(c.get("joint"), ref, f"check {c['id']}") for ref in c.get("ends") or []]
+                if c.get("joint") in self.model.moving:
+                    capped(self.p, c, quantity(c, self.model))
             for joint, ref, use in named:
                 unit, _ = self.p.printed_as(str(ref))
                 if joint in self.model.moving and unit:

@@ -245,7 +245,9 @@ def write(
     tolerances = [
         {"check": c.get("id"), "kind": c.get("kind"), found[0]: found[1]}
         for c in p.checks
-        if (found := checks.tolerance(p, c)) is not None and found != checks.default_tolerance(c)
+        if c.get("kind") in checks.KINDS
+        and (found := checks.tolerance(p, c, compared := checks.quantity(c, model))) is not None
+        and found != checks.default_tolerance(c, compared)
     ]
     limits = [
         {"check": c.get("id"), "max_volume": checks.overlap_limit(p, c)}
