@@ -13,9 +13,7 @@ Both legs and their connecting-plate mounts, with their motion: the knee four-ba
 
 Expected status: `VERIFIED: 0 errors, 0 warnings, 73/73 checks pass`
 
-The five figure readings (`fig2d-width`, `fig2a-beta`, `fig2a-sole`, `fig2a-mass`, `figS1-tension`) were checked against their crops in `figures/crops/` by a named reviewer, recorded as `confirmed_by` in `evidence.yaml`. Without those fields the status would be VERIFIED PENDING REVIEW.
-
-`scripts/check` runs `cadrev check` on this directory and fails if it prints anything else. A change that moves the status updates this line.
+The five figure readings (`fig2d-width`, `fig2a-beta`, `fig2a-sole`, `fig2a-mass`, `figS1-tension`) were checked against their crops in `figures/crops/` by a named reviewer, recorded as `confirmed_by` in `evidence.yaml`.
 
 `checks.yaml` is written by `gen_checks.py` (`../../scripts/cadrev python gen_checks.py`, from this directory), which repeats the checks per leg, toe and servo: edit the script, not the file.
 
@@ -23,6 +21,6 @@ Instances are named `<leg>_<part>`, and toes `<leg>_toe_<side><row>_<segment>`: 
 
 ## Sources
 
-`project.yaml` registers the two sources at `../legclaw-links/sources/`, the copies `examples/legclaw-links` commits, so they are committed once. `cadrev check .` compares each file with the SHA-256 hash in `project.yaml`, so a `[source-hash]` finding means a source file was changed.
+`project.yaml` registers the two sources at `../legclaw-links/sources/`, the copies `examples/legclaw-links` commits, so they are committed once.
 
 The crops in `figures/crops/` and the page image `figures/paper/p004_01.jpg` (which `overlays.yaml` draws the model over) are reproduced from the article and its supplement under CC BY 4.0, credit Cheng et al. 2026.

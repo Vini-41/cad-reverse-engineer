@@ -16,7 +16,7 @@ One run per model per object: read the table as what each model did, not as a ra
 
 ## Results
 
-Status is the re-check's. "Proposed" counts the params resting on proposed values, physics values apart. "Widened" counts the checks with a tolerance or overlap limit other than cadrev's default. The reference is the committed example, which a human reviewed.
+Status is the re-check's. "Proposed" counts the params resting on proposed values, physics values apart. "Widened" counts the checks with a tolerance or overlap limit other than cadrev's default. The reference is the example as that commit holds it, which a human reviewed.
 
 ### Centrifuge
 
@@ -75,13 +75,13 @@ The two routes the rules left open come first, both filed, then the trips severa
 | A pose of one turn has no basis but proposed, warning `[param-gap]` | 32, 33, 35, 36 | #121 |
 | A shape check checks none of its part's params, so each probe-fed param needs a mirrored check: 69 to 107 extra checks, and minutes per `cadrev check` | 30, 32, 33 | a passing shape check checks the params its part reads from probes of that body |
 | A table cell's unit printed in its header is read as the project's unit, silently | 29, 30 | skill: scale through a derived param (#189); tool: warn when a quote's table header prints a unit |
-| A STEP body's own spline edges lie past the default 0.001 shape tolerance | 29, 30 | skill: the tolerance names that offset (#189) |
+| A STEP body's own spline edges lie past the default 0.001 shape tolerance | 29, 30 | #119: such an edge is read where its faces meet, so the default tolerance holds |
 | `[unit-ambiguous]` reads "Anet A8" as an 8 | 35, 36, 37 | a digit glued to letters is part of a name, not a value |
 | The coverage sweep misses numbers glued to the word before (`is0.01kg`, `of242.7 Nm/rad`) | 32, 33 | sweep a number glued to a lowercase word |
 | Overlays cannot flip a figure drawn upside down | 29, 30 | an overlay's `flip` (vertical mirror), with run 10's trip 6 |
 | The default overlap limit cannot pass zero-backlash released teeth | 32, 33 | skill: give the limit the teeth's measured overlap, and say why |
 | Fasteners a bill of materials lists fit no `not-modeled` reason | 35, 36 | project-format.md: purchased fasteners with no stated position are `not-modeled` |
-| `cadrev text` on an SVG cut file raises a traceback | 35 | a clear refusal naming the source's kind |
+| `cadrev text` on an SVG cut file raises a traceback | 35 | fixed: it refuses a source that is not text, naming its file |
 | A shape check's worst point is named "on body" but lies on the model | 32 | name which of the two it lies on |
 | report.md has no motion section: joint types, drives and gear ratios are in report.json alone | 32 | report.md lists the motion |
 

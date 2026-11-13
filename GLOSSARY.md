@@ -45,7 +45,7 @@ _Avoid_: exclusion, ignore
 The declared origin of a parameter's value: `source`, `derived`, `measured` or `proposed`. A parameter with basis `source` *traces to a source*.
 
 **Rests on**:
-The basis a parameter's value ultimately depends on: its own; proposed for a derived parameter that names a gap, since its computation is itself a reconstruction choice; or for any other derived parameter the weakest among the parameters it is computed from, proposed being weaker than measured and measured weaker than source. A check rests on the weakest among the parameters its Reads names, or on source when it names none; a mass check that weighs a part in several instances with no stated count rests on proposed, since how many there are is then the model's choice.
+The basis a value ultimately depends on. A parameter rests on its own basis; a derived one on the weakest among the parameters it is computed from, proposed being weaker than measured and measured weaker than source, or on proposed where its computation is itself a reconstruction choice. A check rests on the weakest among the parameters its Reads names, or on source when it names none.
 _Avoid_: traces to (for a derived parameter), effective basis
 
 **Measured**:
@@ -113,7 +113,7 @@ One comparison between the built geometry and a ledger value, or a value worked 
 _Avoid_: test, assertion
 
 **Reads**:
-What a check's evaluation read, shared by all its results: the params it reads itself (its pose, its sweep's steps, its kind's own, a mass check's only for the parts it weighs), the params the model gives it (its joint's range ends, the ratio or lead of each gear a pose moves a joint through, the wheel's turn and the closed values a pose moves through a cable), the parts it weighs and those it weighs in several instances with no stated count. A check reads both its own params and those the model gives it; its rests on is judged from its Reads.
+What a check's evaluation read: the params the check names (its pose, its sweep's steps, a mass check's density), the params the model gives it (its joint's range ends, the ratio or lead of each gear and the turn and closed values of each cable a pose moves a joint through) and the parts it weighs. What the check rests on is judged from them.
 _Avoid_: dependencies, inputs (of a check)
 
 **Claim**:
@@ -125,7 +125,7 @@ A param some check reads (see Reads), directly or through a param derived from i
 _Avoid_: covered (by a check), confirmed (by a check)
 
 **Tolerance**:
-How far the value a check evaluates may stray from its ledger value and still pass; one other than the default is shown beside its check. An interference check compares with no ledger value, so its overlap limit is not a tolerance, though one other than the default is shown beside its check too.
+How far the value a check evaluates may stray from its ledger value and still pass. An interference check compares with no ledger value, so its overlap limit is not a tolerance.
 _Avoid_: margin, allowance
 
 **Coverage sweep**:
@@ -166,9 +166,9 @@ The first part taken through modelling, checks and the report before any other p
 The first closed loop of a mechanism taken through its joints, the MJCF export and a posed check before any other joint is declared.
 
 **Known first**:
-A project that builds only its settled parts, those whose every dimension the sources settle (quoted, worked out from quotes, probed or measured), so no parameter rests on a proposed value but physics values and a sweep's resolution, and lists what waits; the user then builds on it, or has the reconstruction propose the rest as the complete model. Its project.yaml sets `known_first: true`.
+A project that builds only its settled parts, those whose every dimension the sources settle (quoted, worked out from quotes, probed or measured), and lists what waits. No parameter rests on a proposed value, physics values and a sweep's resolution aside. The user then builds on it, or has the reconstruction propose the rest as the complete model.
 _Avoid_: draft model, sources-only model
 
 **Waiting**:
-Of a part in a known-first project: not settled, since it needs a value the sources leave open, and so not built. Of a stated value: one no parameter uses and no check compares, as a waiting part's are; it is listed with the gaps no parameter names rather than found unused.
+Of a part in a known-first project: not settled, since it needs a value the sources leave open, and so not built. Of a stated value: one no parameter uses and no check compares, as a waiting part's are.
 _Avoid_: pending (for a value; PENDING REVIEW is a status), deferred

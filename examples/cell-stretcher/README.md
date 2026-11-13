@@ -14,10 +14,8 @@ Expected status: `VERIFIED: 0 errors, 0 warnings, 119/119 checks pass`
 
 No figure reading is needed, so no reviewer confirms one.
 
-`cadrev check` on this directory takes under a minute. `scripts/check` checks it and fails if it prints anything else. A change that moves the status updates the line above.
-
 `gen_cutfile.py` writes `evidence.yaml` and `checks.yaml` from the hand-written `evidence.src.yaml` and `checks.src.yaml`, adding a shape check and its sheet datums for each cut-file region a part reproduces; edit the `.src.yaml` files and rerun it (`../../scripts/cadrev python -I gen_cutfile.py`) rather than editing those two files.
 
 ## Sources
 
-The paper, both SVG sheets and both STL are committed, so a fresh clone needs no download. `cadrev check .` compares each with the SHA-256 hash in `project.yaml`, so a `[source-hash]` finding means a source file was changed.
+The paper, both SVG sheets and both STL are committed, so a fresh clone needs no download.
