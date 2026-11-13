@@ -51,10 +51,10 @@ wrote build/parts/compression_linkage.step
 VERIFIED: 0 errors, 2 warnings, 10/10 checks pass. Report: build/report.md
 ```
 
-```
-**VERIFIED**: 0 errors, 2 warnings. 10/10 geometry checks pass.
-Of 15 parameters, 9 rest on sources, 0 on measured values and 6 on proposed values.
-```
+`build/report.md` opens:
+
+> **VERIFIED**: 0 errors, 2 warnings. 10/10 geometry checks pass.\
+> Of 15 parameters, 9 rest on sources, 0 on measured values and 6 on proposed values.
 
 Here VERIFIED means that every number is accounted for and the geometry realises every checked source value. Anything the sources leave open stays listed as proposed, so the report never claims more than the evidence supports. A number read off a figure crop holds the status at VERIFIED PENDING REVIEW until a named reviewer confirms that reading; the example's Fig. 2A label has been confirmed.
 
