@@ -2,7 +2,7 @@
 name: cad-reverse-engineer
 description: Reverse-engineer one published object, from a single part up to a mechanism, as a parametric build123d model where every number traces to a quoted source and every stated value, motion included, is checked against it. Use when asked to rebuild a part, gripper or mechanism from a paper, patent, supplement or datasheet as CAD, STEP or a MuJoCo model.
 license: MIT
-compatibility: Runs its CLI locally through uv on Python 3.10-3.13; the first run downloads build123d, OCC and MuJoCo from PyPI, so it needs network access then.
+compatibility: Runs its CLI locally through uv on Python 3.12-3.14; the first run downloads build123d, OCC and MuJoCo from PyPI, so it needs network access then.
 ---
 
 # CAD reverse-engineer

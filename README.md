@@ -130,7 +130,7 @@ cadrev check my-project                    # everything; writes build/
 
 Then ask the agent something like *"reverse-engineer the gripper in this paper as CAD"*, or invoke `/cad-reverse-engineer` in Claude Code. The skill takes the agent through nine stages: scope, sources, ledger, released geometry, parameters, model, checks, motion and hand-over. Each ends on a criterion the CLI can confirm.
 
-The CLI runs locally and needs [uv](https://docs.astral.sh/uv/), with Python 3.10 to 3.13. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute), at the versions in the lockfile. The plugin ships from [`plugin/`](plugin): the skill, its CLI's source and lockfile, and nothing else of this repo.
+The CLI runs locally and needs [uv](https://docs.astral.sh/uv/), with Python 3.12 to 3.14. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute), at the versions in the lockfile. The plugin ships from [`plugin/`](plugin): the skill, its CLI's source and lockfile, and nothing else of this repo.
 
 ## Examples
 

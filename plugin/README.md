@@ -33,6 +33,6 @@ Built for Fable 5.2 and [benchmarked](https://github.com/Vini-41/cad-reverse-eng
 
 ## Requirements
 
-The skill's `cadrev` CLI runs locally on your machine and needs [uv](https://docs.astral.sh/uv/) and Python 3.10 to 3.13, which uv can install. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute), at the versions pinned in `skills/cad-reverse-engineer/tool/uv.lock`. Under Codex, allow network access as above.
+The skill's `cadrev` CLI runs locally on your machine and needs [uv](https://docs.astral.sh/uv/) and Python 3.12 to 3.14, which uv can install. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute), at the versions pinned in `skills/cad-reverse-engineer/tool/uv.lock`. Under Codex, allow network access as above.
 
 Source, examples and documentation: https://github.com/Vini-41/cad-reverse-engineer. MIT license.
