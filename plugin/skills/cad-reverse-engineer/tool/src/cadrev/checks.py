@@ -156,6 +156,8 @@ def _comparable(p: Project, c: dict) -> None:
         raise Fault("give evidence and key, or expect, the value it is compared with")
     elif name == "stroke" and "key" not in c:
         raise Fault("give key, the ledger value its stroke is compared with, or a claim")
+    elif name == "bbox" and not c.get("axes"):
+        raise Fault("give axes, each value of its evidence item and the axis it runs along")
 
 
 def _held(p: Project, c: dict) -> None:
@@ -712,15 +714,22 @@ class Checks:
             yield Result(cid, "shape", False, expected, measured, shape=fitted)
             return
         if sheet is None:
-            compared, (distance, at) = "surface", released.surface_distance(part.moved(where), body)
+            compared, (distance, at, on_body) = (
+                "surface",
+                released.surface_distance(part.moved(where), body),
+            )
         else:
             outline = released.outline(part, str(along)).moved(where)
-            compared, (distance, at) = "outline", released.outline_distance(outline, body)
+            compared, (distance, at, on_body) = (
+                "outline",
+                released.outline_distance(outline, body),
+            )
         tol = float(c.get("tol", p.length_tol))
         fitted |= {"distance": printed(distance)[0], "worst_point": list(printed(*at))}
         expected = f"{compared}s within {tol:g} of body {name}"
         shown = ", ".join(f"{v:.4g}" for v in at)
-        measured = f"{distance:.4g} largest {compared} distance, at ({shown}) on body {name}"
+        on = f"body {name}" if on_body else f"part {c['part']}, in body {name}'s frame"
+        measured = f"{distance:.4g} largest {compared} distance, at ({shown}) on {on}"
         yield Result(cid, "shape", distance <= tol, expected, measured, shape=fitted)
 
 

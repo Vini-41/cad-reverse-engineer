@@ -477,26 +477,26 @@ def outline(part, along: str):
     return found.clean()
 
 
-def outline_distance(a, b) -> tuple[float, tuple[float, float]]:
+def outline_distance(a, b) -> tuple[float, tuple[float, float], bool]:
     """The largest distance from a point on either outline's edges to the other's edges, sampled
-    along each edge, and the point on the sheet where it occurs."""
+    along each edge, the point on the sheet where it occurs, and whether that point is on b's."""
     from build123d import Compound
 
-    worst: tuple[float, tuple[float, float]] = (0.0, (0.0, 0.0))
-    for ours, theirs in ((a, b), (b, a)):
+    worst: tuple[float, tuple[float, float], bool] = (0.0, (0.0, 0.0), False)
+    for ours, theirs, on_b in ((a, b, False), (b, a, True)):
         edges = Compound(theirs.edges())
         for edge in ours.edges():
             for i in range(SAMPLES + 1):
                 point = edge.position_at(i / SAMPLES)
                 gap = edges.distance_to(point)
                 if gap > worst[0]:
-                    worst = (gap, (point.X, point.Y))
+                    worst = (gap, (point.X, point.Y), on_b)
     return worst
 
 
-def surface_distance(a, b) -> tuple[float, tuple[float, float, float]]:
+def surface_distance(a, b) -> tuple[float, tuple[float, float, float], bool]:
     """The largest distance from a point on either shape's surface to the other's surface, as
-    sampled (see distance.py), and the point where it occurs."""
+    sampled (see distance.py), the point where it occurs, and whether that point is on b's."""
     from . import distance
 
     return distance.surface_distance(a, b, SAMPLES)

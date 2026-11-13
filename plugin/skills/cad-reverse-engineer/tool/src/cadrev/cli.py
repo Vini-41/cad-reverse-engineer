@@ -108,10 +108,18 @@ def cmd_text(args) -> int:
         )
         return 1
     texts = sources.pages(p.source_path(args.source))
+    if args.page is not None and not 1 <= args.page <= len(texts):
+        print(f"{args.source} has {len(texts)} page{'s' * (len(texts) != 1)}", file=sys.stderr)
+        return 1
+    try:
+        pattern = re.compile(args.grep or "", re.I)
+    except re.error as exc:
+        print(f"--grep {args.grep!r} is not a regex: {exc}", file=sys.stderr)
+        return 1
     for n in [args.page] if args.page else range(1, len(texts) + 1):
         if args.grep:
             for line in texts[n - 1].splitlines():
-                if re.search(args.grep, line, re.I):
+                if pattern.search(line):
                     print(f"p{n}: {line.strip()}")
         else:
             print(f"===== {args.source} page {n}/{len(texts)} =====\n{texts[n - 1]}")
@@ -154,12 +162,15 @@ def cmd_coverage(args) -> int:
     p = _open(args)
     if p is None:
         return 1
-    ledger.check_sources(p)  # so the sweep leaves out a source it cannot read
+    before = len(p.findings)
+    ledger.check_sources(p)  # so the sweep leaves out a source it cannot read, and says why
+    problems = p.findings[before:]
+    _print(problems, sys.stderr)
     missing = ledger.coverage(p)
     for sid, where, line in missing:
         print(f"{sid} {where}: {line}")
     print(f"{len(missing)} unledgered stated quantities")
-    return 1 if missing else 0
+    return 1 if missing or problems else 0
 
 
 def cmd_check(args) -> int:

@@ -74,11 +74,12 @@ _TOLERANCES = 10
 _CHUNK = 64
 
 
-def surface_distance(a, b, samples: int) -> tuple[float, tuple[float, float, float]]:
-    """The largest distance from a point on either shape's surface to the other's surface, and the
-    point where it occurs: of the points an samples × samples grid over each face's parameters
-    gives, where they fall on the face rather than in a hole of it, and those samples + 1 along
-    each edge, a's then b's, the first point farthest from the other surface."""
+def surface_distance(a, b, samples: int) -> tuple[float, tuple[float, float, float], bool]:
+    """The largest distance from a point on either shape's surface to the other's surface, the
+    point where it occurs, and whether that point is on b's: of the points an samples × samples
+    grid over each face's parameters gives, where they fall on the face rather than in a hole of
+    it, and those samples + 1 along each edge, a's then b's, the first point farthest from the
+    other surface."""
     surfaces = (_Surface(a, samples), _Surface(b, samples))
     boxes = [s.bounding_box() for s in (a, b)]
     size = max(abs(v) for box in boxes for corner in (box.min, box.max) for v in corner)
@@ -114,7 +115,7 @@ def surface_distance(a, b, samples: int) -> tuple[float, tuple[float, float, flo
         # Of points equally far, the first in order, as computing every point's in turn finds.
         if gap > worst[0] or (gap == worst[0] > 0 and n < found):
             worst, found = (gap, (point.X, point.Y, point.Z)), n
-    return worst
+    return (*worst, found >= first)
 
 
 def _xyz(p) -> tuple[float, float, float]:

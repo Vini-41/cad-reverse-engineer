@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from . import Fault, units
-from .build import JOINT_TYPES, PHYSICS, Model, couplings, printed, range_ends
+from .build import JOINT_TYPES, Model, couplings, physics_of, printed, range_ends
 from .project import Project
 
 # Steps from the as-built pose to the one a check names: each step starts from the last, so the
@@ -173,10 +173,9 @@ class Mechanism:
 
     def _physics(self, kind: str, entry: dict) -> dict[str, str]:
         """The MJCF attributes of the physics params a joint or tendon names, in its units."""
-        own = JOINT_TYPES[entry["type"]].quantity if kind == "joint" else None
         return {
-            attr: _num(self.p.values[entry[key]] * self._size(str(quantity or own)))
-            for key, (attr, quantity) in PHYSICS[kind].items()
+            attr: _num(self.p.values[entry[key]] * self._size(quantity))
+            for key, (attr, quantity) in physics_of(kind, entry).items()
             if key in entry
         }
 
@@ -339,24 +338,27 @@ class Mechanism:
             for name, pair in model.loops.items()
         }
         jac1, jac2 = np.zeros((3, m.nv)), np.zeros((3, m.nv))
-        # Each coupling whose joints values leaves free to move: (driven, driver, ratio).
+        # Each coupling whose joints values leaves free to move: (it, driven, driver, ratio).
         coupled = [
-            (jid[c.driven], jid[c.driver], self._ratio(c))
+            (c, jid[c.driven], jid[c.driver], self._ratio(c))
             for c in self.couplings
             if not {c.driver, c.driven} <= values.keys()
         ]
         coupled_rows = np.zeros((len(coupled), m.nv))
-        for row, (driven, driver, ratio) in zip(coupled_rows, coupled):
+        for row, (_, driven, driver, ratio) in zip(coupled_rows, coupled):
             row[m.jnt_dofadr[driven]] += 1
             row[m.jnt_dofadr[driver]] -= ratio
 
+        def slips() -> list[float]:
+            """How far each coupled joint stands from where its coupling puts it, in MJCF units."""
+            return [
+                float(d.qpos[m.jnt_qposadr[driven]] - ratio * d.qpos[m.jnt_qposadr[driver]])
+                for _, driven, driver, ratio in coupled
+            ]
+
         def residual():
             loop_gaps = [d.site_xpos[a] - d.site_xpos[b] for a, b in loops.values()]
-            turns = [
-                [d.qpos[m.jnt_qposadr[driven]] - ratio * d.qpos[m.jnt_qposadr[driver]]]
-                for driven, driver, ratio in coupled
-            ]
-            return np.concatenate([*loop_gaps, *turns])
+            return np.concatenate([*loop_gaps, slips()])
 
         for step in range(1, STEPS + 1):
             for name, value in values.items():
@@ -386,6 +388,18 @@ class Mechanism:
                     "loop-open",
                     f"loop {name}: {first} and {second} stay {gap:.4g} apart with {at}; the links "
                     "cannot close there, so checks at this pose are not evaluated",
+                )
+                reached = False
+        # The solve weighs a loop's gap and a coupling's slip together, so a loop can close while
+        # a coupling the loops do not allow slips.
+        for (c, *_), slip in zip(coupled, slips()) if reached else ():
+            quantity = model.quantity(c.driven)
+            off = slip / size[c.driven]  # in the project's unit
+            if abs(off) > p.tolerance(quantity) / p.degrees(quantity):
+                p.error(
+                    "loop-open",
+                    f"{c.kind} {c.name} {c.law}, but with {at} {c.driven} stands {off:.4g} off "
+                    "that; the loops do not allow both, so checks at this pose are not evaluated",
                 )
                 reached = False
         for name, joint in model.moving.items() if reached else ():
