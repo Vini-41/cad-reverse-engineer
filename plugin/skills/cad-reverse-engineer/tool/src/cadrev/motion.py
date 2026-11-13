@@ -1,8 +1,10 @@
 """Export a model with joints as MJCF, and pose its assembly through MuJoCo.
 
-MuJoCo closes the loops; every check is still evaluated by cadrev on the build123d instances,
-placed where MuJoCo puts their bodies. The MJCF is in the project's units, without gravity: a
-kinematic model, each body framed as its part, so a datum is the same point in both.
+The loops close on MuJoCo's model of the export: Newton steps over the passive joints, on the
+site positions and Jacobians MuJoCo gives, so cadrev holds no kinematics of its own. Every check
+is still evaluated by cadrev on the build123d instances, placed where MuJoCo puts their bodies.
+The MJCF is in the project's units, without gravity: a kinematic model, each body framed as its
+part, so a datum is the same point in both.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from .build import JOINT_TYPES, PHYSICS, Model, couplings, printed, range_ends
 from .project import Project
 
 # Steps from the as-built pose to the one a check names: each step starts from the last, so the
-# loops close on the branch the model is built on.
+# loops close on the branch the model is built on, in at most ITERATIONS Newton steps each.
 STEPS = 20
 ITERATIONS = 50
 # MuJoCo's STL decoder takes a file of at most this many faces.
