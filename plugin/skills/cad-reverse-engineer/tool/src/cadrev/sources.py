@@ -130,7 +130,9 @@ def _value(printed: str) -> float:
     *whole, last = printed.split()
     over, _, under = last.partition("/")
     value = float(over) / float(under) if under else float(over)
-    return float(whole[0]) + value if whole else value
+    if not whole:
+        return value
+    return float(whole[0]) + (-value if whole[0].startswith("-") else value)  # -1 1/2 is -1.5
 
 
 def _tokens(text: str) -> list[_Token]:

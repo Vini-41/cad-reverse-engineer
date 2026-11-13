@@ -66,6 +66,7 @@ READING = {
     "Walls 3,5 mm": ([3.5], [5, 3]),
     "widths 1,5,10 mm": ([1, 5, 10], [1.5]),
     "a 1/4 inch shaft and a 1 1/2 in key": ([0.25, 1.5], [4, 0.5, 2]),
+    "set -1 1/2 in back": ([-1.5], [-0.5, 1.5]),
     "a 1/4-in. bolt": ([0.25], [1, 4]),
     "gear ratio 1/50": ([1, 50], [0.02]),
     "Eight tension springs": ([8, "eight", "Eight"], [18, "seven"]),
