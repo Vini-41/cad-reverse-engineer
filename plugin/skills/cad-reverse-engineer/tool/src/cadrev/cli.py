@@ -170,7 +170,7 @@ def cmd_coverage(args) -> int:
     for sid, where, line in missing:
         print(f"{sid} {where}: {line}")
     print(f"{len(missing)} unledgered stated quantities")
-    return 1 if missing or problems else 0
+    return 1 if missing or any(f.level == "error" for f in p.findings) else 0
 
 
 def cmd_check(args) -> int:
