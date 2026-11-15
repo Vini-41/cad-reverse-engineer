@@ -670,7 +670,7 @@ def _export_assembly(name: str, model: Model, path: Path) -> None:
         module: importlib.import_module(f"OCP.{module}")
         for module in (
             "IFSelect", "Message", "STEPCAFControl", "STEPControl", "TCollection", "TDataStd",
-            "TDocStd", "XCAFApp", "XCAFDoc",
+            "TDocStd", "TopLoc", "XCAFApp", "XCAFDoc",
         )
     }  # fmt: skip
     text = ocp["TCollection"].TCollection_ExtendedString
@@ -683,12 +683,17 @@ def _export_assembly(name: str, model: Model, path: Path) -> None:
     shapes = tool.ShapeTool_s(doc.Main())
     top = shapes.NewShape()
     named(top, text(name))
+    origin = ocp["TopLoc"].TopLoc_Location()
     parts = {}
     for inst, (part, location) in model.assembly.items():
+        shape = model.parts[part].wrapped
         if part not in parts:
-            parts[part] = shapes.AddShape(model.parts[part].wrapped, False)
+            # A part built at a location of its own is added without it, and each instance
+            # carries it: a located shape would be written as an unnamed part.
+            parts[part] = shapes.AddShape(shape.Located(origin), False)
             named(parts[part], text(part))
-        named(shapes.AddComponent(top, parts[part], location.wrapped), text(inst))
+        placed = location.wrapped.Multiplied(shape.Location())
+        named(shapes.AddComponent(top, parts[part], placed), text(inst))
     shapes.UpdateAssemblies()
     quiet = ocp["Message"].Message_Gravity.Message_Fail  # OCCT's transfer log, off the console
     for printer in ocp["Message"].Message.DefaultMessenger_s().Printers():

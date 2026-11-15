@@ -88,7 +88,7 @@ VERIFIED means every number is accounted for and the geometry matches every chec
 <table>
 <tr>
 <td width="230"><a href="examples/centrifuge"><img src="docs/images/centrifuge.webp" alt="A round printed centrifuge body with an amber rotor holding two PCR strips"></a></td>
-<td><b><a href="examples/centrifuge">Benchtop centrifuge</a></b><br><sub>Poór, <a href="https://doi.org/10.1016/j.ohx.2022.e00328"><i>HardwareX</i> 2022</a></sub><br><br>Printed parts with their switch and fan cut-outs, rebuilt from the authors' STEP files. 85 of 91 dimensions trace to a source; the other six wait on the fan's datasheet and the print density. The quickest to run: 15 seconds.</td>
+<td><b><a href="examples/centrifuge">Benchtop centrifuge</a></b><br><sub>Poór, <a href="https://doi.org/10.1016/j.ohx.2022.e00328"><i>HardwareX</i> 2022</a></sub><br><br>Printed parts with their switch and fan cut-outs, rebuilt from the authors' STEP files. 85 of its 91 parameters rest on sources; the other six wait on the fan's datasheet and the print density. The quickest to run: 15 seconds.</td>
 </tr>
 <tr>
 <td><a href="examples/compact-sspg"><img src="docs/images/compact-sspg.webp" alt="A planetary gearbox with an amber sun gear and three blue planet gears"></a></td>
@@ -96,7 +96,7 @@ VERIFIED means every number is accounted for and the geometry matches every chec
 </tr>
 <tr>
 <td><a href="examples/cell-stretcher"><img src="docs/images/cell-stretcher.webp" alt="A motion stage of laser-cut plates: two stepper motors turn two amber lead screws that move a grey carriage"></a></td>
-<td><b><a href="examples/cell-stretcher">Cell stretcher</a></b><br><sub>Kah et al., <a href="https://doi.org/10.1016/j.ohx.2020.e00162"><i>HardwareX</i> 2021</a></sub><br><br>A stepper-driven stage of laser-cut acrylic. Both lead screws are checked at the stated 8 mm per turn. The paper prints no plate dimensions, so the report names 138 of 170 as proposed, and each plate's outline is still held to the authors' cut sheets.</td>
+<td><b><a href="examples/cell-stretcher">Cell stretcher</a></b><br><sub>Kah et al., <a href="https://doi.org/10.1016/j.ohx.2020.e00162"><i>HardwareX</i> 2021</a></sub><br><br>A stepper-driven stage of laser-cut acrylic. Both lead screws are checked at the stated 8 mm per turn. The paper prints no plate dimensions, so the report names 138 of its 170 parameters as proposed, and each plate's outline is still held to the authors' cut sheets.</td>
 </tr>
 </table>
 

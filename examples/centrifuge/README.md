@@ -16,7 +16,7 @@ It takes about 15 seconds. Then open `build/assembly.step` in a CAD program and 
 
 A static assembly whose authors released STEP files. A fresh agent reconstructed it from the skill and these sources alone: the body, the bottom plate, the PCR-strip rotor for the 32.5 mm fan hub, the 80 mm fan as a frame and hub, and the four M3 screws.
 
-- **Dimensions come from the authors' files.** 74 probes read the body, the plate and the rotor: a bore's diameter, a hole pitch, a cut-out's corner. 85 of the model's 91 parameters trace to a source this way or to a quote.
+- **Dimensions come from the authors' files.** 74 probes read the body, the plate and the rotor: a bore's diameter, a hole pitch, a cut-out's corner. 85 of the model's 91 parameters rest on sources: these probes and the paper's quotes.
 - **Each built part is compared with the released one.** Three shape checks hold the body, plate and rotor to their STEP bodies, surface to surface.
 - **What is not built says why.** Ten released bodies are skipped with a reason: the variants not chosen, two fit testers, an arrow inlay and the tube adapters.
 - **A stated mass is checked.** The rotor weighs 16.02 g against the paper's 16 g, and the report says that check rests on a proposed PLA density.
