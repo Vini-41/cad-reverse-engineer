@@ -645,7 +645,7 @@ def _mass_model(p: Project, model: Model) -> dict[str, Mass]:
 
 def export(p: Project, model: Model) -> list[Path]:
     """Write build/parts/<part>.step and build/assembly.step."""
-    from build123d import Compound, export_step
+    from build123d import export_step
 
     out = p.root / "build"
     (out / "parts").mkdir(parents=True, exist_ok=True)
@@ -655,13 +655,45 @@ def export(p: Project, model: Model) -> list[Path]:
         written.append(out / "parts" / f"{name}.step")
         export_step(part, str(written[-1]))
     if model.assembly:
-        children = []
-        for inst, (part, location) in model.assembly.items():
-            child = model.parts[part].moved(location)
-            child.label = inst
-            children.append(child)
         written.append(out / "assembly.step")
-        export_step(
-            Compound(children=children, label=p.meta.get("name", "assembly")), str(written[-1])
-        )
+        _export_assembly(p.meta.get("name", "assembly"), model, written[-1])
     return written
+
+
+def _export_assembly(name: str, model: Model, path: Path) -> None:
+    """Write the assembly as a CAD program's tree shows it: each part once, under its own name,
+    and each instance an occurrence of its part, under the instance's name. build123d's
+    export_step names a part after the last of its instances."""
+    # OCP's modules re-export a compiled module whose names pyright cannot see, so they are
+    # looked up by name.
+    ocp = {
+        module: importlib.import_module(f"OCP.{module}")
+        for module in (
+            "IFSelect", "Message", "STEPCAFControl", "STEPControl", "TCollection", "TDataStd",
+            "TDocStd", "XCAFApp", "XCAFDoc",
+        )
+    }  # fmt: skip
+    text = ocp["TCollection"].TCollection_ExtendedString
+    named = ocp["TDataStd"].TDataStd_Name.Set_s
+    tool = ocp["XCAFDoc"].XCAFDoc_DocumentTool
+
+    doc = ocp["TDocStd"].TDocStd_Document(text("XmlOcaf"))
+    ocp["XCAFApp"].XCAFApp_Application.GetApplication_s().NewDocument(text("MDTV-XCAF"), doc)
+    tool.SetLengthUnit_s(doc, 0.001)  # millimetres, as export_step writes a part
+    shapes = tool.ShapeTool_s(doc.Main())
+    top = shapes.NewShape()
+    named(top, text(name))
+    parts = {}
+    for inst, (part, location) in model.assembly.items():
+        if part not in parts:
+            parts[part] = shapes.AddShape(model.parts[part].wrapped, False)
+            named(parts[part], text(part))
+        named(shapes.AddComponent(top, parts[part], location.wrapped), text(inst))
+    shapes.UpdateAssemblies()
+    quiet = ocp["Message"].Message_Gravity.Message_Fail  # OCCT's transfer log, off the console
+    for printer in ocp["Message"].Message.DefaultMessenger_s().Printers():
+        printer.SetTraceLevel(quiet)
+    writer = ocp["STEPCAFControl"].STEPCAFControl_Writer()
+    writer.Transfer(doc, ocp["STEPControl"].STEPControl_StepModelType.STEPControl_AsIs)
+    if writer.Write(str(path)) != ocp["IFSelect"].IFSelect_ReturnStatus.IFSelect_RetDone:
+        raise RuntimeError(f"could not write {path}")
