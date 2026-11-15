@@ -379,7 +379,8 @@ def test_known_first_project_lists_what_waits_in_place_of_findings(proj_dir, tmp
     assert run.report["waiting"] == {"values": [waits], "gaps": [asked]}
     waiting = run.md.split("## Waiting")[1].split("\n## ")[0]
     assert "| pin.L | 12 | notes | Sec. 3 |" in waiting and "| G-pin |" in waiting
-    assert "**Known first**" in run.md and "G-pin" not in run.md.split("## Open gaps")[1]
+    assert "**Known first**" in run.md
+    assert "G-pin" not in run.md.split("## Open gaps")[1].split("\n## ")[0]
     # Without it the same project is held to every rule again.
     meta(proj_dir, known_first=None)
     run = check(proj_dir)
