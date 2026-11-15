@@ -45,6 +45,10 @@ def test_every_channel_installs_the_plugin_from_plugin_and_finds_its_skill():
     assert interface["displayName"] and 0 < len(interface["shortDescription"]) <= 30
     for icon in (interface["composerIcon"], interface["logo"]):
         assert icon.startswith("./") and (PLUGIN / icon).is_file()
+    # OpenAI's directory lists a plugin whose skill runs a local program as Desktop only.
+    assert codex["requires_local_executor"] is True
+    assert 0 < len(interface["capabilities"]) <= 20
+    assert all(0 < len(label) <= 120 for label in interface["capabilities"])
     assert (PLUGIN / codex["skills"] / "cad-reverse-engineer" / "SKILL.md").is_file()
 
 
