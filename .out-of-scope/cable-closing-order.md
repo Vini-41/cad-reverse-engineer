@@ -4,7 +4,7 @@ cadrev does not model the order or law in which a cable closes its joints. A cab
 
 ## Why this is out of scope
 
-A stated order of closing, such as the LegClaw's toes bending proximal joint first through rubber-band preload ("the joints closer to the foot bend earlier ... (L2 < L3 < L4)", Cheng et al. 2026, p. 2), is behaviour: it comes from the springs, preloads and contact the cable pulls against. Modelling it would mean either
+A stated order of closing, such as a finger's joints bending proximal first through spring preload, is behaviour: it comes from the springs, preloads and contact the cable pulls against. Modelling it would mean either
 
 - letting MuJoCo find where the joints come to rest against their springs, which ADR-0007 and ADR-0009 keep out: a failed check could not say whether the reconstruction or the solver's springs and contacts were wrong, and the posed model cadrev checks would no longer be the one MuJoCo runs; or
 - a per-joint onset or ratio law with no stated closed pose, which ADR-0009 rejected: a closed angle is the question a source could answer, a bare ratio or onset is not.

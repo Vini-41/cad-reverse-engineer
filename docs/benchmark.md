@@ -5,7 +5,7 @@ How far a fresh agent gets with the skill alone, by model. Each row is one run: 
 ## Method
 
 - **Skill and tool:** main at `b8ac5d2` (2026-11-11), read from a detached checkout per run.
-- **Objects:** the four the examples hold. The centrifuge (static, released STEP files), COMPAct's 7.2:1 planetary gearbox (gears, released STL files), the cell stretcher (lead screws, laser-cut SVG sheets and STL files) and the LegClaw (linkages, cables and gears, from the paper and its supplement alone).
+- **Objects:** the three the examples hold. The centrifuge (static, released STEP files), COMPAct's 7.2:1 planetary gearbox (gears, released STL files) and the cell stretcher (lead screws, laser-cut SVG sheets and STL files).
 - **Brief:** [`dogfood/brief.md`](dogfood/brief.md) word for word under the object's entry, plus two lines: run `date` at the start and after the final `cadrev check`; and, since each run started inside this repo, leave its AGENTS.md and files alone and work as a user of the skill would.
 - **Models:** Fable 5.2 and Opus 5.5 under Claude Code; Sol (`gpt-6.1-sol`) under Codex. Each at `xhigh` effort, full access, no subagents, driven from T3 Code.
 - **Re-check:** each project was copied without `build/` and checked again with the run's own `cadrev`. Every number below is from that check's `report.json`, not from the run's own report.
@@ -45,21 +45,12 @@ Status is the re-check's. "Proposed" counts the params resting on proposed value
 | Sol | 37 | VERIFIED PENDING REVIEW | 315/315 | 14,116, 512 | 160 | 71 | ~31 min | **13,426 params `measured`**: it rendered the authors' cut sheets as images and took each vertex coordinate as a measured value, so their geometry enters the model as params |
 | reference | `examples/cell-stretcher` | VERIFIED | 119/119 | 171, 139 | 17 | 77 | | |
 
-### LegClaw
-
-| model | run | status | checks | params, proposed | probes | widened | active | audit |
-|---|---|---|---|---|---|---|---|---|
-| Fable 5.2 | 38 | VERIFIED PENDING REVIEW | 92/92 | 181, 104 | 0 | 13 | 57 min | 28 loops closed at every pose; mass checks at ±25%, the cap, where the example holds ±10% (total 478 g against 430 g, +11%) |
-| Opus 5.5 | 39 | VERIFIED PENDING REVIEW | 99/99 | 133, 67 | 0 | 14 | 44 min | 12 loops closed; mass checks at ±15% after the 420 g check failed at ±10% (466 g, +11%), named in its report as a judgement to revisit |
-| Sol | 40 | VERIFIED PENDING REVIEW | 114/114 | 177, 107 | 0 | 16 | 25 min | 12 loops closed; mass checks at ±25%, the cap (total 490 g against 430 g, +14%, and 420 g, +17%); the conflict between the two stated totals left open |
-| reference | `examples/legclaw` | VERIFIED | 73/73 | 124, 63 | 0 | 6 | | |
-
 ## What the runs show
 
 - **Every run reached VERIFIED PENDING REVIEW**, and every re-check agreed with the run's own report. The rules hold each model to the same bar; what differs is the route.
 - **Fable 5.2 and Opus 5.5 built every part from params.** Where the tool gives no honest route to a value (a cut sheet's dimensions, which no probe reads), both left it proposed under one gap and said so in a trip. Their projects are the ones a reviewer can audit as the examples are.
-- **Sol was the fastest, 25 to 40 active minutes against 44 to 69**, and twice reached the status by a route the rules did not close: COMPAct's parts are the authors' meshes (run 34), and the cell stretcher's sheet vertices are 13,426 `measured` params (run 37). Each passes every rule at `b8ac5d2`. #189 has the skill say why neither verifies anything, and #195 and #196 have the tool refuse both.
-- **Every model widened a mass check to pass a mismatch at least once.** All three passed the centrifuge's 13.15 g rotor against the stated 16 g at ±20%, though the PCR-strip rotor's released body weighs the 16 g; only Fable recorded the mismatch as a conflict naming that rotor. On the LegClaw, Fable and Sol held mass checks at ±25% and Opus at ±15%, where the example holds ±10%. #189 has the skill say a tolerance is what the evidence allows, and what to do past it.
+- **Sol was the fastest, 28 to 40 active minutes against 46 to 69**, and twice reached the status by a route the rules did not close: COMPAct's parts are the authors' meshes (run 34), and the cell stretcher's sheet vertices are 13,426 `measured` params (run 37). Each passes every rule at `b8ac5d2`. #189 has the skill say why neither verifies anything, and #195 and #196 have the tool refuse both.
+- **Every model widened a mass check to pass a mismatch at least once.** All three passed the centrifuge's 13.15 g rotor against the stated 16 g at ±20%, though the PCR-strip rotor's released body weighs the 16 g; only Fable recorded the mismatch as a conflict naming that rotor. #189 has the skill say a tolerance is what the evidence allows, and what to do past it.
 - **The same trips recur across models**, so they belong to the skill and the tool rather than to any model: below.
 - **Times are active minutes, not wall clock.** A run an account limit stopped was resumed with its context, and its minutes include re-reading it.
 

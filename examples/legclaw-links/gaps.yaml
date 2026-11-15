@@ -1,8 +1,0 @@
-# What the sources leave undefined, and how to close each gap (ask: authors | measure | datasheet | test).
-gaps:
-  - id: G-pitch
-    question: What are the pin-to-pin pitches of the compression, bent and plain linkages? Is Sec. 4.2 L14 = 37 mm the bent-linkage pitch?
-    ask: authors
-  - id: G-pins
-    question: What pin diameter, fit and retention do the linkage joints use?
-    ask: authors
