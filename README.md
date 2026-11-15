@@ -5,30 +5,68 @@
 <h1 align="center">cad-reverse-engineer</h1>
 
 <p align="center">
-  <b>Rebuild published hardware as CAD that anyone can audit, number by number, against the paper.</b>
+  <b>Turn a paper, patent or datasheet into parametric CAD, with every dimension traced to where it came from.</b>
 </p>
 
 <p align="center">
-  <a href="#install">Install</a> ·
+  <a href="#try-it">Try it</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#examples">Examples</a> ·
-  <a href="docs/benchmark.md">Benchmark</a> ·
-  <a href="CHANGELOG.md">Changelog</a>
+  <a href="#install">Install</a>
 </p>
 
 <p align="center">
   <img src="docs/images/compact-sspg.webp" width="640" alt="A planetary gearbox in CAD: an amber sun gear and three blue planet gears inside a grey casing with the ring gear cut into it">
   <br>
-  <sub>The COMPAct 7.2:1 gearbox in <a href="examples/compact-sspg"><code>examples/compact-sspg</code></a>: gears built from the paper's tooth counts, every part shape-checked against the authors' STL. Rendered from its <code>build/model.mjcf</code>, secondary carrier hidden.</sub>
+  <sub>The COMPAct 7.2:1 gearbox in <a href="examples/compact-sspg"><code>examples/compact-sspg</code></a>, rebuilt from the paper's tooth counts and held to the authors' STL meshes. Secondary carrier hidden.</sub>
 </p>
 
-cad-reverse-engineer is a skill for coding agents, with its CLI, `cadrev`. Built for Fable 5.2 and [benchmarked](docs/benchmark.md) across Anthropic's and OpenAI's frontier models, it runs in Claude Code, Codex and any agent that reads skills.
+cad-reverse-engineer is a skill for coding agents, with its CLI, `cadrev`. Give the agent the documents a device was published in, and it builds:
 
-Papers rarely ship CAD. They give an envelope table in the supplement, a few labelled dimensions in a figure, a kinematic length in the methods, and part numbers for the servos. A reconstruction built from that mixes stated values with guesses, and once the STEP file exists, nobody can tell which number is which.
+- **CAD you can open and change.** One STEP file per part and one for the assembly, for SolidWorks, Fusion, Onshape or FreeCAD. Behind them is a parametric [build123d](https://github.com/gumyr/build123d) model: every dimension is a named value in `params.yaml`, so you change a number and rebuild.
+- **A mechanism that moves.** Joints, gear ratios and lead screws export to MuJoCo, and stated motion is checked on the model: one turn of this gearbox's sun moves its carrier 50°, as its 7.2:1 ratio says.
+- **A report of where each dimension came from.** It was quoted from a document, probed from a file the authors released, or proposed because nothing states it. Each proposed value is listed beside the question that would settle it.
+
+Published hardware rarely comes with CAD you can edit. A paper gives an envelope table and a few labelled figures, a datasheet one drawing, a repository a folder of meshes. A model rebuilt from that mixes stated values with guesses, and once the STEP file exists, nobody can tell which is which. This keeps them apart, and checks the built geometry against every value the sources state.
+
+## Try it
+
+With [uv](https://docs.astral.sh/uv/) installed, rebuild the benchtop centrifuge from its paper and the authors' STEP files:
+
+```
+git clone https://github.com/Vini-41/cad-reverse-engineer
+cd cad-reverse-engineer
+scripts/cadrev check examples/centrifuge
+```
+
+```
+building model.py
+evaluating checks.yaml
+wrote build/parts/body.step
+...
+wrote build/assembly.step
+
+VERIFIED: 0 errors, 0 warnings, 88/88 checks pass. Report: build/report.md
+```
+
+The first run downloads build123d, OCC and MuJoCo (about a minute); the check itself takes about 15 seconds. Open `examples/centrifuge/build/assembly.step` in your CAD program, then read `build/report.md` beside it. It opens:
+
+> **VERIFIED**: 0 errors, 0 warnings. 88/88 geometry checks pass.\
+> Of 91 parameters, 85 rest on sources, 0 on measured values and 6 on proposed values.
+
+and, after its sources, lists what they leave open:
+
+| gap | question | close by | params |
+|---|---|---|---|
+| G-fan | What are the 80 mm fan's thickness, blade-bore diameter and screw-hole layout (AKYGA AW-8A-BK datasheet)? | datasheet | fan_t, fan_bore_d, fan_rot |
+| G-seat | Is the fan's hub flush with its frame's top face, so that the rotor's hub ledge sits level with the deck underside? | measure | fan_top_y, rotor_seat_y |
+| G-pla | What does the PLA used for the rotor weigh per cm³ as printed? | measure | pla_density |
+
+Below that, every check, parameter and quote is a table row you can audit against the paper.
 
 ## How it works
 
-This project keeps that boundary visible and machine-checked. Each step is a file in the project directory, and `cadrev check` holds them to each other:
+A reconstruction is a directory of plain files, and `cadrev check` holds them to each other:
 
 ```
  project.yaml  evidence.yaml   params.yaml      model.py     checks.yaml     report.md
@@ -38,42 +76,35 @@ This project keeps that boundary visible and machine-checked. Each step is a fil
                      └─── compared with the ledger, not params ───┘
 ```
 
-1. **Ledger.** Every number a source states about the object is recorded as a verbatim quote, located in a SHA-256-pinned copy of the source. Numbers printed only inside figures are recorded as hashed image crops with a human-confirmed reading. Geometry the authors released (STEP, STL, laser-cut SVG) is probed rather than quoted.
-2. **Parameters.** The model can only get numbers from `params.yaml`, and each parameter declares its basis: `source`, `derived`, `measured` or `proposed`. The model file is linted so that it contains no dimension literals.
-3. **Checks.** Published values become geometry checks (envelopes, pin pitches, masses, interference, motion at a stated pose), evaluated on the built solids and compared with the ledger, never with the parameters.
-4. **Coverage.** A sweep lists every stated quantity in the sources. Each one is either ledgered or skipped with a reason.
-5. **Report.** `build/report.md` states what is verified, which parameters rest on proposed values, which conflicts between sources are still open, and which questions to send the authors.
+1. **Ledger.** Every number the sources state about the object is recorded as a verbatim quote, located in a hash-pinned copy of the source. A number printed only inside a figure is a crop of that figure, with a reading a person confirms. Geometry the authors released (STEP, STL, laser-cut SVG) is probed: its dimensions are read from the file itself.
+2. **Parameters.** The model takes every number from `params.yaml`, where each declares its basis: `source`, `derived`, `measured` or `proposed`. `model.py` is linted to hold no dimensions of its own.
+3. **Checks.** Each published value (an envelope, a hole pitch, a bore, a mass, a gear ratio, a stroke) is evaluated on the built solids and compared with the ledger, never with the parameters. A part whose file the authors released is also compared with it, surface to surface.
+4. **Report.** `build/report.md` gives the status, the questions that would replace each proposed value, the conflicts between sources, and then the full audit trail.
 
-```
-$ cadrev check examples/legclaw-links
-wrote build/parts/compression_linkage.step
-...
-VERIFIED: 0 errors, 2 warnings, 10/10 checks pass. Report: build/report.md
-```
+VERIFIED means every number is accounted for and the geometry matches every checked source value. It does not mean the sources settle everything: what they leave open stays listed as proposed, so the report never claims more than the evidence supports. A number read off a figure holds the status at VERIFIED PENDING REVIEW until a named person confirms the reading.
 
-`build/report.md` opens:
+## Examples
 
-> **VERIFIED**: 0 errors, 2 warnings. 10/10 geometry checks pass.\
-> Of 15 parameters, 9 rest on sources, 0 on measured values and 6 on proposed values.
+<table>
+<tr>
+<td width="230"><a href="examples/centrifuge"><img src="docs/images/centrifuge.webp" alt="A round printed centrifuge body with an amber rotor holding two PCR strips"></a></td>
+<td><b><a href="examples/centrifuge">Benchtop centrifuge</a></b><br><sub>Poór, <a href="https://doi.org/10.1016/j.ohx.2022.e00328"><i>HardwareX</i> 2022</a></sub><br><br>Printed parts with their switch and fan cut-outs, rebuilt from the authors' STEP files. 85 of 91 dimensions trace to a source; the other six wait on the fan's datasheet and the print density. The quickest to run: 15 seconds.</td>
+</tr>
+<tr>
+<td><a href="examples/compact-sspg"><img src="docs/images/compact-sspg.webp" alt="A planetary gearbox with an amber sun gear and three blue planet gears"></a></td>
+<td><b><a href="examples/compact-sspg">COMPAct 7.2:1 gearbox</a></b><br><sub>Singh et al., <a href="https://arxiv.org/abs/2510.07197">arXiv 2025</a></sub><br><br>A planetary gearbox for a robot actuator. Its gears are built from the paper's tooth counts and module, its ratio is checked in motion, and all six parts are held to the authors' STL meshes.</td>
+</tr>
+<tr>
+<td><a href="examples/cell-stretcher"><img src="docs/images/cell-stretcher.webp" alt="A motion stage of laser-cut plates: two stepper motors turn two amber lead screws that move a grey carriage"></a></td>
+<td><b><a href="examples/cell-stretcher">Cell stretcher</a></b><br><sub>Kah et al., <a href="https://doi.org/10.1016/j.ohx.2020.e00162"><i>HardwareX</i> 2021</a></sub><br><br>A stepper-driven stage of laser-cut acrylic. Both lead screws are checked at the stated 8 mm per turn. The paper prints no plate dimensions, so the report names 138 of 170 as proposed, and each plate's outline is still held to the authors' cut sheets.</td>
+</tr>
+</table>
 
-Here VERIFIED means that every number is accounted for and the geometry realises every checked source value. Anything the sources leave open stays listed as proposed, so the report never claims more than the evidence supports. A number read off a figure crop holds the status at VERIFIED PENDING REVIEW until a named reviewer confirms that reading; the example's Fig. 2A label has been confirmed.
-
-`cadrev check` writes `build/`:
-
-- `parts/*.step`: one STEP file per part.
-- `assembly.step`: the assembly, with labelled instances.
-- `model.mjcf`: the mechanism for MuJoCo, when the model declares joints.
-- `overlays/*.png`: model edges drawn over figures.
-- `report.md` and `report.json`: the verification report.
-
-## Two ways to build
-
-The agent asks which you want before it starts:
-
-- **The complete model.** Every part is built. Each value the sources leave open is proposed, beside the question that would settle it.
-- **Known first.** Only the parts the sources settle completely are built and checked. The rest wait, each with its question, until you build on the model yourself or have the agent propose the rest.
+A fresh agent built each one from the skill and its sources alone; the [benchmark](docs/benchmark.md) compares how Anthropic's and OpenAI's frontier models do at that. Every example's sources are committed, so each runs from a fresh clone, and `scripts/check` holds it to the status its README states.
 
 ## Install
+
+The skill is built for Fable 5.2, and runs in Claude Code, Codex and any agent that reads skills.
 
 <details open>
 <summary><b>Claude Code</b></summary>
@@ -112,7 +143,7 @@ npx skills add Vini-41/cad-reverse-engineer
 </details>
 
 <details>
-<summary><b>Standalone CLI</b></summary>
+<summary><b>The CLI alone</b></summary>
 
 ```bash
 git clone https://github.com/Vini-41/cad-reverse-engineer
@@ -128,52 +159,16 @@ cadrev check my-project                    # everything; writes build/
 
 </details>
 
-Then ask the agent something like *"reverse-engineer the gripper in this paper as CAD"*, or invoke `/cad-reverse-engineer` in Claude Code. The skill takes the agent through nine stages: scope, sources, ledger, released geometry, parameters, model, checks, motion and hand-over. Each ends on a criterion the CLI can confirm.
+Then give the agent your documents and ask for the CAD: *"reverse-engineer the gripper in this paper"*. It asks first which build you want:
 
-The CLI runs locally and needs [uv](https://docs.astral.sh/uv/), with Python 3.12 to 3.14. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute), at the versions in the lockfile. The plugin ships from [`plugin/`](plugin): the skill, its CLI's source and lockfile, and nothing else of this repo.
+- **The complete model.** Every part is built, and each value the sources leave open is proposed beside the question that would settle it.
+- **Known first.** Only the parts the sources settle completely are built and checked. The rest wait, each with its question, until you build on the model yourself or have the agent propose the rest.
 
-## Examples
-
-| Example | What it shows |
-|---|---|
-| [LegClaw&nbsp;linkages](examples/legclaw-links)<br><sub>Cheng&nbsp;et&nbsp;al., [*Advanced&nbsp;Science*&nbsp;2026](https://doi.org/10.1002/advs.202523518)</sub> | Each kind of evidence: supplement tables, methods quotes, a figure-label crop, two source conflicts, and proposed pin pitches with the questions that would settle them |
-| [LegClaw](examples/legclaw)<br><sub>the&nbsp;same&nbsp;sources</sub> | The full leg-claw with its motion: four-bars, servos and the cables that close the claws, exported to MuJoCo |
-| [Benchtop&nbsp;centrifuge](examples/centrifuge)<br><sub>Soma&nbsp;Poór, [*HardwareX*&nbsp;2022](https://doi.org/10.1016/j.ohx.2022.e00328)</sub> | A static project checked against the authors' released STEP files |
-| [Cell&nbsp;stretcher](examples/cell-stretcher)<br><sub>Kah&nbsp;et&nbsp;al., [*HardwareX*&nbsp;2021](https://doi.org/10.1016/j.ohx.2020.e00162)</sub> | Two lead screws driving one carriage, checked against the authors' laser-cut SVG sheets and STL |
-| [COMPAct&nbsp;7.2:1&nbsp;gearbox](examples/compact-sspg)<br><sub>Singh&nbsp;et&nbsp;al., [arXiv&nbsp;2025](https://arxiv.org/abs/2510.07197)</sub> | A planetary train checked from its tooth counts and against the authors' STL |
-
-The LegClaw linkages are small by design; fresh agents built the other four from the skill and the sources alone. Every example's sources are committed, so `cadrev check examples/<name>` runs from a fresh clone, and `scripts/check` holds each one to the status its README states.
-
-## Repository layout
-
-```
-plugin/                    the plugin, as it installs
-  .claude-plugin/          its Claude Code manifest
-  .codex-plugin/           its Codex manifest
-  skills/cad-reverse-engineer/
-    SKILL.md               the work, stage by stage
-    references/            project file formats; the model contract
-    cadrev                 runs the CLI from any directory
-    tool/                  the cadrev Python package and its lockfile
-.claude-plugin/            the Claude Code marketplace
-.agents/plugins/           the Codex marketplace
-skills.sh.json             where npx skills finds the skill
-examples/                  worked reconstructions, with their sources
-tests/                     the cadrev tests, which run every example
-docs/adr/                  the decisions behind the rules
-docs/benchmark.md          how far a fresh agent gets, by model
-GLOSSARY.md                the terms the skill, the CLI and its findings use
-scripts/check              the repo's only CI, run locally
-```
+The CLI runs on your machine and needs [uv](https://docs.astral.sh/uv/), with Python 3.12 to 3.14, which uv can install. The plugin ships from [`plugin/`](plugin): the skill, its CLI's source and lockfile, and nothing else of this repo.
 
 ## Development
 
-`scripts/check` is the repo's only CI, run locally before every merge: ruff, pyright and the tests, which run every example. `scripts/check --lint` runs the first two alone. The tests drive the CLI as an agent does:
-
-```bash
-cd plugin/skills/cad-reverse-engineer/tool
-uv run --extra test pytest -q -n auto ../../../../tests -m "not slow"   # without the examples
-```
+`scripts/check` is the repo's only CI, run locally before every merge: ruff, pyright and the tests, which run every example. [`GLOSSARY.md`](GLOSSARY.md) defines the terms the skill, the CLI and its findings use, and [`docs/adr/`](docs/adr) records the decisions behind the rules.
 
 To report a problem, open an issue with the command you ran, the finding it printed, and the project directory or the paper.
 
