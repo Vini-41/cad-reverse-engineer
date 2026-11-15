@@ -17,7 +17,7 @@ A dogfood run's trips are grouped into tickets, and the user approves the groupi
 - What gets built, and in what order: milestones, specs, a ticket breakdown, a trip grouping.
 - Any design choice a brief leaves open: stop and ask, with the options and your recommendation.
 - Figure readings, and so VERIFIED status.
-- A PR that changes a protected path, which the user merges: the shipped skill (`SKILL.md`, `references/`, the plugin manifests, `LICENSE`), `README.md` and `plugin/README.md`, and what steers or gates agents (`AGENTS.md`, `CODING_STANDARDS.md`, `docs/agents/`, `.claude/`, `.agents/`, `scripts/check`). Every other PR merges once `scripts/check` is green locally on its head, in any lane.
+- A PR that changes a protected path, which the user merges: the shipped skill (`SKILL.md`, `references/`, the plugin manifests, `LICENSE`), `README.md` and `plugin/README.md`, and what steers or gates agents (`AGENTS.md`, `docs/agents/`, `.claude/`, `.agents/`, `scripts/check`). Every other PR merges once `scripts/check` is green locally on its head, in any lane.
 - The release: its tag, GitHub release and directory submissions.
 
 Agents own the rest: building within an approved brief, its tests, review, `scripts/check`, labels and close-outs.
@@ -45,4 +45,4 @@ The user clears what waits on them in one daily pass:
 
 ## Changing the rules
 
-A rule joins `AGENTS.md`, `CODING_STANDARDS.md` or `docs/agents/` once the same mistake has happened twice, in the PR that needs it.
+A rule joins `AGENTS.md` or `docs/agents/` once the same mistake has happened twice, in the PR that needs it.
