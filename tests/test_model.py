@@ -311,7 +311,9 @@ def test_interference_names_the_worst_overlap_and_passes_under_a_stated_limit(pr
     assert "| clear | 750 |" in run.md
 
 
-def test_assembly_step_names_each_part_once_and_each_instance_as_placed(proj_dir):
+@pytest.mark.parametrize("link", ["link", "Rot(0, 0, 180) * link"])  # as built, and located
+def test_assembly_step_names_each_part_once_and_each_instance_as_placed(proj_dir, link):
+    remodel(proj_dir, '"parts": {"link": link}', f'"parts": {{"link": {link}}}')
     stack(proj_dir, 3)
     check(proj_dir)
     step = (proj_dir / "build" / "assembly.step").read_text()
