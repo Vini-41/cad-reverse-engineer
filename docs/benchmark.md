@@ -21,7 +21,7 @@ Every check passed in every run. † Reached by a shortcut the tool now refuses,
 ## Method
 
 - **Under test:** the skill and its CLI at `b8ac5d2` (2026-11-11). Fable 5.2 and Opus 5.5 ran in Claude Code, Sol (`gpt-6.1-sol`) in Codex, each at `xhigh` effort with no subagents.
-- **Brief:** [`dogfood/brief.md`](dogfood/brief.md), word for word, in an empty directory.
+- **Brief:** one fixed prompt for every run, naming the device and its sources. The agent read nothing else in the repo, worked in an empty directory, and no one answered its questions.
 - **Counts:** from checking a copy of each project again afterwards, not from the run's own report. Minutes are the time the agent worked.
 - **One run per model per device:** a record of what each did, not a ranking.
 
