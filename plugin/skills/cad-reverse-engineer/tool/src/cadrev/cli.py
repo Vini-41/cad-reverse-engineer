@@ -193,11 +193,14 @@ def cmd_check(args) -> int:
     if modelled and not args.no_build:
         from . import build, motion, overlay
 
+        # A build and its checks can take a minute: say what the wait is for as it starts.
+        print("building model.py", flush=True)
         start = time.perf_counter()
         model = build.build(p)
         build_seconds = round(time.perf_counter() - start, 1)
         if model is not None:
             mechanism = motion.Mechanism(p, model) if model.joints else None
+            print("evaluating checks.yaml", flush=True)
             results, read = checks.Checks(p, model, mechanism, unplanned).run()
             coarsened = mechanism.coarsened if mechanism else {}
             if not partial:

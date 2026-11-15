@@ -285,11 +285,9 @@ def test_every_command_refuses_a_project_it_cannot_read_and_writes_nothing(
 def test_check_prints_each_finding_then_the_status_line_with_its_counts(proj_dir):
     add(proj_dir, gaps="{id: G2}")
     change(proj_dir, "checks", "pitch", tol=1.51)
-    lines = check(proj_dir).out.splitlines()
-    assert sorted(line.split("]")[0] for line in lines[2:4]) == [
-        "error: [tolerance-cap",
-        "warning: [gap-unused",
-    ]
+    run = check(proj_dir)
+    lines = run.out.splitlines()
+    assert sorted(run.findings) == [("error", "tolerance-cap"), ("warning", "gap-unused")]
     assert lines[-1] == (
         "NOT VERIFIED: 1 errors, 1 warnings, 5/5 checks pass. Report: build/report.md"
     )

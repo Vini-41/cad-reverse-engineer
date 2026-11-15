@@ -277,7 +277,12 @@ def write(
         f"{headline['checks_passed']}/{headline['checks']} geometry checks pass.",
         f"Of {headline['params']} parameters, {headline['source']} rest on sources, "
         f"{headline['measured']} on measured values and {headline['proposed']} on proposed values"
-        + (f"; {physics} more are proposed physics values." if physics else "."),
+        + (
+            f"; {physics} more {'is a' if physics == 1 else 'are'} proposed physics "
+            f"value{'s' * (physics != 1)}."
+            if physics
+            else "."
+        ),
         "",
     ]
     if exact:
@@ -306,7 +311,8 @@ def write(
     md += [
         "VERIFIED means every number in the model is accounted for and the geometry matches "
         "every checked source value. It does not mean the sources fully define the part: "
-        "proposed parameters are reconstruction choices, listed below.",
+        "proposed parameters are reconstruction choices, listed under Open gaps beside the "
+        "questions that would settle them.",
         "",
     ]
     if status == PENDING_REVIEW:
@@ -316,6 +322,9 @@ def write(
             "`confirmed_by`, the project is VERIFIED.",
             "",
         ]
+    if findings:
+        md += ["## Findings", ""]
+        md += [f"- **{f.level}** `{f.rule}`: {f.message}" for f in findings] + [""]
     md += ["## Sources", ""]
     md += _table(
         ["id", "kind", "citation", "sha256"],
@@ -324,6 +333,63 @@ def write(
             for s in p.meta.get("sources", [])
         ],
     )
+    if waits is not None:
+        md += [
+            "## Waiting",
+            "",
+            "Each stated value below waits: the part it belongs to needs a value the sources "
+            "leave open. Each gap below asks for such a value, and no param names it yet.",
+            "",
+        ]
+        md += _table(
+            ["stated value", "value", "source", "locator"],
+            [
+                [f"{v['evidence']}.{v['key']}", v["value"], v["source"], v["locator"]]
+                for v in waits["values"]
+            ],
+        )
+        md += _table(
+            ["gap", "question", "close by"],
+            [[g["gap"], g["question"] or "", g["ask"] or ""] for g in waits["gaps"]],
+        )
+    md += [
+        "## Open gaps",
+        "",
+        "What the sources leave open. Each answer would replace the params beside its question "
+        "with a stated value.",
+        "",
+    ]
+    affected = {gap: [n for n, s in p.params.items() if s.get("gap") == gap] for gap in p.gaps}
+    md += _table(
+        ["gap", "question", "close by", "params"],
+        [
+            [gap, g.get("question", ""), g.get("ask", ""), ", ".join(affected[gap])]
+            for gap, g in p.gaps.items()
+            if waits is None or affected[gap]  # a known-first project lists the rest as waiting
+        ],
+    )
+    md += ["## Conflicts between sources", ""]
+    md += _table(
+        ["id", "evidence", "summary", "resolution"],
+        [
+            [
+                c.get("id"),
+                ", ".join(c.get("evidence", [])),
+                c.get("summary", ""),
+                c.get("resolution") or "**open**",
+            ]
+            for c in p.conflicts
+        ],
+    )
+    if awaiting:
+        md += ["## Figure readings awaiting human confirmation", ""]
+        for a in awaiting:
+            md += [
+                f"- **{a['evidence']}** ({a['locator']}): reads “{a['reading']}” in `{a['image']}`",
+                "",
+                f"  ![{a['evidence']}](../{a['image']})",
+                "",
+            ]
     md += ["## Geometry checks against the sources", ""]
     md += _table(
         ["check", "result", "expected (evidence)", "measured", "interpretation"],
@@ -421,57 +487,6 @@ def write(
             for q in p.probes
         ],
     )
-    if awaiting:
-        md += ["## Figure readings awaiting human confirmation", ""]
-        for a in awaiting:
-            md += [
-                f"- **{a['evidence']}** ({a['locator']}): reads “{a['reading']}” in `{a['image']}`",
-                "",
-                f"  ![{a['evidence']}](../{a['image']})",
-                "",
-            ]
-    md += ["## Conflicts between sources", ""]
-    md += _table(
-        ["id", "evidence", "summary", "resolution"],
-        [
-            [
-                c.get("id"),
-                ", ".join(c.get("evidence", [])),
-                c.get("summary", ""),
-                c.get("resolution") or "**open**",
-            ]
-            for c in p.conflicts
-        ],
-    )
-    if waits is not None:
-        md += [
-            "## Waiting",
-            "",
-            "Each stated value below waits: the part it belongs to needs a value the sources "
-            "leave open. Each gap below asks for such a value, and no param names it yet.",
-            "",
-        ]
-        md += _table(
-            ["stated value", "value", "source", "locator"],
-            [
-                [f"{v['evidence']}.{v['key']}", v["value"], v["source"], v["locator"]]
-                for v in waits["values"]
-            ],
-        )
-        md += _table(
-            ["gap", "question", "close by"],
-            [[g["gap"], g["question"] or "", g["ask"] or ""] for g in waits["gaps"]],
-        )
-    md += ["## Open gaps", ""]
-    affected = {gap: [n for n, s in p.params.items() if s.get("gap") == gap] for gap in p.gaps}
-    md += _table(
-        ["gap", "question", "close by", "params"],
-        [
-            [gap, g.get("question", ""), g.get("ask", ""), ", ".join(affected[gap])]
-            for gap, g in p.gaps.items()
-            if waits is None or affected[gap]  # a known-first project lists the rest as waiting
-        ],
-    )
     if images:
         md += [
             "## Figure overlays",
@@ -482,8 +497,6 @@ def write(
             *(f"![{i.stem}](overlays/{i.name})" for i in images),
             "",
         ]
-    md += ["## Findings", ""]
-    md += [f"- **{f.level}** `{f.rule}`: {f.message}" for f in findings] or ["_None._"]
     (out / "report.md").write_text("\n".join(md) + "\n", encoding="utf8")
 
     data = {
