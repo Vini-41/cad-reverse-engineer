@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# The repo's only CI, run locally: green before every commit, and on a PR's head before it merges.
+# The repo's one check: green locally before every commit and on a PR's head before it merges,
+# and run by .github/workflows/check.yml on each PR and on main.
 #
 #   scripts/check          # lint, types and every test, the examples among them
 #   scripts/check --lint   # ruff and pyright alone, in seconds, for after an edit
