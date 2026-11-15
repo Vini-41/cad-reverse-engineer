@@ -11,7 +11,7 @@ An object's sources that no example holds yet are downloaded to `~/Documents/Pro
 - A paper in PubMed Central: find its PMC id with Europe PMC's search API (`https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=DOI:<doi>&format=json`), then fetch `https://pmc-oa-opendata.s3.amazonaws.com/PMC<id>.1/PMC<id>.1.pdf`.
 - A Mendeley Data dataset: `https://data.mendeley.com/public-api/datasets/<id>/files?folder_id=root&version=<v>` lists each file's `download_url` and `sha256_hash`; check each download against its hash. An empty list means the files sit in folders: `https://data.mendeley.com/public-api/datasets/<id>/folders/<v>` lists each folder's `id`, to pass as `folder_id`.
 
-After the run, its report becomes the run's section in the object's log, each trip it names is reproduced and filed as [repro-brief.md](repro-brief.md) says, and then the checkout worktree is removed. An object's first run starts its log, headed as `legclaw-run-log.md` is: the object, the spec and issue behind its runs, and how each run was briefed.
+After the run, its report becomes the run's section in the object's log, each trip it names is reproduced and filed as [repro-brief.md](repro-brief.md) says, and then the checkout worktree is removed. An object's first run starts its log, headed as `centrifuge-run-log.md` is: the object, the spec and issue behind its runs, and how each run was briefed.
 
 A run that ends VERIFIED PENDING REVIEW, or VERIFIED, becomes `examples/<object>`:
 
@@ -19,7 +19,7 @@ A run that ends VERIFIED PENDING REVIEW, or VERIFIED, becomes `examples/<object>
 2. Correct any slip the log records, and record it there.
 3. Have the user confirm each figure reading against its crop, under their own name in `confirmed_by`.
 4. Write its README: what it shows, its sources and their credit, and the `Expected status:` line that `scripts/check` holds it to. That line is all `scripts/check` needs to check the example. A full `cadrev check` of the example finishes in about 2 minutes on a laptop; make a slower one faster before it is committed.
-5. Keep the run's Python as the run wrote it: add the example to the `examples/legclaw` entries in `ruff.toml`, under both `[format] exclude` and `[lint.per-file-ignores]`.
+5. Keep the run's Python as the run wrote it: `ruff.toml` leaves `examples/*/*.py` unformatted and lets its long lines stand.
 
 ---
 
@@ -45,19 +45,6 @@ Report at the end (≤40 lines):
 ---
 
 ## Objects
-
-### LegClaw
-
-Log: `legclaw-run-log.md`.
-
-- **goal:** reconstruct the full LegClaw, both legs and their mount, with its motion.
-- **sources:** (CC-BY) `<checkout>/examples/legclaw-links/sources/Cheng2026_LegClaw.pdf` and `Cheng2026_LegClaw_supplementary.docx` beside it
-- **report items:**
-  - whether `build/model.mjcf` loaded with every loop closed;
-  - joint counts by type, the loops and the gears;
-  - each stated range of motion and the `range` check that covers it, and each sweep with its pose count;
-  - each Table S2 row, checked or not modelled and why;
-  - the total-mass checks, evaluated against stated;
 
 ### Centrifuge
 

@@ -1,9 +1,0 @@
-# Geometry checks. Expected values come from evidence.yaml, never from params.yaml.
-checks:
-  - {id: env-compression, kind: bbox, part: compression_linkage, evidence: S2-compression-linkage,
-     axes: {L: x, H: z, W: y}, interpretation: L x H x W read as part X x Z x Y}
-  - {id: env-bent, kind: bbox, part: bent_linkage, evidence: S2-bent-linkage,
-     axes: {L: x, H: z, W: y}, interpretation: L x H x W read as part X x Z x Y}
-  - {id: env-linkage, kind: bbox, part: linkage, evidence: S2-linkage,
-     axes: {L: x, H: z, W: y}, interpretation: L x H x W read as part X x Z x Y}
-  - {id: layout-clear, kind: interference}
