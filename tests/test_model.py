@@ -1,6 +1,8 @@
 """model.py and the checks on what it builds: the lint, each check kind passing and failing,
 tolerances, what a check rests on, and overlays."""
 
+import re
+
 import pytest
 from conftest import (
     ASSEMBLY,
@@ -307,6 +309,15 @@ def test_interference_names_the_worst_overlap_and_passes_under_a_stated_limit(pr
     assert run.result("clear")["ok"] and run.status == "VERIFIED"
     assert run.report["overlap_limits"] == [{"check": "clear", "max_volume": 750}]
     assert "| clear | 750 |" in run.md
+
+
+def test_assembly_step_names_each_part_once_and_each_instance_as_placed(proj_dir):
+    stack(proj_dir, 3)
+    check(proj_dir)
+    step = (proj_dir / "build" / "assembly.step").read_text()
+    products = re.findall(r"= PRODUCT\('([^']+)'", step)
+    placed = re.findall(r"NEXT_ASSEMBLY_USAGE_OCCURRENCE\('\d+','([^']+)'", step)
+    assert products[1:] == ["link"] and placed == ["link_1", "link_2", "link_3"]
 
 
 def test_part_no_instance_places_is_checked_and_exported_in_its_own_frame(proj_dir):
