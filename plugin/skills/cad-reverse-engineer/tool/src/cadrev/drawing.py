@@ -311,7 +311,7 @@ def _dimensions(p: Project, model: Model, part: str, results: dict[str, Result],
                 marks.append(("aligned", view, a, b, _number(value), colour))
         elif kind == "diameter" and (points := datums([c.get("at")])):
             try:
-                found = released.cylinder_at(solid, points[0], tol, str(c["at"]))
+                found = released.cylinder_at(solid, points[0], tol, str(c["at"]))[:3]
             except Fault:
                 continue
             marks.append(("round", found, f"Ø{_number(found[0])}", colour, points[0]))

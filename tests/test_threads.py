@@ -45,6 +45,8 @@ STATED = {
     "a fine pitch": ("an M3 × 0.35 screw", "M3x0.35", 2.65),
     "a Unified size": ("a 4-40 UNC screw", "4-40", 2.2098),
     "a Unified size by its number sign": ("a #10-32 screw", "10-32", 4.03225),
+    "a second-choice metric size": ("an M4.5 screw", "M4.5", 3.75),
+    "a Unified size with no clearance hole in its table": ("a No. 12-24 screw", "12-24", 4.428067),
 }
 
 

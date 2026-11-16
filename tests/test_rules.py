@@ -294,7 +294,8 @@ LINK_FINDINGS = {
     "image-reading": _reading(reading=""),
     # Threads.
     "param-thread: a pitch its size does not take": _params(THREAD % "M3x0.6"),
-    "param-thread: a size in neither table": _params(THREAD % "M7"),
+    "param-thread: a size in neither table": _params(THREAD % "M9"),
+    "param-thread: threads per inch its size does not take": _params(THREAD % "1/4-24"),
     "param-thread: one that is derived": _params(
         "screw: {basis: derived, thread: M3, expr: hole_d}"
     ),
@@ -318,6 +319,18 @@ LINK_FINDINGS = {
     "thread-standard": lambda r, t: (meta(r, threads="unified"), add(r, params=THREAD % "M3")),
     "model-thread: a hole of neither its thread nor its clearance": _threaded("M5", "link.a"),
     "model-thread: a datum on no cylinder": _threaded("M3", "link.side"),
+    "model-thread: a hole declared twice": lambda r, t: (
+        add(r, params=THREAD % "M3"),
+        remodel(r, ASSEMBLY, ASSEMBLY + '"threads": {"link.a": "screw", "link.top": "screw"},'),
+    ),
+    "model-thread: a hole of no thread whose table gives no clearance": lambda r, t: (
+        meta(r, threads="unified"),
+        _threaded("12-24", "link.a")(r, t),
+    ),
+    "model-build: the clearance hole of a size its table gives none": lambda r, t: (
+        add(r, params=THREAD % "M2.2"),
+        add_line(r, "spare = p.screw.clearance"),
+    ),
     "model-thread: a datum that is none": _threaded("M3", "link.nowhere"),
     "model-thread: a param that is no thread": lambda r, t: remodel(
         r, ASSEMBLY, ASSEMBLY + '"threads": {"link.a": "hole_d"},'

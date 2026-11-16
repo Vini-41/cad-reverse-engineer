@@ -198,10 +198,11 @@ SWEPT = {
     "Rated at 2 bar, weighs 8 g, closes in 2s over a Δt = 2 s step.": ["2 bar", "8 g", "2s", "2 s"],
     "A load of 2 N on the 10 N M4 bolt.": ["2 n", "10 n", "m4"],
     "Held by four M3 screws and 2 M4 nuts in 2 m3 of air.": ["m3", "m4", "2 m3"],
-    'A 1/4-20 bolt, a 1/4"-20 UNC stud, #6-32 and 10-32 UNF screws.': [
+    'A 1/4-20 bolt, a 1/4"-20 UNC stud, #6-32, No. 4-40 and 10-32 UNF screws.': [
         "1/4-20",
         '1/4"-20 unc',
         "#6-32",
+        "no. 4-40",
         "10-32 unf",
     ],
     "A plate 5 in wide ran for 1:30 min.": ["5 in", "30 min"],

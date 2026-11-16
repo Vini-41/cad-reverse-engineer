@@ -215,7 +215,8 @@ A thread param gives `thread`, a designation, in place of a value:
   tripod:      {basis: source,   thread: 1/4-20, from: S4-mount}
 ```
 
-- **The designation** is one the ISO metric table holds (`M3`, or with a fine pitch `M8x1`; M1 to M36) or the Unified one (`1/4-20`, `10-32`, `UNC` or `UNF` optional; #0 to 1 in). Write a number size without its `#`, which YAML reads as a comment. A size or pitch its table does not hold is a finding that lists what the size takes.
+- **The designation** is one the ISO metric table holds (`M3`, or with a fine pitch `M8x1`; ISO 261's first- and second-choice diameters, M1 to M39) or the Unified one (`1/4-20`, `10-32`, `UNC` or `UNF` optional; #0 to 1 in). Write a number size without its `#`, which YAML reads as a comment. A size or pitch its table does not hold is a finding that lists what the size takes.
+- **Its clearance hole** is ISO 273's medium series or ASME B18.2.8's normal fit. Those list none for M1.1, M2.2, #12 and 9/16, so a hole clearing one of them takes a param of its own.
 - **With basis `source`**, `from` names the evidence item whose quote or reading prints the designation; the item needs no `values` for it. A size printed before a length (`M3x10`) states the coarse thread. A source's thread is taken as stated, from either table.
 - **With basis `proposed`**, the thread comes from the project's table, `threads` in project.yaml.
 - **Its value** is its major diameter in the project's length unit, so a derived `expr` may read it; model.py reads its tap drill, clearance hole and pitch from it ([modeling.md](modeling.md#threads)). It is a checked param once model.py declares it on a hole or shank.

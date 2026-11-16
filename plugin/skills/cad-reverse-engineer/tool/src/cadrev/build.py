@@ -390,9 +390,10 @@ def build(p: Project) -> Model | None:
             gap = released.off_solid(model.parts[part], point, p.length_tol)
             if gap is not None:
                 p.error("datum-off-solid", f"datum {name} of part {part}: {released.off(gap)}")
+    faces: dict[int, str] = {}  # each cylindrical face declared for a thread, by its datum
     for at, param in declared.items():
         with p.filing("model-thread", f"thread at {at}: "):
-            model.threads.append(_threaded(p, model, at, param))
+            model.threads.append(_threaded(p, model, at, param, faces))
     for inst, (part, _) in list(model.assembly.items()):
         if part not in model.parts:
             p.error("assembly-part", f"assembly instance {inst}: unknown part {part!r}")
@@ -405,9 +406,10 @@ def build(p: Project) -> Model | None:
     return model
 
 
-def _threaded(p: Project, model: Model, at: str, param: str) -> Threaded:
+def _threaded(p: Project, model: Model, at: str, param: str, faces: dict[int, str]) -> Threaded:
     """The cylinder a thread is declared on, held to the thread's sizes: it carries the thread
-    from its minor diameter to its major, or clears its screw at its clearance hole."""
+    from its minor diameter to its major, or clears its screw at its clearance hole. A hole or
+    shank is declared once, at one datum, so a count of them counts each once."""
     part = prefix(at, model.parts)
     if part is None or at not in model.datums:
         raise Fault("is not a <part>.<feature> datum")
@@ -417,18 +419,22 @@ def _threaded(p: Project, model: Model, at: str, param: str) -> Threaded:
             raise Fault(f"{param} is not a thread param; give it thread: in params.yaml")
         raise Fault()  # the param's own finding says why it has no value
     tol, thread = p.length_tol, size.thread
-    diameter, origin, direction = released.cylinder_at(
+    diameter, origin, direction, face = released.cylinder_at(
         model.parts[part], model.datums[at], tol, at, or_axis=True
     )
+    if faces.setdefault(id(face), at) != at:
+        raise Fault(f"lies on the hole or shank {faces[id(face)]} already declares")
+    clears = None if thread.clearance is None else size.clearance
     if size.minor - tol <= diameter <= size + tol:
         fit = "threaded"
-    elif abs(diameter - size.clearance) <= tol:
+    elif clears is not None and abs(diameter - clears) <= tol:
         fit = "clearance"
     else:
+        hole = "" if clears is None else f" nor its clearance hole (Ø{clears:.4g})"
         raise Fault(
-            f"its cylinder is Ø{diameter:.4g}, neither {thread.name}'s thread (Ø{size.minor:.4g} "
-            f"to Ø{float(size):g}; its tap drill is Ø{size.tap:.4g}) nor its clearance hole "
-            f"(Ø{size.clearance:.4g})"
+            f"its cylinder is Ø{diameter:.4g}, {'neither' if hole else 'not'} {thread.name}'s "
+            f"thread (Ø{size.minor:.4g} to Ø{float(size):g}; its tap drill is Ø{size.tap:.4g})"
+            f"{hole}"
         )
     return Threaded(at, part, param, fit, printed(diameter)[0], origin, direction)
 
