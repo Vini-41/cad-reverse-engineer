@@ -98,13 +98,17 @@ def _steps(p: Project, model: Model, placed: Counter, steps: list[dict]) -> Coun
         holes = sum(placed[t.part] for t in threaded if t.hole)
         shanks = sum(placed[t.part] for t in threaded if not t.hole)
         if param in p.thread_params and holes - shanks > driven[param]:
-            built = f", and {shanks} are built as parts" if shanks else ""
+            built = f" and {_count(shanks, 'screw')} built as a part" if shanks else ""
             p.warn(
                 "plan-screw",
-                f"{holes} holes are threaded {p.thread_params[param].thread.name} for {param}, "
-                f"and the steps drive {driven[param]} of its screws{built}",
+                f"{_count(holes, 'hole')} threaded {p.thread_params[param].thread.name} for "
+                f"{param}, against {_count(driven[param], 'screw')} the steps drive{built}",
             )
     return driven
+
+
+def _count(count: int, noun: str) -> str:
+    return f"{count} {noun}{'s' * (count != 1)}"
 
 
 def _bought(p: Project, model: Model, placed: Counter, buy: dict, driven: Counter) -> list[dict]:

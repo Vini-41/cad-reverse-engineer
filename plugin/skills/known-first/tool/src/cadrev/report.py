@@ -248,10 +248,10 @@ def _plan_lines(planned: dict) -> list[str]:
     md = [
         "## Plan",
         "",
-        "How the object is made and put together. The plan is held to the model: every part the "
-        "assembly places is made or bought, every instance is placed by one step, and each "
-        "quantity is counted from the model. That a tool and a hand can do what it says is its "
-        "author's judgement.",
+        "How the object is made and put together. `cadrev check` holds the plan to the model: "
+        "every part the assembly places is made or bought, one step places each instance, and "
+        "each quantity is counted from the model. Whether a tool and a hand can do each step is "
+        "its author's judgement.",
         "",
         "### Make",
         "",
