@@ -34,7 +34,7 @@ def build(p):
 A thread is declared, never cut. Build a threaded hole or shank as a plain cylinder, and name its thread in `threads` at a datum on that cylinder: on its wall, or on its axis between its ends. The STEP files then hold plain holes a CAD program can thread in its own way, and the thread itself is in the report and on the drawing, where a reviewer reads it.
 
 - **A [thread param](project-format.md#threads) reads as its major diameter**, `p.pin_screw`, and carries the sizes its table gives it, each in the project's length unit: `p.pin_screw.tap`, the hole that carries the thread (its tap drill); `p.pin_screw.clearance`, the hole its screw passes through; `p.pin_screw.pitch`. Size each hole from these, so no hole diameter is proposed beside a thread.
-- **Both holes of a screwed joint are declared**: the one that carries the thread and the one that clears the screw. cadrev holds each declared cylinder to its thread, from the thread's minor diameter to its major or at its clearance hole, and the drawing calls each out.
+- **Both holes of a screwed joint are declared**, each once, at one datum: the one that carries the thread and the one that clears the screw. cadrev holds each declared cylinder to its thread, from the thread's minor diameter to its major or at its clearance hole, and the drawing calls each out.
 - **A screw, nut or washer is a part only where the sources list it as one**, or a stated mass counts it. It is then purchased hardware like any other: a head and a plain shank, its thread declared on the shank. A stated number of screws is checked without them, by a [`count` check](project-format.md#checksyaml) of the thread.
 
 ## Joints and loops

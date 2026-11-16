@@ -334,11 +334,11 @@ def off(gap: float) -> str:
 
 def cylinder_at(
     solid, point: tuple[float, float, float], tol: float, name: str, or_axis: bool = False
-) -> tuple[float, tuple[float, float, float], tuple[float, float, float]]:
+) -> tuple[float, tuple[float, float, float], tuple[float, float, float], object]:
     """The one cylindrical face of a solid that point lies on within tol, or with or_axis on
-    whose axis it lies between the face's ends, as its diameter, a point on its axis and the
-    axis's direction; a Fault naming the datum where it lies on none, or on several of different
-    diameters."""
+    whose axis it lies between the face's ends, as its diameter, a point on its axis, the axis's
+    direction and the face; a Fault naming the datum where it lies on none, or on several of
+    different diameters."""
     from build123d import Vector
 
     surface_of = importlib.import_module("OCP.BRepAdaptor").BRepAdaptor_Surface
@@ -354,7 +354,7 @@ def cylinder_at(
             # OCC's surface adaptor sees through a trim, where build123d's face.radius is None.
             diameter = 2 * surface_of(face.wrapped).Cylinder().Radius()
             if all(abs(diameter - d) > tol for d, *_ in found):
-                found.append((diameter, tuple(origin), tuple(direction)))
+                found.append((diameter, tuple(origin), tuple(direction), face))
     if len(found) == 1:
         return found[0]
     several = " and ".join(f"{d:.4g}" for d, *_ in sorted(found))

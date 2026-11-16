@@ -13,20 +13,26 @@ from typing import NamedTuple
 STANDARDS = {"metric": "ISO metric", "unified": "Unified"}
 INCH = 25.4  # millimetres
 
-# ISO 261's sizes from M1 to M36: the coarse pitch first, then the fine pitches, and ISO 273's
-# medium clearance hole. Millimetres.
+# ISO 261's first- and second-choice diameters from M1 to M39: the coarse pitch first, then the
+# fine pitches of its table 2, and ISO 273's medium clearance hole, None where it lists none.
+# Millimetres.
 _METRIC = {
     "1": ((0.25, 0.2), 1.2),
+    "1.1": ((0.25, 0.2), None),
     "1.2": ((0.25, 0.2), 1.4),
     "1.4": ((0.3, 0.2), 1.6),
     "1.6": ((0.35, 0.2), 1.8),
+    "1.8": ((0.35, 0.2), 2.1),
     "2": ((0.4, 0.25), 2.4),
+    "2.2": ((0.45, 0.25), None),
     "2.5": ((0.45, 0.35), 2.9),
     "3": ((0.5, 0.35), 3.4),
     "3.5": ((0.6, 0.35), 3.9),
     "4": ((0.7, 0.5), 4.5),
+    "4.5": ((0.75, 0.5), 5),
     "5": ((0.8, 0.5), 5.5),
     "6": ((1, 0.75), 6.6),
+    "7": ((1, 0.75), 7.6),
     "8": ((1.25, 1, 0.75), 9),
     "10": ((1.5, 1.25, 1, 0.75), 11),
     "12": ((1.75, 1.5, 1.25, 1), 13.5),
@@ -38,27 +44,34 @@ _METRIC = {
     "24": ((3, 2, 1.5, 1), 26),
     "27": ((3, 2, 1.5, 1), 30),
     "30": ((3.5, 3, 2, 1.5, 1), 33),
+    "33": ((3.5, 3, 2, 1.5), 36),
     "36": ((4, 3, 2, 1.5), 39),
+    "39": ((4, 3, 2, 1.5), 42),
 }
 # ASME B1.1's coarse and fine series from #0 to 1 in: the major diameter, the threads per inch
-# of UNC then UNF, and ASME B18.2.8's normal clearance hole. Inches.
+# of UNC then UNF, and the normal clearance hole of ASME B18.2.8's table 2, None where it lists
+# none. Inches.
 _UNIFIED = {
     "#0": (0.06, (None, 80), 0.076),
-    "#2": (0.086, (56, 64), 0.1015),
-    "#4": (0.112, (40, 48), 0.1285),
-    "#5": (0.125, (40, 44), 0.1562),
-    "#6": (0.138, (32, 40), 0.1695),
+    "#1": (0.073, (64, 72), 0.089),
+    "#2": (0.086, (56, 64), 0.102),
+    "#3": (0.099, (48, 56), 0.116),
+    "#4": (0.112, (40, 48), 0.128),
+    "#5": (0.125, (40, 44), 0.156),
+    "#6": (0.138, (32, 40), 0.17),
     "#8": (0.164, (32, 36), 0.196),
     "#10": (0.19, (24, 32), 0.221),
-    "1/4": (0.25, (20, 28), 0.2812),
-    "5/16": (0.3125, (18, 24), 0.3438),
-    "3/8": (0.375, (16, 24), 0.4062),
-    "7/16": (0.4375, (14, 20), 0.4688),
-    "1/2": (0.5, (13, 20), 0.5625),
-    "5/8": (0.625, (11, 18), 0.6875),
-    "3/4": (0.75, (10, 16), 0.8125),
-    "7/8": (0.875, (9, 14), 0.9375),
-    "1": (1.0, (8, 12), 1.0938),
+    "#12": (0.216, (24, 28), None),
+    "1/4": (0.25, (20, 28), 0.281),
+    "5/16": (0.3125, (18, 24), 0.344),
+    "3/8": (0.375, (16, 24), 0.406),
+    "7/16": (0.4375, (14, 20), 0.469),
+    "1/2": (0.5, (13, 20), 0.562),
+    "9/16": (0.5625, (12, 18), None),
+    "5/8": (0.625, (11, 18), 0.688),
+    "3/4": (0.75, (10, 16), 0.812),
+    "7/8": (0.875, (9, 14), 0.938),
+    "1": (1.0, (8, 12), 1.094),
 }
 _SERIES = ("UNC", "UNF")
 
@@ -84,7 +97,7 @@ class Thread(NamedTuple):
     standard: str  # metric or unified
     major: float
     pitch: float
-    clearance: float  # its clearance hole: ISO 273 medium, ASME B18.2.8 normal
+    clearance: float | None  # its clearance hole, where its table gives the size one
 
     @property
     def tap(self) -> float:
@@ -103,17 +116,33 @@ class Size(float):
     model.py builds its hole or shank from in that unit too."""
 
     thread: Thread
-    pitch: float
-    tap: float
-    minor: float
-    clearance: float
+    per_mm: float
 
     def __new__(cls, thread: Thread, per_mm: float) -> Size:
         size = super().__new__(cls, thread.major * per_mm)
-        size.thread = thread
-        for name in ("pitch", "tap", "minor", "clearance"):
-            setattr(size, name, getattr(thread, name) * per_mm)
+        size.thread, size.per_mm = thread, per_mm
         return size
+
+    @property
+    def pitch(self) -> float:
+        return self.thread.pitch * self.per_mm
+
+    @property
+    def tap(self) -> float:
+        return self.thread.tap * self.per_mm
+
+    @property
+    def minor(self) -> float:
+        return self.thread.minor * self.per_mm
+
+    @property
+    def clearance(self) -> float:
+        if self.thread.clearance is None:
+            raise AttributeError(
+                f"{self.thread.name} has no clearance hole in its table; give that hole's "
+                "diameter a param"
+            )
+        return self.thread.clearance * self.per_mm
 
 
 def _metric(size: str, pitch: str | None) -> Thread | None:
@@ -137,7 +166,8 @@ def _unified(size: str, per_inch: str, series: str | None) -> Thread | None:
     if count not in counts or (series and _SERIES[counts.index(count)] != series.upper()):
         return None
     name = f"{size}-{count} {_SERIES[counts.index(count)]}"
-    return Thread(name, size, "unified", major * INCH, INCH / count, clearance * INCH)
+    hole = None if clearance is None else clearance * INCH
+    return Thread(name, size, "unified", major * INCH, INCH / count, hole)
 
 
 def _read(metric: re.Match | None, unified: re.Match | None) -> Thread | None:
@@ -165,11 +195,11 @@ def printed_in(text: str) -> list[Thread]:
 
 def unified_spans(text: str) -> list[tuple[int, int]]:
     """Where normalized text prints a Unified thread that reads no other way: a fraction size
-    with its threads per inch (1/4-20), or a number size marked by its # or its series
-    (#6-32, 6-32 UNC). A bare 6-32 may be a range, so it is left to the reader."""
+    with its threads per inch (1/4-20), or a number size marked by its #, its No. or its
+    series (#6-32, No. 6-32, 6-32 UNC). A bare 6-32 may be a range, so it is left to the reader."""
     spans = []
     for m in _PRINTED[1].finditer(text):
-        marked = (m[1] is not None and m[1] != "1") or m[0].startswith("#") or m[4]
+        marked = (m[1] is not None and m[1] != "1") or not m[0][0].isdigit() or m[4]
         if marked and _read(None, m) is not None:
             spans.append(m.span())
     return spans
