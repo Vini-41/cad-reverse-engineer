@@ -100,13 +100,15 @@ class Mass:
 
 class Threaded(NamedTuple):
     """A plain cylinder of a part made for a thread: the datum it is declared at, the thread
-    param, whether it carries the thread or clears its screw, and the cylinder's diameter, a
-    point on its axis and the axis's direction, in the part's frame."""
+    param, whether it carries the thread or clears its screw, whether it is a hole or a shank,
+    and the cylinder's diameter, a point on its axis and the axis's direction, in the part's
+    frame."""
 
     at: str
     part: str
     param: str
     fit: str  # threaded or clearance
+    hole: bool  # a hole, its wall facing its axis; else a shank
     diameter: float
     origin: tuple[float, float, float]
     direction: tuple[float, float, float]
@@ -438,7 +440,9 @@ def _threaded(p: Project, model: Model, at: str, param: str, faces: dict[tuple, 
             f"thread (Ø{size.minor:.4g} to Ø{float(size):g}; its tap drill is Ø{size.tap:.4g})"
             f"{hole}"
         )
-    return Threaded(at, part, param, fit, printed(diameter)[0], origin, direction)
+    return Threaded(
+        at, part, param, fit, released.is_hole(face), printed(diameter)[0], origin, direction
+    )
 
 
 def _hold_units(p: Project, model: Model, threaded: set[str]) -> None:
@@ -484,7 +488,9 @@ def _hold_units(p: Project, model: Model, threaded: set[str]) -> None:
             f"param {name}: is marked physics: true, but the model's geometry, a joint range or a "
             "check reads it; a physics value only goes to a joint or tendon",
         )
+    # A screw's length is what is bought, whether or not the model reads it.
     exported = ranges | coupled | slots.keys() | set(ledger.mass_params(p)) | threaded
+    exported |= set(p.screws.values())
     derived = {n for spec in p.params.values() for n in expr_names(str(spec.get("expr") or ""))}
     p.resolution = ledger.resolution(p) - model.used - derived - exported
     for name in sorted(p.values.keys() - model.used - derived - named - exported):

@@ -9,6 +9,7 @@ params.yaml     every number the model uses, with its basis; the mass model
 checks.yaml     the geometry compared with the ledger
 gaps.yaml       what the sources leave open
 overlays.yaml   optional: model edges drawn over figures
+plan.yaml       optional: how the object is made and put together
 model.py        the build123d model (modeling.md)
 sources/        registered source files, pinned by sha256
 figures/        the pages and images `cadrev figures` writes; figures/crops/ holds the pinned evidence crops
@@ -24,7 +25,8 @@ format: 1                # written by `cadrev init`; cadrev refuses a project of
 name: gripper
 target: Version-3 two-finger gripper as reported in Doe 2025, fingers open (not the Fig. S4 prototype)
 units: {length: mm, angle: deg, mass: g}       # also force and time; defaults mm, deg, g, N, s
-threads: metric                                # the table a proposed thread comes from: metric | unified; metric unless said
+material: "PLA, FDM printed"                   # optional: what the made parts are made of, and how
+follows: design                                # optional: design | function; design unless said
 up: y                    # optional: the axis the object stands on, z unless said
 tolerance: {length: 0.001, angle: 0.01}        # how closely the model must realise a source value
 model_literals: [0, 1, 2, -1, 0.5, 90, 180, 270, 360]   # optional: the numbers model.py may hold
@@ -40,8 +42,9 @@ sources:                 # written by `cadrev source`; keep it the last key
 ```
 
 - `target` names the object, its version and its configuration, and where the authors released several variants, the one built.
-- `tolerance` is a modelling tolerance, not a manufacturing one. `tolerance.angle` is in degrees whatever `units.angle` says.
-- `units.length` and `threads` are the user's answer to metric or US: `mm` with `metric`, or `in` with `unified`. A STEP file holds the object at its true size in either.
+- `tolerance` is the model's, how closely it realises a value, and not what a shop works to: that is the [plan](#planyaml)'s to say. `tolerance.angle` is in degrees whatever `units.angle` says.
+- `units.length` is the user's answer to metric or US: `mm` or `in`. A proposed thread and a proposed screw length come from its table, ISO metric for a metric unit and Unified for `in`; a project that mixes the two says `threads: metric` or `threads: unified`. A STEP file holds the object at its true size in either.
+- `material` and `follows` are the complete model's other two answers: what its made parts are made of and how, and whether a feature that is hard to make that way is built as the sources show it (`design`) or replaced by one that does the same job (`function`). The report prints both.
 - `cadrev source` with an id already registered refreshes that entry: its file, hash and whatever the command states. That is how a source is restored into a clone or replaced by a new download.
 - **Text sources** are quote-checked and swept: PDF, DOCX, TXT, MD, HTML (read as its rendered text). Save a web datasheet as HTML or TXT to quote it. Video and image files anchor image evidence only.
 - **Geometry sources** (`kind: geometry`) are what the authors released: STEP or STL, read in millimetres and converted to the project's length unit. A **body** is named by its source's id where the file holds one solid, else `<source>#<n>`, the nth solid in file order from 1. Where a part ships as both, register the STEP, which keeps the cylindrical faces and axes an STL flattens into triangles ([derived datums](#probes-released-geometry)).
@@ -210,16 +213,18 @@ parts:                       # the mass model
 A thread param gives `thread`, a designation, in place of a value:
 
 ```yaml
-  lid_screw:   {basis: source,   thread: M3, from: T2-bom}
-  mount_screw: {basis: proposed, thread: M3, rationale: "the lid's screw, so one size serves", gap: G-mount}
-  tripod:      {basis: source,   thread: 1/4-20, from: S4-mount}
+  lid_screw:     {basis: source,   thread: M3, from: T2-bom, length: lid_screw_len}
+  lid_screw_len: {basis: proposed, value: 10, rationale: "3 mm of lid and 7 mm into its boss", gap: G-lid}
+  mount_thread:  {basis: proposed, thread: M3, rationale: "the lid's thread, so one size serves", gap: G-mount}
+  tripod:        {basis: source,   thread: 1/4-20, from: S4-mount}
 ```
 
 - **The designation** is one the ISO metric table holds (`M3`, or with a fine pitch `M8x1`; ISO 261's first- and second-choice diameters, M1 to M39) or the Unified one (`1/4-20`, `10-32`, `UNC` or `UNF` optional; #0 to 1 in). Write a number size without its `#`, which YAML reads as a comment. A size or pitch its table does not hold is a finding that lists what the size takes.
 - **Its clearance hole** is ISO 273's medium series or ASME B18.2.8's normal fit; a declared hole may be any size up to the coarse series or the loose fit. Those list none for M1.1, M2.2, #12 and 9/16, so a hole clearing one of them takes a param of its own and is not declared.
 - **With basis `source`**, `from` names the evidence item whose quote or reading prints the designation; the item needs no `values` for it. A size printed before a length (`M3x10`) states the coarse thread. A source's thread is taken as stated, from either table.
-- **With basis `proposed`**, the thread comes from the project's table, `threads` in project.yaml.
+- **With basis `proposed`**, the thread comes from the project's table: its length unit's, or `threads` in project.yaml.
 - **Its value** is its major diameter in the project's length unit, so a derived `expr` may read it; model.py reads its tap drill, clearance hole and pitch from it ([modeling.md](modeling.md#threads)). It is a checked param once model.py declares it on a hole or shank.
+- **A screw** is a thread param that names its `length`, a length param of its own: `source` where a source states the screw's length, else `proposed`. A proposed length is a standard one of its thread's table, within `tolerance.length`: ISO 888's preferred lengths from 2 to 300 mm, or ASME B18.3's increments from 1/8 to 10 in. A screw is bought, so its length is never `derived`: a boss or a hole that holds the screw is derived from the length. The report prints the screw as it is ordered (`M3×10`, `1/4-20 UNC × 3/4 in`). A thread param without a length is a thread alone: a mounting hole left for the user's own screw, or a nut.
 
 ## checks.yaml
 
@@ -359,6 +364,29 @@ overlays:
 ```
 
 Renders `build/overlays/<id>.png`: model edges in magenta over the figure, the calibration span in blue, one PNG pixel per image pixel below the title strip. It is visual evidence for a human and adds no pass or fail.
+
+## plan.yaml
+
+The plan says how the object is made and put together, once its design is accepted. `cadrev check` holds it to the built model and prints it in the report, each line with its quantity counted from the model.
+
+```yaml
+make:                    # each part that is made: how, in one operation or several in order
+  body:  ["FDM print in PLA, deck face on the bed, no supports; ±0.2 mm", "ream the hub bore Ø32.5"]
+  plate: "FDM print in PLA, flat"
+buy:                     # each part that is bought, each screw by its thread param, and anything else
+  fan:       "AKYGA AW-8A-BK 80 mm 12 V fan"
+  lid_screw: "socket head cap screw, ISO 4762, A2 stainless"
+  glue:      "cyanoacrylate, a drop"
+steps:                   # the assembly sequence
+  - {place: [body_1], note: "Deck down on the bench."}
+  - {place: [fan_1, plate_1], with: {lid_screw: 4}, note: "Label towards the plate. 2.5 mm hex key, snug."}
+```
+
+- **Every part an instance places is made or bought**, one or the other. `make` gives its operations, as text; `buy` what is ordered. The report counts each by its instances.
+- **A `buy` entry may also name a thread param**, for what is ordered of it (a screw's head and material, a nut, a threaded insert), which the report prints after its thread and length. Any other name is listed as written, uncounted: an adhesive, a wire.
+- **Every instance is placed by exactly one step**; an assembly of one instance needs no steps. A step may also place nothing: one that only drives screws, or only says what to do.
+- **`with`** counts what a step drives of a thread param: its screws, nuts or inserts. The report totals them per thread param as the quantity to buy. Where the model has more holes threaded for a [screw](#threads) than the steps drive screws into, less the screws built as parts, a warning says so: an empty threaded hole may be meant.
+- cadrev holds the plan's bookkeeping, not its judgement. Whether a tool reaches a feature and a hand can do a step is its author's to settle before writing it.
 
 ## Drawings
 

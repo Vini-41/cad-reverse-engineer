@@ -10,6 +10,7 @@
 
 <p align="center">
   <a href="#try-it">Try it</a> ·
+  <a href="#three-skills">Three skills</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#examples">Examples</a> ·
   <a href="#install">Install</a>
@@ -21,12 +22,13 @@
   <sub>The COMPAct 7.2:1 gearbox in <a href="examples/compact-sspg"><code>examples/compact-sspg</code></a>, rebuilt from the paper's tooth counts and held to the authors' STL meshes. Secondary carrier hidden.</sub>
 </p>
 
-cad-reverse-engineer is a skill for coding agents, with its CLI, `cadrev`. Give the agent the documents a device was published in, and it builds:
+cad-reverse-engineer is three skills for coding agents, with their CLI, `cadrev`. Give the agent the documents a device was published in, and it builds:
 
 - **CAD you can open and change.** One STEP file per part and one for the assembly, for SolidWorks, Fusion, Onshape or FreeCAD. Behind them is a parametric [build123d](https://github.com/gumyr/build123d) model: every dimension is a named value in `params.yaml`, so you change a number and rebuild.
 - **A mechanism that moves.** Joints, gear ratios and lead screws export to MuJoCo, and stated motion is checked on the model: one turn of this gearbox's sun moves its carrier 50°, as its 7.2:1 ratio says.
 - **A drawing of each part.** Three views and an isometric one, dimensioned with the values the build was checked against, under an isometric view of the assembly. Screw threads are named from the ISO metric or Unified table and drawn as a drawing shows them; none is cut into the model.
 - **A report of where each dimension came from.** It was quoted from a document, probed from a file the authors released, or proposed because nothing states it. Each proposed value is listed beside the question that would settle it.
+- **A plan to make it.** How each part is made, what to buy and the assembly sequence. It is held to the model, so every part and every screw it names is one the CAD has.
 
 Published hardware rarely comes with CAD you can edit. A paper gives an envelope table and a few labelled figures, a datasheet one drawing, a repository a folder of meshes. A model rebuilt from that mixes stated values with guesses, and once the STEP file exists, nobody can tell which is which. This keeps them apart, and checks the built geometry against every value the sources state.
 
@@ -73,6 +75,16 @@ Below that come the parts, each with its drawing above the checks that read it, 
   <sub><code>build/drawings/body.png</code>: each dimension is a check, printed at the value the body was built to.</sub>
 </p>
 
+## Three skills
+
+Each does one job, and each builds on the one before.
+
+- **`known-first`** builds only what the documents settle: the parts whose every dimension is stated, built and checked. Every other part waits, with the question that would settle it. Nothing is guessed.
+- **`complete-model`** builds the whole object. It asks three things first: metric or US, the material, and whether to follow the design or the function. Then it proposes what the documents leave open, each value beside its question and each chosen to be made: a thread from the ISO metric or Unified table, a screw in a length you can buy, one screw size before two.
+- **`ask-machinist`** reviews the model as the person who has to make it, part by part, thumbs up or thumbs down. Then it writes the plan: how each part is made, what to buy, and the assembly sequence.
+
+Name the skill you want, or ask for the CAD: *"reverse-engineer the gripper in this paper"* gets you the complete model.
+
 ## How it works
 
 A reconstruction is a directory of plain files, and `cadrev check` holds them to each other:
@@ -88,7 +100,7 @@ A reconstruction is a directory of plain files, and `cadrev check` holds them to
 1. **Ledger.** Every number the sources state about the object is recorded as a verbatim quote, located in a hash-pinned copy of the source. A number printed only inside a figure is a crop of that figure, with a reading a person confirms. Geometry the authors released (STEP, STL, laser-cut SVG) is probed: its dimensions are read from the file itself.
 2. **Parameters.** The model takes every number from `params.yaml`, where each declares its basis: `source`, `derived`, `measured` or `proposed`. `model.py` is linted to hold no dimensions of its own.
 3. **Checks.** Each published value (an envelope, a hole pitch, a bore, a mass, a gear ratio, a stroke) is evaluated on the built solids and compared with the ledger, never with the parameters. A part whose file the authors released is also compared with it, surface to surface.
-4. **Report.** `build/report.md` gives the status, the questions that would replace each proposed value, the conflicts between sources, and then the full audit trail, its checks part by part under each part's drawing.
+4. **Report.** `build/report.md` gives the status, the questions that would replace each proposed value, the conflicts between sources, and then the full audit trail, its checks part by part under each part's drawing. Once the design has a plan, the report prints it, with each quantity counted from the model.
 
 VERIFIED means every number is accounted for and the geometry matches every checked source value. It does not mean the sources settle everything: what they leave open stays listed as proposed, so the report never claims more than the evidence supports. A number read off a figure holds the status at VERIFIED PENDING REVIEW until a named person confirms the reading.
 
@@ -113,7 +125,7 @@ A fresh agent built each one from the skill and its sources alone; the [benchmar
 
 ## Install
 
-The skill is built for Fable 5.2, and runs in Claude Code, Codex and any agent that reads skills.
+The skills are built for Fable 5.2, and run in Claude Code, Codex and any agent that reads skills.
 
 <details open>
 <summary><b>Claude Code</b></summary>
@@ -146,8 +158,10 @@ network_access = true
 <summary><b>Any agent that reads skills</b></summary>
 
 ```
-npx skills add Vini-41/cad-reverse-engineer
+npx skills add Vini-41/cad-reverse-engineer --skill '*'
 ```
+
+Install all three: `complete-model` and `ask-machinist` use the CLI that `known-first` holds.
 
 </details>
 
@@ -156,7 +170,7 @@ npx skills add Vini-41/cad-reverse-engineer
 
 ```bash
 git clone https://github.com/Vini-41/cad-reverse-engineer
-alias cadrev="$PWD/cad-reverse-engineer/plugin/skills/cad-reverse-engineer/cadrev"
+alias cadrev="$PWD/cad-reverse-engineer/plugin/skills/known-first/cadrev"
 cadrev init my-project
 cadrev source my-project paper.pdf --id paper --kind paper --citation "Doe et al. 2026"
 cadrev text my-project paper --page 4      # the exact text quotes are matched against
@@ -168,16 +182,13 @@ cadrev check my-project                    # everything; writes build/
 
 </details>
 
-Then give the agent your documents and ask for the CAD: *"reverse-engineer the gripper in this paper"*. It asks first which build you want:
+Then give the agent your documents and ask, as [Three skills](#three-skills) says.
 
-- **The complete model.** Every part is built, and each value the sources leave open is proposed beside the question that would settle it.
-- **Known first.** Only the parts the sources settle completely are built and checked. The rest wait, each with its question, until you build on the model yourself or have the agent propose the rest.
-
-The CLI runs on your machine and needs [uv](https://docs.astral.sh/uv/), with Python 3.12 to 3.14, which uv can install. The plugin ships from [`plugin/`](plugin): the skill, its CLI's source and lockfile, and nothing else of this repo.
+The CLI runs on your machine and needs [uv](https://docs.astral.sh/uv/), with Python 3.12 to 3.14, which uv can install. The plugin ships from [`plugin/`](plugin): the three skills, the CLI's source and lockfile, and nothing else of this repo.
 
 ## Development
 
-`scripts/check` is the repo's one check, run locally and by GitHub Actions on every pull request: ruff, pyright and the tests, which run every example. [`GLOSSARY.md`](GLOSSARY.md) defines the terms the skill, the CLI and its findings use, and [`docs/adr/`](docs/adr) records the decisions behind the rules.
+`scripts/check` is the repo's one check, run locally and by GitHub Actions on every pull request: ruff, pyright and the tests, which run every example. [`GLOSSARY.md`](GLOSSARY.md) defines the terms the skills, the CLI and its findings use, and [`docs/adr/`](docs/adr) records the decisions behind the rules.
 
 To report a problem, open an issue with the command you ran, the finding it printed, and the project directory or the paper.
 

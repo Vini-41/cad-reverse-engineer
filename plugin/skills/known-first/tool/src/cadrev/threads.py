@@ -1,17 +1,38 @@
-"""The two thread tables a thread is named from: ISO metric and Unified.
+"""The two thread tables a thread is named from, ISO metric and Unified, and the lengths a screw
+of each is bought in.
 
 A thread is a designation one of the tables holds (`M3`, `M8x1`, `1/4-20`, `6-32`), never a
 diameter and a pitch made up beside them. The model builds its hole or shank as a plain cylinder
-and declares the thread on it, so the table's sizes are what the cylinder is held to.
+and declares the thread on it, so the table's sizes are what the cylinder is held to. A screw is
+a thread and a length, and a proposed one's length is a standard length of its thread's table.
 """
 
 from __future__ import annotations
 
 import re
+from fractions import Fraction
 from typing import NamedTuple
 
 STANDARDS = {"metric": "ISO metric", "unified": "Unified"}
 INCH = 25.4  # millimetres
+# The project length units of the inch, in which a proposed thread is a Unified one unless
+# project.yaml's threads says otherwise.
+INCH_UNITS = ("in", "ft", "thou")
+
+# ISO 888's nominal lengths from 2 to 300 mm, less those it brackets as to be avoided where
+# possible. Millimetres.
+_METRIC_LENGTHS = (
+    2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 80, 90, 100, 110,
+    120, 130, 140, 150, 160, 180, 200, 220, 240, 260, 280, 300,
+)  # fmt: skip
+# ASME B18.3's standard length increments, from 1/8 in: up to each length, in steps of. Inches.
+_UNIFIED_STEPS = (
+    (Fraction(1, 4), Fraction(1, 16)),
+    (Fraction(1), Fraction(1, 8)),
+    (Fraction(7, 2), Fraction(1, 4)),
+    (Fraction(7), Fraction(1, 2)),
+    (Fraction(10), Fraction(1)),
+)
 
 # ISO 261's first- and second-choice diameters from M1 to M39: the coarse pitch first, then the
 # fine pitches of its table 2, and ISO 273's clearance holes of the medium series and of the
@@ -207,6 +228,62 @@ def unified_spans(text: str) -> list[tuple[int, int]]:
         if marked and _read(None, m) is not None:
             spans.append(m.span())
     return spans
+
+
+def _unified_lengths() -> tuple[Fraction, ...]:
+    found, length = [Fraction(1, 8)], Fraction(1, 8)
+    for up_to, step in _UNIFIED_STEPS:
+        while length < up_to:
+            length += step
+            found.append(length)
+    return tuple(found)
+
+
+_UNIFIED_LENGTHS = _unified_lengths()
+
+
+def lengths(standard: str) -> tuple[float, ...]:
+    """The standard screw lengths of a table, shortest first, in millimetres."""
+    if standard == "metric":
+        return tuple(float(length) for length in _METRIC_LENGTHS)
+    return tuple(float(length) * INCH for length in _UNIFIED_LENGTHS)
+
+
+def standard_length(thread: Thread, length: float, tol: float) -> float | None:
+    """The standard length of a thread's table within tol of a length, both in millimetres;
+    None where the length is none of them."""
+    nearest = min(lengths(thread.standard), key=lambda standard: abs(standard - length))
+    return nearest if abs(nearest - length) <= tol else None
+
+
+def neighbours(thread: Thread, length: float) -> list[float]:
+    """The standard lengths of a thread's table on either side of a length, in millimetres."""
+    below = [standard for standard in lengths(thread.standard) if standard < length]
+    above = [standard for standard in lengths(thread.standard) if standard > length]
+    return below[-1:] + above[:1]
+
+
+def length_text(thread: Thread, length: float) -> str:
+    """A length in millimetres as its thread's table prints it: 10 mm, or 3/8 in."""
+    if thread.standard == "metric":
+        return f"{float(f'{length:.6g}'):g} mm"
+    inches = Fraction(length / INCH).limit_denominator(64)
+    # A binary fraction of an inch, as a rule and a catalogue print one; any other in decimals.
+    if 64 % inches.denominator or abs(float(inches) - length / INCH) > 1e-6:
+        return f"{float(f'{length / INCH:.6g}'):g} in"
+    whole, part = divmod(inches, 1)
+    return f"{'-'.join(str(n) for n in (whole, part) if n)} in"
+
+
+def screw(thread: Thread, length: float) -> str:
+    """A screw as it is ordered, its thread and its length in millimetres: M3×10, M8×1×25,
+    1/4-20 UNC × 3/4 in. A coarse metric thread goes without its pitch."""
+    printed = length_text(thread, length)
+    if thread.standard == "unified":
+        return f"{thread.name} × {printed}"
+    coarse = _METRIC[thread.size[1:]][0][0]
+    pitch = "" if thread.pitch == coarse else f"×{thread.pitch:g}"
+    return f"{thread.size}{pitch}×{printed.removesuffix(' mm')}"
 
 
 def sizes(standard: str) -> str:

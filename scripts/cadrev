@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run this working tree's cadrev from anywhere, through the script the skill ships:
+# Run this working tree's cadrev from anywhere, through the script the known-first skill ships:
 #
 #   scripts/cadrev check <dir> [--no-build]
-exec "$(dirname "$0")/../plugin/skills/cad-reverse-engineer/cadrev" "$@"
+exec "$(dirname "$0")/../plugin/skills/known-first/cadrev" "$@"

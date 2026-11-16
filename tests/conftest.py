@@ -21,7 +21,9 @@ from build123d import Box, Cylinder, Location, Pos, export_step, export_stl
 from cadrev import cli  # noqa: TID251
 
 REPO = Path(__file__).resolve().parents[1]
-SKILL = REPO / "plugin" / "skills" / "cad-reverse-engineer"
+SKILLS = REPO / "plugin" / "skills"
+# The skill that ships the CLI and the file formats; the other skills build on it.
+SKILL = SKILLS / "known-first"
 PASSING = ("VERIFIED PENDING REVIEW", "VERIFIED")
 STATUSES = ("NOT VERIFIED", *PASSING, "PARTIAL")
 REFUSED = "the project was not read, so no report was written"
@@ -248,18 +250,21 @@ _FILES = {
     "gaps": "gaps.yaml",
     "overlays": "overlays.yaml",
     "sources": "project.yaml",
+    "make": "plan.yaml",
+    "buy": "plan.yaml",
+    "steps": "plan.yaml",
 }
 
 
 def add(root: Path, **entries) -> None:
     """Add to the project's collections, each as data or as YAML text: an entry or a list of them
-    for evidence, skipped, conflicts, checks, gaps and overlays; a mapping of names for params,
-    parts and datums."""
+    for evidence, skipped, conflicts, checks, gaps, overlays and the plan's steps; a mapping of
+    names for params, parts, datums and the plan's make and buy."""
     for key, given in entries.items():
         new = yaml.safe_load(given) if isinstance(given, str) else given
 
         def apply(d, key=key, new=new):
-            if key in ("params", "parts", "datums"):
+            if key in ("params", "parts", "datums", "make", "buy"):
                 d[key] = (d.get(key) or {}) | new
             else:
                 d[key] = (d.get(key) or []) + (new if isinstance(new, list) else [new])
@@ -307,6 +312,23 @@ def stack(root: Path, count: int) -> None:
     """Place up to three links, each one link height above the last: link_1, link_2, link_3."""
     lifts = ["0", "p.link_H", "2 * p.link_H"]
     place(root, **{f"link_{i + 1}": f"Location((0, 0, {lifts[i]}))" for i in range(count)})
+
+
+M3 = "screw: {basis: proposed, thread: M3, rationale: the pins are M3 screws, gap: G1}"
+# The same thread as a screw: its length is the param screw_len, which a test adds.
+M3_SCREW = M3.replace("thread: M3", "thread: M3, length: screw_len")
+TEN_LONG = "screw_len: {basis: proposed, value: 10, rationale: through the link, gap: G1}"
+
+
+def threaded(root: Path, size: str = "tap", spec: str = M3) -> None:
+    """The link with both holes sized by a thread param, in place of hole_d, and declared for
+    it: at its tap drill, or at its clearance hole."""
+    edit(root, "params.yaml", lambda d: d["params"].pop("hole_d"))
+    add(root, params=spec)
+    remodel(root, "p.hole_d", f"p.screw.{size}")
+    remodel(
+        root, ASSEMBLY, ASSEMBLY + '\n        "threads": {"link.a": "screw", "link.b": "screw"},'
+    )
 
 
 def cadrev(*args) -> tuple[int, str]:

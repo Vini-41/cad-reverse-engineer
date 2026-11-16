@@ -20,6 +20,8 @@ NUMBER = "number"
 # A number, or a cardinal in words read as the number it names: a ledger value written as printed.
 NUMBER_OR_WORD = "number or word"
 TEXT_OR_NUMBER = (str, NUMBER)
+# What a complete model follows where the object is hard to make as its sources show it.
+FOLLOWS = ("design", "function")
 
 
 @dataclass(frozen=True)
@@ -76,8 +78,8 @@ EVIDENCE = record(
 SKIP = record("source page:int pages:[int] quote from to body within:[[number]] reason")
 CONFLICT = record("id:any evidence:[str] summary resolution")
 PARAM = record(
-    "basis from value:number expr thread:any method uncertainty:any rationale gap interpretation "
-    "physics:bool"
+    "basis from value:number expr thread:any length method uncertainty:any rationale gap "
+    "interpretation physics:bool"
 )
 CHECK = record(
     "id!:any kind part thread instances:[str] parts:[str] evidence key expect axes:{str} "
@@ -103,6 +105,9 @@ JOINT = record(
 GEAR = record("driver driven ratio lead")
 CABLE = record("path:[str] wheel closes:{str}")
 TENDON = record("path:[str] stiffness damping")
+# A step of the plan: the instances it places, the screws it drives of each thread param, and
+# how. `with` is a Python keyword, which a mapping's key may be.
+STEP = record("place:[str] with:{int} note")
 
 # file -> top-level key -> (spec of each entry, the collection holding the entries or None)
 FILES = {
@@ -113,6 +118,8 @@ FILES = {
         "tolerance": (record("length:number angle:number"), None),
         "model_literals": (Items(NUMBER), None),
         "threads": (OneOf(tuple(STANDARDS)), None),
+        "material": (str, None),
+        "follows": (OneOf(FOLLOWS), None),
         "up": (OneOf(("y", "z")), None),
         "known_first": (bool, None),
         "sources": (SOURCE, list),
@@ -127,6 +134,13 @@ FILES = {
     "checks.yaml": {"checks": (CHECK, list)},
     "gaps.yaml": {"gaps": (GAP, list)},
     "overlays.yaml": {"overlays": (OVERLAY, list)},
+    # The plan: how each part is made, in one operation or several in order; what is bought for
+    # a part, a screw or anything else; and the steps that assemble the instances.
+    "plan.yaml": {
+        "make": ((str, Items(str)), dict),
+        "buy": (str, dict),
+        "steps": (STEP, list),
+    },
 }
 
 _NAMES = {

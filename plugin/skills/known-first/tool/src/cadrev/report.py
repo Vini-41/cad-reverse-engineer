@@ -24,6 +24,14 @@ VERIFIED, PENDING_REVIEW, PARTIAL, NOT_VERIFIED = (
     "NOT VERIFIED",
 )
 PASSING = (VERIFIED, PENDING_REVIEW)
+# What report.md says of project.yaml's follows.
+_FOLLOWS = {
+    "design": "**Follows** the design: the object is built as its sources show it.",
+    "function": (
+        "**Follows** the function: where the object is hard to make as its sources show it, a "
+        "proposed feature does the same job."
+    ),
+}
 
 
 def awaiting_confirmation(p: Project) -> list[dict]:
@@ -211,8 +219,9 @@ def _interpretation(r: Result) -> str:
 
 
 def threads(p: Project, model: Model) -> list[dict]:
-    """Each thread param as report.json lists it: its thread, and the holes and shanks declared
-    for it, those that carry it and those that clear its screw."""
+    """Each thread param as report.json lists it: its thread, the holes and shanks declared for
+    it, those that carry it and those that clear its screw, and for a screw the param its length
+    is from and the screw as it is ordered."""
     listed = []
     for name, size in p.thread_params.items():
         thread = size.thread
@@ -220,6 +229,7 @@ def threads(p: Project, model: Model) -> list[dict]:
             fit: [t.at for t in model.threads if t.param == name and t.fit == fit]
             for fit in ("threaded", "clearance")
         }
+        screw = p.screw(name)
         listed.append(
             {
                 "param": name,
@@ -228,8 +238,53 @@ def threads(p: Project, model: Model) -> list[dict]:
                 "basis": p.params[name].get("basis"),
                 **at,
             }
+            | ({"length": p.screws[name], "screw": screw} if screw else {})
         )
     return listed
+
+
+def _plan_lines(planned: dict) -> list[str]:
+    """The plan as report.md shows it: what is made, what is bought, and the steps."""
+    md = [
+        "## Plan",
+        "",
+        "How the object is made and put together. The plan is held to the model: every part the "
+        "assembly places is made or bought, every instance is placed by one step, and each "
+        "quantity is counted from the model. That a tool and a hand can do what it says is its "
+        "author's judgement.",
+        "",
+        "### Make",
+        "",
+    ]
+    md += _table(
+        ["part", "quantity", "how"],
+        [[m["part"], m["count"], "; then ".join(m["how"])] for m in planned["make"]],
+    )
+    md += ["### Buy", ""]
+    md += _table(
+        ["item", "quantity", "what"],
+        [
+            [
+                b["item"],
+                "" if b["count"] is None else b["count"],
+                ": ".join(filter(None, [b.get("thread"), b["what"]])),
+            ]
+            for b in planned["buy"]
+        ],
+    )
+    md += ["### Assemble", ""]
+    if not planned["steps"]:
+        return md + ["_No steps: the assembly places one instance._", ""]
+    ordered = {b["item"]: b["thread"] for b in planned["buy"] if b.get("thread")}
+    for i, step in enumerate(planned["steps"], 1):
+        placed = f"**{', '.join(step['place'])}**" if step["place"] else ""
+        screws = ", ".join(
+            f"{n} × {param}" + (f" ({ordered[param]})" if param in ordered else "")
+            for param, n in step["with"].items()
+        )
+        does = f"{placed} with {screws}" if placed and screws else placed or screws
+        md.append(f"{i}. " + ". ".join(filter(None, [does, step.get("note")])))
+    return md + [""]
 
 
 def _by_part(model: Model, datums: list[str]) -> str:
@@ -270,9 +325,11 @@ def write(
     model: Model | None,
     coarsened: dict,
     build_seconds: float | None,
+    planned: dict | None,
 ) -> Path:
-    """Write build/report.md and build/report.json; model is None when none was built, and
-    build_seconds is None where no build ran."""
+    """Write build/report.md and build/report.json; model is None when none was built,
+    build_seconds is None where no build ran, and planned is the plan as plan.check lists it,
+    None where the project has none or nothing was built to hold it to."""
     out = p.root / "build"
     out.mkdir(exist_ok=True)
     findings = sorted(p.findings, key=lambda f: f.level != "error")  # errors first
@@ -351,6 +408,10 @@ def write(
             "names, listed under Waiting.",
             "",
         ]
+    material, follows = p.meta.get("material"), p.meta.get("follows")
+    if material or follows:
+        made = [f"**Material**: {material}."] if material else []
+        md += [" ".join(made + ([_FOLLOWS[follows]] if follows else [])), ""]
     md += _motion_lines(moves)
     md += [
         "VERIFIED means every number in the model is accounted for and the geometry matches "
@@ -434,6 +495,8 @@ def write(
                 f"  ![{a['evidence']}](../{a['image']})",
                 "",
             ]
+    if planned is not None:
+        md += _plan_lines(planned)
     md += [
         "## Parts",
         "",
@@ -457,17 +520,22 @@ def write(
             "or shank is a plain cylinder held to its thread's sizes.",
             "",
         ]
+        # A column for the screw each thread is bought as, where any names one.
+        screwed = any("screw" in t for t in threaded)
+        bought = [[f"{t['screw']} ({t['length']})" if "screw" in t else ""] for t in threaded]
         md += _table(
-            ["param", "thread", "basis", "threaded", "clearance holes"],
+            ["param", "thread", *(["screw"] if screwed else []), "basis", "threaded"]
+            + ["clearance holes"],
             [
                 [
                     t["param"],
                     t["thread"],
+                    *(screw if screwed else []),
                     t["basis"],
                     _by_part(model, t["threaded"]),
                     _by_part(model, t["clearance"]),
                 ]
-                for t in threaded
+                for t, screw in zip(threaded, bought)
             ],
         )
     md += ["## Non-default tolerances", ""]
@@ -585,6 +653,9 @@ def write(
         "exact": exact,
         "known_first": p.known_first,
         "waiting": waits,
+        "material": material,
+        "follows": follows,
+        "plan": planned,
         "motion": moves,
         "threads": threaded,
         "drawings": [str(d.relative_to(out)) for d in drawn],

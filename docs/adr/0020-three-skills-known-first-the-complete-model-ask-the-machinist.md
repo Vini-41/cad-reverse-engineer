@@ -1,0 +1,9 @@
+# Three skills: known first, the complete model, ask the machinist
+
+The plugin ships three skills in place of one. `known-first` builds only what the sources settle and lists what waits. `complete-model` builds the whole object, proposing what the sources leave open. `ask-machinist` reviews a built model as the person who has to make it and writes its plan (ADR-0021). The one skill before them asked, as its first stage, whether to build the complete model or known first; which skill is invoked now answers that, and a request that names none (reverse-engineer this as CAD) reaches `complete-model` by its description.
+
+`known-first` holds the CLI, the file formats and the nine stages. The other two build on it from beside it: each reaches `../known-first/` by relative path, which holds wherever the three are installed as siblings, in the Claude and Codex plugins and under `npx skills add`. `complete-model` is known first with one difference, that nothing waits, so the stages are stated once.
+
+This came from a mechanical engineer's review of v0.1.0 and the owner's reading of it: what the documents state, what is proposed so the object can be made, and how it is made are three jobs with three products, and a user asks for each on its own.
+
+We rejected one skill with three modes: its text carried every mode on every run, and its first stage had to ask what the user's request had usually already said. We rejected a fourth skill holding the CLI and the formats: no request invokes it, and it would list beside the three as if one did. We rejected the CLI at the plugin's root, since `npx skills add` copies skill directories and nothing above them; and a copy of the CLI in each skill, three to keep alike. A skill installed without `known-first` beside it cannot run, which each says in its frontmatter.

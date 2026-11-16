@@ -1,21 +1,19 @@
 """Threads: a thread param named from the ISO metric or the Unified table, the plain holes and
-shanks model.py declares for it, and what the report says of them."""
+shanks model.py declares for it, the screw it is bought as, and what the report says of them."""
 
 import pytest
-from conftest import ASSEMBLY, add, add_quote, change, check, edit, meta, remodel
-
-M3 = "screw: {basis: proposed, thread: M3, rationale: the pins are M3 screws, gap: G1}"
-
-
-def threaded(root, size: str = "tap", spec: str = M3) -> None:
-    """The link with both holes sized by a thread param, in place of hole_d, and declared for
-    it: at its tap drill, or at its clearance hole."""
-    edit(root, "params.yaml", lambda d: d["params"].pop("hole_d"))
-    add(root, params=spec)
-    remodel(root, "p.hole_d", f"p.screw.{size}")
-    remodel(
-        root, ASSEMBLY, ASSEMBLY + '\n        "threads": {"link.a": "screw", "link.b": "screw"},'
-    )
+from conftest import (
+    M3_SCREW,
+    TEN_LONG,
+    add,
+    add_quote,
+    change,
+    check,
+    edit,
+    meta,
+    remodel,
+    threaded,
+)
 
 
 @pytest.mark.parametrize(
@@ -78,10 +76,69 @@ def test_proposed_thread_comes_from_the_projects_table_and_a_stated_one_from_eit
 
 def test_thread_reads_in_the_projects_length_unit(proj_dir):
     threaded(proj_dir)
-    meta(proj_dir, units={"length": "in"}, tolerance={"length": 1e-5})
+    meta(proj_dir, units={"length": "in"}, threads="metric", tolerance={"length": 1e-5})
     run = check(proj_dir)
     assert run.status == "VERIFIED"
     assert run.report["params"]["screw"]["value"] == pytest.approx(3 / 25.4)
+
+
+def test_proposed_thread_is_unified_in_a_project_in_inches_unless_it_says_metric(proj_dir):
+    # US is one answer: the length unit alone gives the thread table.
+    threaded(proj_dir)
+    meta(proj_dir, units={"length": "in"}, tolerance={"length": 1e-5})
+    run = check(proj_dir)
+    assert run.errors == ["thread-standard"] and "threads is unified" in run.out
+    change(proj_dir, "params", "screw", thread="4-40")
+    assert check(proj_dir).status == "VERIFIED"
+
+
+def test_screw_is_its_thread_and_a_standard_length_as_it_is_ordered(proj_dir):
+    threaded(proj_dir, spec=M3_SCREW)
+    add(proj_dir, params=TEN_LONG)
+    run = check(proj_dir)
+    # Its length shapes no geometry here: it says what is bought, and needs no check.
+    assert run.status == "VERIFIED" and run.rules == []
+    (listed,) = run.report["threads"]
+    assert (listed["length"], listed["screw"]) == ("screw_len", "M3×10")
+    assert "| screw | M3×0.5 | M3×10 (screw_len) | proposed |" in run.md
+    # A length that is not on the chart is one nobody sells.
+    change(proj_dir, "params", "screw_len", value=11.27)
+    run = check(proj_dir)
+    assert run.errors == ["screw-length"]
+    assert "the nearest are 10 mm and 12 mm" in run.messages("screw-length")[0]
+    change(proj_dir, "params", "screw_len", value=1)
+    assert "the nearest is 2 mm" in check(proj_dir).messages("screw-length")[0]
+
+
+def test_stated_screw_length_is_taken_as_stated_and_none_is_fitted_to_the_model(proj_dir, tmp_path):
+    add_quote(proj_dir, tmp_path, "Each pin is an M3 screw 11 mm long.", values={"len": 11})
+    threaded(proj_dir, spec=M3_SCREW)
+    add(proj_dir, params="screw_len: {basis: source, from: N1.len}")
+    run = check(proj_dir)
+    assert run.status == "VERIFIED" and run.rules == []
+    assert run.report["threads"][0]["screw"] == "M3×11"
+    # The model is fitted to the screw that is bought, never the screw to the model.
+    change(proj_dir, "params", "screw_len", basis="derived", expr="link_H + 3", **{"from": None})
+    run = check(proj_dir)
+    assert "screw-length" in run.errors and "is derived" in run.messages("screw-length")[0]
+
+
+def test_unified_screw_is_ordered_in_fractions_of_an_inch(proj_dir):
+    threaded(proj_dir, spec=M3_SCREW.replace("M3,", "4-40,"))
+    add(proj_dir, params=TEN_LONG.replace("10", "0.375"))
+    meta(proj_dir, units={"length": "in"}, tolerance={"length": 1e-5})
+    run = check(proj_dir)
+    assert run.status == "VERIFIED", run.out
+    assert run.report["threads"][0]["screw"] == "#4-40 UNC × 3/8 in"
+    change(proj_dir, "params", "screw_len", value=0.3)
+    message = check(proj_dir).messages("screw-length")[0]
+    assert "(0.3 in)" in message and "the nearest are 1/4 in and 3/8 in" in message
+    # A metric screw in a project in inches is still bought in millimetres.
+    meta(proj_dir, threads="metric")
+    change(proj_dir, "params", "screw", thread="M3")
+    change(proj_dir, "params", "screw_len", value=0.3937)
+    run = check(proj_dir)
+    assert run.status == "VERIFIED" and run.report["threads"][0]["screw"] == "M3×10"
 
 
 def test_count_check_counts_the_holes_a_thread_is_cut_in(proj_dir, tmp_path):

@@ -522,6 +522,12 @@ def _params(p: Project) -> None:
                 p.values[name] = _thread(p, name, spec)
                 p.rests_on[name] = basis if basis in RESTS_ON else "proposed"
             continue
+        if "length" in spec:
+            p.error(
+                "screw-length",
+                f"param {name}: length names the param that gives a screw's length, and {name} "
+                "is no thread param",
+            )
         if basis == "derived":
             if gap and not spec.get("interpretation"):
                 p.error(
@@ -565,6 +571,44 @@ def _params(p: Project) -> None:
         if "value" in spec:
             p.values[name] = float(spec["value"])
     _derived(p, pending)
+    _screws(p)
+
+
+def _screws(p: Project) -> None:
+    """[screw-length] unless each screw's length is a length param that a source states or the
+    reconstruction proposes, and a proposed one a standard length of its thread's table. A screw
+    is bought, so the model is fitted to its length and never its length to the model."""
+    per_mm = units.convert(1.0, "mm", p.units)
+    for name, length in p.screws.items():
+        size, spec = p.thread_params.get(name), p.params.get(length)
+        if size is None:
+            continue  # the thread param's own finding says why it names no thread
+        if spec is None or "thread" in spec:
+            p.error(
+                "screw-length",
+                f"param {name}: length names {length}, which is no length param of params.yaml",
+            )
+            continue
+        p.hold_param(length, ("length",), f"as {name}'s length")
+        basis, value = spec.get("basis"), p.values.get(length)
+        if basis not in ("source", "proposed"):
+            p.error(
+                "screw-length",
+                f"param {name}: its length {length} is {basis}; a screw is bought at a length a "
+                "source states or one proposed from the standard lengths, and what holds it is "
+                "derived from that length",
+            )
+        elif basis == "proposed" and value is not None:
+            thread, mm = size.thread, value / per_mm
+            if threads.standard_length(thread, mm, p.length_tol / per_mm) is None:
+                near = [threads.length_text(thread, n) for n in threads.neighbours(thread, mm)]
+                p.error(
+                    "screw-length",
+                    f"param {name}: its length {length} = {value:g} "
+                    f"({threads.length_text(thread, mm)}) is no standard length for "
+                    f"{threads.STANDARDS[thread.standard]} screws; the nearest "
+                    f"{'are' if len(near) > 1 else 'is'} {' and '.join(near)}",
+                )
 
 
 def _thread(p: Project, name: str, spec: dict) -> threads.Size:
@@ -751,7 +795,9 @@ def unchecked(p: Project, read: set[str], model_reads: set[str]) -> None:
     feeds_physics = _feeding(p, p.physics) - p.physics
     physics_only = feeds_physics - _feeding(p, p.params.keys() - p.physics - feeds_physics)
     checked = _feeding(p, read)
-    unchecked = p.params.keys() - checked - p.physics - physics_only
+    # A screw's length the model does not read shapes no geometry: it says what is bought.
+    bought = set(p.screws.values()) - _feeding(p, model_reads)
+    unchecked = p.params.keys() - checked - p.physics - physics_only - bought
     unchecked |= physics_only & _feeding(p, model_reads) - checked
     compared = {ref for c in p.checks for ref in compared_refs(c)}
     for name, spec in p.params.items():

@@ -1,4 +1,4 @@
-# Reconstruction project. File formats: references/project-format.md in the cad-reverse-engineer skill.
+# Reconstruction project. File formats: references/project-format.md in the known-first skill.
 format: 1   # version of these file formats; set by cadrev init
 name: compact-sspg-7.2
 target: "COMPAct SSPG 7.2:1 gearbox subassembly for the MN8014 actuator (Singh 2025, Table I; released STLs sspg_7.2): sun, three planets, primary carrier (the updated release) with its secondary carrier, gearbox casing with its internal ring, and the output-bearing retainer, assembled as built; motor subassembly and purchased bearings and bolts left out"
