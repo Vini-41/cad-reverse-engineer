@@ -1,4 +1,4 @@
-# Reconstruction project. File formats: references/project-format.md in the cad-reverse-engineer skill.
+# Reconstruction project. File formats: references/project-format.md in the known-first skill.
 format: 1   # version of these file formats; set by cadrev init
 name: centrifuge
 target: "Poór 2022 open-source mini benchtop centrifuge (HardwareX e00328) as released: standard centrifuge body (116 mm lid), bottom plate, and the PCR-strip rotor for 7-bladed 80 mm fans with a 32.5 mm hub, assembled at rest with the lid off; static"

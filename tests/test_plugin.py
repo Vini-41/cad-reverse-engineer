@@ -1,4 +1,4 @@
-"""The plugin as it ships from plugin/: what each channel's manifest names, the skill's
+"""The plugin as it ships from plugin/: what each channel's manifest names, its three skills'
 frontmatter and links, and the cadrev script that runs the tool."""
 
 import json
@@ -7,10 +7,13 @@ import re
 import shutil
 import subprocess
 
+import pytest
 import yaml
-from conftest import REPO, SKILL
+from conftest import REPO, SKILL, SKILLS
 
 PLUGIN = REPO / "plugin"
+# known-first ships the CLI and the file formats; the other two build on it from beside it.
+NAMES = ["ask-machinist", "complete-model", "known-first"]
 
 
 def test_plugin_ships_only_what_its_channels_accept():
@@ -30,13 +33,14 @@ def test_plugin_ships_only_what_its_channels_accept():
     assert len((PLUGIN / "README.md").read_text().split()) >= 40
 
 
-def test_every_channel_installs_the_plugin_from_plugin_and_finds_its_skill():
+def test_every_channel_installs_the_plugin_from_plugin_and_finds_its_skills():
     claude = json.loads((REPO / ".claude-plugin" / "marketplace.json").read_text())
     codex = json.loads((REPO / ".agents" / "plugins" / "marketplace.json").read_text())
     assert [p["source"] for p in claude["plugins"]] == ["./plugin"]
     assert [p["source"] for p in codex["plugins"]] == [{"source": "local", "path": "./plugin"}]
     paths = json.loads((REPO / "skills.sh.json").read_text())["paths"]
-    assert [REPO / p / "cad-reverse-engineer" / "SKILL.md" for p in paths] == [SKILL / "SKILL.md"]
+    assert [(REPO / p).resolve() for p in paths] == [SKILLS]
+    assert sorted(d.name for d in SKILLS.iterdir() if (d / "SKILL.md").is_file()) == NAMES
     claude = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text())
     codex = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
     for key in ("name", "version", "description", "author", "license", "keywords"):
@@ -49,24 +53,29 @@ def test_every_channel_installs_the_plugin_from_plugin_and_finds_its_skill():
     assert codex["requires_local_executor"] is True
     assert 0 < len(interface["capabilities"]) <= 20
     assert all(0 < len(label) <= 120 for label in interface["capabilities"])
-    assert (PLUGIN / codex["skills"] / "cad-reverse-engineer" / "SKILL.md").is_file()
+    assert (PLUGIN / codex["skills"]).resolve() == SKILLS
 
 
-def test_skill_frontmatter_names_itself_its_license_and_what_it_needs():
-    front = yaml.safe_load((SKILL / "SKILL.md").read_text().split("---\n")[1])
-    assert front["name"] == SKILL.name and front["license"] == "MIT"
+@pytest.mark.parametrize("name", NAMES)
+def test_skill_frontmatter_names_itself_its_license_and_what_it_needs(name):
+    front = yaml.safe_load((SKILLS / name / "SKILL.md").read_text().split("---\n")[1])
+    assert front["name"] == name and front["license"] == "MIT"
     assert 0 < len(front["description"]) <= 1024
     needs = front["compatibility"]
     assert len(needs) <= 500 and all(word in needs for word in ("uv", "3.12", "3.14", "network"))
+    # The CLI ships in known-first alone, and each other skill says it is used from beside it.
+    assert (SKILLS / name / "cadrev").is_file() == (name == SKILL.name)
+    assert name == SKILL.name or "known-first skill installed beside it" in needs
 
 
-def test_every_relative_link_in_the_skill_names_a_file_and_a_heading_in_it():
+def test_every_relative_link_in_the_skills_names_a_file_and_a_heading_in_it():
     def headings(doc) -> set[str]:
         """Each heading of a Markdown file as the anchor a link names it by."""
         found = re.findall(r"^#+ (.*)$", doc.read_text(), re.M)
         return {re.sub(r"[^\w\- ]", "", heading.lower()).replace(" ", "-") for heading in found}
 
-    docs = [SKILL / "SKILL.md", *sorted((SKILL / "references").glob("*.md"))]
+    docs = [SKILLS / name / "SKILL.md" for name in NAMES]
+    docs += sorted((SKILL / "references").glob("*.md"))
     links = [
         (doc, target) for doc in docs for target in re.findall(r"\]\(([^)\s]+)\)", doc.read_text())
     ]
@@ -74,9 +83,12 @@ def test_every_relative_link_in_the_skill_names_a_file_and_a_heading_in_it():
     assert len(relative) > 10
     for doc, target in relative:
         path, _, anchor = target.partition("#")
-        file = doc.parent / path if path else doc
-        assert file.is_file(), f"{doc.name} links to {target}, which is no file"
-        assert not anchor or anchor in headings(file), f"{doc.name} links to {target}: no heading"
+        file = (doc.parent / path).resolve() if path else doc
+        where = f"{doc.parent.name}/{doc.name}"
+        assert file.is_file(), f"{where} links to {target}, which is no file"
+        # A skill reaches another only as it is installed: beside it, under the same directory.
+        assert SKILLS in file.parents, f"{where} links to {target}, outside the skills"
+        assert not anchor or anchor in headings(file), f"{where} links to {target}: no heading"
 
 
 def test_cadrev_script_runs_the_tool_from_any_directory_at_the_locked_versions_only(tmp_path):
@@ -90,7 +102,7 @@ def test_cadrev_script_runs_the_tool_from_any_directory_at_the_locked_versions_o
     result = run(SKILL / "cadrev", "python", "-c", "import build123d, cadrev; print('own')")
     assert result.returncode == 0 and result.stdout == "own\n", result.stderr
     # A copy whose pyproject.toml asks for more than its lock holds is refused, not re-resolved.
-    skill = tmp_path / "cad-reverse-engineer"
+    skill = tmp_path / SKILL.name
     shutil.copytree(SKILL, skill, ignore=shutil.ignore_patterns(".venv", "__pycache__"))
     pyproject = skill / "tool" / "pyproject.toml"
     text = pyproject.read_text()

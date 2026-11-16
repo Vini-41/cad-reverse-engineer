@@ -1,6 +1,6 @@
 # CAD reverse-engineering
 
-Rebuilding a published object, from a single part up to a mechanism, from its sources (including geometry its authors released) as parametric CAD, optionally with a kinematic model that exports to MuJoCo. Every number is traced to a quoted source or named as a reconstruction choice, and every stated value, motion included, is checked against the built model. The result can be modified and simulated kinematically. It does not cover the reconstructor's own measurements of a physical object, behavioural simulation, fabrication-ready tolerances, or whole robots (ADR-0007).
+Rebuilding a published object, from a single part up to a mechanism, from its sources (including geometry its authors released) as parametric CAD, optionally with a kinematic model that exports to MuJoCo. Every number is traced to a quoted source or named as a reconstruction choice, and every stated value, motion included, is checked against the built model. The result can be modified, simulated kinematically and, with its plan, made. It does not cover the reconstructor's own measurements of a physical object, behavioural simulation, tolerance analysis, or whole robots (ADR-0007, ADR-0021).
 
 ## Evidence
 
@@ -70,6 +70,10 @@ _Avoid_: preset, preload, springref
 A standard screw thread, named by its designation in the ISO metric table or the Unified one (`M3`, `M8x1`, `1/4-20`). A thread param holds one, stated by a source or proposed from the project's table, and the table gives its diameter, pitch, tap drill and clearance hole. The model declares it on the plain hole or shank made for it and never cuts it: what a CAD program calls a cosmetic thread.
 _Avoid_: screw size (for a designation), thread size (for a diameter typed beside a pitch), modelled thread
 
+**Screw**:
+A thread and a length, bought and never made: a thread param that names its length. A proposed screw's length is a standard length of its thread's table, and the model is fitted to the screw.
+_Avoid_: fastener (for a screw alone), bolt
+
 ## Verification
 
 **Instance**:
@@ -129,7 +133,7 @@ A param some check reads (see Reads), directly or through a param derived from i
 _Avoid_: covered (by a check), confirmed (by a check)
 
 **Tolerance**:
-How far the value a check evaluates may stray from its ledger value and still pass. An interference check compares with no ledger value, so its overlap limit is not a tolerance.
+How far the value a check evaluates may stray from its ledger value and still pass. It is the model's: how far a made part may stray is its plan's to say. An interference check compares with no ledger value, so its overlap limit is not a tolerance.
 _Avoid_: margin, allowance
 
 **Coverage sweep**:
@@ -167,10 +171,6 @@ _Avoid_: verified (for this stronger state)
 
 ## Workflow
 
-**Foundational question**:
-A question whose answer shapes everything built after it, so it is settled before anything is built: the target, metric or US (the length unit and the thread table), and the build (the complete model or known first). The user answers them, or the reconstruction does from the sources and says so.
-_Avoid_: assumption (for an answer given in the user's place), clarifying question
-
 **Tracer part**:
 The first part taken through modelling, checks and the report before any other part is modelled.
 
@@ -184,3 +184,29 @@ _Avoid_: draft model, sources-only model
 **Waiting**:
 Of a part in a known-first project: not settled, since it needs a value the sources leave open, and so not built. Of a stated value: one no parameter uses and no check compares, as a waiting part's are.
 _Avoid_: pending (for a value; PENDING REVIEW is a status), deferred
+
+**Complete model**:
+A project that builds every part: what the sources settle as known first does, and each value they leave open proposed, to be made, beside the gap that would close it.
+_Avoid_: full model, final model
+
+**Foundational question**:
+A question whose answer shapes every value a complete model proposes, so it is settled before anything is proposed: metric or US, the material, and design or function. The user answers them, or the reconstruction does from the sources and says so.
+_Avoid_: assumption (for an answer given in the user's place), clarifying question
+
+**Material**:
+What the object's made parts are made of and how (PLA, FDM printed), or none yet. It decides what a proposed wall, clearance and fit can be.
+_Avoid_: process (for the answer as a whole)
+
+**Design or function**:
+What a complete model follows where the object is hard to make as its sources show it: the design, built as shown, or the function, where a proposed feature that does the same job replaces the one shown.
+_Avoid_: fidelity, mode
+
+## Making
+
+**Plan**:
+How the object is made and put together, written once its design is accepted: how each part is made or what is bought for it, and the steps that assemble its instances. It is held to the model: every part an instance places is made or bought, and every instance is placed by one step.
+_Avoid_: instructions, bill of materials (for the plan as a whole)
+
+**Step**:
+One act of the plan's assembly sequence: the instances it places, the screws it drives, and how.
+_Avoid_: operation (an operation makes a part; a step assembles)

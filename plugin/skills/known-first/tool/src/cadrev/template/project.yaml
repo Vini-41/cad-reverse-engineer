@@ -1,9 +1,8 @@
-# Reconstruction project. File formats: references/project-format.md in the cad-reverse-engineer skill.
+# Reconstruction project. File formats: references/project-format.md in the known-first skill.
 format: 1   # version of these file formats; set by cadrev init
 name: NAME
 target: TODO one sentence naming the object, version and configuration being reconstructed
 units: {length: mm, angle: deg, mass: g}
-threads: metric   # the table a proposed thread comes from: metric (ISO) or unified (UNC, UNF)
-tolerance: {length: 0.001}   # model must realise source values to this; it is not a print tolerance
+tolerance: {length: 0.001}   # how closely the model realises a source value; no shop works to it
 # Register sources with `cadrev source`; it copies the file and pins its sha256. Keep this key last.
 sources: []

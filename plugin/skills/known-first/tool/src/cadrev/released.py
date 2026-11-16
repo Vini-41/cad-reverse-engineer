@@ -367,6 +367,16 @@ def cylinder_at(
     raise Fault(f"{name} lies on {where}")
 
 
+def is_hole(face) -> bool:
+    """Whether a cylindrical face of a solid is a hole's wall, which faces its own axis, and not
+    a shank's, which faces away from it."""
+    axis = face.axis_of_rotation
+    at = face.position_at(0.5, 0.5)
+    along = (at - axis.position).dot(axis.direction)
+    outward = at - (axis.position + axis.direction * along)
+    return face.normal_at(at).dot(outward) < 0
+
+
 def diameter_at(solid, point: tuple[float, float, float], tol: float, name: str) -> float:
     """The diameter of the one cylindrical face of a solid that point lies on within tol."""
     return cylinder_at(solid, point, tol, name)[0]

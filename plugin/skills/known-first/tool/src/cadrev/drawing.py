@@ -346,8 +346,9 @@ def _dimensions(p: Project, model: Model, part: str, results: dict[str, Result],
             if thread.fit == "threaded":
                 # The thread as a drawing shows one: a thin three-quarter circle at the major
                 # diameter around a hole, at the minor diameter inside a shank.
-                internal = thread.diameter < float(sized) - tol
-                marks.append(("thread", cylinder, (float(sized) if internal else sized.minor) / 2))
+                marks.append(
+                    ("thread", cylinder, (float(sized) if thread.hole else sized.minor) / 2)
+                )
             else:
                 text = f"Ø{_number(thread.diameter)} for {sized.thread.size}"
             marks.append(("round", cylinder, text, CHECKED, model.datums[thread.at]))

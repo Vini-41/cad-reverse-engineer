@@ -189,9 +189,10 @@ def cmd_check(args) -> int:
     # A partial run makes no claim, so it writes nothing to build/.
     partial = args.no_build or args.no_coverage
     results, images, drawn, model, coarsened, build_seconds = [], [], [], None, {}, None
+    planned = None
     read = {name for c in p.checks for name in ledger.named_by_checks(p, c)}
     if modelled and not args.no_build:
-        from . import build, drawing, motion, overlay
+        from . import build, drawing, motion, overlay, plan
 
         # A build and its checks can take a minute: say what the wait is for as it starts.
         print("building model.py", flush=True)
@@ -202,6 +203,7 @@ def cmd_check(args) -> int:
             mechanism = motion.Mechanism(p, model) if model.joints else None
             print("evaluating checks.yaml", flush=True)
             results, read = checks.Checks(p, model, mechanism, unplanned).run()
+            planned = plan.check(p, model)
             coarsened = mechanism.coarsened if mechanism else {}
             if not partial:
                 written = build.export(p, model) + (mechanism.write() if mechanism else [])
@@ -233,7 +235,7 @@ def cmd_check(args) -> int:
         )
         print(f"\n{found}; skipped {skipped}, so no claim is made and no report was written.")
         return 1
-    path = report.write(p, status, results, images, drawn, model, coarsened, build_seconds)
+    path = report.write(p, status, results, images, drawn, model, coarsened, build_seconds, planned)
     known_first = f"Known first: {report.waiting_clause(p)}. " if p.known_first else ""
     print(
         f"\n{found}, {headline['checks_passed']}/{headline['checks']} checks pass. {known_first}"

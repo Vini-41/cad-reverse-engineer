@@ -141,6 +141,8 @@ class Project:
     datums: dict[str, list | dict]
     # The mass model: part -> {mass: param} or {density: param}.
     parts: dict[str, dict]
+    # plan.yaml's make, buy and steps; None for a project with no plan.
+    plan: dict | None = None
     findings: list[Finding] = field(default_factory=list)
     # Each resolved param's value, and the basis it rests on (one of RESTS_ON).
     values: dict[str, float] = field(default_factory=dict)
@@ -177,8 +179,29 @@ class Project:
 
     @property
     def thread_standard(self) -> str:
-        """The table a proposed thread comes from: project.yaml's threads, else metric."""
-        return self.meta.get("threads", "metric")
+        """The table a proposed thread comes from: project.yaml's threads, else the Unified one
+        where the project's length unit is of the inch and the ISO metric one where it is not."""
+        own = "unified" if self.units["length"] in threads.INCH_UNITS else "metric"
+        return self.meta.get("threads", own)
+
+    @property
+    def screws(self) -> dict[str, str]:
+        """Each thread param that names a screw, and the param its length names."""
+        return {
+            name: str(spec["length"])
+            for name, spec in self.params.items()
+            if "thread" in spec and "length" in spec
+        }
+
+    def screw(self, name: str) -> str | None:
+        """A screw as it is ordered, M3×10 or 1/4-20 UNC × 3/4 in: thread param `name`'s thread
+        and its length, read as the standard length it is within tolerance.length of. None where
+        the param names no screw, or its thread or its length has no value."""
+        size, length = self.thread_params.get(name), self.values.get(self.screws.get(name, ""))
+        if size is None or length is None:
+            return None
+        mm, tol = length / size.per_mm, self.length_tol / size.per_mm
+        return threads.screw(size.thread, threads.standard_length(size.thread, mm, tol) or mm)
 
     @property
     def up(self) -> str:
@@ -628,6 +651,7 @@ def load(root: Path) -> Project:
         checks=files["checks.yaml"].get("checks", []),
         gaps={g["id"]: g for g in files["gaps.yaml"].get("gaps", [])},
         overlays=files["overlays.yaml"].get("overlays", []),
+        plan=files["plan.yaml"] if (root / "plan.yaml").is_file() and not refused else None,
         findings=findings,
     )
     for what, rule, ids in (

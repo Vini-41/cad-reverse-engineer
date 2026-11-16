@@ -17,6 +17,7 @@ from conftest import (
     INPUT_RANGE,
     KNEE,
     LOOP,
+    M3_SCREW,
     PAPER,
     PROBE,
     SCREW,
@@ -24,6 +25,7 @@ from conftest import (
     SHEET_PROBE,
     SLIDE,
     SKILL,
+    TEN_LONG,
     WOUND,
     add,
     add_line,
@@ -42,6 +44,8 @@ from conftest import (
     released,
     remodel,
     sheet,
+    stack,
+    threaded,
     write,
 )
 
@@ -203,6 +207,18 @@ def _threaded(designation: str, at: str):
     )
 
 
+def _screwed(length: str):
+    """The link's holes threaded for an M3 screw, whose length is the param given as YAML."""
+    return lambda r, t: (threaded(r, spec=M3_SCREW), add(r, params=length))
+
+
+def _planned(**plan):
+    """A plan of the link: made flat and placed by one step, with plan's changes to its make,
+    buy and steps, each YAML text, or None for none."""
+    plan = {"make": "link: print it flat", "steps": "[{place: [link_1]}]"} | plan
+    return lambda r, t: add(r, **{key: text for key, text in plan.items() if text is not None})
+
+
 RESIN = "The link weighs 1.8 g in resin of 1.2 g/cm3."
 EXTRA = "{id: extra, source: paper, locator: Sec. 3, quote: branches of 60 mm diameter"
 ANGLE = "{id: n, kind: angle, between: [link.b, link.a, link.top], evidence: N1, key: v"
@@ -341,6 +357,50 @@ LINK_FINDINGS = {
     "check-config: a count of a thread that is none": _quoted_check(
         "Two screws hold it.", "{id: n, kind: count, thread: hole_d, evidence: N1, key: v}", v=2
     ),
+    # Screws: a thread and a length.
+    "screw-length: a proposed length off the standard lengths": _screwed(
+        TEN_LONG.replace("10", "11.27")
+    ),
+    "screw-length: a length fitted to the model": _screwed(
+        "screw_len: {basis: derived, expr: link_H + 2}"
+    ),
+    "screw-length: a length that names no param": _screwed("spare: " + TEN_LONG.partition(" ")[2]),
+    "screw-length: a length that names a thread": lambda r, t: threaded(
+        r, spec=M3_SCREW.replace("screw_len", "screw")
+    ),
+    "screw-length: a length on a param that is no thread": _param("hole_d", length="pitch"),
+    "unit-quantity: a mass as a screw's length": lambda r, t: (
+        add_quote(r, t, "Each screw weighs 10 g.", values={"m": 10}),
+        _screwed("screw_len: {basis: source, from: N1.m}")(r, t),
+    ),
+    # The plan.
+    "plan-part: a placed part neither made nor bought": _planned(make=None),
+    "plan-part: a making of a part that is none": _planned(make="pin: turn it"),
+    "plan-part: a part both made and bought": _planned(buy="link: a link"),
+    "plan-part: a making that says nothing": _planned(make="link: ['', drill]"),
+    "plan-part: a purchase that says nothing": _planned(buy="glue: ' '"),
+    "plan-step: an instance no step places": lambda r, t: (stack(r, 2), _planned()(r, t)),
+    "plan-step: several instances and no steps": lambda r, t: (
+        stack(r, 2),
+        _planned(steps=None)(r, t),
+    ),
+    "plan-step: an instance placed twice": _planned(steps="[{place: [link_1, link_1]}]"),
+    "plan-step: an instance that is none": _planned(steps="[{place: [link_1, pin_1]}]"),
+    "plan-step: a step that says nothing": _planned(steps="[{place: [link_1]}, {}]"),
+    "plan-screw: a with that names no thread param": _planned(
+        steps="[{place: [link_1], with: {hole_d: 2}}]"
+    ),
+    "plan-screw: a step that drives none": lambda r, t: (
+        _screwed(TEN_LONG)(r, t),
+        _planned(steps="[{place: [link_1], with: {screw: 0}}]")(r, t),
+    ),
+    "plan-screw: warning, holes threaded for a screw and left without one": lambda r, t: (
+        _screwed(TEN_LONG)(r, t),
+        _planned()(r, t),
+    ),
+    "schema: a step that places text": _planned(steps="[{place: link_1}]"),
+    "schema: a step with a key that is none": _planned(steps="[{place: [link_1], tool: key}]"),
+    "schema: follows that is neither": _meta(follows="form"),
     "schema: a count of a part and a thread": _quoted_check(
         "Two screws hold it.",
         "{id: n, kind: count, part: link, thread: hole_d, evidence: N1, key: v}",
@@ -919,6 +979,26 @@ LINK_DAMAGE = {
     "thread that is a list": _params("screw: {basis: proposed, thread: [M3], rationale: r}"),
     "threads is a mapping": _meta(threads={"table": "metric"}),
     "threads of the model is a list": _model(ASSEMBLY, ASSEMBLY + '"threads": ["link.a"],'),
+    "screw length that is a number": _screwed("screw: {basis: proposed, thread: M3, length: 10}"),
+    "screw length of infinity": _screwed(TEN_LONG.replace("10", ".inf")),
+    "screw length with no value": _screwed("screw_len: {basis: proposed, rationale: r}"),
+    "material is a list": _meta(material=["PLA"]),
+    "follows is a mapping": _meta(follows={"design": True}),
+    "plan that is a list": _file("plan.yaml", "- make\n- buy\n"),
+    "plan that is empty": _file("plan.yaml", ""),
+    "plan make that is a list": _file("plan.yaml", "make: [link]\n"),
+    "plan make of a number": _planned(make="link: 3"),
+    "plan make of a list of numbers": _planned(make="link: [1, 2]"),
+    "plan buy of a mapping": _planned(buy="link: {from: a shop}"),
+    "plan steps that are a mapping": _file("plan.yaml", "steps: {place: [link_1]}\n"),
+    "plan step with of text": _planned(steps="[{place: [link_1], with: {screw: two}}]"),
+    "plan step with that is a list": _planned(steps="[{place: [link_1], with: [screw]}]"),
+    "plan step placing a number": _planned(steps="[{place: [1]}]"),
+    "plan of a model that does not build": lambda r, t: (
+        _planned()(r, t),
+        add_line(r, "raise ValueError(p.pitch)"),
+    ),
+    "plan is a directory": lambda r, t: (r / "plan.yaml").mkdir(),
     "name is a number": _meta(name=5),
     "format is a mapping": _meta(format={"v": 1}),
     "units is a number": _meta(units=5),
