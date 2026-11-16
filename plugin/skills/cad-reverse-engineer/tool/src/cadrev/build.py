@@ -98,6 +98,20 @@ class Mass:
     inertia: tuple[float, ...]
 
 
+class Threaded(NamedTuple):
+    """A plain cylinder of a part made for a thread: the datum it is declared at, the thread
+    param, whether it carries the thread or clears its screw, and the cylinder's diameter, a
+    point on its axis and the axis's direction, in the part's frame."""
+
+    at: str
+    part: str
+    param: str
+    fit: str  # threaded or clearance
+    diameter: float
+    origin: tuple[float, float, float]
+    direction: tuple[float, float, float]
+
+
 @dataclass
 class Model:
     parts: dict
@@ -110,6 +124,8 @@ class Model:
     cables: dict = field(default_factory=dict)
     tendons: dict = field(default_factory=dict)
     masses: dict[str, Mass] = field(default_factory=dict)
+    # Each hole or shank declared for a thread, once held to the thread's sizes.
+    threads: list[Threaded] = field(default_factory=list)
     # True when a finding dropped the joints, loops, gears, cables and tendons build() returned.
     dropped: bool = False
     # The joints the pose this assembly is placed at moves, itself or through a gear, cable or
@@ -241,7 +257,8 @@ def _contract(result) -> None:
 
     if not isinstance(result, dict):
         raise Fault(f"must return a mapping of parts, datums and assembly, not {_type(result)}")
-    for key in ("parts", "datums", "assembly", "loops", *(f"{kind}s" for kind in _MOTION)):
+    keys = ("parts", "datums", "assembly", "threads", "loops", *(f"{kind}s" for kind in _MOTION))
+    for key in keys:
         if not isinstance(result.get(key, {}), dict):
             raise Fault(f"{key} must be a mapping of names, not {_type(result[key])}")
         for name in result.get(key, {}):
@@ -255,6 +272,9 @@ def _contract(result) -> None:
     for name, point in result.get("datums", {}).items():
         if not (_listed(point, 3) and all(isinstance(c, (int, float)) for c in point)):
             raise Fault(f"datum {name} must be an (x, y, z) tuple of numbers, not {point!r}")
+    for name, param in result.get("threads", {}).items():
+        if not isinstance(param, str):
+            raise Fault(f"thread at {name} must name a thread param, not {param!r}")
     for inst, entry in result.get("assembly", {}).items():
         if not (_listed(entry, 2) and isinstance(entry[0], str) and isinstance(entry[1], Location)):
             raise Fault(f"assembly instance {inst} must be a (part name, Location) pair")
@@ -352,7 +372,8 @@ def build(p: Project) -> Model | None:
             for kind in ("joint", "loop", "gear", "cable", "tendon")
         },
     )
-    _hold_units(p, model)
+    declared = result.get("threads", {})
+    _hold_units(p, model, set(declared.values()))
     for name, part in model.parts.items():
         solids = len(part.solids())
         if not part.is_valid:
@@ -369,6 +390,9 @@ def build(p: Project) -> Model | None:
             gap = released.off_solid(model.parts[part], point, p.length_tol)
             if gap is not None:
                 p.error("datum-off-solid", f"datum {name} of part {part}: {released.off(gap)}")
+    for at, param in declared.items():
+        with p.filing("model-thread", f"thread at {at}: "):
+            model.threads.append(_threaded(p, model, at, param))
     for inst, (part, _) in list(model.assembly.items()):
         if part not in model.parts:
             p.error("assembly-part", f"assembly instance {inst}: unknown part {part!r}")
@@ -381,7 +405,35 @@ def build(p: Project) -> Model | None:
     return model
 
 
-def _hold_units(p: Project, model: Model) -> None:
+def _threaded(p: Project, model: Model, at: str, param: str) -> Threaded:
+    """The cylinder a thread is declared on, held to the thread's sizes: it carries the thread
+    from its minor diameter to its major, or clears its screw at its clearance hole."""
+    part = prefix(at, model.parts)
+    if part is None or at not in model.datums:
+        raise Fault("is not a <part>.<feature> datum")
+    size = p.thread_params.get(param)
+    if size is None:
+        if param in p.values or param not in p.params:
+            raise Fault(f"{param} is not a thread param; give it thread: in params.yaml")
+        raise Fault()  # the param's own finding says why it has no value
+    tol, thread = p.length_tol, size.thread
+    diameter, origin, direction = released.cylinder_at(
+        model.parts[part], model.datums[at], tol, at, or_axis=True
+    )
+    if size.minor - tol <= diameter <= size + tol:
+        fit = "threaded"
+    elif abs(diameter - size.clearance) <= tol:
+        fit = "clearance"
+    else:
+        raise Fault(
+            f"its cylinder is Ø{diameter:.4g}, neither {thread.name}'s thread (Ø{size.minor:.4g} "
+            f"to Ø{float(size):g}; its tap drill is Ø{size.tap:.4g}) nor its clearance hole "
+            f"(Ø{size.clearance:.4g})"
+        )
+    return Threaded(at, part, param, fit, printed(diameter)[0], origin, direction)
+
+
+def _hold_units(p: Project, model: Model, threaded: set[str]) -> None:
     """Each param the model reads or exports is printed in a unit of the quantity it is used as,
     a physics value goes nowhere else, and each param is read by something."""
     for name in sorted(model.used):
@@ -424,7 +476,7 @@ def _hold_units(p: Project, model: Model) -> None:
             f"param {name}: is marked physics: true, but the model's geometry, a joint range or a "
             "check reads it; a physics value only goes to a joint or tendon",
         )
-    exported = ranges | coupled | slots.keys() | set(ledger.mass_params(p))
+    exported = ranges | coupled | slots.keys() | set(ledger.mass_params(p)) | threaded
     derived = {n for spec in p.params.values() for n in expr_names(str(spec.get("expr") or ""))}
     p.resolution = ledger.resolution(p) - model.used - derived - exported
     for name in sorted(p.values.keys() - model.used - derived - named - exported):
@@ -643,27 +695,39 @@ def _mass_model(p: Project, model: Model) -> dict[str, Mass]:
     return masses
 
 
+# The project length units build123d's STEP export names; a part in any other is scaled to mm.
+_STEP_UNITS = {"mm": "MM", "cm": "CM", "m": "M", "µm": "MC", "in": "IN", "ft": "FT"}
+
+
 def export(p: Project, model: Model) -> list[Path]:
-    """Write build/parts/<part>.step and build/assembly.step."""
-    from build123d import export_step
+    """Write build/parts/<part>.step and build/assembly.step, each at its true size whatever the
+    project's length unit: a CAD program opens a 2 in part as 50.8 mm, not as 2 mm."""
+    from build123d import Unit, export_step
 
     out = p.root / "build"
     (out / "parts").mkdir(parents=True, exist_ok=True)
+    unit = p.units["length"]
     written = []
     for name, part in model.parts.items():
-        part.label = name
         written.append(out / "parts" / f"{name}.step")
-        export_step(part, str(written[-1]))
+        if unit in _STEP_UNITS:
+            part.label = name
+            export_step(part, str(written[-1]), unit=Unit[_STEP_UNITS[unit]])
+        else:
+            scaled = part.scale(units.convert(1.0, unit, {"length": "mm"}))
+            scaled.label = name
+            export_step(scaled, str(written[-1]))
     if model.assembly:
         written.append(out / "assembly.step")
-        _export_assembly(p.meta.get("name", "assembly"), model, written[-1])
+        _export_assembly(p.meta.get("name", "assembly"), model, units.UNITS[unit].si, written[-1])
     return written
 
 
-def _export_assembly(name: str, model: Model, path: Path) -> None:
+def _export_assembly(name: str, model: Model, unit: float, path: Path) -> None:
     """Write the assembly as a CAD program's tree shows it: each part once, under its own name,
     and each instance an occurrence of its part, under the instance's name. build123d's
-    export_step names a part after the last of its instances."""
+    export_step names a part after the last of its instances. unit is the project's length unit
+    in metres."""
     # OCP's modules re-export a compiled module whose names pyright cannot see, so they are
     # looked up by name.
     ocp = {
@@ -679,7 +743,7 @@ def _export_assembly(name: str, model: Model, path: Path) -> None:
 
     doc = ocp["TDocStd"].TDocStd_Document(text("XmlOcaf"))
     ocp["XCAFApp"].XCAFApp_Application.GetApplication_s().NewDocument(text("MDTV-XCAF"), doc)
-    tool.SetLengthUnit_s(doc, 0.001)  # millimetres, as export_step writes a part
+    tool.SetLengthUnit_s(doc, unit)  # as export_step is told a part's
     shapes = tool.ShapeTool_s(doc.Main())
     top = shapes.NewShape()
     named(top, text(name))

@@ -4,6 +4,7 @@ A skill that turns a paper, patent or datasheet into parametric CAD, with every 
 
 - **CAD you can open and change**: a STEP file per part and one for the assembly, from a parametric build123d model whose every dimension is a named value in `params.yaml`.
 - **A mechanism that moves**: joints, gear ratios and lead screws exported to MuJoCo, with stated motion checked on the model.
+- **A drawing of each part**: three views and an isometric one, dimensioned with the checked values, with screw threads named from the ISO metric or Unified table.
 - **A report of where each dimension came from**: quoted from a document, probed from a file the authors released, or proposed because nothing states it, beside the question that would settle it.
 
 ## Install
@@ -31,7 +32,7 @@ network_access = true
 
 Any agent that reads skills: `npx skills add Vini-41/cad-reverse-engineer`.
 
-Then give the agent your documents and ask for the CAD: *"reverse-engineer the gripper in this paper"*. It asks whether you want the complete model or known first: only the parts the sources settle, built and checked, before anything is proposed.
+Then give the agent your documents and ask for the CAD: *"reverse-engineer the gripper in this paper"*. Before it builds, it asks what it cannot assume: metric or US, and whether you want the complete model or known first, only the parts the sources settle, built and checked, before anything is proposed. Say "build now" and it answers those from the sources.
 
 Built for Fable 5.2 and [benchmarked](https://github.com/Vini-41/cad-reverse-engineer/blob/main/docs/benchmark.md) across Anthropic's and OpenAI's frontier models.
 

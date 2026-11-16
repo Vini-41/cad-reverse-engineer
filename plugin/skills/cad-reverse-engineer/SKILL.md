@@ -25,7 +25,7 @@ The CLI is the `cadrev` script beside this file, and needs [`uv`](https://docs.a
 
 `cadrev` below stands for that path. The first run installs build123d and MuJoCo (about a minute).
 
-- `cadrev check <dir>` runs every rule, builds the model, evaluates the checks and writes `build/`. `cadrev check <dir> --no-build` runs every rule that needs no build in seconds, for the stages before there is a model. Each finding names its rule in brackets and says what is wrong and where.
+- `cadrev check <dir>` runs every rule, builds the model, evaluates the checks and writes `build/`: the STEP files, an isometric view, a drawing of each part and the report. `cadrev check <dir> --no-build` runs every rule that needs no build in seconds, for the stages before there is a model. Each finding names its rule in brackets and says what is wrong and where.
 - Read [`references/project-format.md`](references/project-format.md) before writing project YAML and [`references/modeling.md`](references/modeling.md) before writing model.py. They give the formats; the findings give the rules as you meet them.
 - `cadrev python <script>` runs a script of your own on the CLI's Python, with build123d, numpy and matplotlib. One that writes project YAML (checks repeated per instance) lives in the project directory, and the file it writes names it in a comment, so the project alone shows how it was written.
 
@@ -35,12 +35,17 @@ Take the stages in order: each builds on what the ones before settled. A stage i
 
 ### 1. Scope
 
-Ask the user where the project directory goes and which build they want, unless they have said; with no one to ask, build the complete model.
+Three foundational questions shape everything built after them, so their answers come before anything is built. Ask the user those they have not answered, in one message, with where the project directory goes. Where they said to build now, or there is no one to ask, answer each from the sources and name those answers at the hand-over.
 
-- **The complete model**: every part built, each value the sources leave open proposed beside the gap that would close it.
-- **Known first**: only the parts whose every dimension the sources settle, built and checked; every other part waits with the question that would settle it ([Known first](#known-first)).
+- **The target**: the object, its version and its configuration. Papers often show earlier iterations beside the reported one; the target names the one the ledger describes. A target narrows the object, not its parts: a file holding many parts is that many parts to build.
+- **Metric or US**: the project's length unit, `mm` or `in`, and its thread table, `threads: metric` (ISO) or `unified` (UNC and UNF). Every value the reconstruction proposes is in that unit and every thread it proposes is from that table. Answered from the sources, it is the system they print their dimensions in.
+- **The build**: the complete model or known first. Answered without the user, the complete model.
+  - **The complete model**: every part built, each value the sources leave open proposed beside the gap that would close it.
+  - **Known first**: only the parts whose every dimension the sources settle, built and checked; every other part waits with the question that would settle it ([Known first](#known-first)).
 
-Run `cadrev init <dir>` and write `target` in project.yaml: the object, its version and its configuration. Papers often show earlier iterations beside the reported one; the target names the one the ledger describes. A target narrows the object, not its parts: a file holding many parts is that many parts to build.
+Run `cadrev init <dir>` and write the answers in [project.yaml](references/project-format.md#projectyaml).
+
+Done when project.yaml holds all three answers.
 
 ### 2. Sources
 
@@ -81,6 +86,8 @@ Write params.yaml. Each dimension takes the strongest basis available: `source` 
 
 - A tooth count is a `source` param, and a gear ratio a `derived` param written from the counts, so the ratio traces to the table.
 - A proposed param has a `rationale` and names a gap in gaps.yaml, phrased as the question that would settle it.
+- A proposed value is a standard one, and one the object already has before a new one: the thread its other screws use, the thickness its other sheets have, a stock size before an odd one. An object made from one screw size and one sheet is easier to make, so a second size is proposed only where something stated calls for it, and its `rationale` says what.
+- A screw or a thread is a [thread param](references/project-format.md#threads): a designation from the ISO metric or the Unified table, which supplies its diameter, its pitch, its tap drill and its clearance hole.
 - Joint ranges, poses and physics values wait for stage 8.
 
 Done when every feature the model will need has a param.
@@ -89,13 +96,15 @@ Done when every feature the model will need has a param.
 
 Take one part all the way through before modelling any other, as a tracer bullet: a part with a stated envelope or pitch, or with a released body. Model it alone, give it its checks, and run `cadrev check <dir>` until the report shows them green. It proves the path from ledger to report while a mistake costs one part.
 
-Then build the rest per [`references/modeling.md`](references/modeling.md): every part the sources' parts tables list and every mechanism they state, with a datum at every checked feature and pivot. Weigh each part in the [mass model](references/project-format.md#paramsyaml) as you model it.
+Then build the rest per [`references/modeling.md`](references/modeling.md): every part the sources' parts tables list and every mechanism they state, with a datum at every checked feature and pivot, and its [thread](references/modeling.md#threads) declared on every threaded hole and shank. Weigh each part in the [mass model](references/project-format.md#paramsyaml) as you model it.
 
 Done when every part is built and `cadrev check <dir>` reports nothing about the model. Red checks on the other parts are stage 7's.
 
 ### 7. Checks
 
-Add a check for every stated value the geometry should realise: `bbox` for an envelope, `distance` for a pitch or spacing, `angle`, `diameter` for a bore or a `Ø` callout, `count` for a stated number of instances, `mass` for a stated mass, and `interference` across the assembly. Where a source states the numbers a value is worked out from (a pitch diameter from a module and a tooth count), the check compares with [`expect`](references/project-format.md#worked-values-expect). Where a figure shows a modelled part in a near-orthographic view, add an overlay and look at the rendered PNG.
+Add a check for every stated value the geometry should realise: `bbox` for an envelope, `distance` for a pitch or spacing, `angle`, `diameter` for a bore or a `Ø` callout, `count` for a stated number of instances or of threaded holes, `mass` for a stated mass, and `interference` across the assembly. Where a source states the numbers a value is worked out from (a pitch diameter from a module and a tooth count), the check compares with [`expect`](references/project-format.md#worked-values-expect). Where a figure shows a modelled part in a near-orthographic view, add an overlay and look at the rendered PNG.
+
+View each part's drawing in `build/drawings/` as its checks turn green. It shows the part in three views with each checked value as a dimension where the check reads it, so a datum on the wrong feature, or a feature no check reads, shows there first.
 
 A check that is red is information. Turn it green by changing the model or its params. A proposed param changed to do so names the check in its `rationale`, since that check then confirms the choice rather than a source. The evidence changes only to correct a transcription.
 
@@ -124,7 +133,7 @@ Done when every stated range has its `range` check, the report says **Kinematic*
 
 ### 9. Hand over
 
-Report from `build/report.md` of a full run. Give the status in the report's words, and call the project exact only where the report prints **Exact**. Then: the headline counts, the params resting on proposed values, the open conflicts, the gaps grouped by `ask` (the `authors` group is a ready list of questions for the corresponding author), and the figure readings awaiting confirmation. The user, or a reviewer they name, checks each crop and writes their own name in `confirmed_by`: a reading is confirmed by a person who looked.
+Report from `build/report.md` of a full run, and show the user `build/isometric.png` and where the part drawings are: an engineer looks at the object before its tables. Give the status in the report's words, and call the project exact only where the report prints **Exact**. Then: each foundational question you answered in the user's place, the headline counts, the params resting on proposed values, the open conflicts, the gaps grouped by `ask` (the `authors` group is a ready list of questions for the corresponding author), and the figure readings awaiting confirmation. The user, or a reviewer they name, checks each crop and writes their own name in `confirmed_by`: a reading is confirmed by a person who looked.
 
 ## Known first
 

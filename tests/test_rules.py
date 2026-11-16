@@ -11,6 +11,7 @@ import re
 import pytest
 from build123d import Box
 from conftest import (
+    ASSEMBLY,
     CORD,
     FOLD,
     INPUT_RANGE,
@@ -191,6 +192,17 @@ def _weighed(text: str, check: str, **values):
     )
 
 
+THREAD = "screw: {basis: proposed, thread: %s, rationale: a screw for a pin, gap: G1}"
+
+
+def _threaded(designation: str, at: str):
+    """A thread param, and the link's datum `at` declared for it."""
+    return lambda r, t: (
+        add(r, params=THREAD % designation),
+        remodel(r, ASSEMBLY, ASSEMBLY + f'"threads": {{"{at}": "screw"}},'),
+    )
+
+
 RESIN = "The link weighs 1.8 g in resin of 1.2 g/cm3."
 EXTRA = "{id: extra, source: paper, locator: Sec. 3, quote: branches of 60 mm diameter"
 ANGLE = "{id: n, kind: angle, between: [link.b, link.a, link.top], evidence: N1, key: v"
@@ -223,6 +235,8 @@ LINK_FINDINGS = {
     "schema: a released datum of two numbers": _released(
         lambda r, t: add(r, datums="link_step.a: [1, 2]")
     ),
+    "schema: threads that names no table": _meta(threads="whitworth"),
+    "schema: an up axis that is none": _meta(up="x"),
     "target": _meta(target="TODO name the object"),
     "target: none": _meta(target=None),
     "units: a unit cadrev does not know": _meta(units={"length": "furlong"}),
@@ -278,6 +292,47 @@ LINK_FINDINGS = {
     "image-missing": lambda r, t: (add_reading(r), (r / "figures/crops/fig2.png").unlink()),
     "image-hash": _reading(image_sha256="0" * 64),
     "image-reading": _reading(reading=""),
+    # Threads.
+    "param-thread: a pitch its size does not take": _params(THREAD % "M3x0.6"),
+    "param-thread: a size in neither table": _params(THREAD % "M7"),
+    "param-thread: one that is derived": _params(
+        "screw: {basis: derived, thread: M3, expr: hole_d}"
+    ),
+    "param-thread: from that states nothing": _params(
+        "screw: {basis: source, thread: M3, from: nowhere}"
+    ),
+    "param-thread: one its statement does not print": lambda r, t: (
+        add_quote(r, t, "Each pin is an M4 screw."),
+        add(r, params="screw: {basis: source, thread: M3, from: N1}"),
+    ),
+    "param-thread: a size its statement prints lower case": lambda r, t: (
+        add_quote(r, t, "A gear of module m3."),
+        add(r, params="screw: {basis: source, thread: M3, from: N1}"),
+    ),
+    "param-mismatch: a thread's value that is not its major diameter": _params(
+        "screw: {basis: proposed, thread: M3, value: 2.5, rationale: r, gap: G1}"
+    ),
+    "param-proposed: a thread with no rationale": _params(
+        "screw: {basis: proposed, thread: M3, gap: G1}"
+    ),
+    "thread-standard": lambda r, t: (meta(r, threads="unified"), add(r, params=THREAD % "M3")),
+    "model-thread: a hole of neither its thread nor its clearance": _threaded("M5", "link.a"),
+    "model-thread: a datum on no cylinder": _threaded("M3", "link.side"),
+    "model-thread: a datum that is none": _threaded("M3", "link.nowhere"),
+    "model-thread: a param that is no thread": lambda r, t: remodel(
+        r, ASSEMBLY, ASSEMBLY + '"threads": {"link.a": "hole_d"},'
+    ),
+    "model-return: a thread that names no param": lambda r, t: remodel(
+        r, ASSEMBLY, ASSEMBLY + '"threads": {"link.a": 3},'
+    ),
+    "check-config: a count of a thread that is none": _quoted_check(
+        "Two screws hold it.", "{id: n, kind: count, thread: hole_d, evidence: N1, key: v}", v=2
+    ),
+    "schema: a count of a part and a thread": _quoted_check(
+        "Two screws hold it.",
+        "{id: n, kind: count, part: link, thread: hole_d, evidence: N1, key: v}",
+        v=2,
+    ),
     # What each use expects a value to be printed as.
     "unit-quantity: a mass where the model reads a length": lambda r, t: (
         add_quote(r, t, "The link reads 40 g on the gauge.", values={"v": 40}),
@@ -847,6 +902,10 @@ LINK_DAMAGE = {
     "expr overflowing": _params("big: {basis: derived, expr: pitch ** 1000}"),
     "param named by a number": _params("7: {basis: proposed, value: 3, rationale: x, gap: G1}"),
     "param value in words": _param("hole_d", value="three"),
+    "thread that is a number": _params("screw: {basis: proposed, thread: 3, rationale: r}"),
+    "thread that is a list": _params("screw: {basis: proposed, thread: [M3], rationale: r}"),
+    "threads is a mapping": _meta(threads={"table": "metric"}),
+    "threads of the model is a list": _model(ASSEMBLY, ASSEMBLY + '"threads": ["link.a"],'),
     "name is a number": _meta(name=5),
     "format is a mapping": _meta(format={"v": 1}),
     "units is a number": _meta(units=5),

@@ -25,6 +25,7 @@ cad-reverse-engineer is a skill for coding agents, with its CLI, `cadrev`. Give 
 
 - **CAD you can open and change.** One STEP file per part and one for the assembly, for SolidWorks, Fusion, Onshape or FreeCAD. Behind them is a parametric [build123d](https://github.com/gumyr/build123d) model: every dimension is a named value in `params.yaml`, so you change a number and rebuild.
 - **A mechanism that moves.** Joints, gear ratios and lead screws export to MuJoCo, and stated motion is checked on the model: one turn of this gearbox's sun moves its carrier 50°, as its 7.2:1 ratio says.
+- **A drawing of each part.** Three views and an isometric one, dimensioned with the values the build was checked against, under an isometric view of the assembly. Screw threads are named from the ISO metric or Unified table and drawn as a drawing shows them; none is cut into the model.
 - **A report of where each dimension came from.** It was quoted from a document, probed from a file the authors released, or proposed because nothing states it. Each proposed value is listed beside the question that would settle it.
 
 Published hardware rarely comes with CAD you can edit. A paper gives an envelope table and a few labelled figures, a datasheet one drawing, a repository a folder of meshes. A model rebuilt from that mixes stated values with guesses, and once the STEP file exists, nobody can tell which is which. This keeps them apart, and checks the built geometry against every value the sources state.
@@ -45,6 +46,8 @@ evaluating checks.yaml
 wrote build/parts/body.step
 ...
 wrote build/assembly.step
+wrote build/drawings/: 6 part drawings
+wrote build/isometric.png
 
 VERIFIED: 0 errors, 0 warnings, 88/88 checks pass. Report: build/report.md
 ```
@@ -62,7 +65,13 @@ and, after its sources, lists what they leave open:
 | G-seat | Is the fan's hub flush with its frame's top face, so that the rotor's hub ledge sits level with the deck underside? | measure | fan_top_y, rotor_seat_y |
 | G-pla | What does the PLA used for the rotor weigh per cm³ as printed? | measure | pla_density |
 
-Below that, every check, parameter and quote is a table row you can audit against the paper.
+Below that come the parts, each with its drawing above the checks that read it, and then every parameter and quote as a table row you can audit against the paper.
+
+<p align="center">
+  <img src="docs/images/centrifuge-body-drawing.webp" width="720" alt="A drawing of the centrifuge body: top, front and right views with dimensions in blue, beside an isometric view">
+  <br>
+  <sub><code>build/drawings/body.png</code>: each dimension is a check, printed at the value the body was built to.</sub>
+</p>
 
 ## How it works
 
@@ -79,7 +88,7 @@ A reconstruction is a directory of plain files, and `cadrev check` holds them to
 1. **Ledger.** Every number the sources state about the object is recorded as a verbatim quote, located in a hash-pinned copy of the source. A number printed only inside a figure is a crop of that figure, with a reading a person confirms. Geometry the authors released (STEP, STL, laser-cut SVG) is probed: its dimensions are read from the file itself.
 2. **Parameters.** The model takes every number from `params.yaml`, where each declares its basis: `source`, `derived`, `measured` or `proposed`. `model.py` is linted to hold no dimensions of its own.
 3. **Checks.** Each published value (an envelope, a hole pitch, a bore, a mass, a gear ratio, a stroke) is evaluated on the built solids and compared with the ledger, never with the parameters. A part whose file the authors released is also compared with it, surface to surface.
-4. **Report.** `build/report.md` gives the status, the questions that would replace each proposed value, the conflicts between sources, and then the full audit trail.
+4. **Report.** `build/report.md` gives the status, the questions that would replace each proposed value, the conflicts between sources, and then the full audit trail, its checks part by part under each part's drawing.
 
 VERIFIED means every number is accounted for and the geometry matches every checked source value. It does not mean the sources settle everything: what they leave open stays listed as proposed, so the report never claims more than the evidence supports. A number read off a figure holds the status at VERIFIED PENDING REVIEW until a named person confirms the reading.
 

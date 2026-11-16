@@ -10,11 +10,12 @@ from dataclasses import asdict
 from pathlib import Path
 
 from . import checks, ledger
-from .build import GEAR_BY, Model, physics_of, printed, range_ends
+from .build import GEAR_BY, Model, physics_of, prefix, printed, range_ends
 from .checks import Result
 from .lint import MODEL_LITERALS
 from .motion import pose_text
 from .project import BASES, DEFAULT_TOL, RESTS_ON, Project
+from .threads import STANDARDS
 
 VERIFIED, PENDING_REVIEW, PARTIAL, NOT_VERIFIED = (
     "VERIFIED",
@@ -209,6 +210,44 @@ def _interpretation(r: Result) -> str:
     return "; ".join(filter(None, notes))
 
 
+def threads(p: Project, model: Model) -> list[dict]:
+    """Each thread param as report.json lists it: its thread, and the holes and shanks declared
+    for it, those that carry it and those that clear its screw."""
+    listed = []
+    for name, size in p.thread_params.items():
+        thread = size.thread
+        at = {
+            fit: [t.at for t in model.threads if t.param == name and t.fit == fit]
+            for fit in ("threaded", "clearance")
+        }
+        listed.append(
+            {
+                "param": name,
+                "thread": thread.name,
+                "table": thread.standard,
+                "basis": p.params[name].get("basis"),
+                **at,
+            }
+        )
+    return listed
+
+
+def _by_part(model: Model, datums: list[str]) -> str:
+    """Datums as a table cell counts them by part: base ×4, lid ×2."""
+    counted = Counter(prefix(datum, model.parts) for datum in datums)
+    return ", ".join(f"{part} ×{n}" for part, n in counted.items())
+
+
+def _checks_table(results: list[Result]) -> list[str]:
+    return _table(
+        ["check", "result", "expected (evidence)", "measured", "interpretation"],
+        [
+            [r.id, "pass" if r.ok else "**FAIL**", r.expected, r.measured, _interpretation(r)]
+            for r in results
+        ],
+    )
+
+
 def _anchor(e: dict) -> str:
     """What an evidence item is anchored by: its quote, its probe, or its figure reading."""
     if "quote" in e:
@@ -227,6 +266,7 @@ def write(
     status: str,
     results: list[Result],
     images: list[Path],
+    drawn: list[Path],
     model: Model | None,
     coarsened: dict,
     build_seconds: float | None,
@@ -271,7 +311,11 @@ def write(
     ]
 
     physics = headline["physics_proposed"]
+    isometric = [d for d in drawn if d.parent == out]
+    sheets = {d.stem: d for d in drawn if d.parent != out}
+    threaded = [] if model is None else threads(p, model)
     md = [f"# {p.meta.get('name', 'Reconstruction')}: verification report", ""]
+    md += [f"![{path.stem}]({path.name})" for path in isometric] + [""] * bool(isometric)
     md += [
         f"**{status}**: {headline['errors']} errors, {headline['warnings']} warnings. "
         f"{headline['checks_passed']}/{headline['checks']} geometry checks pass.",
@@ -390,14 +434,42 @@ def write(
                 f"  ![{a['evidence']}](../{a['image']})",
                 "",
             ]
-    md += ["## Geometry checks against the sources", ""]
-    md += _table(
-        ["check", "result", "expected (evidence)", "measured", "interpretation"],
-        [
-            [r.id, "pass" if r.ok else "**FAIL**", r.expected, r.measured, _interpretation(r)]
-            for r in results
-        ],
-    )
+    md += [
+        "## Parts",
+        "",
+        "Each part's drawing, dimensioned as built, and the checks that compare that part alone "
+        "with the sources.",
+        "",
+    ]
+    for name in model.parts if model else []:
+        md += [f"### {name}", ""]
+        if name in sheets:
+            md += [f"![{name}](drawings/{sheets[name].name})", ""]
+        md += _checks_table([r for r in results if r.part == name])
+    md += ["## Assembly", "", "The checks that read instances where the assembly places them.", ""]
+    md += _checks_table([r for r in results if r.part is None])
+    if model is not None and threaded:
+        md += [
+            "## Threads",
+            "",
+            "Each thread is named from the ISO metric or the Unified table; a proposed one from "
+            f"the {STANDARDS[p.thread_standard]} table, the project's. No thread is cut: a hole "
+            "or shank is a plain cylinder held to its thread's sizes.",
+            "",
+        ]
+        md += _table(
+            ["param", "thread", "basis", "threaded", "clearance holes"],
+            [
+                [
+                    t["param"],
+                    t["thread"],
+                    t["basis"],
+                    _by_part(model, t["threaded"]),
+                    _by_part(model, t["clearance"]),
+                ]
+                for t in threaded
+            ],
+        )
     md += ["## Non-default tolerances", ""]
     md += _table(
         ["check", "kind", "tolerance"],
@@ -431,7 +503,8 @@ def write(
         [
             [
                 n,
-                f"{p.values.get(n, math.nan):g}",
+                f"{p.values.get(n, math.nan):g}"
+                + (f" ({p.thread_params[n].thread.name})" if n in p.thread_params else ""),
                 str(s.get("basis"))
                 + (
                     f" (rests on {p.rests_on[n]})"
@@ -513,6 +586,8 @@ def write(
         "known_first": p.known_first,
         "waiting": waits,
         "motion": moves,
+        "threads": threaded,
+        "drawings": [str(d.relative_to(out)) for d in drawn],
         "masses": None
         if model is None
         else {

@@ -188,10 +188,10 @@ def cmd_check(args) -> int:
         ledger.coverage(p)
     # A partial run makes no claim, so it writes nothing to build/.
     partial = args.no_build or args.no_coverage
-    results, images, model, coarsened, build_seconds = [], [], None, {}, None
+    results, images, drawn, model, coarsened, build_seconds = [], [], [], None, {}, None
     read = {name for c in p.checks for name in ledger.named_by_checks(p, c)}
     if modelled and not args.no_build:
-        from . import build, motion, overlay
+        from . import build, drawing, motion, overlay
 
         # A build and its checks can take a minute: say what the wait is for as it starts.
         print("building model.py", flush=True)
@@ -207,7 +207,15 @@ def cmd_check(args) -> int:
                 written = build.export(p, model) + (mechanism.write() if mechanism else [])
                 for path in written:
                     print(f"wrote {path.relative_to(p.root)}")
+                drawn = drawing.render(p, model, results)
+                sheets = sum(path.parent.name == "drawings" for path in drawn)
+                if sheets:
+                    print(f"wrote build/drawings/: {sheets} part drawing{'s' * (sheets != 1)}")
+                if len(drawn) > sheets:
+                    print("wrote build/isometric.png")
                 images = overlay.render(p, model)
+    if model is not None:
+        read |= {thread.param for thread in model.threads}  # each held to its thread's sizes
     ledger.unchecked(p, read, model.used if model else set())
     ledger.known_first(p)
     status = report.status(p, partial)
@@ -225,7 +233,7 @@ def cmd_check(args) -> int:
         )
         print(f"\n{found}; skipped {skipped}, so no claim is made and no report was written.")
         return 1
-    path = report.write(p, status, results, images, model, coarsened, build_seconds)
+    path = report.write(p, status, results, images, drawn, model, coarsened, build_seconds)
     known_first = f"Known first: {report.waiting_clause(p)}. " if p.known_first else ""
     print(
         f"\n{found}, {headline['checks_passed']}/{headline['checks']} checks pass. {known_first}"

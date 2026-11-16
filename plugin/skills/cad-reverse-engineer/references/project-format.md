@@ -12,7 +12,7 @@ overlays.yaml   optional: model edges drawn over figures
 model.py        the build123d model (modeling.md)
 sources/        registered source files, pinned by sha256
 figures/        the pages and images `cadrev figures` writes; figures/crops/ holds the pinned evidence crops
-build/          STEP files, overlays, report.md, report.json; model.mjcf and meshes/ for a mechanism
+build/          STEP files, isometric.png, drawings/, overlays, report.md, report.json; model.mjcf and meshes/ for a mechanism
 ```
 
 Every file is read against the shapes shown here: an entry with a key not shown, or a value of the wrong type, is left out of the run with a `[schema]` finding. Quote every free-text value inside a `{…}` entry (`reason: "a test load, not the object"`), since an unquoted comma ends the value there.
@@ -24,6 +24,8 @@ format: 1                # written by `cadrev init`; cadrev refuses a project of
 name: gripper
 target: Version-3 two-finger gripper as reported in Doe 2025, fingers open (not the Fig. S4 prototype)
 units: {length: mm, angle: deg, mass: g}       # also force and time; defaults mm, deg, g, N, s
+threads: metric                                # the table a proposed thread comes from: metric | unified; metric unless said
+up: y                    # optional: the axis the object stands on, z unless said
 tolerance: {length: 0.001, angle: 0.01}        # how closely the model must realise a source value
 model_literals: [0, 1, 2, -1, 0.5, 90, 180, 270, 360]   # optional: the numbers model.py may hold
 known_first: true        # optional: build only what the sources settle (Known first)
@@ -39,6 +41,7 @@ sources:                 # written by `cadrev source`; keep it the last key
 
 - `target` names the object, its version and its configuration, and where the authors released several variants, the one built.
 - `tolerance` is a modelling tolerance, not a manufacturing one. `tolerance.angle` is in degrees whatever `units.angle` says.
+- `units.length` and `threads` are the user's answer to metric or US: `mm` with `metric`, or `in` with `unified`. A STEP file holds the object at its true size in either.
 - `cadrev source` with an id already registered refreshes that entry: its file, hash and whatever the command states. That is how a source is restored into a clone or replaced by a new download.
 - **Text sources** are quote-checked and swept: PDF, DOCX, TXT, MD, HTML (read as its rendered text). Save a web datasheet as HTML or TXT to quote it. Video and image files anchor image evidence only.
 - **Geometry sources** (`kind: geometry`) are what the authors released: STEP or STL, read in millimetres and converted to the project's length unit. A **body** is named by its source's id where the file holds one solid, else `<source>#<n>`, the nth solid in file order from 1. Where a part ships as both, register the STEP, which keeps the cylindrical faces and axes an STL flattens into triangles ([derived datums](#probes-released-geometry)).
@@ -148,7 +151,7 @@ datums:                        # on released bodies: <body>.<feature>: [x, y, z]
 
 ### `skipped`: what is not about the object
 
-The coverage sweep lists every stated quantity in the text sources: each number, in digits or words, printed with a unit from the table above (a range or a toleranced value as one), each `a×b×c` product, each diameter callout (`Ø 32.5`) and each thread size (`M3`). Each must fall inside an evidence quote or a skip. In a geometry source, each body must be compared by a shape check or skipped.
+The coverage sweep lists every stated quantity in the text sources: each number, in digits or words, printed with a unit from the table above (a range or a toleranced value as one), each `a×b×c` product, each diameter callout (`Ø 32.5`) and each thread size (`M3`, `1/4-20`, `#6-32`). Each must fall inside an evidence quote or a skip. In a geometry source, each body must be compared by a shape check or skipped.
 
 ```yaml
 skipped:
@@ -202,6 +205,21 @@ parts:                       # the mass model
 - **A physics value** is a param only the simulation reads (a joint's damping, stiffness, spring rest or friction, a tendon's stiffness or damping), marked `physics: true` and named by the joint or tendon that applies it ([modeling.md](modeling.md#joints-and-loops)). It is in the project's units of its quantity, per radian on a revolute joint (stiffness in N·mm/rad by default) and per length on a slide (N/mm), a friction a torque or a force; a `spring_rest` is a joint value, like a pose. It shapes no geometry, so no check compares it, and a proposed one leaves a project exact.
 - **The mass model**, `parts`, weighs each part by one param: `mass`, a datasheet mass, for a purchased part, or `density`, which its volume is multiplied by, for a printed one. The MJCF export, the report and a mass check without `density` all weigh by it, so they never disagree. In a model with joints every part an instance places needs an entry.
 
+### Threads
+
+A thread param gives `thread`, a designation, in place of a value:
+
+```yaml
+  lid_screw:   {basis: source,   thread: M3, from: T2-bom}
+  mount_screw: {basis: proposed, thread: M3, rationale: "the lid's screw, so one size serves", gap: G-mount}
+  tripod:      {basis: source,   thread: 1/4-20, from: S4-mount}
+```
+
+- **The designation** is one the ISO metric table holds (`M3`, or with a fine pitch `M8x1`; M1 to M36) or the Unified one (`1/4-20`, `10-32`, `UNC` or `UNF` optional; #0 to 1 in). Write a number size without its `#`, which YAML reads as a comment. A size or pitch its table does not hold is a finding that lists what the size takes.
+- **With basis `source`**, `from` names the evidence item whose quote or reading prints the designation; the item needs no `values` for it. A size printed before a length (`M3x10`) states the coarse thread. A source's thread is taken as stated, from either table.
+- **With basis `proposed`**, the thread comes from the project's table, `threads` in project.yaml.
+- **Its value** is its major diameter in the project's length unit, so a derived `expr` may read it; model.py reads its tap drill, clearance hole and pitch from it ([modeling.md](modeling.md#threads)). It is a checked param once model.py declares it on a hole or shank.
+
 ## checks.yaml
 
 A check compares the built geometry with the ledger, never with params: with the value its `evidence` and `key` name, or one its [`expect`](#worked-values-expect) works out from ledger values.
@@ -222,6 +240,7 @@ checks:
      density: resin_density, add: [servo_mass], evidence: fig3b-mass, key: m, tol_rel: 0.15}
   - {id: clear, kind: interference, pairs: [[palm_1, finger_link_1]], max_volume: 0.001}
   - {id: planets, kind: count, part: planet, evidence: T1-sspg, key: n_planets}
+  - {id: lid-screws, kind: count, thread: lid_screw, evidence: T2-bom, key: n_m3}
   - {id: rotor-shape, kind: shape, part: rotor, body: rotor_step,
      pairs: [[rotor.hub_top, rotor_step.hub_top], [rotor.hub_bottom, rotor_step.hub_bottom],
              [rotor.rim, rotor_step.rim]]}
@@ -234,7 +253,7 @@ checks:
 - **`angle`**: `between: [a, vertex, b]`, the angle at `vertex`, in degrees, unsigned from 0 to 180. `along` takes it about one axis, between the datums projected onto the plane square to it: a phase about a bore's axis between features at different heights.
 - **`diameter`**: of the cylindrical face its datum `at` lies on: a bore or a hub. A toothed gear has no face at its pitch circle, so its pitch diameter is a `distance` between two datums on opposite flanks at the pitch radius, half a turn apart, with `expect: "<module> * <teeth>"`.
 - **`mass`**: Σ volume × `density` over the instances it weighs, plus its `add` params, within `tol_rel`, which it must set. It weighs the instances `instances` lists, else the whole assembly, narrowed by `parts`. Each part weighed in several instances takes a `counts` entry naming the param that states how many, which the check holds to the instances it finds; without one the check rests on proposed, since how many there are is then the model's choice. Without `density` it weighs each part by the [mass model](#paramsyaml), and so confirms the model as exported against a stated total.
-- **`count`**: how many instances of `part` the assembly places, compared exactly. A tooth count is checked through what it builds and couples, not by counting teeth.
+- **`count`**: how many instances of `part` the assembly places, compared exactly; or, with `thread` in place of `part`, how many holes and shanks carry that thread param's thread, each counted once per instance of its part, which is how a stated number of screws is checked without modelling one. A clearance hole is not counted. A tooth count is checked through what it builds and couples, not by counting teeth.
 - **`interference`**: the overlap volume between instances, over `pairs` or every pair, at most `max_volume` (default `tolerance.length`³). It needs no evidence.
 - **`shape`**: a built part against a released body, as a whole. `pairs` lists at least three datum pairs `[<part>.<feature>, <body>.<feature>]` not on one line; cadrev carries the part onto the body by the rigid motion that best fits them, which must fit within `tolerance.length`, then compares the largest distance between the two surfaces with `tol`. Against a cut file's region, `along` names the part axis its outline is projected along, and the part may be turned over. A shape check confirms the shape, not the params that build it: they still need their own checks.
 
@@ -330,6 +349,7 @@ overlays:
     image: figures/supp/image7.png
     part: palm              # a part in its own frame, or "assembly"; or instance: <instance>
     view: front             # front: X right, Z up · top: X right, Y up · right: Y right, Z up
+                            # with up: y, front: X right, Y up · top: X right, -Z up · right: -Z right, Y up
     origin: [412, 618]      # the pixel where model (0, 0) lands
     calibration:
       pixels: [[120, 640], [705, 640]]   # two pixels spanning a known dimension
@@ -338,6 +358,14 @@ overlays:
 ```
 
 Renders `build/overlays/<id>.png`: model edges in magenta over the figure, the calibration span in blue, one PNG pixel per image pixel below the title strip. It is visual evidence for a human and adds no pass or fail.
+
+## Drawings
+
+`cadrev check` writes `build/isometric.png`, the assembly as built, and `build/drawings/<part>.png` for each part: its front, top and right views in third-angle projection beside an isometric one. report.md opens on the isometric view and shows each part's drawing above the checks that read that part alone.
+
+- **A drawing is dimensioned by its part's checks**: each unposed `bbox`, `distance`, `angle` and `diameter` check that reads the part in its own frame is a dimension where the check reads it, printed at the value as built, in blue where the check passes and red where it fails. An envelope no check compares is a reference dimension, in grey parentheses.
+- **A declared thread** is drawn as a drawing shows one, a thin three-quarter circle beside its hole or shank, and called out by its designation; a clearance hole by its diameter and the screw it clears.
+- The views are named by the axis the object stands on, `up` in project.yaml. A drawing adds no pass or fail.
 
 ## Statuses
 

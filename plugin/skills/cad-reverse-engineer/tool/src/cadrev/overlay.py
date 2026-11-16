@@ -8,9 +8,10 @@ from pathlib import Path
 
 from . import Fault
 from .build import Model
+from .drawing import frames
 from .project import Project
 
-VIEWS = {"front": (0, 2), "top": (0, 1), "right": (1, 2)}  # (horizontal, vertical) axes
+VIEWS = ("front", "top", "right")
 DPI = 100
 MARKER_RADIUS = 2 * DPI / 72  # pixels: a 4 pt marker
 # The title, in 8 pt type, wraps to the image's width in lines of this many pixels.
@@ -75,7 +76,7 @@ def render(p: Project, model: Model) -> list[Path]:
             scale = math.dist((x1, y1), (x2, y2)) / known  # pixels per model unit
             if o.get("view") not in VIEWS:
                 raise Fault(f"view must be one of {', '.join(VIEWS)}, not {o.get('view')!r}")
-            h, v = VIEWS[o["view"]]
+            across, rise, _ = frames(p.up)[o["view"]]  # the model directions right and up
             ox, oy = o["origin"]
             if not (p.root / o["image"]).is_file():
                 raise Fault(f"image {o['image']} not found")
@@ -84,7 +85,10 @@ def render(p: Project, model: Model) -> list[Path]:
             flip = -1 if o.get("mirror") else 1
             lines = [  # each edge as 25 points along it, in the image's pixels
                 [
-                    (ox + flip * q[h] * scale, oy - q[v] * scale)
+                    (
+                        ox + flip * sum(a * b for a, b in zip(q, across)) * scale,
+                        oy - sum(a * b for a, b in zip(q, rise)) * scale,
+                    )
                     for q in (tuple(edge.position_at(t / 24)) for t in range(25))
                 ]
                 for shape in shapes
