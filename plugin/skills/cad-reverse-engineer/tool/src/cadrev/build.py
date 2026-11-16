@@ -390,7 +390,7 @@ def build(p: Project) -> Model | None:
             gap = released.off_solid(model.parts[part], point, p.length_tol)
             if gap is not None:
                 p.error("datum-off-solid", f"datum {name} of part {part}: {released.off(gap)}")
-    faces: dict[int, str] = {}  # each cylindrical face declared for a thread, by its datum
+    faces: dict[tuple, str] = {}  # each part's cylindrical face declared for a thread: its datum
     for at, param in declared.items():
         with p.filing("model-thread", f"thread at {at}: "):
             model.threads.append(_threaded(p, model, at, param, faces))
@@ -406,7 +406,7 @@ def build(p: Project) -> Model | None:
     return model
 
 
-def _threaded(p: Project, model: Model, at: str, param: str, faces: dict[int, str]) -> Threaded:
+def _threaded(p: Project, model: Model, at: str, param: str, faces: dict[tuple, str]) -> Threaded:
     """The cylinder a thread is declared on, held to the thread's sizes: it carries the thread
     from its minor diameter to its major, or clears its screw at its clearance hole. A hole or
     shank is declared once, at one datum, so a count of them counts each once."""
@@ -422,8 +422,9 @@ def _threaded(p: Project, model: Model, at: str, param: str, faces: dict[int, st
     diameter, origin, direction, face = released.cylinder_at(
         model.parts[part], model.datums[at], tol, at, or_axis=True
     )
-    if faces.setdefault(id(face), at) != at:
-        raise Fault(f"lies on the hole or shank {faces[id(face)]} already declares")
+    # By part too: two parts may be built as one shape.
+    if faces.setdefault((part, id(face)), at) != at:
+        raise Fault(f"lies on the hole or shank {faces[part, id(face)]} already declares")
     clears = None if thread.clearance is None else size.clearance
     if size.minor - tol <= diameter <= size + tol:
         fit = "threaded"
