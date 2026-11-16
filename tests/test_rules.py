@@ -525,6 +525,9 @@ LINK_FINDINGS = {
     "model-return: a datum that is no point": _model("(p.pitch / 2, 0, 0)", "(p.pitch / 2, 0)"),
     "model-return: an instance that is no pair": _model('("link", Location())', '"link"'),
     "model-return: joints that are no mapping": _model('"datums": datums', '"joints": [], **{}'),
+    "part-invalid: a solid wrapped with no volume": _model(
+        '{"link": link}', '{"link": Part(link.solids()[0].wrapped)}'
+    ),
     "part-invalid: two solids": _model(
         '{"link": link}', '{"link": Compound([link, Pos(0, 0, 2 * p.link_H) * link])}'
     ),

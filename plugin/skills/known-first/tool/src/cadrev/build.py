@@ -380,6 +380,8 @@ def build(p: Project) -> Model | None:
         solids = len(part.solids())
         if not part.is_valid:
             p.error("part-invalid", f"part {name}: solid is not valid")
+        elif solids == 1 and part.volume <= p.length_tol**3:
+            p.error("part-invalid", f"part {name}: has no volume; build it as a solid")
         elif solids != 1:
             p.error(
                 "part-invalid",
