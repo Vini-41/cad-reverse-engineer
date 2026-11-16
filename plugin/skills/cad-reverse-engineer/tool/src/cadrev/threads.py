@@ -14,64 +14,64 @@ STANDARDS = {"metric": "ISO metric", "unified": "Unified"}
 INCH = 25.4  # millimetres
 
 # ISO 261's first- and second-choice diameters from M1 to M39: the coarse pitch first, then the
-# fine pitches of its table 2, and ISO 273's medium clearance hole, None where it lists none.
-# Millimetres.
+# fine pitches of its table 2, and ISO 273's clearance holes of the medium series and of the
+# coarse, its loosest, None where it lists none. Millimetres.
 _METRIC = {
-    "1": ((0.25, 0.2), 1.2),
+    "1": ((0.25, 0.2), (1.2, 1.3)),
     "1.1": ((0.25, 0.2), None),
-    "1.2": ((0.25, 0.2), 1.4),
-    "1.4": ((0.3, 0.2), 1.6),
-    "1.6": ((0.35, 0.2), 1.8),
-    "1.8": ((0.35, 0.2), 2.1),
-    "2": ((0.4, 0.25), 2.4),
+    "1.2": ((0.25, 0.2), (1.4, 1.5)),
+    "1.4": ((0.3, 0.2), (1.6, 1.8)),
+    "1.6": ((0.35, 0.2), (1.8, 2)),
+    "1.8": ((0.35, 0.2), (2.1, 2.2)),
+    "2": ((0.4, 0.25), (2.4, 2.6)),
     "2.2": ((0.45, 0.25), None),
-    "2.5": ((0.45, 0.35), 2.9),
-    "3": ((0.5, 0.35), 3.4),
-    "3.5": ((0.6, 0.35), 3.9),
-    "4": ((0.7, 0.5), 4.5),
-    "4.5": ((0.75, 0.5), 5),
-    "5": ((0.8, 0.5), 5.5),
-    "6": ((1, 0.75), 6.6),
-    "7": ((1, 0.75), 7.6),
-    "8": ((1.25, 1, 0.75), 9),
-    "10": ((1.5, 1.25, 1, 0.75), 11),
-    "12": ((1.75, 1.5, 1.25, 1), 13.5),
-    "14": ((2, 1.5, 1.25, 1), 15.5),
-    "16": ((2, 1.5, 1), 17.5),
-    "18": ((2.5, 2, 1.5, 1), 20),
-    "20": ((2.5, 2, 1.5, 1), 22),
-    "22": ((2.5, 2, 1.5, 1), 24),
-    "24": ((3, 2, 1.5, 1), 26),
-    "27": ((3, 2, 1.5, 1), 30),
-    "30": ((3.5, 3, 2, 1.5, 1), 33),
-    "33": ((3.5, 3, 2, 1.5), 36),
-    "36": ((4, 3, 2, 1.5), 39),
-    "39": ((4, 3, 2, 1.5), 42),
+    "2.5": ((0.45, 0.35), (2.9, 3.1)),
+    "3": ((0.5, 0.35), (3.4, 3.6)),
+    "3.5": ((0.6, 0.35), (3.9, 4.2)),
+    "4": ((0.7, 0.5), (4.5, 4.8)),
+    "4.5": ((0.75, 0.5), (5, 5.3)),
+    "5": ((0.8, 0.5), (5.5, 5.8)),
+    "6": ((1, 0.75), (6.6, 7)),
+    "7": ((1, 0.75), (7.6, 8)),
+    "8": ((1.25, 1, 0.75), (9, 10)),
+    "10": ((1.5, 1.25, 1, 0.75), (11, 12)),
+    "12": ((1.75, 1.5, 1.25, 1), (13.5, 14.5)),
+    "14": ((2, 1.5, 1.25, 1), (15.5, 16.5)),
+    "16": ((2, 1.5, 1), (17.5, 18.5)),
+    "18": ((2.5, 2, 1.5, 1), (20, 21)),
+    "20": ((2.5, 2, 1.5, 1), (22, 24)),
+    "22": ((2.5, 2, 1.5, 1), (24, 26)),
+    "24": ((3, 2, 1.5, 1), (26, 28)),
+    "27": ((3, 2, 1.5, 1), (30, 32)),
+    "30": ((3.5, 3, 2, 1.5, 1), (33, 35)),
+    "33": ((3.5, 3, 2, 1.5), (36, 38)),
+    "36": ((4, 3, 2, 1.5), (39, 42)),
+    "39": ((4, 3, 2, 1.5), (42, 45)),
 }
 # ASME B1.1's coarse and fine series from #0 to 1 in: the major diameter, the threads per inch
-# of UNC then UNF, and the normal clearance hole of ASME B18.2.8's table 2, None where it lists
-# none. Inches.
+# of UNC then UNF, and the clearance holes of ASME B18.2.8's table 2 for the normal fit and for
+# the loose, None where it lists none. Inches.
 _UNIFIED = {
-    "#0": (0.06, (None, 80), 0.076),
-    "#1": (0.073, (64, 72), 0.089),
-    "#2": (0.086, (56, 64), 0.102),
-    "#3": (0.099, (48, 56), 0.116),
-    "#4": (0.112, (40, 48), 0.128),
-    "#5": (0.125, (40, 44), 0.156),
-    "#6": (0.138, (32, 40), 0.17),
-    "#8": (0.164, (32, 36), 0.196),
-    "#10": (0.19, (24, 32), 0.221),
+    "#0": (0.06, (None, 80), (0.076, 0.094)),
+    "#1": (0.073, (64, 72), (0.089, 0.104)),
+    "#2": (0.086, (56, 64), (0.102, 0.116)),
+    "#3": (0.099, (48, 56), (0.116, 0.128)),
+    "#4": (0.112, (40, 48), (0.128, 0.144)),
+    "#5": (0.125, (40, 44), (0.156, 0.172)),
+    "#6": (0.138, (32, 40), (0.17, 0.185)),
+    "#8": (0.164, (32, 36), (0.196, 0.213)),
+    "#10": (0.19, (24, 32), (0.221, 0.238)),
     "#12": (0.216, (24, 28), None),
-    "1/4": (0.25, (20, 28), 0.281),
-    "5/16": (0.3125, (18, 24), 0.344),
-    "3/8": (0.375, (16, 24), 0.406),
-    "7/16": (0.4375, (14, 20), 0.469),
-    "1/2": (0.5, (13, 20), 0.562),
+    "1/4": (0.25, (20, 28), (0.281, 0.297)),
+    "5/16": (0.3125, (18, 24), (0.344, 0.359)),
+    "3/8": (0.375, (16, 24), (0.406, 0.422)),
+    "7/16": (0.4375, (14, 20), (0.469, 0.484)),
+    "1/2": (0.5, (13, 20), (0.562, 0.609)),
     "9/16": (0.5625, (12, 18), None),
-    "5/8": (0.625, (11, 18), 0.688),
-    "3/4": (0.75, (10, 16), 0.812),
-    "7/8": (0.875, (9, 14), 0.938),
-    "1": (1.0, (8, 12), 1.094),
+    "5/8": (0.625, (11, 18), (0.688, 0.734)),
+    "3/4": (0.75, (10, 16), (0.812, 0.906)),
+    "7/8": (0.875, (9, 14), (0.938, 1.031)),
+    "1": (1.0, (8, 12), (1.094, 1.156)),
 }
 _SERIES = ("UNC", "UNF")
 
@@ -97,7 +97,9 @@ class Thread(NamedTuple):
     standard: str  # metric or unified
     major: float
     pitch: float
-    clearance: float | None  # its clearance hole, where its table gives the size one
+    # Its clearance hole and the loosest its table gives, where it gives the size any.
+    clearance: float | None
+    loosest: float | None
 
     @property
     def tap(self) -> float:
@@ -149,25 +151,27 @@ def _metric(size: str, pitch: str | None) -> Thread | None:
     entry = _METRIC.get(f"{float(size):g}")
     if entry is None:
         return None
-    pitches, clearance = entry
+    pitches, holes = entry
     chosen = pitches[0] if pitch is None else float(pitch)
     if chosen not in pitches:
         return None
     name = f"M{float(size):g}"
-    return Thread(f"{name}×{chosen:g}", name, "metric", float(size), chosen, clearance)
+    return Thread(
+        f"{name}×{chosen:g}", name, "metric", float(size), chosen, *(holes or (None,) * 2)
+    )
 
 
 def _unified(size: str, per_inch: str, series: str | None) -> Thread | None:
     entry = _UNIFIED.get(size)
     if entry is None:
         return None
-    major, counts, clearance = entry
+    major, counts, holes = entry
     count = int(per_inch)
     if count not in counts or (series and _SERIES[counts.index(count)] != series.upper()):
         return None
     name = f"{size}-{count} {_SERIES[counts.index(count)]}"
-    hole = None if clearance is None else clearance * INCH
-    return Thread(name, size, "unified", major * INCH, INCH / count, hole)
+    normal, loosest = (hole * INCH for hole in holes) if holes else (None, None)
+    return Thread(name, size, "unified", major * INCH, INCH / count, normal, loosest)
 
 
 def _read(metric: re.Match | None, unified: re.Match | None) -> Thread | None:

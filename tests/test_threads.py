@@ -2,7 +2,7 @@
 shanks model.py declares for it, and what the report says of them."""
 
 import pytest
-from conftest import ASSEMBLY, add, add_quote, check, edit, meta, remodel
+from conftest import ASSEMBLY, add, add_quote, change, check, edit, meta, remodel
 
 M3 = "screw: {basis: proposed, thread: M3, rationale: the pins are M3 screws, gap: G1}"
 
@@ -113,3 +113,17 @@ def test_two_parts_built_as_one_shape_each_declare_their_own_holes(proj_dir):
     run = check(proj_dir)
     assert run.status == "VERIFIED", run.out
     assert run.report["threads"][0]["threaded"] == ["link.a", "link.b", "twin.a"]
+
+
+def test_declared_clearance_hole_may_be_any_its_table_gives_as_a_released_bodys_is(proj_dir):
+    # The authors drew their M3 holes Ø3.5: between the normal 3.4 and the loosest, 3.6.
+    threaded(proj_dir, "clearance")
+    add(proj_dir, params="wide: {basis: proposed, value: 3.5, rationale: as released, gap: G1}")
+    remodel(proj_dir, "p.screw.clearance", "p.wide")
+    run = check(proj_dir)
+    assert run.status == "VERIFIED" and run.report["threads"][0]["clearance"] == [
+        "link.a",
+        "link.b",
+    ]
+    change(proj_dir, "params", "wide", value=3.7)
+    assert check(proj_dir).errors == ["model-thread", "model-thread"]
