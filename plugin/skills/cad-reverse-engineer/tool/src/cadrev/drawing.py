@@ -187,10 +187,11 @@ class _Sheet:
         else:
             self.text(middle[0], middle[1] + 0.75 * u, text, colour)
 
-    def leader(self, centre, radius: float, toward, text: str, colour: str) -> None:
+    def leader(self, centre, radius: float, toward, text: str, colour: str, on=None) -> None:
         """A callout of a circle, or of a point where radius is 0: an arrow to its edge from a
         shelf carrying the text, on the side toward a sheet point and clear of the callouts
-        already placed."""
+        already placed. The arrow ends at `on` where that is given, a point known to lie on the
+        edge, since an arc has no edge all the way round."""
         u = self.u
         wide, tall = len(text) * 0.6 * TEXT * u, 1.6 * TEXT * u
 
@@ -198,7 +199,7 @@ class _Sheet:
             """The leader out at an angle: its tip, elbow, shelf end and side, and its text's
             box."""
             cos, sin = math.cos(math.radians(angle)), math.sin(math.radians(angle))
-            tip = (centre[0] + radius * cos, centre[1] + radius * sin)
+            tip = on or (centre[0] + radius * cos, centre[1] + radius * sin)
             elbow = (tip[0] + 3 * u * cos, tip[1] + 3 * u * sin)
             side = 1 if cos >= 0 else -1
             shelf = (elbow[0] + side * u, elbow[1])
@@ -411,15 +412,21 @@ def _mark(sheet: _Sheet, views: dict[str, _View], marks: list) -> None:
             _, (diameter, origin, direction), text, colour, point = mark
             view = next((v for v in (front, top, right) if v.shows(direction)), None)
             centre, radius = (view.on(origin), diameter / 2) if view else (front.on(point), 0.0)
-            callouts.setdefault(((view or front).name, text, colour), []).append((centre, radius))
+            # A datum on the wall is where the arrow ends; one on the axis leaves that open.
+            wall = (
+                view.on(point) if view and math.dist(view.on(point), centre) > radius / 2 else None
+            )
+            callouts.setdefault(((view or front).name, text, colour), []).append(
+                (centre, radius, wall)
+            )
     for (name, text, colour), holes in callouts.items():
         view = views[name]
         middle = (view.at[0] + sum(view.box[:2]) / 2, view.at[1] + sum(view.box[2:]) / 2)
         # One leader for the holes of one callout, from the one nearest the view's middle and
         # toward it: the text then lies on the part, clear of the dimensions stacked around it.
-        centre, radius = min(holes, key=lambda h: math.dist(h[0], middle))
+        centre, radius, wall = min(holes, key=lambda h: math.dist(h[0], middle))
         count = f"{len(holes)}× " if len(holes) > 1 else ""
-        sheet.leader(centre, radius, middle, count + text, colour)
+        sheet.leader(centre, radius, middle, count + text, colour, wall)
 
 
 def _paint(sheet: _Sheet, title: str, note: str, path: Path) -> None:

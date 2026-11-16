@@ -408,7 +408,8 @@ def build(p: Project) -> Model | None:
 
 def _threaded(p: Project, model: Model, at: str, param: str, faces: dict[tuple, str]) -> Threaded:
     """The cylinder a thread is declared on, held to the thread's sizes: it carries the thread
-    from its minor diameter to its major, or clears its screw at its clearance hole. A hole or
+    from its minor diameter to its major, or clears its screw from there to the loosest
+    clearance hole its table gives, as a released body's hole may be any of them. A hole or
     shank is declared once, at one datum, so a count of them counts each once."""
     part = prefix(at, model.parts)
     if part is None or at not in model.datums:
@@ -425,13 +426,13 @@ def _threaded(p: Project, model: Model, at: str, param: str, faces: dict[tuple, 
     # By part too: two parts may be built as one shape.
     if faces.setdefault((part, id(face)), at) != at:
         raise Fault(f"lies on the hole or shank {faces[part, id(face)]} already declares")
-    clears = None if thread.clearance is None else size.clearance
+    loosest = None if thread.loosest is None else thread.loosest * size.per_mm
     if size.minor - tol <= diameter <= size + tol:
         fit = "threaded"
-    elif clears is not None and abs(diameter - clears) <= tol:
+    elif loosest is not None and size < diameter <= loosest + tol:
         fit = "clearance"
     else:
-        hole = "" if clears is None else f" nor its clearance hole (Ø{clears:.4g})"
+        hole = "" if loosest is None else f" nor a clearance hole for it (up to Ø{loosest:.4g})"
         raise Fault(
             f"its cylinder is Ø{diameter:.4g}, {'neither' if hole else 'not'} {thread.name}'s "
             f"thread (Ø{size.minor:.4g} to Ø{float(size):g}; its tap drill is Ø{size.tap:.4g})"
