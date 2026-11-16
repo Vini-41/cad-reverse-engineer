@@ -40,7 +40,7 @@ A proposed param takes a `rationale` and names a gap in gaps.yaml, phrased as th
 - **Bought before made.** What a catalogue sells is bought: a screw, a nut, a pin, a bearing, a spring, a switch. Its `rationale` names it as it is ordered, and the model holds it as its envelope.
 - **A screw is a [thread param](../known-first/references/project-format.md#threads) with a length**: its thread from the project's table and its length a standard one, both held by `cadrev check`. Fit the model to the screw: derive a boss's height and a hole's depth from the screw's length, and size each hole from its thread.
 - **One before two.** One screw size serves the object, and one stock thickness, until something stated calls for a second, and the `rationale` says what. A part stays one piece wherever the material lets it be made as one.
-- **As shown before as invented.** A feature a figure shows is built as it shows it: a slotted wheel stays one wheel, with slots.
+- **As shown before as invented.** What a figure shows is built as it shows it. A part keeps its figure's outline and proportions, scaled by the one size proposed for it, and its features: a slotted wheel stays one wheel, with slots.
 - **Loose before tight.** A fit between two parts takes a clearance param, proposed for the material as the loosest its function allows. One param serves every fit of its kind, and its gap is `ask: test`. A wall is one the process forms and the part survives.
 - **Asked before guessed.** A snap fit, a press fit and a living hinge work by properties of the material that no source gives. Under design, build the form as shown, its gap `ask: test`. Under function, join the parts with screws.
 
