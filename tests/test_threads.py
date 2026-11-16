@@ -99,3 +99,17 @@ def test_count_check_counts_the_holes_a_thread_is_cut_in(proj_dir, tmp_path):
     remodel(proj_dir, ', "link.side": "screw"', "")
     run = check(proj_dir)
     assert run.errors == ["check-failed"] and run.result("screws")["measured"].startswith("1 hole ")
+
+
+def test_two_parts_built_as_one_shape_each_declare_their_own_holes(proj_dir):
+    threaded(proj_dir)
+    remodel(proj_dir, '"parts": {"link": link}', '"parts": {"link": link, "twin": link}')
+    remodel(proj_dir, '"link.b": "screw"', '"link.b": "screw", "twin.a": "screw"')
+    remodel(
+        proj_dir,
+        '"link.a": (-p.pitch / 2, 0, 0),',
+        '"link.a": (-p.pitch / 2, 0, 0),\n        "twin.a": (-p.pitch / 2, 0, 0),',
+    )
+    run = check(proj_dir)
+    assert run.status == "VERIFIED", run.out
+    assert run.report["threads"][0]["threaded"] == ["link.a", "link.b", "twin.a"]
