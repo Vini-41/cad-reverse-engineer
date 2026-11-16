@@ -654,11 +654,14 @@ def _thread(p: Project, name: str, spec: dict) -> threads.Size:
         if not spec.get("gap"):
             p.warn("param-gap", f"param {name}: proposed value names no gap to close it")
         if thread.standard != p.thread_standard:
+            said = "threads" in p.meta
+            why = "as its threads says" if said else f"its length unit being {p.units['length']}"
             p.error(
                 "thread-standard",
                 f"param {name}: proposes {thread.name} from the "
-                f"{threads.STANDARDS[thread.standard]} table, where project.yaml's threads is "
-                f"{p.thread_standard}; a proposed thread comes from the project's table",
+                f"{threads.STANDARDS[thread.standard]} table, and the project's is the "
+                f"{threads.STANDARDS[p.thread_standard]} one, {why}; a proposed thread comes "
+                "from the project's table, which threads in project.yaml may set",
             )
     return size
 

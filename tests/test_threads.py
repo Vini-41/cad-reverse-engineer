@@ -88,7 +88,7 @@ def test_proposed_thread_is_unified_in_a_project_in_inches_unless_it_says_metric
     threaded(proj_dir)
     meta(proj_dir, units={"length": "in"}, tolerance={"length": 1e-5})
     run = check(proj_dir)
-    assert run.errors == ["thread-standard"] and "threads is unified" in run.out
+    assert run.errors == ["thread-standard"] and "its length unit being in" in run.out
     change(proj_dir, "params", "screw", thread="4-40")
     assert check(proj_dir).status == "VERIFIED"
 
