@@ -32,7 +32,7 @@ def test_plan_lists_what_is_made_and_each_step_counted_from_the_model(proj_dir):
         ],
     }
     md = run.md
-    order = ["## Plan", "### Make", "| link | 2 | print it flat in PLA; then ream both holes |"]
+    order = ["## Plan", "### Make", "- **link** × 2\n  1. print it flat in PLA\n  2. ream both"]
     order += ["### Buy", "| glue |  | a drop of cyanoacrylate |", "### Assemble"]
     order += ["1. **link_1**. On the bench.", "2. **link_2**", "## Parts"]
     assert [md.index(mark) for mark in order] == sorted(md.index(mark) for mark in order)
@@ -47,7 +47,16 @@ def test_plan_of_one_instance_needs_no_steps(proj_dir):
     add(proj_dir, make="link: mill it from 5 mm plate")
     run = check(proj_dir)
     assert run.status == "VERIFIED" and run.rules == []
+    assert "- **link** × 1: mill it from 5 mm plate\n" in run.md
     assert "_No steps: the assembly places one instance._" in run.md
+    # Its screws still need a step to drive them, or the plan buys none.
+    threaded(proj_dir, spec=M3_SCREW)
+    add(proj_dir, params=TEN_LONG)
+    run = check(proj_dir)
+    assert run.findings == [("warning", "plan-screw")]
+    add(proj_dir, steps="{place: [link_1], with: {screw: 2}}")
+    run = check(proj_dir)
+    assert run.rules == [] and run.report["plan"]["buy"][0]["count"] == 2
 
 
 def test_steps_drive_the_screws_the_model_has_holes_threaded_for(proj_dir):

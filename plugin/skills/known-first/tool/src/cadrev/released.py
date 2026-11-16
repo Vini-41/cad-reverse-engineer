@@ -333,12 +333,18 @@ def off(gap: float) -> str:
 
 
 def cylinder_at(
-    solid, point: tuple[float, float, float], tol: float, name: str, or_axis: bool = False
+    solid,
+    point: tuple[float, float, float],
+    tol: float,
+    name: str,
+    or_axis: bool = False,
+    fits=None,
 ) -> tuple[float, tuple[float, float, float], tuple[float, float, float], object]:
     """The one cylindrical face of a solid that point lies on within tol, or with or_axis on
     whose axis it lies between the face's ends, as its diameter, a point on its axis, the axis's
     direction and the face; a Fault naming the datum where it lies on none, or on several of
-    different diameters."""
+    different diameters. Several are narrowed to those whose diameter passes fits, where it is
+    given: a hole in a boss shares its axis with the boss."""
     from build123d import Vector
 
     surface_of = importlib.import_module("OCP.BRepAdaptor").BRepAdaptor_Surface
@@ -355,6 +361,8 @@ def cylinder_at(
             diameter = 2 * surface_of(face.wrapped).Cylinder().Radius()
             if all(abs(diameter - d) > tol for d, *_ in found):
                 found.append((diameter, tuple(origin), tuple(direction), face))
+    if len(found) > 1 and fits is not None:
+        found = [cylinder for cylinder in found if fits(cylinder[0])] or found
     if len(found) == 1:
         return found[0]
     several = " and ".join(f"{d:.4g}" for d, *_ in sorted(found))

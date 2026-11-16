@@ -12,6 +12,7 @@ from conftest import (
     edit,
     meta,
     remodel,
+    stack,
     threaded,
 )
 
@@ -156,6 +157,24 @@ def test_count_check_counts_the_holes_a_thread_is_cut_in(proj_dir, tmp_path):
     remodel(proj_dir, ', "link.side": "screw"', "")
     run = check(proj_dir)
     assert run.errors == ["check-failed"] and run.result("screws")["measured"].startswith("1 hole ")
+
+
+def test_thread_declared_on_the_axis_of_a_hole_in_a_boss_is_the_holes(proj_dir):
+    # A screw boss: the hole and the boss around it share one axis, and the thread fits one.
+    threaded(proj_dir)
+    boss = "Cylinder(p.screw, p.link_H) - Cylinder(p.screw.tap / 2, p.link_H)"
+    remodel(proj_dir, '{"link": link}', f'{{"link": link, "post": {boss}}}')
+    remodel(proj_dir, '"link.b": "screw"', '"link.b": "screw", "post.axis": "screw"')
+    remodel(proj_dir, '"link.top":', '"post.axis": (0, 0, 0),\n        "link.top":')
+    run = check(proj_dir)
+    assert run.status == "VERIFIED" and run.rules == [], run.out
+    assert run.report["threads"][0]["threaded"] == ["link.a", "link.b", "post.axis"]
+
+
+def test_report_counts_a_threads_holes_across_the_assembly(proj_dir):
+    threaded(proj_dir)
+    stack(proj_dir, 2)
+    assert "| screw | M3×0.5 | proposed | link ×4 |  |" in check(proj_dir).md
 
 
 def test_two_parts_built_as_one_shape_each_declare_their_own_holes(proj_dir):

@@ -243,6 +243,10 @@ def threads(p: Project, model: Model) -> list[dict]:
     return listed
 
 
+def _numbered(lines: list[str], indent: str = "") -> list[str]:
+    return [f"{indent}{i}. {line}" for i, line in enumerate(lines, 1)]
+
+
 def _plan_lines(planned: dict) -> list[str]:
     """The plan as report.md shows it: what is made, what is bought, and the steps."""
     md = [
@@ -256,11 +260,11 @@ def _plan_lines(planned: dict) -> list[str]:
         "### Make",
         "",
     ]
-    md += _table(
-        ["part", "quantity", "how"],
-        [[m["part"], m["count"], "; then ".join(m["how"])] for m in planned["make"]],
-    )
-    md += ["### Buy", ""]
+    for made in planned["make"]:
+        part, how = f"- **{made['part']}** × {made['count']}", made["how"]
+        # One operation beside its part, several as the sequence they are done in.
+        md += [f"{part}: {how[0]}"] if len(how) == 1 else [part, *_numbered(how, "  ")]
+    md += [*([] if planned["make"] else ["_None._"]), "", "### Buy", ""]
     md += _table(
         ["item", "quantity", "what"],
         [
@@ -288,8 +292,13 @@ def _plan_lines(planned: dict) -> list[str]:
 
 
 def _by_part(model: Model, datums: list[str]) -> str:
-    """Datums as a table cell counts them by part: base ×4, lid ×2."""
-    counted = Counter(prefix(datum, model.parts) for datum in datums)
+    """The holes and shanks declared at datums, as a table cell counts them by part across the
+    assembly, each once per instance of its part or once where none places it: base ×4, lid ×2."""
+    placed = Counter(part for part, _ in model.assembly.values())
+    counted: Counter = Counter()
+    for datum in datums:
+        part = prefix(datum, model.parts)
+        counted[part] += placed[part] or 1
     return ", ".join(f"{part} ×{n}" for part, n in counted.items())
 
 
@@ -421,10 +430,11 @@ def write(
         "",
     ]
     if status == PENDING_REVIEW:
+        n = len(awaiting)
         md += [
-            f"PENDING REVIEW: {len(awaiting)} figure readings await human confirmation, listed "
-            "below. Once a named reviewer has checked each against its crop and written "
-            "`confirmed_by`, the project is VERIFIED.",
+            f"PENDING REVIEW: {n} figure reading{'s' * (n != 1)} await{'s' * (n == 1)} human "
+            "confirmation, listed below. Once a named reviewer has checked each against its "
+            "crop and written `confirmed_by`, the project is VERIFIED.",
             "",
         ]
     if findings:

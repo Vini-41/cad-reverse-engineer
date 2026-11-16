@@ -422,13 +422,21 @@ def _threaded(p: Project, model: Model, at: str, param: str, faces: dict[tuple, 
             raise Fault(f"{param} is not a thread param; give it thread: in params.yaml")
         raise Fault()  # the param's own finding says why it has no value
     tol, thread = p.length_tol, size.thread
+    loosest = None if thread.loosest is None else thread.loosest * size.per_mm
+    widest = float(size) if loosest is None else loosest
+    # A datum on the axis of a hole in a boss lies on the boss's axis too: the hole is the one
+    # of them the thread fits.
     diameter, origin, direction, face = released.cylinder_at(
-        model.parts[part], model.datums[at], tol, at, or_axis=True
+        model.parts[part],
+        model.datums[at],
+        tol,
+        at,
+        or_axis=True,
+        fits=lambda found: size.minor - tol <= found <= widest + tol,
     )
     # By part too: two parts may be built as one shape.
     if faces.setdefault((part, id(face)), at) != at:
         raise Fault(f"lies on the hole or shank {faces[part, id(face)]} already declares")
-    loosest = None if thread.loosest is None else thread.loosest * size.per_mm
     if size.minor - tol <= diameter <= size + tol:
         fit = "threaded"
     elif loosest is not None and size < diameter <= loosest + tol:

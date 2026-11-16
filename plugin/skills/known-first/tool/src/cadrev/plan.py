@@ -93,7 +93,7 @@ def _steps(p: Project, model: Model, placed: Counter, steps: list[dict]) -> Coun
             f"no step places {', '.join(unplaced)}: the steps place every instance of the "
             "assembly, each once",
         )
-    for param in p.screws if steps else ():
+    for param in p.screws:
         threaded = [t for t in model.threads if t.param == param and t.fit == "threaded"]
         holes = sum(placed[t.part] for t in threaded if t.hole)
         shanks = sum(placed[t.part] for t in threaded if not t.hole)
