@@ -13,7 +13,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import NamedTuple
 
-from . import units
+from . import threads, units
 
 _DASHES = dict.fromkeys(map(ord, "‐‑‒–—−"), "-")
 _TIMES = dict.fromkeys(map(ord, "×✕✖⨯"), "x")
@@ -136,9 +136,18 @@ def _value(printed: str) -> float:
     return float(whole[0]) + (-value if whole[0].startswith("-") else value)  # -1 1/2 is -1.5
 
 
-def _tokens(text: str) -> list[_Token]:
+# A thread size after a number (4 M3 screws), as printed: a capital M and its digits, which in
+# lower case would spell a volume.
+_THREAD_NEXT = re.compile(r"\s?M\d")
+
+
+def _tokens(text: str, as_printed: str | None = None) -> list[_Token]:
     """Every number in normalized text, in digits or as a word from zero to ninety-nine, with the
-    unit printed after it. The numbers of a range, product or list share its last unit."""
+    unit printed after it. The numbers of a range, product or list share its last unit. Where
+    as_printed gives the text normalized but for case, a thread size is no unit of the number
+    before it: four M3 screws are no four cubic metres."""
+    if as_printed is None or len(as_printed) != len(text):
+        as_printed = text
     label_spans = [m.span(1) for m in _LABEL.finditer(text)]
     scanned = _DECIMAL_COMMA.sub(
         r"\1.\2", _RANGE_DASH.sub(r"\1 ", text.replace("x", " "))
@@ -154,7 +163,8 @@ def _tokens(text: str) -> list[_Token]:
         if found and n.start < found[-1][2]:
             continue  # a digit of the unit before it: the 3 of g/cm3
         unit, end = units.unit_at(text, n.stop) or (None, n.stop)
-        if unit in _HYPHENED_NAMES and text.startswith("-", n.stop):
+        named = unit in _HYPHENED_NAMES and text.startswith("-", n.stop)
+        if named or _THREAD_NEXT.match(as_printed, n.stop):
             unit, end = None, n.stop
         found.append((n, unit, end))
     tokens: list[_Token] = []
@@ -182,7 +192,8 @@ def quantities_in(text: str) -> tuple[tuple[float, str | None], ...]:
     tokens and number words from zero to ninety-nine, both endpoints of a range as positive
     values, and no number that labels a figure, table, equation or section. The numbers of a
     range or product share its last unit."""
-    return tuple((t.value, t.unit) for t in _tokens(normalize(text)) if not t.labelled)
+    tokens = _tokens(normalize(text), normalize(text, cased=True))
+    return tuple((t.value, t.unit) for t in tokens if not t.labelled)
 
 
 @cache
@@ -436,7 +447,7 @@ def stated_quantities(text: str, as_printed: str | None = None) -> list[tuple[in
     if as_printed is None or case_unknown:  # as_printed is None again, for pyright
         as_printed = text
     spans, group = [], []
-    for t in _tokens(text):
+    for t in _tokens(text, as_printed):
         group.append(t)
         if t.joined:
             continue
@@ -477,8 +488,9 @@ def stated_quantities(text: str, as_printed: str | None = None) -> list[tuple[in
             spans.append((start, t.end))
         group = []
     # A thread size prints a capital M: m1, m2 in lower case are symbols (a gear's modules).
-    threads = _THREAD.finditer(text)
-    spans += [m.span() for m in threads if case_unknown or as_printed[m.start()] == "M"]
+    metric = _THREAD.finditer(text)
+    spans += [m.span() for m in metric if case_unknown or as_printed[m.start()] == "M"]
+    spans += threads.unified_spans(text)
     whole = [
         (a, b)
         for a, b in spans

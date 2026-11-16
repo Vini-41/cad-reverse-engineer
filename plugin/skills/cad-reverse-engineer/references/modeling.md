@@ -11,6 +11,7 @@ def build(p):
         "parts":    {"finger_link": link},       # name -> Part in its own frame
         "datums":   {"finger_link.pin_a": (-p.pitch / 2, 0, 0)},    # named points, part frame
         "assembly": {"finger_link_1": ("finger_link", Location((0, 0, p.z1)))},
+        "threads":  {"finger_link.pin_a": "pin_screw"},              # datum -> thread param
         # for a mechanism, see Joints and loops:
         "joints": {"input": {"type": "revolute", "parent": "palm_1", "child": "finger_link_1",
                              "axis": ["finger_link_1.pin_a", "finger_link_1.pin_a_top"],
@@ -26,6 +27,15 @@ def build(p):
 - **Parts live in their own frame**, placed where their checks read them: a bbox check with `axes: {L: x}` reads the part's X extent. Put the part's natural datum (a pivot, a mounting face) at the origin where the source defines one. A part is one valid solid; bodies that do not touch are separate parts, each placed in the assembly.
 - **Datums** are the named points checks and joints read: pin centres, pivots, mounting holes, tips. Name each `<part>.<feature>` and compute it from the same params that place the feature. A datum lies on its part's solid within `tolerance.length`: on a face, or on the axis of a cylindrical face between that face's ends (a bore's centre at mid-thickness is safe). One off the solid usually means the feature was built somewhere other than where its datum says, so move the feature.
 - **The assembly** places instances of parts with `Location`, as many of each part as the object has, at the configuration the sources measure their angles and strokes from. Instances are what interference and mass checks, checks over `instances`, joints and overlays of the assembly read.
+- **The object stands on Z**, the axis the [drawings](project-format.md#drawings) name their views by. Where released geometry stands on Y, as a file from a Y-up CAD program does, build on Y and say `up: y` in project.yaml.
+
+## Threads
+
+A thread is declared, never cut. Build a threaded hole or shank as a plain cylinder, and name its thread in `threads` at a datum on that cylinder: on its wall, or on its axis between its ends. The STEP files then hold plain holes a CAD program can thread in its own way, and the thread itself is in the report and on the drawing, where a reviewer reads it.
+
+- **A [thread param](project-format.md#threads) reads as its major diameter**, `p.pin_screw`, and carries the sizes its table gives it, each in the project's length unit: `p.pin_screw.tap`, the hole that carries the thread (its tap drill); `p.pin_screw.clearance`, the hole its screw passes through; `p.pin_screw.pitch`. Size each hole from these, so no hole diameter is proposed beside a thread.
+- **Both holes of a screwed joint are declared**: the one that carries the thread and the one that clears the screw. cadrev holds each declared cylinder to its thread, from the thread's minor diameter to its major or at its clearance hole, and the drawing calls each out.
+- **A screw, nut or washer is a part only where the sources list it as one**, or a stated mass counts it. It is then purchased hardware like any other: a head and a plain shank, its thread declared on the shank. A stated number of screws is checked without them, by a [`count` check](project-format.md#checksyaml) of the thread.
 
 ## Joints and loops
 

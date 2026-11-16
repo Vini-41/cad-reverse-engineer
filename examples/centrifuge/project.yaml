@@ -3,6 +3,7 @@ format: 1   # version of these file formats; set by cadrev init
 name: centrifuge
 target: "Poór 2022 open-source mini benchtop centrifuge (HardwareX e00328) as released: standard centrifuge body (116 mm lid), bottom plate, and the PCR-strip rotor for 7-bladed 80 mm fans with a 32.5 mm hub, assembled at rest with the lid off; static"
 units: {length: mm, angle: deg, mass: g}
+up: y   # the released files stand on Y, so the drawings do
 tolerance: {length: 0.001}   # model must realise source values to this; it is not a print tolerance
 # Register sources with `cadrev source`; it copies the file and pins its sha256. Keep this key last.
 sources:

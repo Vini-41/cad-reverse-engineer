@@ -299,6 +299,7 @@ REPORT_KEYS = {
     "status", "exact", "known_first", "waiting", "counts", "findings", "checks", "tolerances",
     "overlap_limits", "motion", "masses", "model_literals", "params", "bases",
     "rests_on_proposed", "measured", "awaiting_confirmation", "probes", "build_seconds",
+    "threads", "drawings",
 }  # fmt: skip
 
 
@@ -340,6 +341,7 @@ def test_report_json_holds_the_run_as_data(proj_dir):
         "rests_on": "source",
         "rests_on_params": [],
         "seconds": 0,
+        "part": "link",
     }
     assert report["tolerances"] == [{"check": "pitch", "kind": "distance", "tol": 1.51}]
     assert report["params"]["pitch"] == {

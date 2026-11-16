@@ -332,25 +332,44 @@ def off(gap: float) -> str:
     )
 
 
-def diameter_at(solid, point: tuple[float, float, float], tol: float, name: str) -> float:
-    """The diameter of the one cylindrical face of a solid that point lies on within tol; a Fault
-    naming the datum where it lies on none, or on the edge of two of different diameters."""
+def cylinder_at(
+    solid, point: tuple[float, float, float], tol: float, name: str, or_axis: bool = False
+) -> tuple[float, tuple[float, float, float], tuple[float, float, float]]:
+    """The one cylindrical face of a solid that point lies on within tol, or with or_axis on
+    whose axis it lies between the face's ends, as its diameter, a point on its axis and the
+    axis's direction; a Fault naming the datum where it lies on none, or on several of different
+    diameters."""
     from build123d import Vector
 
     surface_of = importlib.import_module("OCP.BRepAdaptor").BRepAdaptor_Surface
     at = Vector(*point)
-    found: list[float] = []
-    for face, *_ in _kept("surface", solid, _surface)[1]:
-        if face.distance_to(at) <= tol:
+    found: list[tuple] = []
+    for face, origin, direction, ends in _kept("surface", solid, _surface)[1]:
+        on = face.distance_to(at) <= tol
+        if not on and or_axis and ends is not None:
+            along = (at - origin).dot(direction)
+            off_axis = (at - (origin + direction * along)).length
+            on = ends[0] - tol <= along <= ends[1] + tol and off_axis <= tol
+        if on:
             # OCC's surface adaptor sees through a trim, where build123d's face.radius is None.
             diameter = 2 * surface_of(face.wrapped).Cylinder().Radius()
-            if all(abs(diameter - d) > tol for d in found):
-                found.append(diameter)
+            if all(abs(diameter - d) > tol for d, *_ in found):
+                found.append((diameter, tuple(origin), tuple(direction)))
     if len(found) == 1:
         return found[0]
-    edge = " and ".join(f"{d:.4g}" for d in sorted(found))
-    where = f"the edge of cylindrical faces of diameters {edge}" if found else "no cylindrical face"
+    several = " and ".join(f"{d:.4g}" for d, *_ in sorted(found))
+    faces = "the axis or the edge" if or_axis else "the edge"
+    where = (
+        f"{faces} of cylindrical faces of diameters {several}"
+        if found
+        else "no cylindrical face" + (" or its axis" if or_axis else "")
+    )
     raise Fault(f"{name} lies on {where}")
+
+
+def diameter_at(solid, point: tuple[float, float, float], tol: float, name: str) -> float:
+    """The diameter of the one cylindrical face of a solid that point lies on within tol."""
+    return cylinder_at(solid, point, tol, name)[0]
 
 
 def circle(points, tol: float, names) -> tuple[tuple[float, float, float], float]:

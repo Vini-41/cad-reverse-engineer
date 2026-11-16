@@ -66,6 +66,7 @@ class Result:
     shape: dict | None = None  # a shape check's fit: residual, distance, worst_point
     expect: dict | None = None  # an expect's expression and the value it works out to
     miss: str | None = None  # how far a failed comparison is off, beside its tolerance
+    part: str | None = None  # the part it reads alone, in that part's own frame
 
 
 def quantity(c: dict, model: Model | None = None) -> str:
@@ -78,6 +79,24 @@ def quantity(c: dict, model: Model | None = None) -> str:
         if not between and model is not None and joint in model.moving:
             return model.quantity(str(joint))
     return KINDS[c["kind"]].quantity
+
+
+def part_of(c: dict, model: Model) -> str | None:
+    """The part check c reads alone, in that part's own frame: the one its drawing is
+    dimensioned by. None for a check that reads the assembly, or is posed."""
+    if "instances" in c or c.get("pose") or "from" in c:
+        return None
+    kind = c.get("kind")
+    if kind in ("bbox", "shape"):
+        named = {c.get("part")}
+    elif kind in ("distance", "angle"):
+        named = {prefix(str(d), model.parts) for d in c.get("between") or ()}
+    elif kind == "diameter":
+        named = {prefix(str(c.get("at")), model.parts)}
+    else:
+        return None
+    (part,) = named if len(named) == 1 else (None,)
+    return part if part in model.parts else None
 
 
 def tolerance(p: Project, c: dict, compared: str | None = None) -> tuple[str, float] | None:
@@ -290,7 +309,7 @@ class Checks:
             basis, params = rests_on(p, reads, self.uncounted)
             for r in found:
                 r.rests_on, r.rests_on_params, r.note = basis, params, c.get("interpretation", "")
-                r.seconds = seconds
+                r.seconds, r.part = seconds, part_of(c, self.model)
                 if not r.ok:
                     moved = "" if r.from_pose is None else f" from {pose_text(r.from_pose)}"
                     moved += f" to {pose_text(r.pose)}" if moved and r.pose else ""
@@ -499,12 +518,28 @@ class Checks:
         yield self._compare(c, c["id"], compared_with(c), found, f" at {at}")
 
     def _count(self, c: dict, placed: Model) -> Iterator[Result]:
-        part, ref = str(c["part"]), compared_with(c)
-        if part not in placed.parts:
-            raise Fault(f"{part} is not a part model.build returns")
+        """How many instances of its part the assembly places; or, of its thread, how many holes
+        and shanks carry it, each once per instance of its part, or once where none places it."""
+        ref = compared_with(c)
         stated = self.p.stated(ref, "count")
-        found = sum(1 for name, _ in placed.assembly.values() if name == part)
-        measured = f"{found} instance{'s' * (found != 1)} of {part}"
+        placed_parts = Counter(name for name, _ in placed.assembly.values())
+        if "thread" in c:
+            thread = str(c["thread"])
+            if thread not in self.p.thread_params:
+                raise Fault(f"{thread} is not a thread param")
+            found = sum(
+                placed_parts[t.part] or 1
+                for t in self.model.threads
+                if t.param == thread and t.fit == "threaded"
+            )
+            measured = f"{found} hole{'s' * (found != 1)} or shank{'s' * (found != 1)} threaded "
+            measured += f"{self.p.thread_params[thread].thread.name} ({thread})"
+        else:
+            part = str(c["part"])
+            if part not in placed.parts:
+                raise Fault(f"{part} is not a part model.build returns")
+            found = placed_parts[part]
+            measured = f"{found} instance{'s' * (found != 1)} of {part}"
         yield Result(c["id"], "count", stated == found, f"{stated:g} ({ref})", measured)
 
     def _mass(self, c: dict, placed: Model) -> Iterator[Result]:

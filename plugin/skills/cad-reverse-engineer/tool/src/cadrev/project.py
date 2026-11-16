@@ -19,7 +19,7 @@ from pathlib import Path
 
 import yaml
 
-from . import Fault, released, schema, sources, units
+from . import Fault, released, schema, sources, threads, units
 
 FORMAT = 1  # the project.yaml format this cadrev reads
 # Findings after which nothing else in the project is read and every command refuses it.
@@ -174,6 +174,21 @@ class Project:
     @property
     def known_first(self) -> bool:
         return self.meta.get("known_first") is True
+
+    @property
+    def thread_standard(self) -> str:
+        """The table a proposed thread comes from: project.yaml's threads, else metric."""
+        return self.meta.get("threads", "metric")
+
+    @property
+    def up(self) -> str:
+        """The axis the object stands on, which the drawings' views are named by: z, or y."""
+        return self.meta.get("up", "z")
+
+    @property
+    def thread_params(self) -> dict[str, threads.Size]:
+        """Each resolved thread param's sizes."""
+        return {n: v for n, v in self.values.items() if isinstance(v, threads.Size)}
 
     @property
     def physics(self) -> set[str]:

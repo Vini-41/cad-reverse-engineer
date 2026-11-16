@@ -331,17 +331,21 @@ def test_part_no_instance_places_is_checked_and_exported_in_its_own_frame(proj_d
     assert not (proj_dir / "build" / "assembly.step").exists()
 
 
-# What an overlay names, and the columns of its figure the link's edges then span.
+# What an overlay names, the columns of its figure the link's edges then span, and the axis the
+# project stands on: with y up, the front view shows the link's 5 mm width where z up shows its
+# 8 mm height.
 TARGETS = {
-    "part": ({"part": "link"}, (160, 240)),
-    "instance": ({"instance": "link"}, (220, 300)),
-    "assembly": ({"part": "assembly"}, (220, 300)),
+    "part": ({"part": "link"}, (160, 240), "z"),
+    "instance": ({"instance": "link"}, (220, 300), "z"),
+    "assembly": ({"part": "assembly"}, (220, 300), "z"),
+    "part, y up": ({"part": "link"}, (160, 240), "y"),
 }
 
 
 @pytest.mark.parametrize("named", TARGETS)
 def test_overlay_draws_the_models_edges_over_its_figure_pixel_for_pixel(proj_dir, named):
-    target, columns = TARGETS[named]
+    target, columns, up = TARGETS[named]
+    meta(proj_dir, up=up)
     import numpy as np
     from PIL import Image
 
@@ -365,7 +369,7 @@ def test_overlay_draws_the_models_edges_over_its_figure_pixel_for_pixel(proj_dir
     magenta = (image[:, :, 0] > 150) & (image[:, :, 1] < 150) & (image[:, :, 2] > 80)
     drawn = np.nonzero(magenta.any(axis=0))[0]
     assert (drawn.min(), drawn.max()) == pytest.approx(columns, abs=1)
-    rows = np.nonzero(magenta[:, columns[0] + 20])[0]  # the link's faces at z = ±4 mm
-    assert (rows.min(), rows.max()) == pytest.approx((92, 108), abs=1)
+    rows = np.nonzero(magenta[:, columns[0] + 20])[0]  # the link's faces at z = ±4, y = ±2.5 mm
+    assert (rows.min(), rows.max()) == pytest.approx((92, 108) if up == "z" else (95, 105), abs=1)
     blue = (image[:, :, 2] > 150) & (image[:, :, 0] < 120)  # the calibration span
     assert np.nonzero(blue.any(axis=0))[0].min() == pytest.approx(50, abs=3)

@@ -28,7 +28,7 @@ _Avoid_: geometry reading, measurement (for a value taken from released geometry
 Two ledger entries that disagree about the same feature; open until it carries a resolution.
 
 **Stated quantity**:
-A number a source prints with a unit, as an `a×b×c` product, as a diameter callout (`Ø 32.5`, a length) or as a thread size; each one is ledgered or skipped.
+A number a source prints with a unit, as an `a×b×c` product, as a diameter callout (`Ø 32.5`, a length) or as a thread size (`M3`, `1/4-20`); each one is ledgered or skipped.
 _Avoid_: dimension (for anything that is not a size of the object's geometry), dimension candidate
 
 **Count**:
@@ -65,6 +65,10 @@ _Avoid_: simulation parameter, tuning value
 **Spring rest**:
 The joint value at which a joint's spring exerts no torque, or no force on a slide, measured from the assembly as built like a pose. A spring preloaded against a stop rests outside its joint's range.
 _Avoid_: preset, preload, springref
+
+**Thread**:
+A standard screw thread, named by its designation in the ISO metric table or the Unified one (`M3`, `M8x1`, `1/4-20`). A thread param holds one, stated by a source or proposed from the project's table, and the table gives its diameter, pitch, tap drill and clearance hole. The model declares it on the plain hole or shank made for it and never cuts it: what a CAD program calls a cosmetic thread.
+_Avoid_: screw size (for a designation), thread size (for a diameter typed beside a pitch), modelled thread
 
 ## Verification
 
@@ -109,7 +113,7 @@ A configuration of the assembly given by joint values measured from the assembly
 _Avoid_: state, configuration (for the values themselves)
 
 **Check**:
-One comparison between the built geometry and a ledger value, or a value worked out from ledger values alone (an expect, such as module × teeth): an envelope, a distance or an angle between datums, a diameter, a mass, a count of instances, an interference, or a whole part against its released body (a shape check).
+One comparison between the built geometry and a ledger value, or a value worked out from ledger values alone (an expect, such as module × teeth): an envelope, a distance or an angle between datums, a diameter, a mass, a count of instances or of threaded holes, an interference, or a whole part against its released body (a shape check).
 _Avoid_: test, assertion
 
 **Reads**:
@@ -136,6 +140,10 @@ _Avoid_: coverage check, scan
 A check that aligns a built part with its released body through pairs of datums and compares the largest distance between their surfaces with a length tolerance. It checks the shape as a whole, not the params that build it.
 _Avoid_: mesh comparison, ICP check
 
+**Drawing**:
+A part's sheet, written by every verification run: its front, top and right views and an isometric one, dimensioned by the checks that read that part alone, each dimension the value as built. An envelope no check compares is a reference dimension. The assembly has an isometric view and no drawing.
+_Avoid_: render, sketch, blueprint
+
 **Verification run**:
 One execution of `cadrev check`: lint, build, every check, and the report.
 _Avoid_: check (for the whole run)
@@ -158,6 +166,10 @@ VERIFIED with no parameter resting on a proposed value, physics values and a swe
 _Avoid_: verified (for this stronger state)
 
 ## Workflow
+
+**Foundational question**:
+A question whose answer shapes everything built after it, so it is settled before anything is built: the target, metric or US (the length unit and the thread table), and the build (the complete model or known first). The user answers them, or the reconstruction does from the sources and says so.
+_Avoid_: assumption (for an answer given in the user's place), clarifying question
 
 **Tracer part**:
 The first part taken through modelling, checks and the report before any other part is modelled.

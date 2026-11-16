@@ -1,7 +1,8 @@
 """The shape of every project file, checked before any rule runs.
 
 A spec is a type (str, int, bool, dict), NUMBER, a tuple of alternatives, Items(spec) for a list,
-Table(spec) for a mapping of names, or a Record for a mapping with known keys. An unknown key is
+Table(spec) for a mapping of names, a Record for a mapping with known keys, or OneOf for one of a
+few words. An unknown key is
 a problem, since it is most often a typo or a value split at an unquoted comma; a key set to null
 counts as absent.
 """
@@ -13,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .sources import word_number
+from .threads import STANDARDS
 
 NUMBER = "number"
 # A number, or a cardinal in words read as the number it names: a ledger value written as printed.
@@ -28,6 +30,11 @@ class Items:
 @dataclass(frozen=True)
 class Table:
     of: object
+
+
+@dataclass(frozen=True)
+class OneOf:
+    words: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -69,13 +76,15 @@ EVIDENCE = record(
 SKIP = record("source page:int pages:[int] quote from to body within:[[number]] reason")
 CONFLICT = record("id:any evidence:[str] summary resolution")
 PARAM = record(
-    "basis from value:number expr method uncertainty:any rationale gap interpretation physics:bool"
+    "basis from value:number expr thread:any method uncertainty:any rationale gap interpretation "
+    "physics:bool"
 )
 CHECK = record(
-    "id!:any kind part instances:[str] parts:[str] evidence key expect axes:{str} between:[str] "
+    "id!:any kind part thread instances:[str] parts:[str] evidence key expect axes:{str} "
+    "between:[str] "
     "along at density counts:{str} add:[str] tol:number tol_rel:number max_volume:number "
     "pairs:[[str]] pose:{any} from:{any} claim joint cable body ends:[str] interpretation",
-    exclusive=(("part", "instances"),),
+    exclusive=(("part", "instances"), ("part", "thread")),
     sweep=record("joint! steps!"),
 )
 # A datum on a released body: a point, or one derived from datums declared on the same body.
@@ -103,6 +112,8 @@ FILES = {
         "units": (dict, None),
         "tolerance": (record("length:number angle:number"), None),
         "model_literals": (Items(NUMBER), None),
+        "threads": (OneOf(tuple(STANDARDS)), None),
+        "up": (OneOf(("y", "z")), None),
         "known_first": (bool, None),
         "sources": (SOURCE, list),
     },
@@ -134,6 +145,8 @@ def _expected(spec) -> str:
         return " or ".join(_expected(s) for s in spec)
     if isinstance(spec, Items):
         return "a list"
+    if isinstance(spec, OneOf):
+        return " or ".join(spec.words)
     return "a mapping" if isinstance(spec, (Table, Record)) else _NAMES[spec]
 
 
@@ -187,6 +200,9 @@ def conform(value, spec, where: str, problems: list[str]) -> Any:
                 k: conform(v, spec.fields[k], f"{where}.{k}", problems) if k in spec.fields else v
                 for k, v in value.items()
             }
+    elif isinstance(spec, OneOf):
+        if value in spec.words:
+            return value
     elif _is(value, spec):
         return value
     elif spec == NUMBER_OR_WORD and isinstance(value, str) and word_number(value) is not None:

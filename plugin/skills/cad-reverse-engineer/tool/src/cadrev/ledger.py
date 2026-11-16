@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import re
 
-from . import Fault, released, sources, units
+from . import Fault, released, sources, threads, units
 from .project import (
     AXES,
     BASES,
@@ -86,13 +86,15 @@ def _evidence(p: Project) -> None:
     # A statement of a direction needs no values where only claim checks cite it.
     keyed = {ref.partition(".")[0] for c in p.checks for ref in compared_refs(c)}
     directions = {str(c.get("evidence")) for c in p.checks if "claim" in c} - keyed
+    # Nor does a statement of a thread, which a thread param reads by its designation.
+    threaded = {str(spec.get("from")) for spec in p.params.values() if "thread" in spec}
     for e in p.evidence:
         eid, values = e["id"], e.get("values") or {}
         with p.filing("evidence-anchor", f"{eid}: "):
             if e.get("source") not in p.sources:
                 raise Fault(f"unknown source {e.get('source')!r}", "evidence-source")
             needed = "probe" in e or (
-                "quote" in e and e.get("scope") != "context" and eid not in directions
+                "quote" in e and e.get("scope") != "context" and eid not in directions | threaded
             )
             if needed and not values:
                 p.error("evidence-values", f"{eid}: needs values (or scope: context)")
@@ -483,6 +485,8 @@ def named_by_checks(p: Project, c: dict, steps: bool = True, weighs=None) -> lis
             names += mass_params(p, c.get("parts") or weighs)
         names += [str(c.get("density")), *map(str, c.get("add") or [])]
         names += [str(n) for n in (c.get("counts") or {}).values()]
+    if c.get("kind") == "count" and "thread" in c:
+        names.append(str(c["thread"]))
     return [n for n in dict.fromkeys(names) if n in p.params]
 
 
@@ -513,6 +517,11 @@ def _params(p: Project) -> None:
             p.error("param-gap", f"param {name}: a source param has no value for a gap to replace")
         elif gap and gap not in p.gaps:
             p.error("param-gap", f"param {name}: unknown gap {gap!r}")
+        if "thread" in spec:
+            with p.filing("param-thread", f"param {name}: "):
+                p.values[name] = _thread(p, name, spec)
+                p.rests_on[name] = basis if basis in RESTS_ON else "proposed"
+            continue
         if basis == "derived":
             if gap and not spec.get("interpretation"):
                 p.error(
@@ -556,6 +565,58 @@ def _params(p: Project) -> None:
         if "value" in spec:
             p.values[name] = float(spec["value"])
     _derived(p, pending)
+
+
+def _thread(p: Project, name: str, spec: dict) -> threads.Size:
+    """A thread param's sizes; a Fault where neither table holds its designation. [param-thread]
+    unless a source one is printed by the statement it is from, and [thread-standard] unless a
+    proposed one comes from the project's table."""
+    basis, designation = spec["basis"], spec["thread"]
+    thread = threads.named(designation)
+    if thread is None:
+        known = threads.pitches(designation) or (
+            "name an ISO metric thread (M3, M8x1) or a Unified one (1/4-20, 6-32)"
+        )
+        raise Fault(f"thread {designation} is in neither thread table; {known}")
+    size = threads.Size(thread, units.convert(1.0, "mm", p.units))
+    if "expr" in spec or basis not in ("source", "proposed"):
+        p.error(
+            "param-thread",
+            f"param {name}: a thread is stated by a source or proposed, and takes no expr",
+        )
+    if "value" in spec and not math.isclose(float(spec["value"]), size, rel_tol=1e-9):
+        p.error(
+            "param-mismatch",
+            f"param {name}: value {spec['value']} != {thread.name}'s major diameter "
+            f"{float(size):g}",
+        )
+    if basis == "source":
+        ref = str(spec.get("from", ""))
+        item = p.item(ref) or p.item(ref.partition(".")[0])
+        stated = None if item is None else item.get("quote", item.get("reading"))
+        printed = threads.printed_in(str(stated or ""))
+        if item is None or stated is None:
+            p.error(
+                "param-thread",
+                f"param {name}: from: {ref!r} is no quote or reading, which is what states a "
+                "thread",
+            )
+        elif thread not in printed:
+            found = ", ".join(dict.fromkeys(t.name for t in printed)) or "no thread"
+            p.error("param-thread", f"param {name}: {item['id']} prints {found}, not {thread.name}")
+    elif basis == "proposed":
+        if not spec.get("rationale"):
+            p.error("param-proposed", f"param {name}: proposed needs rationale")
+        if not spec.get("gap"):
+            p.warn("param-gap", f"param {name}: proposed value names no gap to close it")
+        if thread.standard != p.thread_standard:
+            p.error(
+                "thread-standard",
+                f"param {name}: proposes {thread.name} from the "
+                f"{threads.STANDARDS[thread.standard]} table, where project.yaml's threads is "
+                f"{p.thread_standard}; a proposed thread comes from the project's table",
+            )
+    return size
 
 
 def _derived(p: Project, pending: dict[str, dict]) -> None:
