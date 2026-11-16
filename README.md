@@ -28,7 +28,7 @@ cad-reverse-engineer is three skills for coding agents, with their CLI, `cadrev`
 - **A mechanism that moves.** Joints, gear ratios and lead screws export to MuJoCo, and stated motion is checked on the model: one turn of this gearbox's sun moves its carrier 50°, as its 7.2:1 ratio says.
 - **A drawing of each part.** Three views and an isometric one, dimensioned with the values the build was checked against, under an isometric view of the assembly. Screw threads are named from the ISO metric or Unified table and drawn as a drawing shows them; none is cut into the model.
 - **A report of where each dimension came from.** It was quoted from a document, probed from a file the authors released, or proposed because nothing states it. Each proposed value is listed beside the question that would settle it.
-- **A plan to make it.** How each part is made, what to buy and the assembly sequence. It is held to the model, so every part and every screw it names is one the CAD has.
+- **A plan to make it.** How each part is made, what to buy and the assembly sequence. `cadrev check` holds the plan to the model, so every part and screw it names is one the CAD has.
 
 Published hardware rarely comes with CAD you can edit. A paper gives an envelope table and a few labelled figures, a datasheet one drawing, a repository a folder of meshes. A model rebuilt from that mixes stated values with guesses, and once the STEP file exists, nobody can tell which is which. This keeps them apart, and checks the built geometry against every value the sources state.
 
@@ -79,11 +79,11 @@ Below that come the parts, each with its drawing above the checks that read it, 
 
 Each does one job, and each builds on the one before.
 
-- **`known-first`** builds only what the documents settle: the parts whose every dimension is stated, built and checked. Every other part waits, with the question that would settle it. Nothing is guessed.
+- **`known-first`** builds and checks only the parts whose every dimension the documents settle. Every other part waits, with the question that would settle it. It guesses nothing.
 - **`complete-model`** builds the whole object. It asks three things first: metric or US, the material, and whether to follow the design or the function. Then it proposes what the documents leave open, each value beside its question and each chosen to be made: a thread from the ISO metric or Unified table, a screw in a length you can buy, one screw size before two.
 - **`ask-machinist`** reviews the model as the person who has to make it, part by part, thumbs up or thumbs down. Then it writes the plan: how each part is made, what to buy, and the assembly sequence.
 
-Name the skill you want, or ask for the CAD: *"reverse-engineer the gripper in this paper"* gets you the complete model.
+Name the skill you want, or ask for the CAD. *"Reverse-engineer the gripper in this paper"* gets you the complete model.
 
 ## How it works
 

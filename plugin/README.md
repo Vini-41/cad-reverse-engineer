@@ -6,15 +6,15 @@ Three skills that turn a paper, patent or datasheet into parametric CAD, with ev
 - **A mechanism that moves**: joints, gear ratios and lead screws exported to MuJoCo, with stated motion checked on the model.
 - **A drawing of each part**: three views and an isometric one, dimensioned with the checked values, with screw threads named from the ISO metric or Unified table.
 - **A report of where each dimension came from**: quoted from a document, probed from a file the authors released, or proposed because nothing states it, beside the question that would settle it.
-- **A plan to make it**: how each part is made, what to buy and the assembly sequence, held to the model.
+- **A plan to make it**: how each part is made, what to buy and the assembly sequence, which `cadrev check` holds to the model.
 
 ## The skills
 
-- **`known-first`** builds only what the documents settle, and lists what they leave open as questions. Nothing is guessed.
+- **`known-first`** builds and checks only the parts whose every dimension the documents settle, and lists what they leave open as questions. It guesses nothing.
 - **`complete-model`** builds the whole object. It asks metric or US, the material, and whether to follow the design or the function, then proposes what the documents leave open from standard sizes: a thread from the table, a screw in a length you can buy.
 - **`ask-machinist`** reviews the model as the person who has to make it, part by part, and writes the plan.
 
-Name the skill you want, or ask for the CAD: *"reverse-engineer the gripper in this paper"* gets you the complete model. Say "build now" and it answers its questions from the documents.
+Name the skill you want, or ask for the CAD. *"Reverse-engineer the gripper in this paper"* gets you the complete model. Say "build now" and it answers its questions from the documents.
 
 ## Install
 

@@ -1,6 +1,17 @@
 """The plan: how the object is made and put together, held to the model it is a plan of."""
 
-from conftest import M3_SCREW, TEN_LONG, add, change, check, edit, meta, stack, threaded
+from conftest import (
+    M3_SCREW,
+    TEN_LONG,
+    add,
+    change,
+    check,
+    edit,
+    meta,
+    remodel,
+    stack,
+    threaded,
+)
 
 FLAT = "link: [print it flat in PLA, ream both holes]"
 
@@ -59,12 +70,40 @@ def test_steps_drive_the_screws_the_model_has_holes_threaded_for(proj_dir):
     change(proj_dir, "steps", None, **{"with": {"screw": 1}})
     run = check(proj_dir)
     assert run.status == "VERIFIED" and run.findings == [("warning", "plan-screw")]
-    assert "2 holes are threaded M3×0.5 for screw, and the steps drive 1" in run.out
+    assert "2 holes threaded M3×0.5 for screw, against 1 screw the steps drive" in run.out
     # A thread with no length names no screw: a hole left open for the user's own.
     edit(proj_dir, "params.yaml", lambda d: d["params"]["screw"].pop("length"))
     edit(proj_dir, "params.yaml", lambda d: d["params"].pop("screw_len"))
     run = check(proj_dir)
     assert run.rules == [] and run.report["plan"]["buy"][0]["thread"] == "M3×0.5"
+
+
+PINNED = '"link_1": ("link", Location()), "pin_1": ("pin", Location((0, p.pitch, 0)))'
+
+
+def test_screw_built_as_a_part_fills_its_hole_without_a_step_driving_it(proj_dir):
+    # The screw as a part, its shank declared for the thread its holes carry, placed off the link.
+    threaded(proj_dir, spec=M3_SCREW)
+    add(proj_dir, params=TEN_LONG)
+    remodel(proj_dir, '{"link": link}', '{"link": link, "pin": Cylinder(p.screw / 2, p.link_H)}')
+    remodel(proj_dir, '"link.b": "screw"', '"link.b": "screw", "pin.axis": "screw"')
+    remodel(proj_dir, '"link.top":', '"pin.axis": (0, 0, 0),\n        "link.top":')
+    two = PINNED + ', "pin_2": ("pin", Location((0, 2 * p.pitch, 0)))'
+    remodel(proj_dir, '"link_1": ("link", Location())', two)
+    add(proj_dir, make=FLAT, buy="pin: M3×10 socket head cap screw, ISO 4762")
+    add(proj_dir, steps="[{place: [link_1]}, {place: [pin_1, pin_2], note: Snug.}]")
+    run = check(proj_dir)
+    assert run.status == "VERIFIED" and run.rules == [], run.out
+    assert run.report["threads"][0]["threaded"] == ["link.a", "link.b", "pin.axis"]
+    assert run.report["plan"]["buy"] == [
+        {"item": "pin", "count": 2, "what": "M3×10 socket head cap screw, ISO 4762"}
+    ]
+    # One screw fewer leaves a threaded hole open.
+    remodel(proj_dir, two, PINNED)
+    edit(proj_dir, "plan.yaml", lambda d: d["steps"][1].update(place=["pin_1"]))
+    run = check(proj_dir)
+    assert run.findings == [("warning", "plan-screw")]
+    assert "against 0 screws the steps drive and 1 screw built as a part" in run.out
 
 
 def test_report_says_what_the_object_is_made_of_and_what_it_follows(proj_dir):
