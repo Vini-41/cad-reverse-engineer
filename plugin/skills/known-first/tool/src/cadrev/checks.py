@@ -714,7 +714,9 @@ class Checks:
                 self._solids[numbers[inst]] = (solids, solids.bounding_box().wrapped)
         (solid_a, box_a), (solid_b, box_b) = self._solids[numbers[a]], self._solids[numbers[b]]
         volume = 0.0
-        if not box_a.IsOut(box_b):  # apart, so no overlap: the boolean is the slow part
+        # A part of no solid is [part-invalid] and has no box: it shares no volume. Boxes apart
+        # share none either, and the boolean is the slow part.
+        if box_a is not None and box_b is not None and not box_a.IsOut(box_b):
             (part_a, at_a), (part_b, at_b) = placed.assembly[a], placed.assembly[b]
             relative = (part_a, part_b, _placement(at_a.inverse() * at_b))
             if relative not in self._overlap_of:

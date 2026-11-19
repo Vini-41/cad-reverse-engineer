@@ -311,6 +311,14 @@ def test_interference_names_the_worst_overlap_and_passes_under_a_stated_limit(pr
     assert "| clear | 750 |" in run.md
 
 
+def test_interference_between_instances_of_a_part_of_no_solid_is_its_finding(proj_dir):
+    stack(proj_dir, 2)
+    remodel(proj_dir, '"parts": {"link": link}', '"parts": {"link": Compound([])}')
+    run = check(proj_dir)
+    assert "part-invalid" in run.errors and run.status == "NOT VERIFIED"
+    assert run.result("clear")["measured"] == "0 over 1 pair (all)"
+
+
 @pytest.mark.parametrize("link", ["link", "Rot(0, 0, 180) * link"])  # as built, and located
 def test_assembly_step_names_each_part_once_and_each_instance_as_placed(proj_dir, link):
     remodel(proj_dir, '"parts": {"link": link}', f'"parts": {{"link": {link}}}')
