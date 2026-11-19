@@ -28,7 +28,7 @@ cad-reverse-engineer is three skills for coding agents, with their CLI, `cadrev`
 - **A mechanism that moves.** Joints, gear ratios and lead screws export to MuJoCo, and stated motion is checked on the model: one turn of this gearbox's sun moves its carrier 50°, as its 7.2:1 ratio says.
 - **A drawing of each part.** Three views and an isometric one, dimensioned with the values the build was checked against, under an isometric view of the assembly. Screw threads are named from the ISO metric or Unified table and drawn as a drawing shows them; none is cut into the model.
 - **A report of where each dimension came from.** It was quoted from a document, probed from a file the authors released, or proposed because nothing states it. Each proposed value is listed beside the question that would settle it.
-- **A plan to make it.** How each part is made, what to buy and the assembly sequence. `cadrev check` holds the plan to the model, so every part and screw it names is one the CAD has.
+- **A plan to make it.** How each part is made, what to buy and the assembly sequence, each step under a view of what it places. `cadrev check` holds the plan to the model, so every part and screw it names is one the CAD has, and no part is left in mid-air.
 
 Published hardware rarely comes with CAD you can edit. A paper gives an envelope table and a few labelled figures, a datasheet one drawing, a repository a folder of meshes. A model rebuilt from that mixes stated values with guesses, and once the STEP file exists, nobody can tell which is which. This keeps them apart, and checks the built geometry against every value the sources state.
 

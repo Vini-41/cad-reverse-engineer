@@ -29,6 +29,7 @@ Take every part in turn as the person who has to make it from that material, and
 - **What is tighter than its job**: a fit, a tolerance or a finish finer than the part's function needs.
 - **What costs more than it should**: a part cut from a block for one slim feature, where a plain block and a bought pin do the same job; a part made that a catalogue sells; two parts where one would do.
 - **What a hand cannot assemble**: a screw no driver reaches, a part closed in before the one that goes inside it.
+- **What nothing holds**: a pin free to slide out of its hole, a cord's end with no anchor, a part that rests where nothing keeps it.
 
 A thumbs down names the feature, the reason, and the change that would turn it.
 
@@ -48,10 +49,12 @@ Write [plan.yaml](../known-first/references/project-format.md#planyaml):
 
 - **`make`**, for each part that is made: its operations in the order the shop does them. The stock, or the print's orientation and supports. Each cut with its tool where the tool is on the chart: the drill, the tap, the reamer. The tolerance the part is made to, the loosest that works, and each feature that needs tighter, with the reason. The finish, and the edges broken.
 - **`buy`**, for each part that is bought: what is ordered, by its standard or catalogue designation. For each screw, its head and material; cadrev prints its thread and length. And anything else the steps use: an adhesive, a wire.
-- **`steps`**, the assembly sequence a person follows. Each step places instances onto what is already there, from a direction a hand and a tool can reach, drives its screws (`with`), and says how in its `note`: the tool, what to align, how tight. What goes inside goes in first.
+- **`steps`**, the assembly sequence a person follows. Each step places instances onto what is already there, from a direction a hand and a tool can reach, drives its screws (`with`), and says how in its `note`: the tool, what to align, how tight, and what to check before the next step. What goes inside goes in first.
+- **`clearance`**, the param of the loosest fit, where two parts that hold each other do not touch.
+- **A fit that asks for a test is tested first.** Where a fit param's gap is `ask: test`, add a coupon: a part of its own that no instance places, with each such hole or slot at the proposed size and a size either side. The first step makes it and tries the real pin, screw or bearing in it, before any part is made.
 
-Done when `cadrev check` reports nothing about the plan and ends on the status it had.
+Done when `cadrev check` reports nothing about the plan and ends on the status it had, and each step's view in `build/steps/` shows what its note says.
 
 ## 5. Hand over
 
-Show the user the Plan section of `build/report.md`. Then: each thumbs down and what became of it, each gap that asks for a test before the parts are made, and each answer you gave in the user's place.
+Show the user `build/plan.md`, the guide with each step under its view. Then: each thumbs down and what became of it, each gap that asks for a test before the parts are made, and each answer you gave in the user's place.

@@ -13,7 +13,7 @@ plan.yaml       optional: how the object is made and put together
 model.py        the build123d model (modeling.md)
 sources/        registered source files, pinned by sha256
 figures/        the pages and images `cadrev figures` writes; figures/crops/ holds the pinned evidence crops
-build/          STEP files, isometric.png, drawings/, overlays, report.md, report.json; model.mjcf and meshes/ for a mechanism
+build/          STEP files, isometric.png, drawings/, overlays, report.md, report.json; model.mjcf and meshes/ for a mechanism; plan.md and steps/ for a plan
 ```
 
 Every file is read against the shapes shown here: an entry with a key not shown, or a value of the wrong type, is left out of the run with a `[schema]` finding. Quote every free-text value inside a `{…}` entry (`reason: "a test load, not the object"`), since an unquoted comma ends the value there.
@@ -367,7 +367,7 @@ Renders `build/overlays/<id>.png`: model edges in magenta over the figure, the c
 
 ## plan.yaml
 
-The plan says how the object is made and put together, once its design is accepted. `cadrev check` holds it to the built model and prints it in the report, each line with its quantity counted from the model.
+The plan says how the object is made and put together, once its design is accepted. `cadrev check` holds it to the built model and writes it as `build/plan.md`, the guide for whoever makes the object: each line with its quantity counted from the model, and each step under its view.
 
 ```yaml
 make:                    # each part that is made: how, in one operation or several in order
@@ -380,17 +380,20 @@ buy:                     # each part that is bought, each screw by its thread pa
 steps:                   # the assembly sequence
   - {place: [body_1], note: "Deck down on the bench."}
   - {place: [fan_1, plate_1], with: {lid_screw: 4}, note: "Label towards the plate. 2.5 mm hex key, snug."}
+clearance: fit_gap       # optional: the length param of the loosest fit
 ```
 
-- **Every part an instance places is made or bought**, one or the other. `make` gives its operations, as text; `buy` what is ordered. The report counts each by its instances.
+- **Every part an instance places is made or bought**, one or the other. `make` gives its operations, as text; `buy` what is ordered. The plan counts each by its instances. A part made beside the object, a fit coupon or a jig, is a part no instance places: `make` lists it uncounted, and a step that places nothing says when it is used.
 - **A `buy` entry may also name a thread param**, for what is ordered of it (a screw's head and material, a nut, a threaded insert), which the report prints after its thread and length. Any other name is listed as written, uncounted: an adhesive, a wire.
 - **Every instance is placed by exactly one step**; an assembly of one instance needs no steps. A step may also place nothing: one that only drives screws, or only says what to do.
-- **`with`** counts what a step drives of a thread param: its screws, nuts or inserts. The report totals them per thread param as the quantity to buy. Where the model has more holes threaded for a [screw](#threads) than the steps drive screws into, less the screws built as parts, a warning says so: an empty threaded hole may be meant.
+- **Every instance is held**: it touches another instance, or sits within `clearance` of one, so the assembly is one object. `clearance` names the length param of the loosest fit, the largest gap the model leaves between two parts that hold each other: a pin centred in its running hole, a tongue between its fork's cheeks. Without it, parts touch. An instance further than that from every other floats, and so does a group whose instances hold only each other: build what holds it (a spring's hooks, a seat), or move it onto what does.
+- **Each step has a view**, `build/steps/<n>.png`: the isometric view of what it places, in black and named by part, on what the steps before it placed, in grey. View each as you write its step: it shows a part placed onto nothing, or before the one it goes inside.
+- **`with`** counts what a step drives of a thread param: its screws, nuts or inserts. The plan totals them per thread param as the quantity to buy. Where the model has more holes threaded for a [screw](#threads) than the steps drive screws into, less the screws built as parts, a warning says so: an empty threaded hole may be meant.
 - cadrev holds the plan's bookkeeping, not its judgement. Whether a tool reaches a feature and a hand can do a step is its author's to settle before writing it.
 
 ## Drawings
 
-`cadrev check` writes `build/isometric.png`, the assembly as built, and `build/drawings/<part>.png` for each part: its front, top and right views in third-angle projection beside an isometric one. report.md opens on the isometric view and shows each part's drawing above the checks that read that part alone.
+`cadrev check` writes `build/isometric.png`, the assembly as built, and `build/drawings/<part>.png` for each part: its front, top and right views in third-angle projection beside an isometric one. report.md opens on the isometric view and shows each part's drawing above the checks that read that part alone. A [plan](#planyaml)'s steps have their own views.
 
 - **A drawing is dimensioned by its part's checks**: each unposed `bbox`, `distance`, `angle` and `diameter` check that reads the part in its own frame is a dimension where the check reads it, printed at the value as built, in blue where the check passes and red where it fails. An envelope no check compares is a reference dimension, in grey parentheses.
 - **A declared thread** is drawn as a drawing shows one, a thin three-quarter circle beside its hole or shank, and called out by its designation; a clearance hole by its diameter and the screw it clears.

@@ -204,9 +204,17 @@ _Avoid_: fidelity, mode
 ## Making
 
 **Plan**:
-How the object is made and put together, written once its design is accepted: how each part is made or what is bought for it, and the steps that assemble its instances. It is held to the model: every part an instance places is made or bought, and every instance is placed by one step.
+How the object is made and put together, written once its design is accepted: how each part is made or what is bought for it, and the steps that assemble its instances. It is held to the model: every part an instance places is made or bought, every instance is placed by one step, and every instance is held.
 _Avoid_: instructions, bill of materials (for the plan as a whole)
 
 **Step**:
-One act of the plan's assembly sequence: the instances it places, the screws it drives, and how.
+One act of the plan's assembly sequence: the instances it places, the screws it drives, and how. Its view shows what it places on what the steps before it placed.
 _Avoid_: operation (an operation makes a part; a step assembles)
+
+**Held**:
+Of an instance in a plan: touching another instance, or within the plan's clearance of one. One that is not held floats, and so does a group of instances that hold only each other.
+_Avoid_: mated, constrained, attached
+
+**Clearance**:
+The largest gap the model leaves between two parts that hold each other, the loosest fit: a length param the plan names.
+_Avoid_: tolerance (for a fit's gap), play
