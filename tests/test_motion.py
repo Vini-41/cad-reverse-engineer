@@ -314,7 +314,10 @@ def test_cable_wound_on_a_wheel_closes_its_joints_in_proportion_and_a_stroke_rea
     path = ["rail_1.up", "slider_1.down"]
     cables = run.report["motion"]["cables"]
     assert cables == {"cord": {"path": path, "wheel": "input", "closes": closes}}
-    assert "Cable `cord` through rail_1.up → slider_1.down, wound on input" in run.md
+    # The report opens on the count, and lists each cable's path after the checks.
+    opening, listed = run.md.split("## Motion")
+    assert "and 1 cable (listed under Motion)" in opening and "Cable `cord`" not in opening
+    assert "Cable `cord` through rail_1.up → slider_1.down, wound on input" in listed
     assert [s.get("site") for s in mjcf(mech_dir).iter("site") if s.get("site")] == path
     assert coupled(mech_dir) == {
         "cord_slide": ("slide", "input", pytest.approx([0, -20 / math.radians(30), 0, 0, 0])),
