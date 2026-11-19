@@ -2,7 +2,7 @@
 
 A plan is held to one more thing: every instance is held. An instance is held where it touches another, or sits within the plan's `clearance` of one, the length param of the loosest fit; a group of instances that hold only each other floats as one. `cadrev check` files what floats as `[plan-held]`, naming it and its gap, so a model with a plan is one object. A part made beside the object, a fit coupon or a jig, is a part no instance places.
 
-The plan is also written as `build/plan.md`, a guide of its own, in place of a section of the report (ADR-0021): what is made, what is bought, and each step under `build/steps/<n>.png`, the isometric view of the instances it places, in black and named by part, on what the steps before it placed, in grey. The report links to it.
+The plan is also written as `build/plan.md`, a guide of its own, in place of a section of the report (ADR-0021): what is made, what is bought, and each step that places an instance over `build/steps/<n>.png`, the isometric view of the instances it places, in black and named by part, on what the steps before it placed, in grey, taking in the part each goes onto. A step that places nothing has no view. The report links to it.
 
 This came from a mechanical engineer's review of a mechanism rebuilt to be printed: the assembly had parts floating in it, and the assembly guide wanted illustrations. The model was VERIFIED with a plan. Its fit coupon was an instance 42 mm from the mechanism, because a made part had to be placed to be counted, and its sixteen extension springs were tubes that touched nothing, their hooks left out. The same shows in other objects: a jig placed beside a mould, fan blades off their hub, a power supply beside its device.
 

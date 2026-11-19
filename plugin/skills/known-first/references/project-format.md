@@ -367,7 +367,7 @@ Renders `build/overlays/<id>.png`: model edges in magenta over the figure, the c
 
 ## plan.yaml
 
-The plan says how the object is made and put together, once its design is accepted. `cadrev check` holds it to the built model and writes it as `build/plan.md`, the guide for whoever makes the object: each line with its quantity counted from the model, and each step under its view.
+The plan says how the object is made and put together, once its design is accepted. `cadrev check` holds it to the built model and writes it as `build/plan.md`, the guide for whoever makes the object: each line with its quantity counted from the model, and each step over its view.
 
 ```yaml
 make:                    # each part that is made: how, in one operation or several in order
@@ -387,7 +387,7 @@ clearance: fit_gap       # optional: the length param of the loosest fit
 - **A `buy` entry may also name a thread param**, for what is ordered of it (a screw's head and material, a nut, a threaded insert), which the report prints after its thread and length. Any other name is listed as written, uncounted: an adhesive, a wire.
 - **Every instance is placed by exactly one step**; an assembly of one instance needs no steps. A step may also place nothing: one that only drives screws, or only says what to do.
 - **Every instance is held**: it touches another instance, or sits within `clearance` of one, so the assembly is one object. `clearance` names the length param of the loosest fit, the largest gap the model leaves between two parts that hold each other: a pin centred in its running hole, a tongue between its fork's cheeks. Without it, parts touch. An instance further than that from every other floats, and so does a group whose instances hold only each other: build what holds it (a spring's hooks, a seat), or move it onto what does.
-- **Each step has a view**, `build/steps/<n>.png`: the isometric view of what it places, in black and named by part, on what the steps before it placed, in grey. View each as you write its step: it shows a part placed onto nothing, or before the one it goes inside.
+- **Each step that places an instance has a view**, `build/steps/<n>.png`: the isometric view of what it places, in black and named by part, on what the steps before it placed, in grey, taking in the part each goes onto. View each as you write its step: it shows a part placed onto nothing, or before the one it goes inside.
 - **`with`** counts what a step drives of a thread param: its screws, nuts or inserts. The plan totals them per thread param as the quantity to buy. Where the model has more holes threaded for a [screw](#threads) than the steps drive screws into, less the screws built as parts, a warning says so: an empty threaded hole may be meant.
 - cadrev holds the plan's bookkeeping, not its judgement. Whether a tool reaches a feature and a hand can do a step is its author's to settle before writing it.
 

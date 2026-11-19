@@ -214,8 +214,9 @@ def test_part_made_beside_the_object_is_placed_by_no_instance(proj_dir):
     assert "- **coupon** ([drawing](drawings/coupon.png)): print it first\n" in run.plan_md
 
 
-def test_small_part_is_shown_on_what_it_goes_onto(proj_dir):
-    # A pin a tenth of the link's length, standing on the link's middle.
+def test_small_part_is_shown_on_the_whole_of_what_it_goes_onto(proj_dir):
+    # A pin a thirteenth of the link's length, standing on the link's middle: every edge of the
+    # link lies further from the pin than the pin is large.
     pin = "Cylinder(p.hole_d / 2, p.hole_d)"
     remodel(proj_dir, '{"link": link}', f'{{"link": link, "pin": {pin}}}')
     on = "Location((0, 0, p.link_H / 2 + p.hole_d / 2))"
@@ -223,7 +224,8 @@ def test_small_part_is_shown_on_what_it_goes_onto(proj_dir):
     add(proj_dir, make=FLAT, buy="pin: a dowel pin", steps="[{place: [link_1]}, {place: [pin_1]}]")
     run = check(proj_dir)
     assert run.rules == [], run.out
-    assert inked(proj_dir / "build" / "steps" / "2.png", "placed") > 1500
+    # The pin's view draws the link whole, in grey.
+    assert inked(proj_dir / "build" / "steps" / "2.png", "placed") > 3000
 
 
 def test_instance_inside_another_and_clear_of_its_walls_floats(proj_dir):
