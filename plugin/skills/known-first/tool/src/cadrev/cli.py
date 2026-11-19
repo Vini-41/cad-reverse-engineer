@@ -209,12 +209,15 @@ def cmd_check(args) -> int:
                 written = build.export(p, model) + (mechanism.write() if mechanism else [])
                 for path in written:
                     print(f"wrote {path.relative_to(p.root)}")
-                drawn = drawing.render(p, model, results)
+                drawn = drawing.render(p, model, results, planned["steps"] if planned else [])
                 sheets = sum(path.parent.name == "drawings" for path in drawn)
+                views = sum(path.parent.name == "steps" for path in drawn)
                 if sheets:
                     print(f"wrote build/drawings/: {sheets} part drawing{'s' * (sheets != 1)}")
-                if len(drawn) > sheets:
+                if len(drawn) > sheets + views:
                     print("wrote build/isometric.png")
+                if views:
+                    print(f"wrote build/steps/: {views} step view{'s' * (views != 1)}")
                 images = overlay.render(p, model)
     if model is not None:
         read |= {thread.param for thread in model.threads}  # each held to its thread's sizes
@@ -236,6 +239,8 @@ def cmd_check(args) -> int:
         print(f"\n{found}; skipped {skipped}, so no claim is made and no report was written.")
         return 1
     path = report.write(p, status, results, images, drawn, model, coarsened, build_seconds, planned)
+    if planned is not None:
+        print("wrote build/plan.md")
     known_first = f"Known first: {report.waiting_clause(p)}. " if p.known_first else ""
     print(
         f"\n{found}, {headline['checks_passed']}/{headline['checks']} checks pass. {known_first}"

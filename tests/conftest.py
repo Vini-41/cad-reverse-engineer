@@ -371,6 +371,10 @@ class Run(NamedTuple):
     def md(self) -> str:
         return (self.root / "build" / "report.md").read_text(encoding="utf8")
 
+    @property
+    def plan_md(self) -> str:
+        return (self.root / "build" / "plan.md").read_text(encoding="utf8")
+
 
 def check(root: Path, *flags: str) -> Run:
     """Run `cadrev check`. Whatever the project holds, the run ends on a status, exits by it,

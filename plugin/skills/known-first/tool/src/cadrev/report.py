@@ -1,5 +1,5 @@
-"""A verification run's status, and build/report.md and build/report.json, which hold the same
-data."""
+"""A verification run's status, build/report.md and build/report.json, which hold the same data,
+and build/plan.md, the plan as the person who makes the object reads it."""
 
 from __future__ import annotations
 
@@ -247,24 +247,35 @@ def _numbered(lines: list[str], indent: str = "") -> list[str]:
     return [f"{indent}{i}. {line}" for i, line in enumerate(lines, 1)]
 
 
-def _plan_lines(planned: dict) -> list[str]:
-    """The plan as report.md shows it: what is made, what is bought, and the steps."""
-    md = [
-        "## Plan",
-        "",
+def _plan_md(p: Project, model: Model, planned: dict, drawn: list[Path]) -> list[str]:
+    """build/plan.md: what is made, what is bought, and the steps, each under its view."""
+    shown = {str(d.relative_to(p.root / "build")) for d in drawn}
+    md = [f"# {p.meta.get('name', 'Reconstruction')}: plan", ""]
+    md += ["![isometric](isometric.png)", ""] * ("isometric.png" in shown)
+    md += [
         "How the object is made and put together. `cadrev check` holds the plan to the model: "
-        "every part the assembly places is made or bought, one step places each instance, and "
-        "each quantity is counted from the model. Whether a tool and a hand can do each step is "
-        "its author's judgement.",
-        "",
-        "### Make",
+        "every part the assembly places is made or bought, one step places each instance, the "
+        "instances hold together, and each quantity is counted from the model. Whether a tool "
+        "and a hand can do each step is its author's judgement.",
         "",
     ]
+    fit = planned["clearance"]
+    if fit:
+        md += [
+            f"Two parts that hold each other touch, or sit within {fit['value']:g} "
+            f"{p.units['length']} of each other, the loosest fit (`{fit['from']}`).",
+            "",
+        ]
+    md += ["## Make", ""]
     for made in planned["make"]:
-        part, how = f"- **{made['part']}** × {made['count']}", made["how"]
+        # A part no instance places is made beside the object: a coupon, a jig.
+        part = f"- **{made['part']}**" + f" × {made['count']}" * bool(made["count"])
+        sheet = f"drawings/{made['part']}.png"
+        part += f" ([drawing]({sheet}))" * (sheet in shown)
+        how = made["how"]
         # One operation beside its part, several as the sequence they are done in.
         md += [f"{part}: {how[0]}"] if len(how) == 1 else [part, *_numbered(how, "  ")]
-    md += [*([] if planned["make"] else ["_None._"]), "", "### Buy", ""]
+    md += [*([] if planned["make"] else ["_None._"]), "", "## Buy", ""]
     md += _table(
         ["item", "quantity", "what"],
         [
@@ -276,19 +287,32 @@ def _plan_lines(planned: dict) -> list[str]:
             for b in planned["buy"]
         ],
     )
-    md += ["### Assemble", ""]
+    md += ["## Assemble", ""]
     if not planned["steps"]:
         return md + ["_No steps: the assembly places one instance._", ""]
+    md += ["Each view shows what its step places in black, on what is already there in grey.", ""]
     ordered = {b["item"]: b["thread"] for b in planned["buy"] if b.get("thread")}
     for i, step in enumerate(planned["steps"], 1):
-        placed = f"**{', '.join(step['place'])}**" if step["place"] else ""
+        known = [inst for inst in step["place"] if inst in model.assembly]
+        parts = Counter(model.assembly[inst][0] for inst in known)
+        placed = ", ".join(f"{part} × {n}" if n > 1 else part for part, n in parts.items())
         screws = ", ".join(
             f"{n} × {param}" + (f" ({ordered[param]})" if param in ordered else "")
             for param, n in step["with"].items()
         )
-        does = f"{placed} with {screws}" if placed and screws else placed or screws
-        md.append(f"{i}. " + ". ".join(filter(None, [does, step.get("note")])))
-    return md + [""]
+        does = [f"**Place** {placed}." * bool(placed), f"**Drive** {screws}." * bool(screws)]
+        said = [" ".join(filter(None, does)), step.get("note")]
+        said.append(f"![step {i}]({step['view']})" if "view" in step else None)
+        md += [f"### Step {i}", ""]
+        for line in filter(None, said):
+            md += [line, ""]
+    return md
+
+
+def _step_views(planned: dict, drawn: list[Path]) -> list[str | None]:
+    """Each step's view as the plan names it, steps/<n>.png, or None for a step with none."""
+    views = {int(d.stem): f"steps/{d.name}" for d in drawn if d.parent.name == "steps"}
+    return [views.get(i) for i in range(1, len(planned["steps"]) + 1)]
 
 
 def _by_part(model: Model, datums: list[str]) -> str:
@@ -378,7 +402,7 @@ def write(
 
     physics = headline["physics_proposed"]
     isometric = [d for d in drawn if d.parent == out]
-    sheets = {d.stem: d for d in drawn if d.parent != out}
+    sheets = {d.stem: d for d in drawn if d.parent.name == "drawings"}
     threaded = [] if model is None else threads(p, model)
     md = [f"# {p.meta.get('name', 'Reconstruction')}: verification report", ""]
     md += [f"![{path.stem}]({path.name})" for path in isometric] + [""] * bool(isometric)
@@ -505,8 +529,18 @@ def write(
                 f"  ![{a['evidence']}](../{a['image']})",
                 "",
             ]
-    if planned is not None:
-        md += _plan_lines(planned)
+    if planned is not None and model is not None:
+        for step, view in zip(planned["steps"], _step_views(planned, drawn)):
+            step |= {"view": view} if view else {}
+        plan_md = "\n".join(_plan_md(p, model, planned, drawn)) + "\n"
+        (out / "plan.md").write_text(plan_md, encoding="utf8")
+        md += [
+            "## Plan",
+            "",
+            "How the object is made and put together, each step under its view: "
+            "[plan.md](plan.md).",
+            "",
+        ]
     md += [
         "## Parts",
         "",
@@ -668,7 +702,7 @@ def write(
         "plan": planned,
         "motion": moves,
         "threads": threaded,
-        "drawings": [str(d.relative_to(out)) for d in drawn],
+        "drawings": [str(d.relative_to(out)) for d in drawn if d.parent.name != "steps"],
         "masses": None
         if model is None
         else {

@@ -135,11 +135,13 @@ FILES = {
     "gaps.yaml": {"gaps": (GAP, list)},
     "overlays.yaml": {"overlays": (OVERLAY, list)},
     # The plan: how each part is made, in one operation or several in order; what is bought for
-    # a part, a screw or anything else; and the steps that assemble the instances.
+    # a part, a screw or anything else; the steps that assemble the instances; and the param of
+    # the loosest fit, the gap within which one instance holds another.
     "plan.yaml": {
         "make": ((str, Items(str)), dict),
         "buy": (str, dict),
         "steps": (STEP, list),
+        "clearance": (str, None),
     },
 }
 
