@@ -209,7 +209,7 @@ def cmd_check(args) -> int:
                 written = build.export(p, model) + (mechanism.write() if mechanism else [])
                 for path in written:
                     print(f"wrote {path.relative_to(p.root)}")
-                drawn = drawing.render(p, model, results, planned["steps"] if planned else [])
+                drawn = drawing.render(p, model, results, planned)
                 sheets = sum(path.parent.name == "drawings" for path in drawn)
                 views = sum(path.parent.name == "steps" for path in drawn)
                 if sheets:

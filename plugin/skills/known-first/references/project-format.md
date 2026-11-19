@@ -367,7 +367,7 @@ Renders `build/overlays/<id>.png`: model edges in magenta over the figure, the c
 
 ## plan.yaml
 
-The plan says how the object is made and put together, once its design is accepted. `cadrev check` holds it to the built model and writes it as `build/plan.md`, the guide for whoever makes the object: each line with its quantity counted from the model, and each step over its view.
+The plan says how the object is made and put together, once its design is accepted. `cadrev check` holds it to the built model and writes it as `build/plan.md`, the guide for whoever makes the object: each line with its quantity counted from the model, and each step that places an instance over its view.
 
 ```yaml
 make:                    # each part that is made: how, in one operation or several in order
