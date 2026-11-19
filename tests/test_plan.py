@@ -251,6 +251,14 @@ def test_small_part_is_shown_on_the_whole_of_what_it_goes_onto(proj_dir):
     meta(proj_dir, clearance="hole_d")
     run = check(proj_dir)
     assert run.rules == [] and inked(view, "placed") > 3000
+    # Or a hair above it, touching it as far as the model realises any length.
+    meta(proj_dir, clearance=None)
+    add(proj_dir, params="hair: {basis: derived, expr: hole_d / 6000}")
+    remodel(
+        proj_dir, "p.link_H / 2 + p.hole_d / 2 + p.hole_d", "p.link_H / 2 + p.hole_d / 2 + p.hair"
+    )
+    run = check(proj_dir)
+    assert run.rules == [] and inked(view, "placed") > 3000
 
 
 def test_instance_inside_another_and_clear_of_its_walls_floats(proj_dir):

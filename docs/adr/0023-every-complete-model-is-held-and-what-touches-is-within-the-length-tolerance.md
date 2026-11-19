@@ -12,6 +12,6 @@ We rejected an error for every complete model. The three examples would fail on 
 
 We rejected a way to say what holds a floating instance, a reason beside it as a skip has. ADR-0022 rejected counting a joint as holding for the same cause: the declaration is written across any gap. The warning is the statement, and it stays in the report until the part is held.
 
-We rejected a fixed limit for touching. ADR-0022's 1e-6 followed a review's objection that a loose tolerance would widen the clearance. A tolerance loose enough to hide a floating part is capped at 5% of every value the checks compare, and is printed in the report as the model's own precision.
+We rejected a fixed limit for touching. ADR-0022's 1e-6 followed a review's objection that a loose tolerance would widen the clearance. A tolerance loose enough to hide a floating part loosens every check that sets no `tol` of its own, each capped at 5% of the value it compares, and it is one line of project.yaml to read. `[held]` takes the project's tolerance whatever a check overrides.
 
 A `count` check also takes an `expect`. A source states a count per leg or per joint, which no instance count equals, and such a param could only stand unchecked: six of one run's thirteen warnings.
