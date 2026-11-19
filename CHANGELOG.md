@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.0
 
 From a mechanical engineer's review of v0.1.0, of a run on a patent, and of a mechanism built to be printed.
 

@@ -1,6 +1,6 @@
 [project]
 name = "cadrev"
-version = "0.1.0"
+version = "0.2.0"
 description = "Reverse-engineer CAD from a paper, with every dimension traceable to a quoted source."
 license = "MIT"
 # One resolution: every Python in this range installs the versions scripts/check runs.
