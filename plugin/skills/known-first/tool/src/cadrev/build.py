@@ -492,12 +492,13 @@ def _hold_units(p: Project, model: Model, threaded: set[str]) -> None:
                 f"param {name}: {places[0][0]} is a physics value, so mark the param physics: true",
             )
     named = {n for c in p.checks for n in ledger.named_by_checks(p, c)}
-    fit = {(p.plan or {}).get("clearance")} - {None}  # the plan's loosest fit
+    fit = {p.meta.get("clearance")} - {None}  # the loosest fit
     for name in sorted(p.physics & (model.used | named | ranges | coupled | fit)):
         p.error(
             "param-physics",
             f"param {name}: is marked physics: true, but the model's geometry, a joint range, a "
-            "check or the plan reads it; a physics value only goes to a joint or tendon",
+            "check or project.yaml's clearance reads it; a physics value only goes to a joint or "
+            "tendon",
         )
     # A screw's length is what is bought, whether or not the model reads it.
     exported = ranges | coupled | slots.keys() | set(ledger.mass_params(p)) | threaded

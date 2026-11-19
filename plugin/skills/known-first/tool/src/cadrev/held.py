@@ -1,8 +1,12 @@
-"""Which instances of an assembly hold together, as a plan's steps must leave them.
+"""Which instances of an assembly hold together: whether the model is one object.
 
-An instance is held by another where the two touch, or lie within a limit of each other: the gap
-a fit leaves. The instances then fall into groups, each reaching its every member through
-instances that hold each other, and an object that can be put together is one group.
+An instance is held by another where the two touch, or lie within the clearance of each other:
+the gap the loosest fit leaves, a param project.yaml names. Two solids touch where they lie
+within the model's length tolerance, how closely it realises any length: two gears built in mesh
+are a fraction of that apart. The instances then fall into groups, each reaching its every member
+through instances that hold each other, and an object that can be put together is one group. What
+floats is an error under a plan, which claims the object is put together, and a warning without
+one, where what holds a part may be left out of the target.
 
 Whether two solids lie within the limit is OCC's exact distance, which takes seconds between two
 gears. So each part is meshed once, and OCC's proximity test on the meshes first names the faces
@@ -16,10 +20,12 @@ from __future__ import annotations
 
 import importlib
 import math
+from collections import Counter
 
 import numpy as np
 
 from .build import Model
+from .project import Finding, Project
 
 # OCP's modules re-export a compiled module whose names pyright cannot see, so they are looked up
 # at run time.
@@ -39,9 +45,6 @@ _OCP = {
 }
 # A part is meshed to this fraction of its box's diagonal.
 _SAG = 1e-3
-# How far apart OCC's distance may leave two faces built to meet, in the project's length unit:
-# the model's tolerance says how closely it realises a stated value, not what touches.
-TOUCH = 1e-6
 
 
 def _distance(a, b) -> float:
@@ -190,3 +193,64 @@ def apart(model: Model, limit: float) -> list[dict]:
         else:
             return found
         found = []
+
+
+def check(p: Project, model: Model) -> dict | None:
+    """[held] for each instance, or group of instances, that nothing holds to the rest: an error
+    under a plan, a warning without one. What holds as the report gives it: the clearance, the
+    param project.yaml names and its value, and what floats. None for a known-first project with
+    no plan, whose parts may wait on what holds them."""
+    if p.known_first and p.plan is None:
+        return None
+    limit, clearance, fit = p.length_tol, None, p.meta.get("clearance")
+    if fit is not None:
+        if fit not in p.values:
+            p.error("held", f"clearance names {fit}, which is no param with a value")
+        elif p.values[fit] < 0:
+            p.error("held", f"clearance {fit} is {p.values[fit]:g}; a fit's gap is no less than 0")
+        else:
+            p.hold_param(fit, ("length",), "as project.yaml's clearance")
+            clearance = {"from": fit, "value": p.values[fit]}
+            limit += p.values[fit]
+    floating = []
+    # A part that is no solid has its own finding, and nothing to hold.
+    if len(model.assembly) > 1 and not any(f.rule == "part-invalid" for f in p.findings):
+        try:
+            floating = apart(model, limit)
+        except Exception as exc:  # noqa: BLE001 - OCC raises many types on a solid it cannot read
+            p.error(
+                "held",
+                "whether the instances hold together could not be evaluated "
+                f"({type(exc).__name__}: {exc})",
+            )
+    floating.sort(key=lambda group: -group["gap"])
+    # One finding for all that floats as far from the rest: a fit left unnamed shows as one gap,
+    # whatever number of instances ride on it.
+    by_gap: dict[str, dict[tuple, list[dict]]] = {}
+    for group in floating:
+        parts = sorted(Counter(model.assembly[inst][0] for inst in group["instances"]).items())
+        by_gap.setdefault(f"{group['gap']:.4g}", {}).setdefault(tuple(parts), []).append(group)
+    for gap, alike in by_gap.items():
+        said = []
+        for parts, groups in alike.items():
+            first, more = groups[0], ", …" * (len(groups) > 1)
+            between = f"{first['from']} from {first['nearest']}"
+            if len(first["instances"]) > 1:
+                count = f"{len(groups)} groups of " * (len(groups) > 1)
+                between = f"touching only each other, {between}"
+                said.append(f"{count}{len(first['instances'])} instances ({between}{more})")
+            elif len(groups) > 1:
+                said.append(f"{parts[0][0]} ×{len(groups)} ({between}{more})")
+            else:
+                said.append(f"{first['instances'][0]} (from {first['nearest']})")
+        more = f"; and {len(said) - 3} more kinds" * (len(said) > 3)
+        p.findings.append(
+            Finding(
+                "warning" if p.plan is None else "error",
+                "held",
+                f"{gap} {p.units['length']} from the nearest instance, and held by nothing: "
+                f"{'; '.join(said[:3])}{more}. An instance sits on what holds it, or within "
+                "project.yaml's clearance of it",
+            )
+        )
+    return {"clearance": clearance, "floating": floating}

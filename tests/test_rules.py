@@ -387,29 +387,26 @@ LINK_FINDINGS = {
     "plan-step: an instance placed twice": _planned(steps="[{place: [link_1, link_1]}]"),
     "plan-step: an instance that is none": _planned(steps="[{place: [link_1, pin_1]}]"),
     "plan-step: a step that says nothing": _planned(steps="[{place: [link_1]}, {}]"),
-    "plan-held: an instance apart from the rest": lambda r, t: (
+    "held: an instance of a plan apart from the rest": lambda r, t: (
         place(r, link_1="Location()", link_2="Location((0, 0, p.link_H + p.hole_d))"),
         _planned(steps="[{place: [link_1, link_2]}]")(r, t),
     ),
-    "plan-held: a clearance that names no param": lambda r, t: (
-        _planned()(r, t),
-        edit(r, "plan.yaml", lambda d: d.update(clearance="fit")),
+    "held: warning, an instance apart from the rest with no plan": lambda r, t: place(
+        r, link_1="Location()", link_2="Location((0, 0, p.link_H + p.hole_d))"
     ),
-    "plan-held: a clearance below nothing": lambda r, t: (
+    "held: a clearance that names no param": _meta(clearance="fit"),
+    "held: a clearance below nothing": lambda r, t: (
         add(r, params="fit: {basis: derived, expr: -hole_d}"),
-        _planned()(r, t),
-        edit(r, "plan.yaml", lambda d: d.update(clearance="fit")),
+        meta(r, clearance="fit"),
     ),
-    "param-physics: a physics value as the plan's clearance": lambda r, t: (
+    "param-physics: a physics value as the clearance": lambda r, t: (
         change(r, "params", "hole_d", physics=True),
-        _planned()(r, t),
-        edit(r, "plan.yaml", lambda d: d.update(clearance="hole_d")),
+        meta(r, clearance="hole_d"),
     ),
-    "unit-quantity: a mass as the plan's clearance": lambda r, t: (
+    "unit-quantity: a mass as the clearance": lambda r, t: (
         add_quote(r, t, "Each screw weighs 10 g.", values={"m": 10}),
         add(r, params="fit: {basis: source, from: N1.m}"),
-        _planned()(r, t),
-        edit(r, "plan.yaml", lambda d: d.update(clearance="fit")),
+        meta(r, clearance="fit"),
     ),
     "plan-screw: a with that names no thread param": _planned(
         steps="[{place: [link_1], with: {hole_d: 2}}]"
@@ -641,6 +638,9 @@ LINK_FINDINGS = {
         "One link makes a finger.",
         "{id: n, kind: count, part: link, evidence: N1, key: n, tol: 1}",
         n=1,
+    ),
+    "check-config: a count worked out to no whole number": _quoted_check(
+        "Three links make a finger.", '{id: n, kind: count, part: link, expect: "N1.n / 2"}', n=3
     ),
     "check-config: a count of a part that is none": _quoted_check(
         "One link makes a finger.", "{id: n, kind: count, part: pin, evidence: N1, key: n}", n=1

@@ -41,13 +41,13 @@ A proposed param takes a `rationale` and names a gap in gaps.yaml, phrased as th
 - **A screw is a [thread param](../known-first/references/project-format.md#threads) with a length**: its thread from the project's table and its length a standard one, both held by `cadrev check`. Fit the model to the screw: derive a boss's height and a hole's depth from the screw's length, and size each hole from its thread.
 - **One before two.** One screw size serves the object, and one stock thickness, until something stated calls for a second, and the `rationale` says what. A part stays one piece wherever the material lets it be made as one.
 - **As shown before as invented.** What a figure shows is built as it shows it. A part keeps its figure's outline and proportions, scaled by the one size proposed for it, and its features: a slotted wheel stays one wheel, with slots.
-- **Loose before tight.** A fit between two parts takes a clearance param, proposed for the material as the loosest its function allows. One param serves every fit of its kind, and its gap is `ask: test`. A wall is one the process forms and the part survives.
+- **Loose before tight.** A fit between two parts takes a clearance param, proposed for the material as the loosest its function allows. One param serves every fit of its kind, and its gap is `ask: test`. project.yaml names the loosest as its [`clearance`](../known-first/references/project-format.md#projectyaml). A wall is one the process forms and the part survives.
 - **Asked before guessed.** A snap fit, a press fit and a living hinge work by properties of the material that no source gives. Under design, build the form as shown, its gap `ask: test`. Under function, join the parts with screws.
 
 Under **function**, a feature that is hard to make in the material is replaced by one that does the same job more loosely, and the project says so. The `rationale` of what replaces it names the feature and the reason, and a stated value the replacement leaves unbuilt is ledgered `scope: not-modeled`, its `reason` naming what replaced it.
 
 ## Hand over
 
-Report as known first does, in place of what waits: each foundational question you answered in the user's place, the params resting on proposed values, and each feature built other than the sources show it, with what it replaces. Call the project exact only where the report prints **Exact**.
+Report as known first does, in place of what waits: each foundational question you answered in the user's place, the params resting on proposed values, each feature built other than the sources show it, with what it replaces, and each instance the report says floats, with what would hold it. Call the project exact only where the report prints **Exact**.
 
 Then offer the next step. Once the user accepts the design, the [ask-machinist](../ask-machinist/SKILL.md) skill reviews it as the person who has to make it, and writes its fabrication and assembly plan. Where the request already asks for that plan, carry on with it once the status is VERIFIED or VERIFIED PENDING REVIEW.

@@ -8,7 +8,7 @@ A six-well stretching stage of laser-cut acrylic, from Kah et al., *A low-cost u
 scripts/cadrev check examples/cell-stretcher
 ```
 
-Expected status: `VERIFIED: 0 errors, 0 warnings, 119/119 checks pass`
+Expected status: `VERIFIED: 0 errors, 4 warnings, 119/119 checks pass`
 
 It takes about 20 seconds. Then open `build/assembly.step` in a CAD program and read `build/report.md`. The mechanism is in `build/model.mjcf`, for MuJoCo.
 
@@ -19,6 +19,7 @@ A lead-screw stage whose sources hold shapes but few dimensions. A fresh agent r
 - **The lead screws are checked in motion.** Two stepper motors each turn their own screw, and both move one carriage. One turn of either moves it the stated "8 mm per revolution", and a third check works the same lead out from the stated top speed and motor speed. The carriage's range is 25 mm, Table 2's largest tested amplitude.
 - **Cut sheets are sources.** Every region of `Acryl6MM.svg` (54) and the mould's regions of `Acryl3MM.svg` is compared, outline to outline, with the plate the model builds. The controller housing's regions are skipped with a reason.
 - **Proposed values are named, then held to the shape.** The paper prints no plate dimensions, so 138 of the 170 parameters are proposed, under ten gaps for the authors and the datasheets. The plates built from them still have to match the cut sheets, most within 0.05 mm.
+- **What nothing holds is named.** Four warnings: the mould and its platform jig stand beside the stretcher, as do the two stacks of stretch-holding frames; each clamp stands 3.5 mm off its mounting, the substrate between them not built; and the carriage 1.5 mm off its lead screws, their nuts not built.
 - **The printed parts are compared with their meshes.** `Clamp.stl` and `MoldFrame.stl` are shape-checked against the built clamp and mould frame, and probed for their dimensions.
 
 No figure reading is needed, so no reviewer confirms one.

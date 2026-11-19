@@ -51,15 +51,15 @@ wrote build/assembly.step
 wrote build/drawings/: 6 part drawings
 wrote build/isometric.png
 
-VERIFIED: 0 errors, 0 warnings, 88/88 checks pass. Report: build/report.md
+VERIFIED: 0 errors, 1 warning, 88/88 checks pass. Report: build/report.md
 ```
 
 The first run downloads build123d, OCC and MuJoCo (about a minute); the check itself takes about 15 seconds. Open `examples/centrifuge/build/assembly.step` in your CAD program, then read `build/report.md` beside it. It opens:
 
-> **VERIFIED**: 0 errors, 0 warnings. 88/88 geometry checks pass.\
-> Of 91 parameters, 85 rest on sources, 0 on measured values and 6 on proposed values.
+> **VERIFIED**: 0 errors, 1 warning. 88/88 geometry checks pass.\
+> Of 92 parameters, 86 rest on sources, 0 on measured values and 6 on proposed values.
 
-and, after its sources, lists what they leave open:
+The warning names what nothing holds: the fan's motor is not built, so its hub and the rotor on it stand 2 mm clear of the plate. After its sources, the report lists what they leave open:
 
 | gap | question | close by | params |
 |---|---|---|---|
@@ -109,7 +109,7 @@ VERIFIED means every number is accounted for and the geometry matches every chec
 <table>
 <tr>
 <td width="230"><a href="examples/centrifuge"><img src="docs/images/centrifuge.webp" alt="A round printed centrifuge body with an amber rotor holding two PCR strips"></a></td>
-<td><b><a href="examples/centrifuge">Benchtop centrifuge</a></b><br><sub>Poór, <a href="https://doi.org/10.1016/j.ohx.2022.e00328"><i>HardwareX</i> 2022</a></sub><br><br>Printed parts with their switch and fan cut-outs, rebuilt from the authors' STEP files. 85 of its 91 parameters rest on sources; the other six wait on the fan's datasheet and the print density. The quickest to run: 15 seconds.</td>
+<td><b><a href="examples/centrifuge">Benchtop centrifuge</a></b><br><sub>Poór, <a href="https://doi.org/10.1016/j.ohx.2022.e00328"><i>HardwareX</i> 2022</a></sub><br><br>Printed parts with their switch and fan cut-outs, rebuilt from the authors' STEP files. 86 of its 92 parameters rest on sources; the other six wait on the fan's datasheet and the print density. The quickest to run: 15 seconds.</td>
 </tr>
 <tr>
 <td><a href="examples/compact-sspg"><img src="docs/images/compact-sspg.webp" alt="A planetary gearbox with an amber sun gear and three blue planet gears"></a></td>

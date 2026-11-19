@@ -58,6 +58,12 @@ def status(p: Project, partial: bool = False) -> str:
     return PENDING_REVIEW if awaiting_confirmation(p) else VERIFIED
 
 
+def tally(headline: dict[str, int]) -> str:
+    """How many errors and warnings a run found, as its last line and its report say it."""
+    errors, warnings = headline["errors"], headline["warnings"]
+    return f"{errors} error{'s' * (errors != 1)}, {warnings} warning{'s' * (warnings != 1)}"
+
+
 def counts(p: Project, results: list[Result]) -> dict[str, int]:
     """The headline numbers: the params by what they rest on, proposed physics values apart."""
     errors = sum(f.level == "error" for f in p.findings)
@@ -254,7 +260,9 @@ def _numbered(lines: list[str], indent: str = "") -> list[str]:
     return [f"{indent}{i}. {line}" for i, line in enumerate(lines, 1)]
 
 
-def _plan_md(p: Project, model: Model, planned: dict, drawn: list[Path]) -> list[str]:
+def _plan_md(
+    p: Project, model: Model, planned: dict, holds: dict | None, drawn: list[Path]
+) -> list[str]:
     """build/plan.md: what is made, what is bought, and the steps, each under its view."""
     shown = {str(d.relative_to(p.root / "build")) for d in drawn}
     md = [f"# {p.meta.get('name', 'Reconstruction')}: plan", ""]
@@ -266,7 +274,7 @@ def _plan_md(p: Project, model: Model, planned: dict, drawn: list[Path]) -> list
         "and a hand can do each step is its author's judgement.",
         "",
     ]
-    fit = planned["clearance"]
+    fit = (holds or {}).get("clearance")
     if fit:
         md += [
             f"Two parts that hold each other touch, or sit within {fit['value']:g} "
@@ -366,10 +374,12 @@ def write(
     coarsened: dict,
     build_seconds: float | None,
     planned: dict | None,
+    holds: dict | None,
 ) -> Path:
     """Write build/report.md and build/report.json; model is None when none was built,
-    build_seconds is None where no build ran, and planned is the plan as plan.check lists it,
-    None where the project has none or nothing was built to hold it to."""
+    build_seconds is None where no build ran, planned is the plan as plan.check lists it, None
+    where the project has none or nothing was built to hold it to, and holds is what held.check
+    found, None where it was not asked."""
     out = p.root / "build"
     out.mkdir(exist_ok=True)
     findings = sorted(p.findings, key=lambda f: f.level != "error")  # errors first
@@ -414,7 +424,7 @@ def write(
     md = [f"# {p.meta.get('name', 'Reconstruction')}: verification report", ""]
     md += [f"![{path.stem}]({path.name})" for path in isometric] + [""] * bool(isometric)
     md += [
-        f"**{status}**: {headline['errors']} errors, {headline['warnings']} warnings. "
+        f"**{status}**: {tally(headline)}. "
         f"{headline['checks_passed']}/{headline['checks']} geometry checks pass.",
         f"Of {headline['params']} parameters, {headline['source']} rest on sources, "
         f"{headline['measured']} on measured values and {headline['proposed']} on proposed values"
@@ -539,7 +549,7 @@ def write(
     if planned is not None and model is not None:
         for step, view in zip(planned["steps"], _step_views(planned, drawn)):
             step |= {"view": view} if view else {}
-        plan_md = "\n".join(_plan_md(p, model, planned, drawn)) + "\n"
+        plan_md = "\n".join(_plan_md(p, model, planned, holds, drawn)) + "\n"
         (out / "plan.md").write_text(plan_md, encoding="utf8")
         md += [
             "## Plan",
@@ -708,6 +718,7 @@ def write(
         "material": material,
         "follows": follows,
         "plan": planned,
+        "held": holds,
         "motion": moves,
         "threads": threaded,
         "drawings": [str(d.relative_to(out)) for d in drawn if d.parent.name != "steps"],
