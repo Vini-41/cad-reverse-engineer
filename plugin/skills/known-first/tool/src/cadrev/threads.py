@@ -104,9 +104,15 @@ _UNIFIED_NAME = re.compile(
     r"(?:(\d+/\d+|1)\s?(?:\"|″|''|in\.?|inch)?|(?:#|(?i:no\.?)\s?)?(\d+))"
     r"\s?-\s?(\d+)(?:\s?((?i:un[cf])))?"
 )
+# As a statement prints one: alone, or called out by the count of its holes as a drawing does
+# (4-M3, 4xM3, and 8-M 2.0 as some datasheets space it).
+_ALONE, _PRINTED_END = r"(?<![\w./#-])", r"(?![\w/]|[.-]\d)"
 _PRINTED = [
-    re.compile(rf"(?<![\w./#-])(?:{name.pattern})(?![\w/]|[.-]\d)")
-    for name in (_METRIC_NAME, _UNIFIED_NAME)
+    re.compile(
+        rf"(?:{_ALONE}M|(?:(?<=\d-)|(?<=\d[xX×]))M\s?)({_NUMBER})"
+        rf"(?:\s?[xX×]\s?({_NUMBER}))?{_PRINTED_END}"
+    ),
+    re.compile(rf"{_ALONE}(?:{_UNIFIED_NAME.pattern}){_PRINTED_END}"),
 ]
 
 

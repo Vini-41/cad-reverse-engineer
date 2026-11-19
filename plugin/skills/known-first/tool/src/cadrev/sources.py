@@ -136,9 +136,10 @@ def _value(printed: str) -> float:
     return float(whole[0]) + (-value if whole[0].startswith("-") else value)  # -1 1/2 is -1.5
 
 
-# A thread size after a number (4 M3 screws), as printed: a capital M and its digits, which in
-# lower case would spell a volume.
-_THREAD_NEXT = re.compile(r"\s?M\d")
+# A thread size after a number (4 M3 screws), or called out by it as a drawing counts its holes
+# (4-M3, 4xM3, 8-M 2.0), as printed: a capital M and its digits, which in lower case would spell
+# a length, an area or a volume.
+_THREAD_NEXT = re.compile(r"\s?M\d|\s?[-xX]\s?M\s?\d")
 
 
 def _tokens(text: str, as_printed: str | None = None) -> list[_Token]:
@@ -401,8 +402,12 @@ def _write_viewable(target: Path, data: bytes) -> Path:
 
 
 # Thread and fastener sizes (M3, M2.5x0.45): stated sizes the unit table cannot read; not the end
-# of a model name hyphened to a word (an Olympus E-M10).
-_THREAD = re.compile(r"(?<![a-z0-9.])(?<![a-z]-)m\d+(?:\.\d+)?(?:x\d+(?:\.\d+)?)?(?![a-z0-9])")
+# of a model name hyphened to a word (an Olympus E-M10). A drawing calls one out by the count of
+# its holes (4-M3, 4xM3, 8-M 2.0).
+_THREAD = re.compile(
+    r"(?:(?<![a-z0-9.])(?<![a-z]-)m|(?:(?<=\d-)|(?<=\dx))m ?)"
+    r"\d+(?:\.\d+)?(?:x\d+(?:\.\d+)?)?(?![a-z0-9])"
+)
 # A diameter sign right before a number (Ø 32.5, Ø3, ⌀3; ∅ as some PDFs extract it), not a letter
 # of a word: a diameter callout, a length in the project's unit unless a unit follows.
 _DIAMETER = re.compile(r"(?<!\w)[ø⌀∅] ?$")
