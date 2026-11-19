@@ -587,7 +587,7 @@ def _assembly(p: Project, model: Model, path: Path) -> None:
 def _step(p: Project, model: Model, number: int, new: list, before: list, fit: float, path) -> None:
     """A step's view: the instances it places, drawn whole in black and each part named, over
     those of the steps before it that lie near them, in grey where the new ones leave them
-    seen. fit is the clearance, the gap across which one instance holds another."""
+    seen. fit is the gap across which one instance holds another, as held.check takes it."""
     from build123d import Compound
 
     def placed(instances) -> list:
@@ -688,7 +688,7 @@ def render(
             draw = lambda path, name=name: _part(p, model, name, by_id, path)  # noqa: E731
             sheets.append((out / "drawings" / f"{name}.png", draw))
     steps = planned["steps"] if planned else []
-    fit = ((holds or {}).get("clearance") or {}).get("value", 0.0)
+    fit = p.length_tol + ((holds or {}).get("clearance") or {}).get("value", 0.0)
     before: list[str] = []
     for number, step in enumerate(steps, 1):
         # An instance the assembly lacks, or one placed twice, is the plan's finding.
