@@ -406,6 +406,7 @@ params.update({
     "screw_d": {"basis": "source", "from": "P4-screws.d", "interpretation": "M3 nominal diameter; shank only, no head or thread"},
     "screw_l": {"basis": "source", "from": "P4-screws.L", "interpretation": "the stated range's shorter end, 10 mm"},
     "screw_n": {"basis": "source", "from": "P4-screws.n", "interpretation": "four screws, one per body boss; the plate's four feet follow the same count"},
+    "screw_fit": {"basis": "derived", "expr": "(boss_hole_d - screw_d) / 2", "interpretation": "the gap around each screw's shank in its boss, whose hole the released body draws over the screw's diameter: the thread that holds it there is not modelled"},
     "fan_t": {"basis": "proposed", "value": 25, "rationale": "the common 80 x 80 x 25 mm case fan; the paper gives no thickness", "gap": "G-fan"},
     "fan_bore_d": {"basis": "proposed", "value": 76, "rationale": "blade bore of a typical 80 mm fan frame", "gap": "G-fan"},
     "fan_rot": {"basis": "proposed", "value": 45, "rationale": "fan frame turned so its corner screw holes meet the deck's four holes on the axes", "gap": "G-fan"},

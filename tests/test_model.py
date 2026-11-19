@@ -79,6 +79,8 @@ FINGER_CHECKS = f"""\
 - {{id: expect-diameter, kind: diameter, at: link.wall, expect: "N1.h / N1.lift + 1"}}
 - {{id: expect-mass, {PAIR}, density: rho, add: [servo_m], expect: "N2.m + N2.servo",
    tol_rel: 0.01}}
+- {{id: expect-count, kind: count, part: link, expect: "N1.pair + 1"}}
+- {{id: not-expect-count, kind: count, part: link, expect: "N1.pair * N1.pair"}}
 """
 
 
@@ -94,7 +96,7 @@ def finger(tmp_path_factory):
 
 def test_each_check_kind_passes_on_what_the_ledger_states_and_fails_on_what_it_does_not(finger):
     results = {c["id"]: c for c in finger.report["checks"]}
-    assert len(results) == 28 and finger.errors == ["check-failed"] * 7
+    assert len(results) == 30 and finger.errors == ["check-failed"] * 8
     assert {cid for cid, c in results.items() if not c["ok"]} == {
         cid for cid in results if cid.startswith("not-")
     }
@@ -128,11 +130,16 @@ def test_each_check_kind_passes_on_what_the_ledger_states_and_fails_on_what_it_d
             "expect-angle": 90,
             "expect-diameter": 3,
             "expect-mass": 11.07,
+            "expect-count": 3,
+            "not-expect-count": 3,
         },
         abs=5e-4,
     )
     assert results["expect"]["expect"] == {"expr": "N1.lift * N1.pair", "value": 16}
     assert results["not-expect"]["expected"] == "24 (N1.lift * N1.n)"
+    # A count per leg or per joint is a stated count times another.
+    assert results["expect-count"]["expect"] == {"expr": "N1.pair + 1", "value": 3}
+    assert results["not-expect-count"]["expected"] == "4 (N1.pair * N1.pair)"
     assert results["mass"]["expected"] == "3.57 ±1% (N2.m)"
     # An interference check says how many pairs it tried, all of them where it lists none.
     assert (results["clear"]["pairs"], results["listed"]["pairs"]) == (3, 1)

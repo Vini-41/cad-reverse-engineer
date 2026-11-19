@@ -289,7 +289,7 @@ def test_check_prints_each_finding_then_the_status_line_with_its_counts(proj_dir
     lines = run.out.splitlines()
     assert sorted(run.findings) == [("error", "tolerance-cap"), ("warning", "gap-unused")]
     assert lines[-1] == (
-        "NOT VERIFIED: 1 errors, 1 warnings, 5/5 checks pass. Report: build/report.md"
+        "NOT VERIFIED: 1 error, 1 warning, 5/5 checks pass. Report: build/report.md"
     )
     for written in ("parts/link.step", "assembly.step", "report.md", "report.json"):
         assert (proj_dir / "build" / written).is_file()
@@ -299,7 +299,7 @@ REPORT_KEYS = {
     "status", "exact", "known_first", "waiting", "counts", "findings", "checks", "tolerances",
     "overlap_limits", "motion", "masses", "model_literals", "params", "bases",
     "rests_on_proposed", "measured", "awaiting_confirmation", "probes", "build_seconds",
-    "threads", "drawings", "material", "follows", "plan",
+    "threads", "drawings", "material", "follows", "plan", "held",
 }  # fmt: skip
 
 
@@ -390,7 +390,8 @@ def test_report_md_renders_what_report_json_holds(proj_dir):
     run = check(proj_dir)
     report, md = run.report, run.md
     counts = report["counts"]
-    assert f"**{report['status']}**: {counts['errors']} errors, {counts['warnings']} warnings" in md
+    tally = [f"{counts[k]} {k[: len(k) - (counts[k] == 1)]}" for k in ("errors", "warnings")]
+    assert f"**{report['status']}**: {', '.join(tally)}. " in md
     for f in report["findings"]:
         assert f"- **{f['level']}** `{f['rule']}`: {f['message']}" in md
     for c in report["checks"]:

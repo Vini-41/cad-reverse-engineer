@@ -34,9 +34,8 @@ def test_plan_lists_what_is_made_and_each_step_counted_from_the_model(proj_dir):
             {"place": ["link_1"], "with": {}, "note": "On the bench.", "view": "steps/1.png"},
             {"place": ["link_2"], "with": {}, "view": "steps/2.png"},
         ],
-        "clearance": None,
-        "floating": [],
     }
+    assert run.report["held"] == {"clearance": None, "floating": []}
     # The plan is a file of its own, for whoever makes the object; the report points to it.
     assert "[plan.md](plan.md)" in run.md and "wrote build/plan.md\n" in run.out
     md = run.plan_md
@@ -159,32 +158,52 @@ STEPS = "[{place: [link_1]}, {place: [link_2]}]"
 LIFTED = {"link_1": "Location()", "link_2": "Location((0, 0, p.link_H + p.hole_d))"}
 
 
-def test_plan_holds_each_instance_to_another(proj_dir):
+def test_each_instance_is_held_by_another(proj_dir):
     place(proj_dir, **LIFTED)
-    # A model with no plan makes no claim to be put together.
-    assert check(proj_dir).rules == []
-    add(proj_dir, make=FLAT, steps=STEPS)
+    # A complete model with no plan is told what floats, and stands: what holds a part may be
+    # left out of its target.
     run = check(proj_dir)
-    assert run.status == "NOT VERIFIED" and run.errors == ["plan-held"]
-    (floating,) = run.report["plan"]["floating"]
+    assert run.status == "VERIFIED" and run.findings == [("warning", "held")]
+    (floating,) = run.report["held"]["floating"]
     assert floating["instances"] == ["link_2"] and floating["nearest"] == "link_1"
     assert floating["gap"] == pytest.approx(3)
-    # How closely the model realises a stated value says nothing of what touches.
-    meta(proj_dir, tolerance={"length": 4, "angle": 0.01})
-    assert "plan-held" in check(proj_dir).errors
-    meta(proj_dir, tolerance=None)
-    # A fit leaves a gap: the plan names the param that states it, and the two hold again. A
-    # param only the plan reads is read.
-    add(proj_dir, params="fit: {basis: derived, expr: hole_d}")
-    edit(proj_dir, "plan.yaml", lambda d: d.update(clearance="fit"))
+    # A known-first project's parts may wait on what holds them.
+    meta(proj_dir, known_first=True)
     run = check(proj_dir)
-    assert run.rules == [] and run.report["plan"]["floating"] == []
-    assert run.report["plan"]["clearance"] == {"from": "fit", "value": 3}
+    assert "held" not in run.rules and run.report["held"] is None
+    meta(proj_dir, known_first=None)
+    # A plan claims the object is put together, so there what floats is an error.
+    add(proj_dir, make=FLAT, steps=STEPS)
+    run = check(proj_dir)
+    assert run.status == "NOT VERIFIED" and run.errors == ["held"]
+    assert run.report["held"]["floating"] == [floating]
+    # A fit leaves a gap: project.yaml names the param that states it, and the two hold again.
+    # A param only the clearance reads is read.
+    add(proj_dir, params="fit: {basis: derived, expr: hole_d}")
+    meta(proj_dir, clearance="fit")
+    run = check(proj_dir)
+    assert run.rules == [] and run.report["held"]["floating"] == []
+    assert run.report["held"]["clearance"] == {"from": "fit", "value": 3}
+    assert "within 3 mm of each other, the loosest fit (`fit`)" in run.plan_md
     # Set down on the first link, the second needs no clearance to be held.
-    edit(proj_dir, "plan.yaml", lambda d: d.pop("clearance"))
+    meta(proj_dir, clearance=None)
     remodel(proj_dir, "p.link_H + p.hole_d", "p.link_H")
     run = check(proj_dir)
-    assert run.status == "VERIFIED" and run.report["plan"]["floating"] == []
+    assert run.status == "VERIFIED" and run.report["held"]["floating"] == []
+
+
+def test_parts_built_to_touch_touch_within_the_length_tolerance(proj_dir):
+    # Two gears in mesh, or two faces a kernel builds to meet, lie a hair apart: as far as the
+    # model realises any length.
+    add(proj_dir, params="hair: {basis: derived, expr: hole_d / 6000}")
+    place(proj_dir, link_1="Location()", link_2="Location((0, 0, p.link_H + p.hair))")
+    add(proj_dir, make=FLAT, steps=STEPS)
+    run = check(proj_dir)
+    assert run.rules == [] and run.report["held"]["floating"] == []
+    meta(proj_dir, tolerance={"length": 0.0001, "angle": 0.01})
+    run = check(proj_dir)
+    assert run.errors == ["held"]
+    assert run.report["held"]["floating"][0]["gap"] == pytest.approx(0.0005)
 
 
 def test_instances_that_hold_only_each_other_float_as_one_group(proj_dir):
@@ -193,8 +212,8 @@ def test_instances_that_hold_only_each_other_float_as_one_group(proj_dir):
     place(proj_dir, **{name: f"Location((0, 0, {lift}))" for name, lift in zip(names, lifts)})
     add(proj_dir, make=FLAT, steps=[{"place": [name]} for name in names])
     run = check(proj_dir)
-    assert run.errors == ["plan-held"]
-    (floating,) = run.report["plan"]["floating"]
+    assert run.errors == ["held"]
+    (floating,) = run.report["held"]["floating"]
     assert floating["instances"] == ["link_4", "link_5"]
     assert (floating["from"], floating["nearest"]) == ("link_4", "link_3")
     assert floating["gap"] == pytest.approx(30 - 3 * 8)
@@ -229,7 +248,7 @@ def test_small_part_is_shown_on_the_whole_of_what_it_goes_onto(proj_dir):
     assert inked(view, "placed") > 3000
     # And so it does where the pin stands a fit's gap above the link, held across it.
     remodel(proj_dir, "p.link_H / 2 + p.hole_d / 2", "p.link_H / 2 + p.hole_d / 2 + p.hole_d")
-    edit(proj_dir, "plan.yaml", lambda d: d.update(clearance="hole_d"))
+    meta(proj_dir, clearance="hole_d")
     run = check(proj_dir)
     assert run.rules == [] and inked(view, "placed") > 3000
 
@@ -242,12 +261,12 @@ def test_instance_inside_another_and_clear_of_its_walls_floats(proj_dir):
     remodel(proj_dir, ASSEMBLY, one)
     add(proj_dir, make=FLAT, buy="pin: a dowel pin", steps="[{place: [link_1, pin_1]}]")
     run = check(proj_dir)
-    assert run.errors == ["plan-held"]
-    (floating,) = run.report["plan"]["floating"]
+    assert run.errors == ["held"]
+    (floating,) = run.report["held"]["floating"]
     assert floating["instances"] == ["pin_1"] and floating["gap"] == pytest.approx(0.75)
     # Sunk whole into the link's material, clear of every face, it overlaps the link, which
     # so holds it.
     remodel(proj_dir, "Location((p.pitch / 2, 0, 0))", "Location((0, 0, 0))")
     change(proj_dir, "checks", "clear", max_volume=100)
     run = check(proj_dir)
-    assert run.rules == [] and run.report["plan"]["floating"] == []
+    assert run.rules == [] and run.report["held"]["floating"] == []

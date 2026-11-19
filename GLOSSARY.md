@@ -32,7 +32,7 @@ A number a source prints with a unit, as an `a×b×c` product, as a diameter cal
 _Avoid_: dimension (for anything that is not a size of the object's geometry), dimension candidate
 
 **Count**:
-A whole number a source states of how many there are: a gear's teeth, a train's planets, a spring's turns. It is ledgered like any number and read as a pure number, not as a length; it is a stated quantity only when printed with a count unit (turns, teeth).
+A whole number a source states of how many there are: a gear's teeth, a train's planets, a spring's turns. It is ledgered like any number and read as a pure number, not as a length; it is a stated quantity only when printed with a count unit (turns, teeth). A count per leg or per joint is checked through an expect: one stated count times another.
 _Avoid_: unitless quantity, integer (for a count)
 
 **Skip**:
@@ -204,7 +204,7 @@ _Avoid_: fidelity, mode
 ## Making
 
 **Plan**:
-How the object is made and put together, written once its design is accepted: how each part is made or what is bought for it, and the steps that assemble its instances. It is held to the model: every part an instance places is made or bought, every instance is placed by one step, and every instance is held.
+How the object is made and put together, written once its design is accepted: how each part is made or what is bought for it, and the steps that assemble its instances. It is held to the model: every part an instance places is made or bought, every instance is placed by one step, and an instance that floats is an error.
 _Avoid_: instructions, bill of materials (for the plan as a whole)
 
 **Step**:
@@ -212,9 +212,9 @@ One act of the plan's assembly sequence: the instances it places, the screws it 
 _Avoid_: operation (an operation makes a part; a step assembles)
 
 **Held**:
-Of an instance in a plan: touching another instance, or within the plan's clearance of one. One that is not held floats, and so does a group of instances that hold only each other.
+Of an instance: touching another instance, which two do within the length tolerance, or within the clearance of one. One that is not held floats, and so does a group of instances that hold only each other: a warning, and an error under a plan. A known-first project with no plan is not held to it.
 _Avoid_: mated, constrained, attached
 
 **Clearance**:
-The largest gap the model leaves between two parts that hold each other, the loosest fit: a length param the plan names.
+The largest gap the model leaves between two parts that hold each other, the loosest fit: a length param project.yaml names.
 _Avoid_: tolerance (for a fit's gap), play

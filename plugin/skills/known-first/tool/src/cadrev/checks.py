@@ -37,7 +37,7 @@ KINDS = {
     "range": Kind("angle"),  # a joint's own value where it names no datums
     "stroke": Kind("length", expects=True, changes=True),  # or a claim in place of a value
     "shape": Kind("length"),  # tol capped against its released body's size
-    "count": Kind("count"),  # compared exactly
+    "count": Kind("count", expects=True),  # compared exactly
 }
 # What a claim says a stroke does between its two poses: the sign of its shortening.
 CLAIMS = {"shortens": 1, "lengthens": -1}
@@ -176,7 +176,9 @@ def _comparable(p: Project, c: dict) -> None:
             raise Fault(f"expect is for a check that compares one value; kind {name} takes none")
         if "evidence" in c:
             raise Fault("give expect or evidence, not both")
-        p.expect(str(c["expect"]))
+        worked = p.expect(str(c["expect"]))
+        if name == "count" and abs(worked - round(worked)) > 1e-9:
+            raise Fault(f"expect {c['expect']!r} works out to {worked:g}, which is no count")
     elif kind.expects and "evidence" not in c:
         raise Fault("give evidence and key, or expect, the value it is compared with")
     elif name == "stroke" and "key" not in c:
@@ -521,7 +523,8 @@ class Checks:
         """How many instances of its part the assembly places; or, of its thread, how many holes
         and shanks carry it, each once per instance of its part, or once where none places it."""
         ref = compared_with(c)
-        stated = self.p.stated(ref, "count")
+        stated = round(self.p.expect(ref)) if "expect" in c else self.p.stated(ref, "count")
+        worked = {"expr": ref, "value": printed(stated)[0]} if "expect" in c else None
         placed_parts = Counter(name for name, _ in placed.assembly.values())
         if "thread" in c:
             thread = str(c["thread"])
@@ -540,7 +543,8 @@ class Checks:
                 raise Fault(f"{part} is not a part model.build returns")
             found = placed_parts[part]
             measured = f"{found} instance{'s' * (found != 1)} of {part}"
-        yield Result(c["id"], "count", stated == found, f"{stated:g} ({ref})", measured)
+        expected = f"{stated:g} ({ref})"
+        yield Result(c["id"], "count", stated == found, expected, measured, expect=worked)
 
     def _mass(self, c: dict, placed: Model) -> Iterator[Result]:
         """Each instance it weighs, by its part's volume times the check's density, or without one

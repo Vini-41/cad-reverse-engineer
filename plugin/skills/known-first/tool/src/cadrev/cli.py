@@ -189,10 +189,10 @@ def cmd_check(args) -> int:
     # A partial run makes no claim, so it writes nothing to build/.
     partial = args.no_build or args.no_coverage
     results, images, drawn, model, coarsened, build_seconds = [], [], [], None, {}, None
-    planned = None
+    planned, holds = None, None
     read = {name for c in p.checks for name in ledger.named_by_checks(p, c)}
     if modelled and not args.no_build:
-        from . import build, drawing, motion, overlay, plan
+        from . import build, drawing, held, motion, overlay, plan
 
         # A build and its checks can take a minute: say what the wait is for as it starts.
         print("building model.py", flush=True)
@@ -204,12 +204,13 @@ def cmd_check(args) -> int:
             print("evaluating checks.yaml", flush=True)
             results, read = checks.Checks(p, model, mechanism, unplanned).run()
             planned = plan.check(p, model)
+            holds = held.check(p, model)
             coarsened = mechanism.coarsened if mechanism else {}
             if not partial:
                 written = build.export(p, model) + (mechanism.write() if mechanism else [])
                 for path in written:
                     print(f"wrote {path.relative_to(p.root)}")
-                drawn = drawing.render(p, model, results, planned)
+                drawn = drawing.render(p, model, results, planned, holds)
                 sheets = sum(path.parent.name == "drawings" for path in drawn)
                 views = sum(path.parent.name == "steps" for path in drawn)
                 if sheets:
@@ -229,7 +230,7 @@ def cmd_check(args) -> int:
     if results:
         slowest = max(results, key=lambda r: r.seconds)
         print(f"slowest check: {slowest.id} {slowest.seconds:.1f} s")
-    found = f"{status}: {headline['errors']} errors, {headline['warnings']} warnings"
+    found = f"{status}: {report.tally(headline)}"
     if partial:
         skipped = " and ".join(
             what
@@ -238,7 +239,9 @@ def cmd_check(args) -> int:
         )
         print(f"\n{found}; skipped {skipped}, so no claim is made and no report was written.")
         return 1
-    path = report.write(p, status, results, images, drawn, model, coarsened, build_seconds, planned)
+    path = report.write(
+        p, status, results, images, drawn, model, coarsened, build_seconds, planned, holds
+    )
     if planned is not None:
         print("wrote build/plan.md")
     known_first = f"Known first: {report.waiting_clause(p)}. " if p.known_first else ""

@@ -29,6 +29,7 @@ material: "PLA, FDM printed"                   # optional: what the made parts a
 follows: design                                # optional: design | function; design unless said
 up: y                    # optional: the axis the object stands on, z unless said
 tolerance: {length: 0.001, angle: 0.01}        # how closely the model must realise a source value
+clearance: fit_gap       # optional: the length param of the loosest fit
 model_literals: [0, 1, 2, -1, 0.5, 90, 180, 270, 360]   # optional: the numbers model.py may hold
 known_first: true        # optional: build only what the sources settle (Known first)
 sources:                 # written by `cadrev source`; keep it the last key
@@ -43,6 +44,7 @@ sources:                 # written by `cadrev source`; keep it the last key
 
 - `target` names the object, its version and its configuration, and where the authors released several variants, the one built.
 - `tolerance` is the model's, how closely it realises a value, and not what a shop works to: that is the [plan](#planyaml)'s to say. `tolerance.angle` is in degrees whatever `units.angle` says.
+- **Every instance is held**: it touches another instance, or sits within `clearance` of one, so the assembly is one object. `clearance` names the length param of the loosest fit, the largest gap the model leaves between two parts that hold each other: a pin centred in its running hole, a tongue between its fork's cheeks. Without it, parts touch, which two do within `tolerance.length`. An instance further than that from every other floats, and so does a group whose instances hold only each other: a `[held]` warning, and an error under a [plan](#planyaml). Build what holds it (a spring's hooks, a seat), or move it onto what does. The warning stands where the `target` leaves out what holds it, a bearing or a second unit. A known-first project with no plan is not held to this: what holds a part may wait.
 - `units.length` is the user's answer to metric or US: `mm` or `in`. A proposed thread and a proposed screw length come from its table, ISO metric for a metric unit and Unified for `in`; a project that mixes the two says `threads: metric` or `threads: unified`. A STEP file holds the object at its true size in either.
 - `material` and `follows` are the complete model's other two answers: what its made parts are made of and how, and whether a feature that is hard to make that way is built as the sources show it (`design`) or replaced by one that does the same job (`function`). The report prints both.
 - `cadrev source` with an id already registered refreshes that entry: its file, hash and whatever the command states. That is how a source is restored into a clone or replaced by a new download.
@@ -259,7 +261,7 @@ checks:
 - **`angle`**: `between: [a, vertex, b]`, the angle at `vertex`, in degrees, unsigned from 0 to 180. `along` takes it about one axis, between the datums projected onto the plane square to it: a phase about a bore's axis between features at different heights.
 - **`diameter`**: of the cylindrical face its datum `at` lies on: a bore or a hub. A toothed gear has no face at its pitch circle, so its pitch diameter is a `distance` between two datums on opposite flanks at the pitch radius, half a turn apart, with `expect: "<module> * <teeth>"`.
 - **`mass`**: Σ volume × `density` over the instances it weighs, plus its `add` params, within `tol_rel`, which it must set. It weighs the instances `instances` lists, else the whole assembly, narrowed by `parts`. Each part weighed in several instances takes a `counts` entry naming the param that states how many, which the check holds to the instances it finds; without one the check rests on proposed, since how many there are is then the model's choice. Without `density` it weighs each part by the [mass model](#paramsyaml), and so confirms the model as exported against a stated total.
-- **`count`**: how many instances of `part` the assembly places, compared exactly; or, with `thread` in place of `part`, how many holes and shanks carry that thread param's thread, each counted once per instance of its part, which is how a stated number of screws is checked without modelling one. A clearance hole is not counted. A tooth count is checked through what it builds and couples, not by counting teeth.
+- **`count`**: how many instances of `part` the assembly places, compared exactly, with a stated count or with one [`expect`](#worked-values-expect) works out, as a count per leg times the legs is (`expect: "P2.legs * P11.springs"`); or, with `thread` in place of `part`, how many holes and shanks carry that thread param's thread, each counted once per instance of its part, which is how a stated number of screws is checked without modelling one. A clearance hole is not counted. A tooth count is checked through what it builds and couples, not by counting teeth.
 - **`interference`**: the overlap volume between instances, over `pairs` or every pair, at most `max_volume` (default `tolerance.length`³). It needs no evidence.
 - **`shape`**: a built part against a released body, as a whole. `pairs` lists at least three datum pairs `[<part>.<feature>, <body>.<feature>]` not on one line; cadrev carries the part onto the body by the rigid motion that best fits them, which must fit within `tolerance.length`, then compares the largest distance between the two surfaces with `tol`. Against a cut file's region, `along` names the part axis its outline is projected along, and the part may be turned over. A shape check confirms the shape, not the params that build it: they still need their own checks.
 
@@ -271,7 +273,7 @@ checks:
 
 ### Worked values: `expect`
 
-Where a source states the numbers a value is worked out from rather than the value, a `distance`, `angle`, `diameter`, `mass` or `stroke` check names `expect` in place of `evidence` and `key`: an expression over ledger values `<item>.<key>`, numbers and the functions a derived `expr` may call.
+Where a source states the numbers a value is worked out from rather than the value, a `distance`, `angle`, `diameter`, `mass`, `stroke` or `count` check names `expect` in place of `evidence` and `key`: an expression over ledger values `<item>.<key>`, numbers and the functions a derived `expr` may call.
 
 ```yaml
   - {id: pitch-sun, kind: distance, between: [sun.flank_a, sun.flank_b],
@@ -380,13 +382,12 @@ buy:                     # each part that is bought, each screw by its thread pa
 steps:                   # the assembly sequence
   - {place: [body_1], note: "Deck down on the bench."}
   - {place: [fan_1, plate_1], with: {lid_screw: 4}, note: "Label towards the plate. 2.5 mm hex key, snug."}
-clearance: fit_gap       # optional: the length param of the loosest fit
 ```
 
 - **Every part an instance places is made or bought**, one or the other. `make` gives its operations, as text; `buy` what is ordered. The plan counts each by its instances. A part made beside the object, a fit coupon or a jig, is a part no instance places: `make` lists it uncounted, and a step that places nothing says when it is used.
 - **A `buy` entry may also name a thread param**, for what is ordered of it (a screw's head and material, a nut, a threaded insert), which the guide prints after its thread and length. Any other name is listed as written, uncounted: an adhesive, a wire.
 - **Every instance is placed by exactly one step**; an assembly of one instance needs no steps. A step may also place nothing: one that only drives screws, or only says what to do.
-- **Every instance is held**: it touches another instance, or sits within `clearance` of one, so the assembly is one object. `clearance` names the length param of the loosest fit, the largest gap the model leaves between two parts that hold each other: a pin centred in its running hole, a tongue between its fork's cheeks. Without it, parts touch. An instance further than that from every other floats, and so does a group whose instances hold only each other: build what holds it (a spring's hooks, a seat), or move it onto what does.
+- **Every instance is [held](#projectyaml)**, and one that floats is an error here: a plan says the object is put together.
 - **Each step that places an instance has a view**, `build/steps/<n>.png`: the isometric view of what it places, in black and named by part, on what the steps before it placed, in grey, taking in the part each goes onto. View each as you write its step: it shows a part placed onto nothing, or before the one it goes inside.
 - **`with`** counts what a step drives of a thread param: its screws, nuts or inserts. The plan totals them per thread param as the quantity to buy. Where the model has more holes threaded for a [screw](#threads) than the steps drive screws into, less the screws built as parts, a warning says so: an empty threaded hole may be meant.
 - cadrev holds the plan's bookkeeping, not its judgement. Whether a tool reaches a feature and a hand can do a step is its author's to settle before writing it.
