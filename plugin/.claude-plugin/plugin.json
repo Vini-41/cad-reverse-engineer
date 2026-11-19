@@ -1,7 +1,7 @@
 {
   "name": "cad-reverse-engineer",
   "description": "Reverse-engineer CAD from papers: a parametric build123d model where every dimension traces to a quoted, hashed source and is checked against the built geometry.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "Vini Rezanejad",
     "url": "https://github.com/Vini-41"
