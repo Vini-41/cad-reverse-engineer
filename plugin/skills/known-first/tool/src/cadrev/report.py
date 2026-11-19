@@ -155,6 +155,7 @@ def _table(header: list[str], rows: list[list]) -> list[str]:
 
 
 def _motion_lines(moves: dict | None) -> list[str]:
+    """The report's line on whether the model moves, with what its Motion section then lists."""
     if moves is None:
         return []
     if moves["dropped"]:
@@ -168,7 +169,22 @@ def _motion_lines(moves: dict | None) -> list[str]:
             "**Static**: model.py returns no joints, so nothing is posed or exported as MJCF.",
             "",
         ]
-    joints, loops = len(moves["joints"]), len(moves["loops"])
+    joints, loops, cables = (len(moves[key]) for key in ("joints", "loops", "cables"))
+    counted = [f"{joints} joint{'s' * (joints != 1)}", f"{loops} loop{'s' * (loops != 1)}"]
+    if cables:
+        counted.append(f"{cables} cable{'s' * (cables != 1)} (listed under Motion)")
+    return [
+        f"**Kinematic**: {', '.join(counted[:-1])} and {counted[-1]}, exported as "
+        "`build/model.mjcf`; a posed check shows its pose beside its interpretation.",
+        "",
+    ]
+
+
+def _motion_section(moves: dict | None) -> list[str]:
+    """## Motion: each cable's path and what it closes, and each mesh exported coarser; nothing
+    for a model with neither."""
+    if moves is None or moves["dropped"]:
+        return []
     lines = []
     for name, c in moves["cables"].items():
         line = f"- Cable `{name}` through {' → '.join(c['path'])}"
@@ -178,22 +194,13 @@ def _motion_lines(moves: dict | None) -> list[str]:
             )
             line += f", wound on {c['wheel']}; its full turn closes {closes}"
         lines.append(line + ".")
-    if lines:
-        lines.append("")
     for name, m in moves["coarsened"].items():
         lines.append(
             f"- Mesh `meshes/{name}.stl` exported coarser for MuJoCo's STL decoder: {m['faces']} "
             f"faces at tolerance {m['tolerance']:g} in the project's length unit and angular "
             f"tolerance {m['angular_tolerance']:g} rad, from {m['default_faces']} at the default."
         )
-    if moves["coarsened"]:
-        lines.append("")
-    return [
-        f"**Kinematic**: {joints} joint{'s' * (joints != 1)} and {loops} loop{'s' * (loops != 1)}, "
-        "exported as `build/model.mjcf`; a posed check shows its pose beside its interpretation.",
-        "",
-        *lines,
-    ]
+    return ["## Motion", "", *lines, ""] if lines else []
 
 
 def _interpretation(r: Result) -> str:
@@ -555,6 +562,7 @@ def write(
         md += _checks_table([r for r in results if r.part == name])
     md += ["## Assembly", "", "The checks that read instances where the assembly places them.", ""]
     md += _checks_table([r for r in results if r.part is None])
+    md += _motion_section(moves)
     if model is not None and threaded:
         md += [
             "## Threads",
