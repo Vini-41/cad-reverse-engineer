@@ -584,10 +584,10 @@ def _assembly(p: Project, model: Model, path: Path) -> None:
     _paint(sheet, str(p.meta.get("name", "assembly")), note, path)
 
 
-def _step(p: Project, model: Model, number: int, new: list[str], before: list[str], path) -> None:
+def _step(p: Project, model: Model, number: int, new: list, before: list, fit: float, path) -> None:
     """A step's view: the instances it places, drawn whole in black and each part named, over
     those of the steps before it that lie near them, in grey where the new ones leave them
-    seen."""
+    seen. fit is the plan's clearance, the gap across which one instance holds another."""
     from build123d import Compound
 
     def placed(instances) -> list:
@@ -595,9 +595,10 @@ def _step(p: Project, model: Model, number: int, new: list[str], before: list[st
 
     solids = dict(zip(new, placed(new)))
     box = Compound(children=list(solids.values())).bounding_box()
-    reach = box.diagonal / 2
+    reach = box.diagonal / 2 + fit
     low, high = tuple(box.min), tuple(box.max)
-    # What is already there, as far around the new instances as they are large.
+    # What is already there, as far around the new instances as they are large, and a fit
+    # further.
     near, boxes = [], []
     for solid in placed(before):
         other = solid.bounding_box()
@@ -632,14 +633,15 @@ def _step(p: Project, model: Model, number: int, new: list[str], before: list[st
     x0, y0, x1, y1 = sheet.extent
     middle = ((x0 + x1) / 2, (y0 + y1) / 2)
     # The view takes in what each new instance goes onto, whole: the smallest instance already
-    # there whose box meets its own, so a pin is seen on its plate and not in mid-air.
+    # there whose box meets its own, or lies within the fit of it, so a pin is seen on its plate
+    # and not in mid-air.
     for solid in solids.values():
         own = solid.bounding_box()
         hosts = [
             other
             for other in boxes
             if all(
-                a <= top and b >= bottom
+                a <= top + fit and b >= bottom - fit
                 for a, b, bottom, top in zip(
                     tuple(other.min), tuple(other.max), tuple(own.min), tuple(own.max)
                 )
@@ -668,7 +670,7 @@ def _step(p: Project, model: Model, number: int, new: list[str], before: list[st
     _paint(sheet, f"step {number}", note, path)
 
 
-def render(p: Project, model: Model, results: list[Result], steps: list[dict]) -> list[Path]:
+def render(p: Project, model: Model, results: list[Result], planned: dict | None) -> list[Path]:
     """Write build/isometric.png, the assembly as built, build/drawings/<part>.png for each
     part that is one valid solid, and build/steps/<n>.png for each of the plan's steps that
     places an instance; the paths written, the isometric first where there is one. A sheet OCC
@@ -683,13 +685,15 @@ def render(p: Project, model: Model, results: list[Result], steps: list[dict]) -
         if part.is_valid and len(part.solids()) == 1 and part.edges():
             draw = lambda path, name=name: _part(p, model, name, by_id, path)  # noqa: E731
             sheets.append((out / "drawings" / f"{name}.png", draw))
+    steps = planned["steps"] if planned else []
+    fit = (planned["clearance"] or {}).get("value", 0.0) if planned else 0.0
     before: list[str] = []
     for number, step in enumerate(steps, 1):
         # An instance the assembly lacks, or one placed twice, is the plan's finding.
         new = [i for i in dict.fromkeys(step["place"]) if i in model.assembly and i not in before]
         if any(model.parts[model.assembly[i][0]].edges() for i in new):
             draw = lambda path, n=number, new=new, b=tuple(before): _step(  # noqa: E731
-                p, model, n, new, list(b), path
+                p, model, n, new, list(b), fit, path
             )
             sheets.append((out / "steps" / f"{number:0{len(str(len(steps)))}d}.png", draw))
         before += new

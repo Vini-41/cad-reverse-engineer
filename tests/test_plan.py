@@ -225,7 +225,13 @@ def test_small_part_is_shown_on_the_whole_of_what_it_goes_onto(proj_dir):
     run = check(proj_dir)
     assert run.rules == [], run.out
     # The pin's view draws the link whole, in grey.
-    assert inked(proj_dir / "build" / "steps" / "2.png", "placed") > 3000
+    view = proj_dir / "build" / "steps" / "2.png"
+    assert inked(view, "placed") > 3000
+    # And so it does where the pin stands a fit's gap above the link, held across it.
+    remodel(proj_dir, "p.link_H / 2 + p.hole_d / 2", "p.link_H / 2 + p.hole_d / 2 + p.hole_d")
+    edit(proj_dir, "plan.yaml", lambda d: d.update(clearance="hole_d"))
+    run = check(proj_dir)
+    assert run.rules == [] and inked(view, "placed") > 3000
 
 
 def test_instance_inside_another_and_clear_of_its_walls_floats(proj_dir):
