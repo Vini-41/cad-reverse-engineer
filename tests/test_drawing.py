@@ -9,13 +9,16 @@ from PIL import Image
 
 
 def inked(path, colour: str) -> int:
-    """How many pixels of a drawing are drawn in a colour: blue, red or grey."""
+    """How many pixels of a drawing are drawn in a colour: blue, red, grey, or the grey of what
+    a step's view shows as already placed."""
     r, g, b = (np.asarray(Image.open(path).convert("RGB")).astype(int)[:, :, i] for i in range(3))
     spread = np.maximum(np.maximum(r, g), b) - np.minimum(np.minimum(r, g), b)
     drawn = {
         "blue": (b > 140) & (r < 90),
         "red": (r > 170) & (g < 90) & (b < 90),
-        "grey": (spread < 12) & (r > 90) & (r < 140),
+        "grey": (spread < 12) & (r > 90) & (r < 135),
+        # What a step's view shows as already there: lighter than a reference dimension.
+        "placed": (spread < 12) & (r >= 135) & (r < 150),
     }
     return int(drawn[colour].sum())
 

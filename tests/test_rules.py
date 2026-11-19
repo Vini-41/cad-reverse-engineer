@@ -387,6 +387,20 @@ LINK_FINDINGS = {
     "plan-step: an instance placed twice": _planned(steps="[{place: [link_1, link_1]}]"),
     "plan-step: an instance that is none": _planned(steps="[{place: [link_1, pin_1]}]"),
     "plan-step: a step that says nothing": _planned(steps="[{place: [link_1]}, {}]"),
+    "plan-held: an instance apart from the rest": lambda r, t: (
+        place(r, link_1="Location()", link_2="Location((0, 0, p.link_H + p.hole_d))"),
+        _planned(steps="[{place: [link_1, link_2]}]")(r, t),
+    ),
+    "plan-held: a clearance that names no param": lambda r, t: (
+        _planned()(r, t),
+        edit(r, "plan.yaml", lambda d: d.update(clearance="fit")),
+    ),
+    "unit-quantity: a mass as the plan's clearance": lambda r, t: (
+        add_quote(r, t, "Each screw weighs 10 g.", values={"m": 10}),
+        add(r, params="fit: {basis: source, from: N1.m}"),
+        _planned()(r, t),
+        edit(r, "plan.yaml", lambda d: d.update(clearance="fit")),
+    ),
     "plan-screw: a with that names no thread param": _planned(
         steps="[{place: [link_1], with: {hole_d: 2}}]"
     ),

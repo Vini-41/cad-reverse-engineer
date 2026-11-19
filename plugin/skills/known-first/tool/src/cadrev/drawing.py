@@ -1,8 +1,11 @@
-"""build/isometric.png and build/drawings/<part>.png: the object as a reviewer first looks at it.
+"""build/isometric.png, build/drawings/<part>.png and build/steps/<n>.png: the object as a
+reviewer first looks at it, and as the person putting it together does.
 
 A part's drawing is its front, top and right views in third-angle projection beside an isometric
 one, dimensioned by the part's own checks: each dimension is the value as built, so a reviewer
-verifies the part on one sheet. The drawings read the build and add no pass or fail.
+verifies the part on one sheet. A step's view is the isometric view of what the plan's step
+places, in black, on what the steps before it placed, in grey. The drawings read the build and
+add no pass or fail.
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ from .checks import Result, part_of
 from .project import AXES, Project
 
 INK, HIDDEN, CHECKED, FAILED, REFERENCE = "#1a1a1a", "#a0a0a0", "#1f5fa8", "#c62828", "#707070"
+PLACED = "#8c8c8c"  # what a step's view shows as already there
 DPI = 200
 WIDTH, HEIGHT = 11.0, 7.5  # inches a sheet fits in, under its title
 TITLE = 0.75  # inches of title above the sheet
@@ -132,9 +136,11 @@ class _Sheet:
         e = self.extent
         e[0], e[1], e[2], e[3] = min(e[0], x), min(e[1], y), max(e[2], x), max(e[3], y)
 
-    def line(self, points, colour=INK, width=0.9, style="-") -> None:
+    def line(self, points, colour=INK, width=0.9, style="-", cover=True) -> None:
+        """A line through points; one not covered is drawn only where the sheet's other marks
+        reach."""
         self.lines.append((list(points), colour, width, style))
-        for x, y in points:
+        for x, y in points if cover else ():
             self.cover(x, y)
 
     def text(self, x, y, text, colour, turn=0.0, ha="center", size=1.0) -> None:
@@ -578,11 +584,73 @@ def _assembly(p: Project, model: Model, path: Path) -> None:
     _paint(sheet, str(p.meta.get("name", "assembly")), note, path)
 
 
-def render(p: Project, model: Model, results: list[Result]) -> list[Path]:
-    """Write build/isometric.png, the assembly as built, and build/drawings/<part>.png for each
-    part that is one valid solid; the paths written, the isometric first where there is one. A
-    sheet OCC cannot project is left out and said so: the run's verdict does not wait on a
-    picture."""
+def _step(p: Project, model: Model, number: int, new: list[str], before: list[str], path) -> None:
+    """A step's view: the instances it places, drawn whole in black and each part named, over
+    those of the steps before it that lie near them, in grey where the new ones leave them
+    seen."""
+    from build123d import Compound
+
+    def placed(instances) -> list:
+        return [model.parts[model.assembly[i][0]].moved(model.assembly[i][1]) for i in instances]
+
+    solids = dict(zip(new, placed(new)))
+    box = Compound(children=list(solids.values())).bounding_box()
+    reach = box.diagonal / 2
+    low, high = tuple(box.min), tuple(box.max)
+    # What is already there, as far around the new instances as they are large.
+    near = []
+    for solid in placed(before):
+        other = solid.bounding_box()
+        spans = zip(tuple(other.min), tuple(other.max), low, high)
+        if all(a <= top + reach and b >= bottom - reach for a, b, bottom, top in spans):
+            near.append(solid)
+    frame = frames(p.up)["isometric"]
+    _, rise, toward = frame
+    diagonal = Compound(children=[*near, *solids.values()]).bounding_box().diagonal
+    inked, _ = _projected(Compound(children=list(solids.values())), frame, diagonal)
+    xs = [x for line in inked for x, _ in line] or [0.0, 1.0]
+    sheet = _Sheet((max(xs) - min(xs) or 1.0) / STEPS)
+    if near:
+        seen, _ = _projected(Compound(children=[*near, *solids.values()]), frame, diagonal)
+        for line in seen:
+            sheet.line(line, PLACED, 0.5, cover=False)
+    for line in inked:
+        sheet.line(line, INK, 1.1)
+    # The view's own axes on the page, as OCC projects a point: across, and up.
+    norm = math.sqrt(_dot(toward, toward))
+    eye = tuple(c / norm for c in toward)
+    across = _cross(rise, eye)
+    norm = math.sqrt(_dot(across, across))
+    across = tuple(c / norm for c in across)
+    up = _cross(eye, across)
+    centres = {
+        inst: (_dot(tuple(c), across), _dot(tuple(c), up))
+        for inst, solid in solids.items()
+        for c in [solid.bounding_box().center()]
+    }
+    x0, y0, x1, y1 = sheet.extent
+    middle = ((x0 + x1) / 2, (y0 + y1) / 2)
+    margin = 0.12 * max(x1 - x0, y1 - y0)
+    sheet.cover(x0 - margin, y0 - margin)
+    sheet.cover(x1 + margin, y1 + margin)
+    by_part: dict[str, list[str]] = {}
+    for inst in new:
+        by_part.setdefault(model.assembly[inst][0], []).append(inst)
+    for part, instances in by_part.items():
+        # Named at the instance furthest out, so the names ring the view.
+        at = centres[max(instances, key=lambda i: math.dist(centres[i], middle))]
+        away = (2 * at[0] - middle[0], 2 * at[1] - middle[1])
+        count = f" ×{len(instances)}" * (len(instances) > 1)
+        sheet.leader(at, 0.0, away, part + count, INK)
+    note = f"{p.meta.get('name', '')} · black: what this step places · grey: already there"
+    _paint(sheet, f"step {number}", note, path)
+
+
+def render(p: Project, model: Model, results: list[Result], steps: list[dict]) -> list[Path]:
+    """Write build/isometric.png, the assembly as built, build/drawings/<part>.png for each
+    part that is one valid solid, and build/steps/<n>.png for each of the plan's steps that
+    places an instance; the paths written, the isometric first where there is one. A sheet OCC
+    cannot project is left out and said so: the run's verdict does not wait on a picture."""
     out = p.root / "build"
     by_id = {str(r.id): r for r in results}
     sheets = []
@@ -593,6 +661,16 @@ def render(p: Project, model: Model, results: list[Result]) -> list[Path]:
         if part.is_valid and len(part.solids()) == 1 and part.edges():
             draw = lambda path, name=name: _part(p, model, name, by_id, path)  # noqa: E731
             sheets.append((out / "drawings" / f"{name}.png", draw))
+    before: list[str] = []
+    for number, step in enumerate(steps, 1):
+        # An instance the assembly lacks, or one placed twice, is the plan's finding.
+        new = [i for i in dict.fromkeys(step["place"]) if i in model.assembly and i not in before]
+        if any(model.parts[model.assembly[i][0]].edges() for i in new):
+            draw = lambda path, n=number, new=new, b=tuple(before): _step(  # noqa: E731
+                p, model, n, new, list(b), path
+            )
+            sheets.append((out / "steps" / f"{number:0{len(str(len(steps)))}d}.png", draw))
+        before += new
     written = []
     for path, draw in sheets:
         try:
