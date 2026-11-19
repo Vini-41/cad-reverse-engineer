@@ -598,19 +598,19 @@ def _step(p: Project, model: Model, number: int, new: list[str], before: list[st
     reach = box.diagonal / 2
     low, high = tuple(box.min), tuple(box.max)
     # What is already there, as far around the new instances as they are large.
-    near = []
+    near, boxes = [], []
     for solid in placed(before):
         other = solid.bounding_box()
         spans = zip(tuple(other.min), tuple(other.max), low, high)
         if all(a <= top + reach and b >= bottom - reach for a, b, bottom, top in spans):
             near.append(solid)
+            boxes.append(other)
     frame = frames(p.up)["isometric"]
     _, rise, toward = frame
     diagonal = Compound(children=[*near, *solids.values()]).bounding_box().diagonal
     inked, _ = _projected(Compound(children=list(solids.values())), frame, diagonal)
     xs = [x for line in inked for x, _ in line] or [0.0, 1.0]
     sheet = _Sheet((max(xs) - min(xs) or 1.0) / STEPS)
-    seen = []
     if near:
         seen, _ = _projected(Compound(children=[*near, *solids.values()]), frame, diagonal)
         for line in seen:
@@ -631,18 +631,30 @@ def _step(p: Project, model: Model, number: int, new: list[str], before: list[st
     }
     x0, y0, x1, y1 = sheet.extent
     middle = ((x0 + x1) / 2, (y0 + y1) / 2)
-    # The view reaches a little past what the step places, and as far again as that is large
-    # where something is already there: a small part is shown on what it goes onto.
-    size = max(x1 - x0, y1 - y0)
-    margin, reach = 0.12 * size, 0.5 * size
-    there = [point for line in seen for point in line]
-    for sign, edge_x, edge_y in ((-1, x0, y0), (1, x1, y1)):
-        out_x = max((sign * (x - edge_x) for x, _ in there), default=0.0)
-        out_y = max((sign * (y - edge_y) for _, y in there), default=0.0)
-        sheet.cover(
-            edge_x + sign * min(max(out_x, margin), reach),
-            edge_y + sign * min(max(out_y, margin), reach),
-        )
+    # The view takes in what each new instance goes onto, whole: the smallest instance already
+    # there whose box meets its own, so a pin is seen on its plate and not in mid-air.
+    for solid in solids.values():
+        own = solid.bounding_box()
+        hosts = [
+            other
+            for other in boxes
+            if all(
+                a <= top and b >= bottom
+                for a, b, bottom, top in zip(
+                    tuple(other.min), tuple(other.max), tuple(own.min), tuple(own.max)
+                )
+            )
+        ]
+        if hosts:
+            host = min(hosts, key=lambda other: other.diagonal)
+            ends = list(zip(tuple(host.min), tuple(host.max)))
+            for corner in ((x, y, z) for x in ends[0] for y in ends[1] for z in ends[2]):
+                sheet.cover(_dot(corner, across), _dot(corner, up))
+    x0, y0, x1, y1 = sheet.extent
+    margin = 0.08 * max(x1 - x0, y1 - y0)
+    sheet.cover(x0 - margin, y0 - margin)
+    sheet.cover(x1 + margin, y1 + margin)
+    sheet.u = (max(x1 - x0, y1 - y0) + 2 * margin) / STEPS  # names sized to the view as framed
     by_part: dict[str, list[str]] = {}
     for inst in new:
         by_part.setdefault(model.assembly[inst][0], []).append(inst)
