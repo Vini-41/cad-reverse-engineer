@@ -610,6 +610,7 @@ def _step(p: Project, model: Model, number: int, new: list[str], before: list[st
     inked, _ = _projected(Compound(children=list(solids.values())), frame, diagonal)
     xs = [x for line in inked for x, _ in line] or [0.0, 1.0]
     sheet = _Sheet((max(xs) - min(xs) or 1.0) / STEPS)
+    seen = []
     if near:
         seen, _ = _projected(Compound(children=[*near, *solids.values()]), frame, diagonal)
         for line in seen:
@@ -630,9 +631,18 @@ def _step(p: Project, model: Model, number: int, new: list[str], before: list[st
     }
     x0, y0, x1, y1 = sheet.extent
     middle = ((x0 + x1) / 2, (y0 + y1) / 2)
-    margin = 0.12 * max(x1 - x0, y1 - y0)
-    sheet.cover(x0 - margin, y0 - margin)
-    sheet.cover(x1 + margin, y1 + margin)
+    # The view reaches a little past what the step places, and as far again as that is large
+    # where something is already there: a small part is shown on what it goes onto.
+    size = max(x1 - x0, y1 - y0)
+    margin, reach = 0.12 * size, 0.5 * size
+    there = [point for line in seen for point in line]
+    for sign, edge_x, edge_y in ((-1, x0, y0), (1, x1, y1)):
+        out_x = max((sign * (x - edge_x) for x, _ in there), default=0.0)
+        out_y = max((sign * (y - edge_y) for _, y in there), default=0.0)
+        sheet.cover(
+            edge_x + sign * min(max(out_x, margin), reach),
+            edge_y + sign * min(max(out_y, margin), reach),
+        )
     by_part: dict[str, list[str]] = {}
     for inst in new:
         by_part.setdefault(model.assembly[inst][0], []).append(inst)

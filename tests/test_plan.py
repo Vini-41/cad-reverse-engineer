@@ -169,11 +169,17 @@ def test_plan_holds_each_instance_to_another(proj_dir):
     (floating,) = run.report["plan"]["floating"]
     assert floating["instances"] == ["link_2"] and floating["nearest"] == "link_1"
     assert floating["gap"] == pytest.approx(3)
-    # A fit leaves a gap: the plan names the param that states it, and the two hold again.
-    edit(proj_dir, "plan.yaml", lambda d: d.update(clearance="hole_d"))
+    # How closely the model realises a stated value says nothing of what touches.
+    meta(proj_dir, tolerance={"length": 4, "angle": 0.01})
+    assert "plan-held" in check(proj_dir).errors
+    meta(proj_dir, tolerance=None)
+    # A fit leaves a gap: the plan names the param that states it, and the two hold again. A
+    # param only the plan reads is read.
+    add(proj_dir, params="fit: {basis: derived, expr: hole_d}")
+    edit(proj_dir, "plan.yaml", lambda d: d.update(clearance="fit"))
     run = check(proj_dir)
     assert run.rules == [] and run.report["plan"]["floating"] == []
-    assert run.report["plan"]["clearance"] == {"from": "hole_d", "value": 3}
+    assert run.report["plan"]["clearance"] == {"from": "fit", "value": 3}
     # Set down on the first link, the second needs no clearance to be held.
     edit(proj_dir, "plan.yaml", lambda d: d.pop("clearance"))
     remodel(proj_dir, "p.link_H + p.hole_d", "p.link_H")
@@ -206,6 +212,18 @@ def test_part_made_beside_the_object_is_placed_by_no_instance(proj_dir):
         "how": ["print it first"]
     }
     assert "- **coupon** ([drawing](drawings/coupon.png)): print it first\n" in run.plan_md
+
+
+def test_small_part_is_shown_on_what_it_goes_onto(proj_dir):
+    # A pin a tenth of the link's length, standing on the link's middle.
+    pin = "Cylinder(p.hole_d / 2, p.hole_d)"
+    remodel(proj_dir, '{"link": link}', f'{{"link": link, "pin": {pin}}}')
+    on = "Location((0, 0, p.link_H / 2 + p.hole_d / 2))"
+    remodel(proj_dir, ASSEMBLY, ASSEMBLY.replace("},", f', "pin_1": ("pin", {on})}},'))
+    add(proj_dir, make=FLAT, buy="pin: a dowel pin", steps="[{place: [link_1]}, {place: [pin_1]}]")
+    run = check(proj_dir)
+    assert run.rules == [], run.out
+    assert inked(proj_dir / "build" / "steps" / "2.png", "placed") > 1500
 
 
 def test_instance_inside_another_and_clear_of_its_walls_floats(proj_dir):

@@ -51,7 +51,7 @@ Write [plan.yaml](../known-first/references/project-format.md#planyaml):
 - **`buy`**, for each part that is bought: what is ordered, by its standard or catalogue designation. For each screw, its head and material; cadrev prints its thread and length. And anything else the steps use: an adhesive, a wire.
 - **`steps`**, the assembly sequence a person follows. Each step places instances onto what is already there, from a direction a hand and a tool can reach, drives its screws (`with`), and says how in its `note`: the tool, what to align, how tight, and what to check before the next step. What goes inside goes in first.
 - **`clearance`**, the param of the loosest fit, where two parts that hold each other do not touch.
-- **A fit that asks for a test is tested first.** Where a fit param's gap is `ask: test`, add a coupon: a part of its own that no instance places, with each such hole or slot at the proposed size and a size either side. The first step makes it and tries the real pin, screw or bearing in it, before any part is made.
+- **A fit that asks for a test is tried before the parts are made.** Where a fit param's gap is `ask: test`, the plan says how: a coupon, a part of its own that no instance places, holding that fit around the proposed size, and a step that tries the real pin, screw or bearing in it.
 
 Done when `cadrev check` reports nothing about the plan and ends on the status it had, and each step's view in `build/steps/` shows what its note says.
 

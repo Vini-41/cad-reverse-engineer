@@ -395,6 +395,16 @@ LINK_FINDINGS = {
         _planned()(r, t),
         edit(r, "plan.yaml", lambda d: d.update(clearance="fit")),
     ),
+    "plan-held: a clearance below nothing": lambda r, t: (
+        add(r, params="fit: {basis: derived, expr: -hole_d}"),
+        _planned()(r, t),
+        edit(r, "plan.yaml", lambda d: d.update(clearance="fit")),
+    ),
+    "param-physics: a physics value as the plan's clearance": lambda r, t: (
+        change(r, "params", "hole_d", physics=True),
+        _planned()(r, t),
+        edit(r, "plan.yaml", lambda d: d.update(clearance="hole_d")),
+    ),
     "unit-quantity: a mass as the plan's clearance": lambda r, t: (
         add_quote(r, t, "Each screw weighs 10 g.", values={"m": 10}),
         add(r, params="fit: {basis: source, from: N1.m}"),
@@ -1001,6 +1011,19 @@ LINK_DAMAGE = {
     "screw length with no value": _screwed("screw_len: {basis: proposed, rationale: r}"),
     "material is a list": _meta(material=["PLA"]),
     "follows is a mapping": _meta(follows={"design": True}),
+    "plan of instances that are no solid": lambda r, t: (
+        stack(r, 2),
+        remodel(r, '{"link": link}', '{"link": link - link}'),
+        edit(r, "checks.yaml", lambda d: d["checks"].pop()),  # its interference check
+        _planned(steps="[{place: [link_1, link_2]}]")(r, t),
+    ),
+    "plan of a part too small to mesh": lambda r, t: (
+        meta(r, tolerance={"length": 1e-7, "angle": 0.01}),
+        add(r, params="speck: {basis: proposed, value: 0.00005, rationale: r, gap: G1}"),
+        remodel(r, '{"link": link}', '{"link": link, "dot": Box(p.speck, p.speck, p.speck)}'),
+        remodel(r, ASSEMBLY, ASSEMBLY.replace("},", ', "dot_1": ("dot", Location())},')),
+        _planned(steps="[{place: [link_1, dot_1]}]", buy="dot: a speck")(r, t),
+    ),
     "plan that is a list": _file("plan.yaml", "- make\n- buy\n"),
     "plan that is empty": _file("plan.yaml", ""),
     "plan make that is a list": _file("plan.yaml", "make: [link]\n"),

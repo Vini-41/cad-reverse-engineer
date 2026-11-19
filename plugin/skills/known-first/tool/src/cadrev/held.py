@@ -39,6 +39,9 @@ _OCP = {
 }
 # A part is meshed to this fraction of its box's diagonal.
 _SAG = 1e-3
+# How far apart OCC's distance may leave two faces built to meet, in the project's length unit:
+# the model's tolerance says how closely it realises a stated value, not what touches.
+TOUCH = 1e-6
 
 
 def _distance(a, b) -> float:
@@ -64,8 +67,11 @@ class _Placed:
             if part not in meshed:
                 solid = model.parts[part]
                 copy = _OCP["BRepBuilderAPI"].BRepBuilderAPI_Copy(solid.wrapped, True, False)
-                sag = _SAG * solid.bounding_box().diagonal
-                _OCP["BRepMesh"].BRepMesh_IncrementalMesh(copy.Shape(), sag, False, 0.5, True)
+                sag: float | None = _SAG * solid.bounding_box().diagonal
+                try:
+                    _OCP["BRepMesh"].BRepMesh_IncrementalMesh(copy.Shape(), sag, False, 0.5, True)
+                except Exception:  # noqa: BLE001 - a part too small for OCC to mesh is read exactly
+                    sag = None
                 meshed[part] = (copy.Shape(), sag, len(solid.faces()))
             shape, sag, faces = meshed[part]
             self.solids.append(shape.Moved(at.wrapped))
@@ -80,6 +86,8 @@ class _Placed:
     def near(self, i: int, j: int, limit: float) -> bool:
         """Whether instances i and j touch, overlap or lie within limit of each other."""
         a, b = self.solids[i], self.solids[j]
+        if self.sags[i] is None or self.sags[j] is None:
+            return _distance(a, b) <= limit or self._within(i, j) or self._within(j, i)
         reach = limit + 2 * (self.sags[i] + self.sags[j])
         proximity = _OCP["BRepExtrema"].BRepExtrema_ShapeProximity(a, b, reach)
         proximity.Perform()  # done or not, it names the faces it found near: none where none is
