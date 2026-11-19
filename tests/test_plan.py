@@ -257,6 +257,7 @@ def test_small_part_is_shown_on_the_whole_of_what_it_goes_onto(proj_dir):
     remodel(
         proj_dir, "p.link_H / 2 + p.hole_d / 2 + p.hole_d", "p.link_H / 2 + p.hole_d / 2 + p.hair"
     )
+    view.unlink()
     run = check(proj_dir)
     assert run.rules == [] and inked(view, "placed") > 3000
 
