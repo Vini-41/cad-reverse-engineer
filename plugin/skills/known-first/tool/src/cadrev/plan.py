@@ -115,15 +115,29 @@ def _steps(p: Project, model: Model, placed: Counter, steps: list[dict]) -> Coun
 def _held(p: Project, model: Model, fit: str | None) -> tuple[dict | None, list[dict]]:
     """[plan-held] for each instance, or group of instances, that nothing holds to the rest: the
     plan's clearance as the report gives it, the param it names and its value, and what floats."""
-    limit, clearance = p.length_tol, None
+    limit, clearance = held.TOUCH, None
     if fit is not None:
         if fit not in p.values:
             p.error("plan-held", f"clearance names {fit}, which is no param with a value")
+        elif p.values[fit] < 0:
+            p.error(
+                "plan-held", f"clearance {fit} is {p.values[fit]:g}; a fit's gap is no less than 0"
+            )
         else:
             p.hold_param(fit, ("length",), "as the plan's clearance")
             clearance = {"from": fit, "value": p.values[fit]}
-            limit += max(p.values[fit], 0.0)
-    floating = held.apart(model, limit) if len(model.assembly) > 1 else []
+            limit += p.values[fit]
+    floating = []
+    # A part that is no solid has its own finding, and nothing to hold.
+    if len(model.assembly) > 1 and not any(f.rule == "part-invalid" for f in p.findings):
+        try:
+            floating = held.apart(model, limit)
+        except Exception as exc:  # noqa: BLE001 - OCC raises many types on a solid it cannot read
+            p.error(
+                "plan-held",
+                "whether the instances hold together could not be evaluated "
+                f"({type(exc).__name__}: {exc})",
+            )
     floating.sort(key=lambda group: -group["gap"])
     # One finding for all that floats as far from the rest: a fit left out of the plan shows as
     # one gap, whatever number of instances ride on it.

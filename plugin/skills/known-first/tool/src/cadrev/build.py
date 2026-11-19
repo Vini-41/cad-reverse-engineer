@@ -492,15 +492,16 @@ def _hold_units(p: Project, model: Model, threaded: set[str]) -> None:
                 f"param {name}: {places[0][0]} is a physics value, so mark the param physics: true",
             )
     named = {n for c in p.checks for n in ledger.named_by_checks(p, c)}
-    for name in sorted(p.physics & (model.used | named | ranges | coupled)):
+    fit = {(p.plan or {}).get("clearance")} - {None}  # the plan's loosest fit
+    for name in sorted(p.physics & (model.used | named | ranges | coupled | fit)):
         p.error(
             "param-physics",
-            f"param {name}: is marked physics: true, but the model's geometry, a joint range or a "
-            "check reads it; a physics value only goes to a joint or tendon",
+            f"param {name}: is marked physics: true, but the model's geometry, a joint range, a "
+            "check or the plan reads it; a physics value only goes to a joint or tendon",
         )
     # A screw's length is what is bought, whether or not the model reads it.
     exported = ranges | coupled | slots.keys() | set(ledger.mass_params(p)) | threaded
-    exported |= set(p.screws.values())
+    exported |= set(p.screws.values()) | fit
     derived = {n for spec in p.params.values() for n in expr_names(str(spec.get("expr") or ""))}
     p.resolution = ledger.resolution(p) - model.used - derived - exported
     for name in sorted(p.values.keys() - model.used - derived - named - exported):
