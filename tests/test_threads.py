@@ -46,6 +46,10 @@ STATED = {
     "a Unified size by its number sign": ("a #10-32 screw", "10-32", 4.03225),
     "a second-choice metric size": ("an M4.5 screw", "M4.5", 3.75),
     "a Unified size with no clearance hole in its table": ("a No. 12-24 screw", "12-24", 4.428067),
+    # A drawing calls out its threaded holes by their count.
+    "a callout of several holes": ("one of the 4-M3 holes", "M3", 2.5),
+    "a callout written with an x": ("one of the 4xM3 holes", "M3", 2.5),
+    "a callout spaced as some datasheets print it": ("one of the 8-M 3.0 holes", "M3", 2.5),
 }
 
 

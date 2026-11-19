@@ -142,6 +142,9 @@ MM = {
     "a spring of 0.25 N·m/rad": (0.25, 250),
     "a cord of 300 N/m": (300, 0.3),
     "a sun of 25 teeth": (25, 25),
+    # A drawing's count of threaded holes is a count, whatever its thread size spells.
+    "tapped 6-M2.0 through": (6, 6),
+    "tapped 8-M 2.0 on a circle": (8, 8),
 }
 # The same reader in a project that sets its own units.
 CM = {
@@ -198,6 +201,7 @@ SWEPT = {
     "Rated at 2 bar, weighs 8 g, closes in 2s over a Δt = 2 s step.": ["2 bar", "8 g", "2s", "2 s"],
     "A load of 2 N on the 10 N M4 bolt.": ["2 n", "10 n", "m4"],
     "Held by four M3 screws and 2 M4 nuts in 2 m3 of air.": ["m3", "m4", "2 m3"],
+    "Tapped 6-M2.0 and 4xM3, with 8-M 2.0 on the horn.": ["m2.0", "m3", "m 2.0"],
     'A 1/4-20 bolt, a 1/4"-20 UNC stud, #6-32, No. 4-40 and 10-32 UNF screws.': [
         "1/4-20",
         '1/4"-20 unc',

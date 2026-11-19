@@ -15,6 +15,7 @@ From a mechanical engineer's review of v0.1.0, of a run on a patent, and of a me
 - **The report lists checks part by part**, each part's under its drawing, in place of one table of every check; report.json gives each check its `part`.
 - **STEP files are true size in any length unit.** A project in inches used to export 25.4 times too small.
 - A number before a thread size (`four M3 screws`) is no longer read as cubic metres, and the coverage sweep lists Unified thread sizes.
+- A drawing's callout of its threaded holes (`4-M3`, `6-M2.0`, `8-M 2.0`) states its thread, and its count reads as a count: `8-M 2.0` used to read as eight metres.
 
 ## v0.1.0
 
