@@ -11,7 +11,7 @@ dependencies = [
     # Reads a PDF's text, renders its pages and extracts its images: PDFium, under a permissive
     # license. Quotes are matched against the text it extracts, so a new major is taken on purpose.
     "pypdfium2>=5.15,<6",
-    # Overlays, and the plots a run's own scripts draw (`cadrev python`).
+    # The drawings, and the plots a run's own scripts draw (`cadrev python`).
     "matplotlib>=3.11",
     # MuJoCo's bindings without its viewer: the kinematics motion.py poses a mechanism with.
     "mujoco-core>=4.0.1",

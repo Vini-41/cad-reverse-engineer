@@ -59,7 +59,7 @@ Done when every document the reconstruction will cite is registered.
 Read every page with `cadrev text <dir> <source>`, and view every image `cadrev figures <dir> <source>` writes: each page of a PDF whole, which shows its vector drawings and tables as printed, and each image embedded in it at full resolution. Ledger each statement about the object:
 
 - Copy each quote from `cadrev text` output, the text the matcher sees.
-- A number printed only inside a figure is image evidence. Crop its label with `cadrev crop <dir> <image> LEFT TOP RIGHT BOTTOM --name <name>`, which prints the `image` and `image_sha256` the item takes. The box is in pixels of the file you crop, whose size `cadrev figures` prints, so scale it from the size you viewed the image at. View the crop, and write the `reading` exactly as printed. A scale bar is evidence only where an overlay or a measured param calibrates from it.
+- A number printed only inside a figure is image evidence. Crop its label with `cadrev crop <dir> <image> LEFT TOP RIGHT BOTTOM --name <name>`, which prints the `image` and `image_sha256` the item takes. The box is in pixels of the file you crop, whose size `cadrev figures` prints, so scale it from the size you viewed the image at. View the crop, and write the `reading` exactly as printed. A scale bar is evidence only where a measured param is scaled against it.
 - The coverage sweep lists numbers printed with a unit. A count printed without one (a table cell, `3 planets`) and a ratio (`7.2:1`) are yours to find: ledger each one a param or a check will use.
 - Stated ranges of motion and physics values (a spring's stiffness) are ledgered too; the motion stage reads them.
 - A value stated in several places is ledgered at each, one in scope and the rest restatements. A disagreement between sources is a conflict. A stated quantity about something else (a test object, a load, a rig, a result) is skipped with a reason.
@@ -104,9 +104,9 @@ Done when every settled part is built and `cadrev check <dir>` reports nothing a
 
 ### 7. Checks
 
-Add a check for every stated value the geometry should realise: `bbox` for an envelope, `distance` for a pitch or spacing, `angle`, `diameter` for a bore or a `Ø` callout, `count` for a stated number of instances or of threaded holes, `mass` for a stated mass, and `interference` across the assembly. Where a source states the numbers a value is worked out from (a pitch diameter from a module and a tooth count), the check compares with [`expect`](references/project-format.md#worked-values-expect). Where a figure shows a modelled part in a near-orthographic view, add an overlay and look at the rendered PNG.
+Add a check for every stated value the geometry should realise: `bbox` for an envelope, `distance` for a pitch or spacing, `angle`, `diameter` for a bore or a `Ø` callout, `count` for a stated number of instances or of threaded holes, `mass` for a stated mass, and `interference` across the assembly. Where a source states the numbers a value is worked out from (a pitch diameter from a module and a tooth count), the check compares with [`expect`](references/project-format.md#worked-values-expect).
 
-View each part's drawing in `build/drawings/` as its checks turn green. It shows the part in three views with each checked value as a dimension where the check reads it, so a datum on the wrong feature, or a feature no check reads, shows there first.
+View each part's drawing in `build/drawings/` as its checks turn green. It shows the part in three views with each checked value as a dimension where the check reads it, so a datum on the wrong feature, or a feature no check reads, shows there first. Hold it beside the figures that show the part: an outline or a proportion that differs shows there too.
 
 A check that is red is information. Turn it green by changing the model. The evidence changes only to correct a transcription.
 
@@ -127,7 +127,7 @@ Then the rest:
 - A posed check for every value a source states at a joint angle or stroke, and for motion stated across a gear (a carrier's turn per sun turn, a carriage's travel per screw turn) a check with `from`. An angle reads unsigned from 0 to 180°, so place its datums where a sign error moves the angle the other way.
 - Each stated range read into its joint's range params, confirmed by a `range` check, with an interference `sweep` across the joint.
 - Gears as the worked examples build them ([gears](references/modeling.md#joints-and-loops), [a planetary train](references/project-format.md#worked-example-a-planetary-train)).
-- Physics values in the joint or tendon that applies them. Only the simulation reads one, so one no source states is `proposed`, with a gap.
+- Physics values in the joint that applies them. Only the simulation reads one, so one no source states is `proposed`, with a gap.
 - **Motion waits** where the sources leave a range, a ratio or a pose open: the value waits with its gap, and so does the motion that needs it. Where every joint waits, the model stays static.
 
 Where a stated pose or range end leaves a loop open or pushes a joint out of range, fix the link lengths, the ranges or the as-built zero. Near a toggle (two links collinear) the solve itself can fail on links that do close: report that end to the user rather than trimming a stated range.

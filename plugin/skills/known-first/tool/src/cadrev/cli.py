@@ -8,7 +8,6 @@ import os
 import re
 import shutil
 import sys
-import time
 from pathlib import Path
 
 import yaml
@@ -173,21 +172,19 @@ def cmd_check(args) -> int:
     incomparable = checks.comparable(p)
     modelled = lint.lint(p)
     ledger.coverage(p)
-    results, images, drawn, model, coarsened, build_seconds = [], [], [], None, {}, None
+    results, drawn, model, coarsened, slowest = [], [], None, {}, None
     planned, holds = None, None
     read = {name for c in p.checks for name in ledger.named_by_checks(p, c)}
     if modelled and not args.no_build:
-        from . import build, drawing, held, motion, overlay, plan
+        from . import build, drawing, held, motion, plan
 
         # A build and its checks can take a minute: say what the wait is for as it starts.
         print("building model.py", flush=True)
-        start = time.perf_counter()
         model = build.build(p)
-        build_seconds = round(time.perf_counter() - start, 1)
         if model is not None:
             mechanism = motion.Mechanism(p, model) if model.joints else None
             print("evaluating checks.yaml", flush=True)
-            results, read = checks.Checks(p, model, mechanism, incomparable).run()
+            results, read, slowest = checks.Checks(p, model, mechanism, incomparable).run()
             planned = plan.check(p, model)
             holds = held.check(p, model)
             coarsened = mechanism.coarsened if mechanism else {}
@@ -203,7 +200,6 @@ def cmd_check(args) -> int:
                 print("wrote build/isometric.png")
             if views:
                 print(f"wrote build/steps/: {views} step view{'s' * (views != 1)}")
-            images = overlay.render(p, model)
     if model is not None:
         read |= {thread.param for thread in model.threads}  # each held to its thread's sizes
     ledger.unchecked(p, read, model.used if model else set())
@@ -211,16 +207,13 @@ def cmd_check(args) -> int:
     status = report.status(p, partial=args.no_build)
     headline = report.counts(p, results)
     _print(p.findings)
-    if results:
-        slowest = max(results, key=lambda r: r.seconds)
-        print(f"slowest check: {slowest.id} {slowest.seconds:.1f} s")
+    if slowest:
+        print(f"slowest check: {slowest[0]} {slowest[1]:.1f} s")
     found = f"{status}: {report.tally(headline)}"
     if args.no_build:  # a partial run makes no claim, so it writes nothing to build/
         print(f"\n{found}; skipped the build, so no claim is made and no report was written.")
         return 1
-    path = report.write(
-        p, status, results, images, drawn, model, coarsened, build_seconds, planned, holds
-    )
+    path = report.write(p, status, results, drawn, model, coarsened, planned, holds)
     if planned is not None:
         print("wrote build/plan.md")
     known_first = f"Known first: {report.waiting_clause(p)}. " if p.known_first else ""

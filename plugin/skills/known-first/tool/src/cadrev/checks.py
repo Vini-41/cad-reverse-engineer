@@ -56,7 +56,6 @@ class Result:
     # What the check rests on, and the params it reads that rest on that basis.
     rests_on: str = "source"
     rests_on_params: list[str] = field(default_factory=list)
-    seconds: float = 0.0  # its check's wall time, at every pose it was evaluated at
     # Given only for the checks they apply to:
     pairs: int | None = None  # how many instance pairs an interference check evaluated
     pose: dict | None = None  # joint -> {from, value} it was posed at
@@ -284,9 +283,10 @@ class Checks:
         self._overlap_of: dict[tuple, float] = {}
         self._kinds = {kind: getattr(self, f"_{kind}") for kind in (*KINDS, "interference")}
 
-    def run(self) -> tuple[list[Result], set[str]]:
-        """Every check's results, and the params the checks read."""
-        p, results, read = self.p, [], set()
+    def run(self) -> tuple[list[Result], set[str], tuple[str, float] | None]:
+        """Every check's results, the params the checks read, and the check that took longest,
+        with its seconds at every pose it was evaluated at."""
+        p, results, read, slowest = self.p, [], set(), None
         self._hold_joint_values()
         for i, c in enumerate(p.checks):
             cid, found, start = c["id"], [], time.perf_counter()
@@ -305,13 +305,15 @@ class Checks:
                         p.error(fault.rule or "check-config", f"check {cid}: {fault.message}")
                 except (KeyError, TypeError, ValueError) as exc:
                     p.error("check-config", f"check {cid}: missing or unknown {exc}")
-            seconds = round(time.perf_counter() - start, 1)
+            seconds = time.perf_counter() - start
+            if found and (slowest is None or seconds > slowest[1]):
+                slowest = (str(cid), seconds)
             reads = ledger.named_by_checks(p, c, weighs=self.weighs) + self._given(c)
             read |= set(reads)
             basis, params = rests_on(p, reads, self.uncounted)
             for r in found:
                 r.rests_on, r.rests_on_params, r.note = basis, params, c.get("interpretation", "")
-                r.seconds, r.part = seconds, part_of(c, self.model)
+                r.part = part_of(c, self.model)
                 if not r.ok:
                     moved = "" if r.from_pose is None else f" from {pose_text(r.from_pose)}"
                     moved += f" to {pose_text(r.pose)}" if moved and r.pose else ""
@@ -321,7 +323,7 @@ class Checks:
                         f"{r.id}: expected {r.expected}, measured {r.measured}{miss}{moved}",
                     )
             results += found
-        return results, read
+        return results, read, slowest
 
     def _hold_joint_values(self) -> None:
         """[unit-quantity] for each pose value, and each end of a range check of a joint's own

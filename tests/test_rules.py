@@ -56,7 +56,6 @@ WARNINGS = {
     "conflict-open",
     "coverage-off",
     "gap-unused",
-    "overlay-empty",
     "param-unused",
     "quote-page",
     "unchecked-source",
@@ -129,22 +128,6 @@ def _measured(**fields):
     spec |= {"uncertainty": "±0.3 mm"} | fields
     spec = {k: v for k, v in spec.items() if v is not None}
     return lambda r, t: (add_reading(r, confirmed_by="A. Reviewer"), add(r, params={"foot": spec}))
-
-
-def _overlay(**fields):
-    """A front-view overlay of the link over a 400×200 figure, 10 px per mm."""
-
-    def apply(r, t):
-        from PIL import Image
-
-        (r / "figures").mkdir(exist_ok=True)
-        Image.new("RGB", (400, 200), "white").save(r / "figures" / "fig.png")
-        calibration = {"pixels": [[50, 150], [350, 150]], "evidence": "pitch.pitch"}
-        entry = {"id": "front", "image": "figures/fig.png", "part": "link", "view": "front"}
-        entry |= {"origin": [200, 100], "calibration": calibration} | fields
-        add(r, overlays={k: v for k, v in entry.items() if v is not None})
-
-    return apply
 
 
 def _released(*then, **kwargs):
@@ -441,10 +424,6 @@ LINK_FINDINGS = {
     "unit-quantity: a count that is no whole number": lambda r, t: (
         add_quote(r, t, "The hand has 1.5 links.", values={"n": 1.5}),
         add(r, checks="{id: n, kind: count, part: link, evidence: N1, key: n}"),
-    ),
-    "unit-quantity: a length where an overlay scales by one": lambda r, t: (
-        add_quote(r, t, "The link weighs 30 g.", values={"m": 30}),
-        _overlay(calibration={"pixels": [[50, 150], [350, 150]], "evidence": "N1.m"})(r, t),
     ),
     "unit-quantity: a length in the mass model": lambda r, t: add(
         r, parts="link: {density: pitch}"
@@ -761,17 +740,6 @@ LINK_FINDINGS = {
         probed(r, t, probe="diameter", at="link_step.m", values={"v": 3}),
         add(r, datums={"link_step.m": {"mid": ["link_step.a", "link_step.b"]}}),
     ),
-    # Overlays.
-    "overlay-config: a view that is none": _overlay(view="side"),
-    "overlay-config: a part that is none": _overlay(part="pin"),
-    "overlay-config: an instance that is none": _overlay(part=None, instance="link"),
-    "overlay-config: part and instance": _overlay(instance="link_1"),
-    "overlay-config: neither part nor instance": _overlay(part=None),
-    "overlay-config: a calibration that is no ledger value": _overlay(
-        calibration={"pixels": [[50, 150], [350, 150]], "evidence": "pitch.d"}
-    ),
-    "overlay-config: an image that is none": _overlay(image="figures/none.png"),
-    "overlay-empty": _overlay(origin=[5000, 100]),
 }
 
 
@@ -870,9 +838,7 @@ MECH_FINDINGS = {
     "model-return: a wheel without closes": _wound(
         WOUND.replace(', "closes": {"slide": "pull"}', "")
     ),
-    "model-return: a tendon datum that is none": _model(
-        LOOP, LOOP + '\n        "tendons": {"cord": {"path": ["rail_1.up", "slider_1.z"]}},'
-    ),
+    "model-return: a key build may not return": _model(LOOP, LOOP + '\n        "tendons": {},'),
     "model-return: a physics value params.yaml lacks": _model(KNEE, '"damping": "knee_c", ' + KNEE),
     "cable-on-axis": _wound(
         WOUND.replace("slider_1.down", "coupler_1.up").replace('{"slide"', '{"knee"')
@@ -1109,14 +1075,6 @@ LINK_DAMAGE = {
     "mass density naming a param that is none": _weighed(
         RESIN, "key: m, density: nope, tol_rel: 0.1", m=1.8, rho=1.2
     ),
-    "overlay pixels in 3D": _overlay(
-        calibration={"pixels": [[0, 0, 0], [1, 1, 1]], "evidence": "pitch.pitch"}
-    ),
-    "overlay calibrated over no span": _overlay(
-        calibration={"pixels": [[5, 5], [5, 5]], "evidence": "pitch.pitch"}
-    ),
-    "overlay without an origin": _overlay(origin=None),
-    "overlay image that is no image": _overlay(image="model.py"),
     "datum of booleans": _model("(p.pitch / 2, 0, 0)", "(True, 0, 0)"),
     "part name is a number": _model('{"link": link}', '{"link": link, 3: link}'),
     "model.py exits": _line("raise SystemExit(p.pitch)"),
@@ -1147,7 +1105,6 @@ MECH_DAMAGE = {
     "gear ratio that is a number": _chain(FOLD.replace('"fold"}', "p.L}")),
     "cable path of numbers": _wound(WOUND.replace('["rail_1.up", "slider_1.down"]', "[1, 2]")),
     "cable closes that is a list": _wound(WOUND.replace('{"slide": "pull"}', '["slide"]')),
-    "tendon of one datum": _model(LOOP, LOOP + '"tendons": {"cord": {"path": ["rail_1.up"]}},'),
     "mass model that is a list": lambda r, t: edit(
         r, "params.yaml", lambda d: d.update(parts=["rail"])
     ),

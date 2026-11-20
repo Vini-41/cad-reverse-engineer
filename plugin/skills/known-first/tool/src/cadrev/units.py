@@ -22,8 +22,8 @@ DERIVED = {
     "area": {"length": 2},
     "volume": {"length": 3},
     "angular speed": {"angle": 1, "time": -1},
-    # The physics values a joint or tendon applies: a spring, a damper; per radian, whatever the
-    # project's angle unit, as a simulator reads them.
+    # The physics values a joint applies: a spring, a damper; per radian, whatever the project's
+    # angle unit, as a simulator reads them.
     "torsional stiffness": {"force": 1, "length": 1},
     "torsional damping": {"force": 1, "length": 1, "time": 1},
     "linear stiffness": {"force": 1, "length": -1},

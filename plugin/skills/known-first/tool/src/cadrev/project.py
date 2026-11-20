@@ -135,7 +135,6 @@ class Project:
     params: dict[str, dict]
     checks: list[dict]
     gaps: dict[str, dict]
-    overlays: list[dict]
     # Datums declared on released bodies: <body>.<feature> -> its point in the body's frame, or
     # {circle: [a, b, c]} or {mid: [a, b]} of datums declared on that body.
     datums: dict[str, list | dict]
@@ -649,7 +648,6 @@ def load(root: Path) -> Project:
         parts=files["params.yaml"].get("parts", {}),
         checks=files["checks.yaml"].get("checks", []),
         gaps={g["id"]: g for g in files["gaps.yaml"].get("gaps", [])},
-        overlays=files["overlays.yaml"].get("overlays", []),
         plan=files["plan.yaml"] if (root / "plan.yaml").is_file() and not refused else None,
         findings=findings,
     )

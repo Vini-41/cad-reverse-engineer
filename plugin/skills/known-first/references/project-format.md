@@ -8,12 +8,11 @@ evidence.yaml   the ledger: evidence, skipped, conflicts, datums on released bod
 params.yaml     every number the model uses, with its basis; the mass model
 checks.yaml     the geometry compared with the ledger
 gaps.yaml       what the sources leave open
-overlays.yaml   optional: model edges drawn over figures
 plan.yaml       optional: how the object is made and put together
 model.py        the build123d model (modeling.md)
 sources/        registered source files, pinned by sha256
 figures/        the pages and images `cadrev figures` writes; figures/crops/ holds the pinned evidence crops
-build/          STEP files, isometric.png, drawings/, overlays, report.md, report.json; model.mjcf and meshes/ for a mechanism; plan.md and steps/ for a plan
+build/          STEP files, isometric.png, drawings/, report.md, report.json; model.mjcf and meshes/ for a mechanism; plan.md and steps/ for a plan
 ```
 
 Every file is read against the shapes shown here: an entry with a key not shown, or a value of the wrong type, is left out of the run with a `[schema]` finding. Quote every free-text value inside a `{…}` entry (`reason: "a test load, not the object"`), since an unquoted comma ends the value there.
@@ -53,7 +52,7 @@ sources:                 # written by `cadrev source`; keep it the last key
 
 ## Units come from the quote
 
-A ledger value is written as printed (`values: {L: 4}` for "4 cm"). cadrev reads the unit printed after the number, or after a hyphen (`5-mm pin`), and converts the value to the project's units wherever a param, a check or an overlay uses it; a `value` written on that param is in project units (40).
+A ledger value is written as printed (`values: {L: 4}` for "4 cm"). cadrev reads the unit printed after the number, or after a hyphen (`5-mm pin`), and converts the value to the project's units wherever a param or a check uses it; a `value` written on that param is in project units (40).
 
 - The numbers of a range or a product share its last unit ("3–5 mm", "40×8×5 mm"), and a nominal its tolerance's ("1.000 ± 0.005 in").
 - A value with no unit after it, such as a table cell, is already in project units. Where the table prints its unit in a header (`(cm)` over `13*13*10`), ledger the cell as printed, give the dimension a `derived` param scaled to the project's unit (`t_w * 10`) whose `interpretation` names the header, and check it through `expect` (`T2.W * 10`) on a `distance` check between datums on opposite faces, since a `bbox` check takes no `expect`.
@@ -206,7 +205,7 @@ parts:                       # the mass model
 - **`interpretation`** says how a value maps onto geometry where that is a choice: which axis, envelope or pitch, which feature, which configuration.
 - **A derived param whose `expr` makes a placement choice** (pins at the centres of the rounded ends, a frame centred in its sole) names the `gap` whose answer would settle it. A choice several params share can instead be one proposed param they all read (`end_margin` above).
 - **Rests on.** A param rests on its own basis; a derived one on the weakest basis among the params its `expr` reads (proposed < measured < source), or on proposed where it names a gap. The report's headline counts params by what they rest on. An `expr` that reads no param traces to nothing: give the number its own basis.
-- **A physics value** is a param only the simulation reads (a joint's damping, stiffness, spring rest or friction, a tendon's stiffness or damping), marked `physics: true` and named by the joint or tendon that applies it ([modeling.md](modeling.md#joints-and-loops)). It is in the project's units of its quantity, per radian on a revolute joint (stiffness in N·mm/rad by default) and per length on a slide (N/mm), a friction a torque or a force; a `spring_rest` is a joint value, like a pose. It shapes no geometry, so no check compares it, and a proposed one leaves a project exact.
+- **A physics value** is a param only the simulation reads (a joint's damping, stiffness, spring rest or friction), marked `physics: true` and named by the joint that applies it ([modeling.md](modeling.md#joints-and-loops)). It is in the project's units of its quantity, per radian on a revolute joint (stiffness in N·mm/rad by default) and per length on a slide (N/mm), a friction a torque or a force; a `spring_rest` is a joint value, like a pose. It shapes no geometry, so no check compares it, and a proposed one leaves a project exact.
 - **The mass model**, `parts`, weighs each part by one param: `mass`, a datasheet mass, for a purchased part, or `density`, which its volume is multiplied by, for a printed one. The MJCF export, the report and a mass check without `density` all weigh by it, so they never disagree. In a model with joints every part an instance places needs an entry.
 
 ### Threads
@@ -347,24 +346,6 @@ gaps:
 ```
 
 A gap is a question whose answer would replace a proposed or measured value. The report lists each with its `ask` and the params whose `gap` names it.
-
-## overlays.yaml
-
-```yaml
-overlays:
-  - id: s1-palm-front
-    image: figures/supp/image7.png
-    part: palm              # a part in its own frame, or "assembly"; or instance: <instance>
-    view: front             # front: X right, Z up · top: X right, Y up · right: Y right, Z up
-                            # with up: y, front: X right, Y up · top: X right, -Z up · right: -Z right, Y up
-    origin: [412, 618]      # the pixel where model (0, 0) lands
-    calibration:
-      pixels: [[120, 640], [705, 640]]   # two pixels spanning a known dimension
-      evidence: S1-palm.L                 # that dimension
-    mirror: false
-```
-
-Renders `build/overlays/<id>.png`: model edges in magenta over the figure, the calibration span in blue, one PNG pixel per image pixel below the title strip. It is visual evidence for a human and adds no pass or fail.
 
 ## plan.yaml
 

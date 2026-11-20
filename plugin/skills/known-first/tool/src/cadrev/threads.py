@@ -291,15 +291,6 @@ def screw(thread: Thread, length: float) -> str:
     return f"{thread.size}{pitch}×{printed.removesuffix(' mm')}"
 
 
-def sizes(standard: str) -> str:
-    """The sizes of a table, as a finding lists them."""
-    if standard == "metric":
-        return ", ".join(f"M{size}" for size in _METRIC)
-    return ", ".join(
-        f"{size}-{count}" for size, (_, counts, _) in _UNIFIED.items() for count in counts if count
-    )
-
-
 def pitches(designation) -> str | None:
     """For a designation whose size a table holds but whose pitch it does not, the pitches that
     size takes, as a finding lists them; None where no table holds the size."""

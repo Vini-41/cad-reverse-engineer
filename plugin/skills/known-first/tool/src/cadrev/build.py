@@ -1,5 +1,5 @@
 """Run model.py and hold what it returns to the model contract: parts, datums, the assembly, and
-for a mechanism its joints, loops, gears, cables and tendons."""
+for a mechanism its joints, loops, gears and cables."""
 
 from __future__ import annotations
 
@@ -54,8 +54,8 @@ JOINT_TYPES = {
     "fixed": JointType(None, None, "stays"),
 }
 DRIVES = ("actuated", "passive")
-# The physics values a revolute joint, a slide or a tendon may name, each a param: the MJCF
-# attribute it is written to, and its quantity.
+# The physics values a revolute joint or a slide may name, each a param: the MJCF attribute it
+# is written to, and its quantity.
 PHYSICS = {
     "revolute": {
         "damping": ("damping", "torsional damping"),
@@ -69,21 +69,14 @@ PHYSICS = {
         "friction": ("frictionloss", "force"),
         "spring_rest": ("springref", "length"),
     },
-    "tendon": {
-        "stiffness": ("stiffness", "linear stiffness"),
-        "damping": ("damping", "linear damping"),
-    },
 }
 # What a gear is stated by: the quantity of its param, and whether it couples a revolute joint
 # with a slide (a lead) or two joints of one type (a ratio).
 GEAR_BY = {"ratio": ("fraction", False), "lead": ("length", True)}
 AS_BUILT = "as built"  # names the end of a one-ended range that no param states: a move of 0
-_MOTION = {
-    "joint": schema.JOINT,
-    "gear": schema.GEAR,
-    "cable": schema.CABLE,
-    "tendon": schema.TENDON,
-}
+_MOTION = {"joint": schema.JOINT, "gear": schema.GEAR, "cable": schema.CABLE}
+# What model.py's build may return.
+_RETURNS = ("parts", "datums", "assembly", "threads", "loops", *(f"{kind}s" for kind in _MOTION))
 
 
 @dataclass
@@ -124,11 +117,10 @@ class Model:
     loops: dict = field(default_factory=dict)
     gears: dict = field(default_factory=dict)
     cables: dict = field(default_factory=dict)
-    tendons: dict = field(default_factory=dict)
     masses: dict[str, Mass] = field(default_factory=dict)
     # Each hole or shank declared for a thread, once held to the thread's sizes.
     threads: list[Threaded] = field(default_factory=list)
-    # True when a finding dropped the joints, loops, gears, cables and tendons build() returned.
+    # True when a finding dropped the joints, loops, gears and cables build() returned.
     dropped: bool = False
     # The joints the pose this assembly is placed at moves, itself or through a gear, cable or
     # loop.
@@ -192,22 +184,19 @@ def gear_by(gear: dict) -> tuple[str, str]:
     return key, gear[key]
 
 
-def physics_of(kind: str, entry: dict) -> dict[str, tuple[str, str]]:
-    """The physics values a joint or tendon may name, from PHYSICS; none for a fixed joint."""
-    return PHYSICS.get(entry["type"] if kind == "joint" else kind, {})
+def physics_of(joint: dict) -> dict[str, tuple[str, str]]:
+    """The physics values a joint may name, from PHYSICS; none for a fixed joint."""
+    return PHYSICS.get(joint["type"], {})
 
 
 def physics_slots(model: Model) -> dict[str, list[tuple[str, str, str]]]:
-    """Each param a joint or tendon names as a physics value, with each place it applies: what a
-    finding calls the place, the MJCF attribute, and its quantity."""
+    """Each param a joint names as a physics value, with each place it applies: what a finding
+    calls the place, the MJCF attribute, and its quantity."""
     slots: dict[str, list] = {}
-    for kind, entries in (("joint", model.joints), ("tendon", model.tendons)):
-        for name, entry in entries.items():
-            for key, (attr, quantity) in physics_of(kind, entry).items():
-                if key in entry:
-                    slots.setdefault(entry[key], []).append(
-                        (f"{kind} {name}'s {key}", attr, quantity)
-                    )
+    for name, joint in model.joints.items():
+        for key, (attr, quantity) in physics_of(joint).items():
+            if key in joint:
+                slots.setdefault(joint[key], []).append((f"joint {name}'s {key}", attr, quantity))
     return slots
 
 
@@ -259,8 +248,11 @@ def _contract(result) -> None:
 
     if not isinstance(result, dict):
         raise Fault(f"must return a mapping of parts, datums and assembly, not {_type(result)}")
-    keys = ("parts", "datums", "assembly", "threads", "loops", *(f"{kind}s" for kind in _MOTION))
-    for key in keys:
+    if unknown := [key for key in result if key not in _RETURNS]:
+        raise Fault(
+            f"returns {', '.join(map(repr, unknown))}, where it may return {', '.join(_RETURNS)}"
+        )
+    for key in _RETURNS:
         if not isinstance(result.get(key, {}), dict):
             raise Fault(f"{key} must be a mapping of names, not {_type(result[key])}")
         for name in result.get(key, {}):
@@ -304,7 +296,7 @@ def _listed(value, count: int) -> bool:
 
 
 def _unfit(kind: str, entry: dict) -> str | None:
-    """Why a joint, gear, cable or tendon of the right shape still states no motion."""
+    """Why a joint, gear or cable of the right shape still states no motion."""
     if kind == "joint":
         if entry.get("type") not in JOINT_TYPES:
             return f"type must be one of {', '.join(JOINT_TYPES)}, not {entry.get('type')!r}"
@@ -323,7 +315,7 @@ def _unfit(kind: str, entry: dict) -> str | None:
             return "names a driver, a driven and one of ratio or lead"
     elif len(entry.get("path", ())) < 2:
         return f"path must be two or more datums, not {entry.get('path')!r}"
-    elif kind == "cable" and ("wheel" in entry) != ("closes" in entry):
+    elif ("wheel" in entry) != ("closes" in entry):
         return "wheel and closes go together"
     return None
 
@@ -342,7 +334,7 @@ def _failure(exc: BaseException, model: Path) -> str:
 def build(p: Project) -> Model | None:
     """The model model.py builds from the resolved params, held to the contract; None after a
     [model-build] or [model-return] finding. A finding on its motion keeps the build and drops
-    the joints, loops, gears, cables and tendons."""
+    the joints, loops, gears and cables."""
     path = p.root / "model.py"
     spec = importlib.util.spec_from_file_location("cadrev_model", path)
     assert spec is not None and spec.loader is not None  # a .py path always gets a source loader
@@ -369,10 +361,7 @@ def build(p: Project) -> Model | None:
         },
         assembly=result.get("assembly", {}),
         used=params.used,
-        **{
-            f"{kind}s": result.get(f"{kind}s", {})
-            for kind in ("joint", "loop", "gear", "cable", "tendon")
-        },
+        **{f"{kind}s": result.get(f"{kind}s", {}) for kind in ("joint", "loop", "gear", "cable")},
     )
     declared = result.get("threads", {})
     _hold_units(p, model, set(declared.values()))
@@ -403,7 +392,7 @@ def build(p: Project) -> Model | None:
             p.error("assembly-part", f"assembly instance {inst}: unknown part {part!r}")
             del model.assembly[inst]
     if _motion_faults(p, model):
-        model.joints, model.loops, model.gears, model.cables, model.tendons = {}, {}, {}, {}, {}
+        model.joints, model.loops, model.gears, model.cables = {}, {}, {}, {}
         model.dropped = True
     _cables_on_axes(p, model)
     model.masses = _mass_model(p, model)
@@ -497,8 +486,7 @@ def _hold_units(p: Project, model: Model, threaded: set[str]) -> None:
         p.error(
             "param-physics",
             f"param {name}: is marked physics: true, but the model's geometry, a joint range, a "
-            "check or project.yaml's clearance reads it; a physics value only goes to a joint or "
-            "tendon",
+            "check or project.yaml's clearance reads it; a physics value only goes to a joint",
         )
     # A screw's length is what is bought, whether or not the model reads it.
     exported = ranges | coupled | slots.keys() | set(ledger.mass_params(p)) | threaded
@@ -524,7 +512,7 @@ def _worked_from(p: Project, name: str, through: tuple[str, ...] = ()) -> list[s
 
 def _motion_faults(p: Project, model: Model) -> bool:
     """File [model-joint], [model-loop], [model-gear], [model-cable] and [model-return] for each
-    joint, loop, gear, cable and tendon the assembly cannot hold; whether there is any."""
+    joint, loop, gear and cable the assembly cannot hold; whether there is any."""
     before = len(p.findings)
     moved_by: dict[str, str] = {}  # child instance -> the joint moving it
     for name, joint in model.joints.items():
@@ -562,12 +550,6 @@ def _motion_faults(p: Project, model: Model) -> bool:
         for joint in cable.get("closes", {}):
             closed_by.setdefault(joint, name)
     with p.filing("model-return", "model.build "):
-        for name, tendon in model.tendons.items():
-            for datum in tendon["path"]:
-                try:
-                    model.instance_datum(datum)
-                except Fault as fault:
-                    raise Fault(f"tendon {name}: {fault.message}") from None
         for param, places in physics_slots(model).items():
             if param not in p.values:
                 raise Fault(f"{places[0][0]} names {param}, which params.yaml does not define")

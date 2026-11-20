@@ -159,15 +159,12 @@ def test_gear_the_loops_do_not_allow_leaves_its_poses_unreached(mech_dir):
     assert [c["id"] for c in run.report["checks"]] == ["length", "rest", "mass"]
 
 
-BAD_TENDON = LOOP + '\n        "tendons": {"band": {"path": ["rail_1.up", "x.y"]}},'
-
-
 @pytest.mark.parametrize(
     "rule, old, new",
     [
         ("model-joint", '"crank_1.up"]', '"crank_1.a"]'),
         ("model-loop", "slider_1.up", "slider_1.nope"),
-        ("model-return", LOOP, BAD_TENDON),
+        ("model-return", KNEE, '"damping": "knee_c", ' + KNEE),
     ],
 )
 def test_fault_in_what_moves_keeps_the_build_and_drops_the_motion(mech_dir, rule, old, new):
@@ -356,44 +353,33 @@ def test_stroke_of_a_cable_is_compared_with_a_stated_direction_or_a_worked_lengt
     assert run.report["motion"]["cables"] == {"cord": {"path": ["rail_1.up", "slider_1.down"]}}
 
 
-SPRUNG = (
-    "The knee spring is 0.25 N·m/rad, preset at 45°, its damper 0.002 N·m·s/rad; a 300 N/m band."
-)
+SPRUNG = "The knee spring is 0.25 N·m/rad, preset at 45°, its damper 0.002 N·m·s/rad."
 PHYSICS = """\
 knee_k: {basis: source, from: N1.k, physics: true}
 knee_rest: {basis: source, from: N1.rest, physics: true}
 knee_c: {basis: source, from: N1.c, physics: true}
 knee_f: {basis: proposed, value: 2, rationale: light friction, gap: G1, physics: true}
-band_k: {basis: source, from: N1.band, physics: true}
-band_c: {basis: proposed, value: 0.001, rationale: light damping, gap: G1, physics: true}
 """
 SPRING = '"stiffness": "knee_k", "spring_rest": "knee_rest", "damping": "knee_c", '
-BAND = '"tendons": {"band": {"path": ["rail_1.up", "slider_1.down"], "stiffness": "band_k",'
 
 
 def test_physics_values_reach_the_mjcf_in_its_units_and_shape_no_geometry(mech_dir, tmp_path):
-    add_quote(mech_dir, tmp_path, SPRUNG, values={"k": 0.25, "rest": 45, "c": 0.002, "band": 300})
+    add_quote(mech_dir, tmp_path, SPRUNG, values={"k": 0.25, "rest": 45, "c": 0.002})
     remodel(mech_dir, KNEE, SPRING + '"friction": "knee_f", ' + KNEE)
-    remodel(mech_dir, LOOP, LOOP + "\n        " + BAND + ' "damping": "band_c"}},')
     add(mech_dir, params=PHYSICS)
     run = check(mech_dir)
     # No check sees a physics value, so a source one needs none; a proposed one is counted apart.
     assert run.status == "VERIFIED" and run.rules == []
     counts = run.report["counts"]
-    assert (counts["proposed"], counts["physics_proposed"]) == (3, 2)
-    assert "3 on proposed values; 2 more are proposed physics values." in run.md
-    # The report gives each in the project's units: N·mm per radian, degrees, N/mm.
-    knee, band = run.report["motion"]["joints"]["knee"], run.report["motion"]["tendons"]["band"]
+    assert (counts["proposed"], counts["physics_proposed"]) == (3, 1)
+    assert "3 on proposed values; 1 more is a proposed physics value." in run.md
+    # The report gives each in the project's units: N·mm per radian and degrees.
+    knee = run.report["motion"]["joints"]["knee"]
     assert {k: v["value"] for k, v in knee.items() if isinstance(v, dict)} == {
         "stiffness": 250,
         "spring_rest": 45,
         "damping": 2,
         "friction": 2,
-    }
-    assert band == {
-        "path": ["rail_1.up", "slider_1.down"],
-        "stiffness": {"from": "band_k", "value": 0.3},
-        "damping": {"from": "band_c", "value": 0.001},
     }
     # The MJCF is in mm, g and s, so a newton is 1e6 g·mm/s², and angles are radians.
     (joint,) = [j for j in mjcf(mech_dir).iter("joint") if j.get("name") == "knee"]
@@ -401,8 +387,6 @@ def test_physics_values_reach_the_mjcf_in_its_units_and_shape_no_geometry(mech_d
     assert [float(joint.get(k, 0)) for k in written] == pytest.approx(
         [2.5e8, math.radians(45), 2e6, 2e6]
     )
-    (spatial,) = mjcf(mech_dir).iter("spatial")
-    assert (float(spatial.get("stiffness", 0)), float(spatial.get("damping", 0))) == (3e5, 1e3)
 
 
 def test_a_slides_physics_values_are_a_force_per_length_and_a_force(mech_dir, tmp_path):

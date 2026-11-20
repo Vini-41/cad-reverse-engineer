@@ -1,5 +1,5 @@
 """model.py and the checks on what it builds: the lint, each check kind passing and failing,
-tolerances, what a check rests on, and overlays."""
+tolerances, and what a check rests on."""
 
 import re
 
@@ -330,47 +330,3 @@ def test_part_no_instance_places_is_checked_and_exported_in_its_own_frame(proj_d
     assert run.result("clear")["measured"] == "0 over 0 pairs (all)"
     assert (proj_dir / "build" / "parts" / "link.step").is_file()
     assert not (proj_dir / "build" / "assembly.step").exists()
-
-
-# What an overlay names, the columns of its figure the link's edges then span, and the axis the
-# project stands on: with y up, the front view shows the link's 5 mm width where z up shows its
-# 8 mm height.
-TARGETS = {
-    "part": ({"part": "link"}, (160, 240), "z"),
-    "instance": ({"instance": "link"}, (220, 300), "z"),
-    "assembly": ({"part": "assembly"}, (220, 300), "z"),
-    "part, y up": ({"part": "link"}, (160, 240), "y"),
-}
-
-
-@pytest.mark.parametrize("named", TARGETS)
-def test_overlay_draws_the_models_edges_over_its_figure_pixel_for_pixel(proj_dir, named):
-    target, columns, up = TARGETS[named]
-    meta(proj_dir, up=up)
-    import numpy as np
-    from PIL import Image
-
-    # An instance named after its part and placed 30 mm along X: `part` draws the part in its
-    # own frame, `instance` and `assembly` where the assembly places it. 2 px per mm.
-    place(proj_dir, link="Location((p.pitch, 0, 0))")
-    (proj_dir / "figures").mkdir()
-    figure = Image.new("RGB", (400, 200), "white")
-    figure.putpixel((0, 0), (255, 0, 0))
-    figure.save(proj_dir / "figures" / "fig.png")
-    calibration = {"pixels": [[50, 150], [110, 150]], "evidence": "pitch.pitch"}
-    overlay = {"id": "front", "image": "figures/fig.png", "view": "front", "origin": [200, 100]}
-    add(proj_dir, overlays=overlay | {"calibration": calibration} | target)
-    run = check(proj_dir)
-    assert run.status == "VERIFIED" and "![front](overlays/front.png)" in run.md
-    png = np.asarray(Image.open(proj_dir / "build" / "overlays" / "front.png").convert("RGB"))
-    strip = png.shape[0] - 200  # the title, above the figure
-    assert png.shape[1] == 400 and strip > 0 and (png[:strip] < 128).any()
-    image = png[strip:].astype(int)
-    assert tuple(image[0, 0]) == (255, 0, 0)
-    magenta = (image[:, :, 0] > 150) & (image[:, :, 1] < 150) & (image[:, :, 2] > 80)
-    drawn = np.nonzero(magenta.any(axis=0))[0]
-    assert (drawn.min(), drawn.max()) == pytest.approx(columns, abs=1)
-    rows = np.nonzero(magenta[:, columns[0] + 20])[0]  # the link's faces at z = ±4, y = ±2.5 mm
-    assert (rows.min(), rows.max()) == pytest.approx((92, 108) if up == "z" else (95, 105), abs=1)
-    blue = (image[:, :, 2] > 150) & (image[:, :, 0] < 120)  # the calibration span
-    assert np.nonzero(blue.any(axis=0))[0].min() == pytest.approx(50, abs=3)
