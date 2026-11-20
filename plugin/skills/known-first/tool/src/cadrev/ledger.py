@@ -7,9 +7,7 @@ import re
 
 from . import Fault, released, sources, threads, units
 from .project import (
-    AXES,
     BASES,
-    PROBE_QUANTITY,
     RESTS_ON,
     SOURCE_KINDS,
     Project,
@@ -42,7 +40,6 @@ def check(p: Project) -> None:
             p.error("units", f"project.yaml units.{q}: {problem}")
     check_sources(p)
     _evidence(p)
-    _released_datums(p)
     _params(p)
     _usage(p)
     for part, entry in p.parts.items():
@@ -87,9 +84,7 @@ def _evidence(p: Project) -> None:
         with p.filing("evidence-anchor", f"{eid}: "):
             if e.get("source") not in p.sources:
                 raise Fault(f"unknown source {e.get('source')!r}", "evidence-source")
-            needed = "probe" in e or (
-                "quote" in e and e.get("scope") != "context" and eid not in threaded
-            )
+            needed = "quote" in e and e.get("scope") != "context" and eid not in threaded
             if needed and not values:
                 p.error("evidence-values", f"{eid}: needs values (or scope: context)")
             if not e.get("locator"):
@@ -108,14 +103,16 @@ def _evidence(p: Project) -> None:
 
 
 def _anchor(p: Project, e: dict, values: dict) -> None:
-    """Hold item e to its anchor: a quote found in its text source, a crop with its reading, or a
-    probe of a geometry source."""
+    """Hold item e to its anchor: a quote found in its text source, or a crop with its reading."""
     eid, sid = e["id"], e["source"]
     if "quote" in e:
         if not p.available(sid):
             raise Fault()  # its source's own finding says why
         if not p.is_text(sid):
-            raise Fault(f"{sid} is not a text source; anchor it by image + reading, or a probe")
+            raise Fault(
+                f"{sid} is not a text source; anchor it by image + reading, or compare a released "
+                "body by a shape check"
+            )
         found = sources.find_quote(p.source_path(sid), e["quote"], e.get("page"))
         if found is None:
             where = f" on page {e['page']}" if e.get("page") else ""
@@ -123,8 +120,6 @@ def _anchor(p: Project, e: dict, values: dict) -> None:
         if not e.get("page") and len(sources.pages(p.source_path(sid))) > 1:
             p.warn("quote-page", f"{eid}: add page: {found}")
         _stated(p, eid, e["quote"], "quote", values)
-    elif "probe" in e:
-        _probe(p, e)
     elif "image" in e:
         image = p.root / e["image"]
         if not image.is_file():
@@ -136,7 +131,7 @@ def _anchor(p: Project, e: dict, values: dict) -> None:
         else:
             _stated(p, eid, str(e["reading"]), "reading", values)
     else:
-        raise Fault("needs a quote, an image + reading, or a probe")
+        raise Fault("needs a quote, or an image + reading")
 
 
 def _stated(p: Project, eid: str, text: str, kind: str, values: dict) -> None:
@@ -154,154 +149,6 @@ def _stated(p: Project, eid: str, text: str, kind: str, values: dict) -> None:
             )
         elif not any(math.isclose(value, q, rel_tol=1e-9) for q in stated):
             p.error(f"value-not-in-{kind}", f"{eid}.{key} = {value:g} is not in its {kind}")
-
-
-def _probe_values(p: Project, e: dict, body: str) -> dict[str, float]:
-    """What a probe evaluates on its released body, a solid or a region of a cut file: each value
-    key's value, in the project's units, an angle in degrees."""
-    kind, values, shape = e["probe"], e.get("values") or {}, p.body(body)
-    if kind == "bbox":
-        axes, size = e.get("axes") or {}, shape.bounding_box().size
-        for key in [*(axes.keys() - values.keys()), *values]:
-            if axes.get(key) not in AXES or key not in values:
-                raise Fault(f"axes gives each value its axis x, y or z, and {key} has none")
-        return {key: tuple(size)[AXES[axes[key]]] for key in values}
-    if kind not in PROBE_QUANTITY:
-        raise Fault(f"probe must be bbox, distance, angle or diameter, not {kind!r}")
-    if len(values) != 1:
-        raise Fault(f"a {kind} probe records one value, not {len(values)}")
-    (key,) = values
-    if kind == "diameter":
-        if "at" not in e:
-            raise Fault("a diameter probe names the datum it is taken at in at")
-        at, entry = str(e["at"]), p.datums.get(str(e["at"]))
-        derived = isinstance(entry, dict)
-        if released.at_point(body) and not (isinstance(entry, dict) and "circle" in entry):
-            raise Fault(f"a diameter of a cut file's region is taken at a circle datum, not {at}")
-        point = p.datum_on(at, body)
-        if not derived:
-            return {key: released.diameter_at(shape, point, p.length_tol, at)}
-        diameter = p.derived_datum(at)[2]
-        if diameter is None:
-            raise Fault(f"{at} is a midpoint; take a diameter at a circle or on a cylindrical face")
-        return {key: diameter}
-    between = e.get("between") or []
-    points = [p.datum_on(name, body) for name in between]
-    if kind == "distance":
-        return {key: released.datum_distance(points, e.get("along"))}
-    return {key: released.angle_at(points, p.length_tol, between, e.get("along"))}
-
-
-def _probe(p: Project, e: dict) -> None:
-    """Evaluate probe e on its released body and compare each value it records with what the
-    body gives: [probe-mismatch] beyond its tolerance, which is capped as a check's is."""
-    eid, sid = e["id"], e["source"]
-    if p.sources[sid].get("kind") != "geometry":
-        raise Fault(f"a probe reads a geometry source, and {sid} is not one")
-    if sid in p.unread_geometry:
-        raise Fault()  # its source's own finding says why
-    body = str(e.get("body", sid))
-    if sid in p.regions:
-        if (released.at_point(body) or ("",))[0] != sid:
-            raise Fault(f"{body} is not a region of cut file {sid}; name one {sid}@<x>,<y>")
-    else:
-        names = [b for b in p.bodies if released.source_of(b) == sid]
-        if body not in names:
-            raise Fault(f"{body} is not a body of {sid}; its bodies are {', '.join(names)}")
-    evaluated = _probe_values(p, e, body)
-    quantity = PROBE_QUANTITY[e["probe"]]
-    for key, value in evaluated.items():
-        recorded = p.stated(f"{eid}.{key}", quantity)
-        tol = float(e.get("tol", p.tolerance(quantity)))
-        if above_cap(tol, recorded):
-            p.error(
-                "tolerance-cap",
-                f"probe {eid}: tol {tol:g} is above {TOL_CAP:.0%} of {eid}.{key}, {recorded:g}",
-            )
-        ok = abs(value - recorded) <= tol
-        p.probes.append(
-            {
-                "evidence": eid,
-                "key": key,
-                "body": body,
-                "probe": e["probe"],
-                "recorded": recorded,
-                "value": float(f"{value:.12g}"),
-                "tol": tol,
-                "ok": ok,
-            }
-        )
-        if not ok:
-            p.error(
-                "probe-mismatch",
-                f"probe {eid}.{key}: evaluates to {value:.6g} on body {body}, but records "
-                f"{recorded:g} (tolerance {tol:g})",
-            )
-
-
-def _released_datums(p: Project) -> None:
-    """[datum-off-solid] for each datum declared on released geometry that lies on no body, each
-    derived datum the datums it names give no point, and each datum a derived one is worked out
-    from that lies on no triangle corner of an STL or on no region's edge of a cut file."""
-    unread = p.unread_geometry
-    sheets = [
-        sid
-        for sid, s in p.sources.items()
-        if s.get("kind") == "geometry" and released.is_sheet(p.source_path(sid))
-    ]
-    # The datums some derived datum is worked out from.
-    deriving = {
-        str(datum)
-        for entry in p.datums.values()
-        if isinstance(entry, dict)
-        for through in entry.values()
-        for datum in through
-    }
-    for name, point in p.datums.items():
-        sheet = next((s for s in sheets if name.startswith(f"{s}.")), None)
-        derived = isinstance(point, dict)
-        misshapen = not derived and len(point) != (3 if sheet is None else 2)
-        if misshapen:
-            shape = "[x, y, z]" if sheet is None else f"[x, y] on cut file {sheet}"
-            p.error("schema", f"evidence.yaml datums.{name}: must be {shape}, not {point}")
-        elif released.source_of(name.partition(".")[0]) in unread or sheet in unread:
-            continue  # its source's own finding says why
-        elif derived:
-            with p.filing("datum-off-solid", f"datum {name}: "):
-                p.derived_datum(name)
-        elif sheet is not None:
-            found, at = p.regions[sheet], (point[0], point[1])
-            holding = released.outlines_at(found, at, p.length_tol)
-            if not holding:
-                p.error(
-                    "datum-off-solid",
-                    f"datum {name} of cut file {sheet}: lies inside no region's outer contour",
-                )
-            elif name in deriving and (
-                gap := released.off_edge([found[i] for i in holding], at, p.length_tol)
-            ):
-                p.error(
-                    "datum-off-solid",
-                    f"datum {name} of cut file {sheet}: lies on no region's edge, {gap:.4g} from "
-                    "the nearest; a datum derived from it is pinned on a sheet only by edges",
-                )
-        elif (named := p.released_datum(name)) is None:
-            p.error(
-                "datum-off-solid",
-                f"datum {name}: names no body of a geometry source; name it <body>.<feature>",
-            )
-        elif (gap := released.off_solid(p.bodies[named[0]], named[1], p.length_tol)) is not None:
-            p.error("datum-off-solid", f"datum {name} of body {named[0]}: {released.off(gap)}")
-        elif (
-            name in deriving
-            and released.is_mesh(p.source_path(released.source_of(named[0])))
-            and (gap := released.off_corner(p.bodies[named[0]], named[1], p.length_tol))
-        ):
-            p.error(
-                "datum-off-solid",
-                f"datum {name} of body {named[0]}: lies on no triangle corner, {gap:.4g} from the "
-                "nearest; a datum derived from it is pinned on an STL only by corners",
-            )
 
 
 def _offsets(text: str, needle: str) -> list[int]:
@@ -529,10 +376,21 @@ def _params(p: Project) -> None:
             continue
         p.rests_on[name] = basis
         if basis == "source":
-            ref = spec.get("from", "")
+            ref = str(spec.get("from", ""))
             value = p.value(ref)
+            if value is None and is_body(p, ref):
+                if "value" not in spec:
+                    p.error(
+                        "param-from",
+                        f"param {name}: from: {ref} is a released body; give the value it settles",
+                    )
+                    continue
+                value = float(spec["value"])
             if value is None:
-                p.error("param-from", f"param {name}: from: {ref!r} is not an evidence value")
+                p.error(
+                    "param-from",
+                    f"param {name}: from: {ref!r} is neither an evidence value nor a released body",
+                )
                 continue
             if "value" in spec and not math.isclose(float(spec["value"]), value, rel_tol=1e-9):
                 p.error("param-mismatch", f"param {name}: value {spec['value']} != {ref} = {value}")
@@ -562,6 +420,16 @@ def _params(p: Project) -> None:
             p.values[name] = float(spec["value"])
     _derived(p, pending)
     _screws(p)
+
+
+def is_body(p: Project, name: str) -> bool:
+    """Whether name addresses a released body: a solid of a geometry source, or a region of a cut
+    file."""
+    try:
+        p.body(name)
+    except Fault:
+        return False
+    return True
 
 
 def _screws(p: Project) -> None:
@@ -778,19 +646,36 @@ def _feeding(p: Project, names: set[str]) -> set[str]:
     return found
 
 
-def unchecked(p: Project, read: set[str], model_reads: set[str]) -> None:
+def unchecked(p: Project, read: set[str], model_reads: set[str], passed: set[str]) -> None:
     """[unchecked-source] for each source param no check checks, where read is the params the
-    checks read and model_reads those model.py reads. A check checks the params whose ledger value
-    it compares and what the params it reads are derived from."""
+    checks read, model_reads those model.py reads and passed the ids of the results that pass. A
+    check checks the params whose ledger value it compares and what the params it reads are
+    derived from, and a shape check that passes the params citing its body."""
     checked = _feeding(p, read)
     # A screw's length the model does not read shapes no geometry: it says what is bought.
     bought = set(p.screws.values()) - _feeding(p, model_reads)
     unchecked = p.params.keys() - checked - bought
     compared = {ref for c in p.checks for ref in compared_refs(c)}
+    shaped = [
+        _body_key(p, str(c.get("body")))
+        for c in p.checks
+        if c.get("kind") == "shape" and c["id"] in passed
+    ]
     for name, spec in p.params.items():
-        if name in unchecked and spec.get("basis") == "source" and spec.get("from") not in compared:
-            p.warn(
-                "unchecked-source",
-                f"param {name}: {spec.get('from')} feeds the model but no check confirms the "
-                "geometry realises it",
-            )
+        ref = str(spec.get("from"))
+        if name not in unchecked or spec.get("basis") != "source" or ref in compared:
+            continue
+        if is_body(p, ref) and _body_key(p, ref) in shaped:
+            continue
+        p.warn(
+            "unchecked-source",
+            f"param {name}: {ref} feeds the model but no check compares the geometry with it",
+        )
+
+
+def _body_key(p: Project, name: str):
+    """What a body name addresses, alike for two names of one region of a cut file."""
+    try:
+        return p.region(name) if released.at_point(name) else name
+    except Fault:
+        return name

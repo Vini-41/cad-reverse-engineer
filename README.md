@@ -27,7 +27,7 @@ cad-reverse-engineer is three skills for coding agents, with their CLI, `cadrev`
 - **CAD you can open and change.** One STEP file per part and one for the assembly, for SolidWorks, Fusion, Onshape or FreeCAD. Behind them is a parametric [build123d](https://github.com/gumyr/build123d) model: every dimension is a named value in `params.yaml`, so you change a number and rebuild.
 - **A mechanism that moves.** Joints, gear ratios and lead screws export to MuJoCo, and stated motion is checked on the model: one turn of this gearbox's sun moves its carrier 50°, as its 7.2:1 ratio says.
 - **A drawing of each part.** Three views and an isometric one, dimensioned with the values the build was checked against, under an isometric view of the assembly. Screw threads are named from the ISO metric or Unified table and drawn as a drawing shows them; none is cut into the model.
-- **A report of where each dimension came from.** It was quoted from a document, probed from a file the authors released, or proposed because nothing states it. Each proposed value is listed beside the question that would settle it.
+- **A report of where each dimension came from.** It was quoted from a document, read off a file the authors released, or proposed because nothing states it. Each proposed value is listed beside the question that would settle it.
 - **A plan to make it.** How each part is made, what to buy and the assembly sequence, each step under a view of what it places. `cadrev check` holds the plan to the model, so every part and screw it names is one the CAD has, and no part is left in mid-air.
 
 Published hardware rarely comes with CAD you can edit. A paper gives an envelope table and a few labelled figures, a datasheet one drawing, a repository a folder of meshes. A model rebuilt from that mixes stated values with guesses, and once the STEP file exists, nobody can tell which is which. This keeps them apart, and checks the built geometry against every value the sources state.
@@ -51,13 +51,13 @@ wrote build/assembly.step
 wrote build/drawings/: 6 part drawings
 wrote build/isometric.png
 
-VERIFIED: 0 errors, 1 warning, 88/88 checks pass. Report: build/report.md
+VERIFIED: 0 errors, 1 warning, 15/15 checks pass. Report: build/report.md
 ```
 
 The first run downloads build123d, OCC and MuJoCo (about a minute); the check itself takes about 15 seconds. Open `examples/centrifuge/build/assembly.step` in your CAD program, then read `build/report.md` beside it. It opens:
 
-> **VERIFIED**: 0 errors, 1 warning. 88/88 geometry checks pass.\
-> Of 92 parameters, 86 rest on sources, 0 on measured values and 6 on proposed values.
+> **VERIFIED**: 0 errors, 1 warning. 15/15 geometry checks pass.\
+> Of 93 parameters, 87 rest on sources, 0 on measured values and 6 on proposed values.
 
 The warning names what nothing holds: the fan's motor is not built, so its hub and the rotor on it stand 2 mm clear of the plate. After its sources, the report lists what they leave open:
 
@@ -97,7 +97,7 @@ A reconstruction is a directory of plain files, and `cadrev check` holds them to
                      └─── compared with the ledger, not params ───┘
 ```
 
-1. **Ledger.** Every number the sources state about the object is recorded as a verbatim quote, located in a hash-pinned copy of the source. A number printed only inside a figure is a crop of that figure, with a reading a person confirms. Geometry the authors released (STEP, STL, laser-cut SVG) is probed: its dimensions are read from the file itself.
+1. **Ledger.** Every number the sources state about the object is recorded as a verbatim quote, located in a hash-pinned copy of the source. A number printed only inside a figure is a crop of that figure, with a reading a person confirms. Geometry the authors released (STEP, STL, laser-cut SVG) is compared whole with the part built from it, in the file's own frame.
 2. **Parameters.** The model takes every number from `params.yaml`, where each declares its basis: `source`, `derived`, `measured` or `proposed`. `model.py` is linted to hold no dimensions of its own.
 3. **Checks.** Each published value (an envelope, a hole pitch, a bore, a mass, a gear ratio, a stroke) is evaluated on the built solids and compared with the ledger, never with the parameters. A part whose file the authors released is also compared with it, surface to surface.
 4. **Report.** `build/report.md` gives the status, the questions that would replace each proposed value, the conflicts between sources, and then the full audit trail, its checks part by part under each part's drawing. Once the design has a plan, `build/plan.md` is its guide: what to make, what to buy and each step under its view, with each quantity counted from the model.

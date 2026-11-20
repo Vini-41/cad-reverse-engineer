@@ -4,7 +4,7 @@ A reconstruction project is a directory of YAML files plus `model.py`. `cadrev i
 
 ```
 project.yaml    format, target, units, tolerance, sources
-evidence.yaml   the ledger: evidence, skipped, conflicts, datums on released bodies
+evidence.yaml   the ledger: evidence, skipped, conflicts
 params.yaml     every number the model uses, with its basis; the mass model
 checks.yaml     the geometry compared with the ledger
 gaps.yaml       what the sources leave open
@@ -46,7 +46,7 @@ sources:                 # written by `cadrev source`; keep it the last key
 - `material` and `follows` are the complete model's other two answers: what its made parts are made of and how, and whether a feature that is hard to make that way is built as the sources show it (`design`) or replaced by one that does the same job (`function`). The report prints both.
 - `cadrev source` with an id already registered refreshes that entry: its file, hash and whatever the command states. That is how a source is restored into a clone or replaced by a new download.
 - **Text sources** are quote-checked and swept: PDF, DOCX, TXT, MD, HTML (read as its rendered text). Save a web datasheet as HTML or TXT to quote it. Video and image files anchor image evidence only.
-- **Geometry sources** (`kind: geometry`) are what the authors released: STEP or STL, read in millimetres and converted to the project's length unit. A **body** is named by its source's id where the file holds one solid, else `<source>#<n>`, the nth solid in file order from 1. Where a part ships as both, register the STEP, which keeps the cylindrical faces and axes an STL flattens into triangles ([derived datums](#probes-released-geometry)).
+- **Geometry sources** (`kind: geometry`) are what the authors released: STEP or STL, read in millimetres and converted to the project's length unit. A **body** is named by its source's id where the file holds one solid, else `<source>#<n>`, the nth solid in file order from 1. Where a part ships as both, register the STEP, which keeps the cylindrical faces and axes an STL flattens into triangles. A part a body ships is built in its frame and compared whole with it by a [shape check](#checksyaml).
 - **A cut file** is a laser-cut sheet, an SVG registered as `kind: geometry`. Its bodies are its regions, each an outer contour with the holes inside it, named by a point inside it: `<source>@<x>,<y>` (`plates@30,41`). Points are in the sheet's frame: from the page's top-left corner, x right and y down, at the scale the file declares with every transform applied, in the project's length unit. The coverage findings name each region by such a point, ready to copy.
 
 ## Units come from the quote
@@ -59,7 +59,7 @@ A ledger value is written as printed (`values: {L: 4}` for "4 cm"). cadrev reads
 - A value printed in two different units in one quote, or once with a unit and once without, is ambiguous: quote only the part that states it.
 - A **count** (a gear's teeth, a train's planets) is a whole number printed with no unit or a count unit, read as a pure number: a table's `25` for the sun's teeth gives `z_sun` 25, not 25 mm. A ratio is ledgered as its number: "7.2:1" is `{ratio: 7.2}`.
 
-Each use expects one quantity (a length for a `distance` check, an angle for an `angle` check, a count for a `count` check, a revolute joint's angle or a slide's length for its range and poses), and a value printed in a unit of another, or a probe of another, is a `[unit-quantity]` finding naming the quantity expected.
+Each use expects one quantity (a length for a `distance` check, an angle for an `angle` check, a count for a `count` check, a revolute joint's angle or a slide's length for its range and poses), and a value printed in a unit of another is a `[unit-quantity]` finding naming the quantity expected.
 
 | quantity | units read, spelled-out names included |
 |---|---|
@@ -82,7 +82,7 @@ Torque, pressure, density and speed are in the project's base units (N·mm, N/mm
 
 ### `evidence`: the ledger
 
-One item per statement in a source, anchored one of three ways: a quote, a figure reading (both below) or a [probe](#probes-released-geometry).
+One item per statement in a text source, anchored one of two ways: a quote or a figure reading. Geometry the authors released states no numbers: a param takes a value it settles by citing the body.
 
 ```yaml
 evidence:
@@ -111,45 +111,6 @@ evidence:
   - `not-modeled`: a real statement about something the reconstruction does not build: what lies outside the device (a test rig, the electronics), a part the target's configuration leaves out, a part whose motion cadrev's joint types cannot model (a flexure), a feature that a project following the function replaces with one easier to make, or behaviour the kinematic model leaves out (a spring's stiffness, a damping, a friction). It keeps its `values`, so the report shows what was left unbuilt.
   - `context`: a statement that informs interpretation but is not a dimension of a modelled feature. A restatement is context: a value stated in several places is ledgered at each, the statement a param or check reads stays in scope (a quote rather than a figure reading where both exist), and each other one says `restates <id>`. Statements whose values differ are a conflict, not a restatement. A direction of change stated with no length (the cable lengthens between two poses) is context too, its reason saying so: no check compares a direction.
 - Every value of an in-scope item is used by a param's `from` or compared by a check.
-
-### Probes: released geometry
-
-A probe takes a value from a body of a geometry source. cadrev evaluates it from the file on every run and compares it with the value the probe records, the design value (`32.5`, not the file's `32.4999`), in the project's units.
-
-```yaml
-evidence:
-  - {id: R-hub, source: rotor_step, locator: "rotor, hub bore axis", probe: distance,
-     between: [rotor_step.hub_top, rotor_step.hub_bottom], values: {h: 20}}
-  - {id: R-env, source: lid_step, body: "lid_step#2", locator: "lid, envelope", probe: bbox,
-     axes: {D: x, H: z}, values: {D: 130, H: 4}}
-  - {id: R-bore, source: rotor_step, locator: "rotor, hub bore", probe: diameter,
-     at: rotor_step.bore_wall, values: {d: 32.5}}
-  - {id: H-bore, source: hub_stl, locator: "hub, 13-sided bore", probe: diameter,
-     at: hub_stl.bore, values: {d: 5}}
-  - {id: S-end, source: plates, body: "plates@30,41", locator: "link plate, hole from its end",
-     probe: distance, between: [plates.end, plates.hole_a], values: {e: 5}}
-datums:                        # on released bodies: <body>.<feature>: [x, y, z] in the file's frame
-  rotor_step.hub_top: [0, 0, 20]
-  rotor_step.hub_bottom: [0, 0, 0]
-  rotor_step.bore_wall: [16.25, 0, 10]
-  hub_stl.rim_1: [2.5, 0, 0]          # three triangle corners of the bore's rim
-  hub_stl.rim_5: [-0.8865, 2.3375, 0]
-  hub_stl.rim_9: [-1.8713, -1.6578, 0]
-  hub_stl.bore: {circle: [hub_stl.rim_1, hub_stl.rim_5, hub_stl.rim_9]}
-  plates.end: [20, 42.5]             # on a cut file's sheet: <source>.<feature>: [x, y]
-  plates.a1: [23.5, 42.5]            # three points on hole a's edge, and the circle through them
-  plates.a2: [25, 41]
-  plates.a3: [26.5, 42.5]
-  plates.hole_a: {circle: [plates.a1, plates.a2, plates.a3]}
-```
-
-- `probe` is `bbox` (with `axes`, one per value), `distance` (two datums in `between`, `along` optional), `angle` (three datums, the angle at the middle one, in degrees, `along` optional) or `diameter` (of the circle a circle datum `at` names, else of the cylindrical face the datum `at` lies on). Each reads the body as the check of that kind reads the built model. `body` may be left out where the file holds one solid.
-- A probe of a cut file names its region in `body` (`<source>@<x>,<y>`) and reads it in the sheet's frame: `bbox` with `axes` x and y, the region's outer contour; `distance` (`along` x or y) or `angle` between datums of the sheet in that region; `diameter` at a circle datum.
-- A datum lies on its body's solid within `tolerance.length`, as a built part's does ([modeling.md](modeling.md#contract)). A cut file's datum lies on the sheet, named `<source>.<feature>` and given as `[x, y]`, inside a region's outer contour. One a probe or a derived datum names lies on its region's edge, the outer contour or a hole's, within `tolerance.length`: a hole's centre is a circle datum, not a point typed at it.
-- A **derived datum** on a released body is worked out from datums given as points on that same body, `[x, y, z]` on a STEP or STL and `[x, y]` on a cut file's sheet: `{circle: [a, b, c]}` is the circle through three, more than `tolerance.length` apart and off one line, and `{mid: [a, b]}` the midpoint of two. A `distance` or `angle` probe, or a shape check's pair, reads a circle datum at its centre, and a `diameter` probe at it reads the circle's diameter. The datums it names are confirmed as any datum is; the derived point lies in air by design.
-- On an STL, each datum a derived datum names also lies within `tolerance.length` of a triangle corner, since corners are the points a mesh stores on the true surface.
-- A probe may set its own `tol`, capped as a check's is. It needs no human confirmation. A param takes its value with `from:` and basis `source`, like a quote's.
-- A probe restating a quote is `context`; one that differs from a quote is a conflict.
 
 ### `skipped`: what is not about the object
 
@@ -195,7 +156,7 @@ parts:                       # the mass model
 
 | basis | takes | meaning |
 |---|---|---|
-| `source` | `from`, an evidence value; `value` optional and must match | stated by a source: a quote, a reading or a probe |
+| `source` | `from`, an evidence value, `value` optional and must match; or a released body, `value` its design value | stated by a source: a quote, a reading or a released body |
 | `derived` | `expr` over other params; `value` optional and must match; `gap` with `interpretation` where the expr is a choice | computed; `pi sqrt sin cos tan asin acos atan atan2 radians degrees hypot min max abs` are available |
 | `measured` | `from`, an image evidence id whose source is not a geometry source; `value`, `method`, `uncertainty`; `gap` optional | scaled off a figure of the object against a known reference |
 | `proposed` | `value`, `rationale`; `gap` | a reconstruction choice the sources do not make |
@@ -244,11 +205,8 @@ checks:
   - {id: clear, kind: interference, pairs: [[palm_1, finger_link_1]], max_volume: 0.001}
   - {id: planets, kind: count, part: planet, evidence: T1-sspg, key: n_planets}
   - {id: lid-screws, kind: count, thread: lid_screw, evidence: T2-bom, key: n_m3}
-  - {id: rotor-shape, kind: shape, part: rotor, body: rotor_step,
-     pairs: [[rotor.hub_top, rotor_step.hub_top], [rotor.hub_bottom, rotor_step.hub_bottom],
-             [rotor.rim, rotor_step.rim]]}
-  - {id: plate-shape, kind: shape, part: plate, body: "plates@30,41", along: z,
-     pairs: [[plate.a, plates.a], [plate.b, plates.b], [plate.d, plates.d]]}
+  - {id: rotor-shape, kind: shape, part: rotor, body: rotor_step}
+  - {id: plate-shape, kind: shape, part: plate, body: "plates@30,41", along: z}
 ```
 
 - **`bbox`**: the part's axis-aligned bounding-box size in its own frame, one result per axis.
@@ -258,13 +216,18 @@ checks:
 - **`mass`**: Σ volume × `density` over the instances it weighs, plus its `add` params, within `tol_rel`, which it must set. It weighs the instances `instances` lists, else the whole assembly, narrowed by `parts`. Each part weighed in several instances takes a `counts` entry naming the param that states how many, which the check holds to the instances it finds; without one the check rests on proposed, since how many there are is then the model's choice. Without `density` it weighs each part by the [mass model](#paramsyaml), and so confirms the model as exported against a stated total.
 - **`count`**: how many instances of `part` the assembly places, compared exactly, with a stated count or with one [`expect`](#worked-values-expect) works out, as a count per leg times the legs is (`expect: "P2.legs * P11.springs"`); or, with `thread` in place of `part`, how many holes and shanks carry that thread param's thread, each counted once per instance of its part, which is how a stated number of screws is checked without modelling one. A clearance hole is not counted. A tooth count is checked through what it builds and couples, not by counting teeth.
 - **`interference`**: the overlap volume between instances, over `pairs` or every pair, at most `max_volume` (default `tolerance.length`³). It needs no evidence.
-- **`shape`**: a built part against a released body, as a whole. `pairs` lists at least three datum pairs `[<part>.<feature>, <body>.<feature>]` not on one line; cadrev carries the part onto the body by the rigid motion that best fits them, which must fit within `tolerance.length`, then compares the largest distance between the two surfaces with `tol`. Against a cut file's region, `along` names the part axis its outline is projected along, and the part may be turned over. A shape check confirms the shape, not the params that build it: they still need their own checks.
+- **`shape`**: a built part against its released body, as a whole and in place: the part is built in the body's frame, and the two must agree within `tolerance.length` everywhere. The report gives the largest deviation and where it lies. Each kind of file is compared as it stores its shape:
+  - **STEP**: the largest distance between their sampled surfaces, both ways.
+  - **STL**: only at points both shapes hold exactly, so a facet's sag loosens nothing. Every mesh corner lies on the part; every corner of the part where sharp edges meet lies on a mesh corner, and every sharp closed edge (a hole's rim) passes through three; every facet's three corners lie on one smooth patch of the part, faces joined by tangent edges. A seam, a smooth edge and a tangent join are no corner a mesh must hold.
+  - **A cut file's region**: the part's outline projected along `along`, the part axis square to the sheet, against the region's edges, both ways, where model.py's [`sheets`](modeling.md#contract) places the part on the sheet. A part cut from several regions takes a shape check and a placement per region.
+
+  A passing shape check checks every param that cites its body (`from: <body>`).
 
 **Over instances.** A `bbox`, `distance` or `angle` check that names `instances: [...]` in place of `part` is evaluated in the assembly frame, with its datums named `<instance>.<feature>`: an envelope of a subassembly, a spacing between parts. Datums of two different parts are only comparable this way.
 
-**Tolerances.** `tol` overrides `tolerance.length` (or `tolerance.angle`, in degrees) for one check, and is how far its evidence lets the value stray. It is capped at 5% of each value the check compares, `tol_rel` at 0.25, a `range` check's `tol` at 5% of the span between its ends, and a shape check's at 1% of its body's bbox diagonal. The report lists every tolerance and overlap limit other than the default beside its check.
+**Tolerances.** `tol` overrides `tolerance.length` (or `tolerance.angle`, in degrees) for one check, and is how far its evidence lets the value stray. It is capped at 5% of each value the check compares, `tol_rel` at 0.25, and a `range` check's `tol` at 5% of the span between its ends. A shape check takes no `tol`. The report lists every tolerance and overlap limit other than the default beside its check.
 
-**What a check rests on.** A check rests on the weakest basis among the params it reads (a pose, a density, a count, its joint's range, the gears a pose moves through), or on source when it reads none; the report shows it. A mass check on a proposed density confirms the model given that density, not the density. A `source` param should be checked, its ledger value compared by a check or the param read by one; one that is not raises a warning.
+**What a check rests on.** A check rests on the weakest basis among the params it reads (a pose, a density, a count, its joint's range, the gears a pose moves through), or on source when it reads none; the report shows it. A mass check on a proposed density confirms the model given that density, not the density. A `source` param should be checked, its ledger value compared by a check, the param read by one, or its body's shape check passing; one that is not raises a warning.
 
 ### Worked values: `expect`
 
@@ -392,7 +355,7 @@ steps:                   # the assembly sequence
 
 ## Known first
 
-`known_first: true` holds a project to what the sources settle: the parts whose every dimension is quoted, worked out from quotes, probed or measured.
+`known_first: true` holds a project to what the sources settle: the parts whose every dimension is quoted, worked out from quotes, read off a released body or measured.
 
 - A param resting on proposed is an error, a sweep's `steps` aside, so a known-first project that is VERIFIED is exact.
 - An in-scope ledger value nothing uses **waits**, and so does a gap no param names, the question a waiting part asks. The report lists both under Waiting. Everything else holds: the whole ledger is still harvested and covered.

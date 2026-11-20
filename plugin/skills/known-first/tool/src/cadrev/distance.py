@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import importlib
 import math
+from typing import Literal, NamedTuple
 
 import numpy as np
 
@@ -633,3 +634,268 @@ def _segment_distance(points: np.ndarray, a, b, within: np.ndarray) -> np.ndarra
     t = np.clip(((points[near] - a) @ ab) / max(float(ab @ ab), 1e-300), 0, 1)
     out[near] = np.linalg.norm(points[near] - a - t[:, None] * ab, axis=1)
     return out
+
+
+# An STL body is held to a part only at points both shapes hold exactly, so facet sag loosens
+# nothing.
+
+_SPHERE = _OCP["GeomAbs"].GeomAbs_SurfaceType.GeomAbs_Sphere
+# How far, in degrees, two faces' normals across an edge, or two edges' tangents at a vertex, may
+# turn and still be one smooth surface or curve: a join there is the part's parametrisation, not
+# its shape, so a mesh of the same shape need not hold a corner there.
+_SMOOTH = 1.0
+# How many spans each edge of a closed chain is split into, to bound corners' distances to it.
+_CHAIN = 64
+
+
+# What found an STL's largest deviation: a mesh corner off the part, a corner or a closed edge of
+# the part on no mesh corner, or a facet whose corners lie on no one smooth patch of the part.
+Found = Literal["mesh corner", "part corner", "closed edge", "facet"]
+
+
+class MeshFit(NamedTuple):
+    """How a part fits an STL body (mesh_fit): whether it passes, the largest deviation found,
+    where it lies, what found it, and how many facets lie on no one smooth patch."""
+
+    ok: bool
+    distance: float
+    at: tuple[float, float, float]
+    found: Found
+    facets: int
+
+
+def mesh_fit(part, mesh, tol: float, samples: int) -> MeshFit:
+    """Hold part to mesh, an STL body of flat triangles, at points both hold exactly, each within
+    tol: every mesh corner lies on the part; every corner of the part where sharp edges meet lies
+    on a mesh corner, and every sharp closed edge passes through three; every facet's three
+    corners lie on one smooth patch of the part, faces joined by tangent edges. The deviation is
+    the largest any of them finds, exact: a mesh corner's distance to the part, a point of the
+    part's to its mesh corners, or a failing facet's centre's to the part."""
+    triangles = _Surface(mesh, 1).mesh
+    if triangles is None:
+        raise ValueError("an STL body is flat triangles")
+    corners, of = np.unique(np.round(triangles.reshape(-1, 3), 9), axis=0, return_inverse=True)
+    surface = _Surface(part, samples)
+    box = part.bounding_box()
+    size = max(abs(v) for corner in (box.min, box.max) for v in corner)
+    slack = _ROUNDING * max(1.0, size, float(np.abs(corners).max(initial=0)))
+    gap, n = _farthest(corners, surface, slack)
+    found: list[tuple[Found, float, tuple | None]] = [
+        ("mesh corner", gap, tuple(corners[n]) if n >= 0 else None),
+        _on_corners(part, corners),
+    ]
+    off = _off_patches(part, corners, of.reshape(-1, 3), tol, samples, slack)
+    if len(off):
+        centres = triangles[off].mean(1)
+        gap, n = _farthest(centres, surface, slack)
+        found.append(("facet", gap, tuple(centres[n])))
+    ok = all(gap <= tol for _, gap, _ in found) and not len(off)
+    # A failing facet is what fails where every distance passes.
+    what, distance, at = max(found, key=lambda f: (f[1] > tol or f[0] == "facet", f[1]))
+    x, y, z = (0.0, 0.0, 0.0) if at is None else (float(v) for v in at)
+    return MeshFit(ok, float(distance), (x, y, z), what, len(off))
+
+
+def _farthest(points: np.ndarray, surface: _Surface, slack: float) -> tuple[float, int]:
+    """The largest distance from points to surface, and the index of the first point at it, as
+    computing every point's distance finds it: OCC computes the points from the highest bound
+    (_bound) down, until no bound left can reach the largest found. (0, -1) for no points."""
+    from build123d import Vector
+
+    bounds = _bound(points, surface, slack, 0.0)
+    worst, at = 0.0, -1
+    for n in np.argsort(-bounds, kind="stable"):
+        if bounds[n] < worst or (at >= 0 and bounds[n] == worst == 0):
+            break
+        gap = surface.distance_to(Vector(*points[n]))
+        if gap > worst or at < 0 or (gap == worst and n < at):
+            worst, at = gap, int(n)
+    return worst, at
+
+
+def _sharp(part) -> tuple[list, dict]:
+    """The part's sharp edges, across which its two faces meet at an angle, and each edge's faces,
+    None for a face it is a seam of: where a periodic face closes on itself, joining no two."""
+    is_closed = _OCP["BRep"].BRep_Tool.IsClosed_s
+    faces_of: dict = {}
+    for face in part.faces():
+        for edge in face.edges():
+            seam = is_closed(edge.wrapped, face.wrapped)
+            faces_of.setdefault(edge, []).append(None if seam else face)
+    turn = math.cos(math.radians(_SMOOTH))
+    sharp = []
+    for edge, faces in faces_of.items():
+        if None in faces or len(faces) != 2:
+            continue
+        at = edge.position_at(0.5)
+        if abs(faces[0].normal_at(at).dot(faces[1].normal_at(at))) < turn:
+            sharp.append(edge)
+    return sharp, faces_of
+
+
+def _on_corners(part, corners: np.ndarray) -> tuple[Found, float, tuple | None]:
+    """How far the part's exact points lie from the mesh's corners: each vertex where sharp edges
+    meet from its nearest corner, and each sharp closed edge from the third corner nearest it,
+    since three fix a circle. Sharp edges that join tangentially are one edge, so a vertex there is
+    no corner, and a rim split into arcs is one closed edge. The largest, what it is, and where."""
+    from scipy.spatial import KDTree
+
+    sharp, _ = _sharp(part)
+    turn = math.cos(math.radians(_SMOOTH))
+    meeting: dict = {}
+    for edge in sharp:
+        if not edge.is_closed:
+            for vertex in edge.vertices():
+                meeting.setdefault(vertex, []).append(edge)
+    index = {edge: i for i, edge in enumerate(sharp)}
+    parent = list(range(len(sharp)))
+
+    def root(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    vertices, ends = [], set()
+    for vertex, edges in meeting.items():
+        if len(edges) == 2:
+            at = vertex.center()
+            starts = [(e.position_at(0) - at).length < 1e-6 for e in edges]
+            tangents = [e.tangent_at(0 if start else 1) for e, start in zip(edges, starts)]
+            if abs(tangents[0].dot(tangents[1])) >= turn:
+                parent[root(index[edges[0]])] = root(index[edges[1]])
+                continue
+        vertices.append(tuple(vertex))
+        ends |= {index[e] for e in edges}
+    chains: dict[int, list] = {}
+    for edge in sharp:
+        chains.setdefault(root(index[edge]), []).append(edge)
+    worst: tuple[Found, float, tuple | None] = ("part corner", 0.0, None)
+    if vertices and len(corners):
+        gaps, _ = KDTree(corners).query(np.array(vertices))
+        k = int(np.argmax(gaps))
+        worst = ("part corner", float(gaps[k]), vertices[k])
+    for chain in chains.values():
+        if any(index[e] in ends for e in chain):
+            continue  # an open run of sharp edges, held by its corners
+        third = _third_nearest(chain, corners)
+        if third > worst[1]:
+            worst = ("closed edge", third, tuple(chain[0].position_at(0.5)))
+    return worst
+
+
+def _third_nearest(chain: list, corners: np.ndarray) -> float:
+    """The distance from a closed chain of edges to the third corner nearest it: by numpy where
+    its edges are arcs of one circle, else by OCC for the corners near its bbox."""
+    from build123d import Vector
+
+    curves = [_OCP["BRepAdaptor"].BRepAdaptor_Curve(e.wrapped) for e in chain]
+    circles = [c.Circle() for c in curves if c.GetType() == _CIRCLE]
+    centres = [np.array(_xyz(c.Location())) for c in circles]
+    normals = [np.array(_xyz(c.Axis().Direction())) for c in circles]
+    one = len(circles) == len(chain) and all(
+        np.linalg.norm(o - centres[0]) <= _SAME_CORNER
+        and abs(abs(n @ normals[0]) - 1) <= _SAME_PARAMETER
+        and abs(c.Radius() - circles[0].Radius()) <= _SAME_CORNER
+        for o, n, c in zip(centres, normals, circles)
+    )
+    if one:
+        w = corners - centres[0]
+        up = w @ normals[0]
+        across = np.linalg.norm(w - up[:, None] * normals[0], axis=1) - circles[0].Radius()
+        gaps = np.sort(np.hypot(up, across))
+    elif len(corners) >= 3:
+        from scipy.spatial import KDTree
+
+        # Each corner's distance to the nearest of points spaced along the chain bounds its
+        # distance to the chain from above, and from below less half the spacing: only the corners
+        # whose lower bound is under the third least upper bound can be among the three nearest.
+        points = np.array(
+            [tuple(e.position_at(i / _CHAIN)) for e in chain for i in range(_CHAIN + 1)]
+        )
+        half = max(e.length for e in chain) / _CHAIN / 2
+        upper = KDTree(points).query(corners)[0]
+        near = corners[upper <= np.partition(upper, 2)[2] + half]
+        gaps = np.sort([min(e.distance_to(Vector(*q)) for e in chain) for q in near])
+    else:
+        gaps = []
+    return float(gaps[2]) if len(gaps) >= 3 else math.inf
+
+
+def _patches(part) -> list[list]:
+    """The part's faces grouped into smooth patches: faces joined by an edge across which their
+    normals turn no more than _SMOOTH are one patch, and a sharp edge parts two."""
+    faces = part.faces()
+    index = {face: i for i, face in enumerate(faces)}
+    parent = list(range(len(faces)))
+
+    def root(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    sharp, faces_of = _sharp(part)
+    parted = set(sharp)
+    for edge, two in faces_of.items():
+        if edge not in parted and None not in two and len(two) == 2:
+            parent[root(index[two[0]])] = root(index[two[1]])
+    groups: dict[int, list] = {}
+    for face in faces:
+        groups.setdefault(root(index[face]), []).append(face)
+    return list(groups.values())
+
+
+def _off_patches(
+    part, corners: np.ndarray, facets: np.ndarray, tol: float, samples: int, slack: float
+) -> np.ndarray:
+    """The facets, by index, whose three corners lie within tol of no one smooth patch of the
+    part. Numpy settles which faces most corners lie on: off a face where the corner's distance
+    to the face's whole surface passes tol, on it where an upper bound (_bound) on its distance
+    to the face does not; OCC computes the rest."""
+    from build123d import Vector
+
+    on = []
+    for group in _patches(part):
+        held = np.zeros(len(corners), bool)
+        for face in group:
+            box = face.bounding_box()
+            low, high = np.array(tuple(box.min)) - tol, np.array(tuple(box.max)) + tol
+            near = np.flatnonzero(~held & np.all((corners >= low) & (corners <= high), 1))
+            near = near[_floor(corners[near], face) <= tol]
+            if not len(near):
+                continue
+            bounds = _bound(corners[near], _Surface(face, samples), slack, tol)
+            held[near[bounds <= tol]] = True
+            for n in near[bounds > tol]:
+                held[n] = face.distance_to(Vector(*corners[n])) <= tol
+        on.append(held)
+    patches = np.stack(on, 1) if on else np.zeros((len(corners), 1), bool)
+    shared = patches[facets[:, 0]] & patches[facets[:, 1]] & patches[facets[:, 2]]
+    return np.flatnonzero(~shared.any(1))
+
+
+def _floor(points: np.ndarray, face) -> np.ndarray:
+    """A lower bound on each point's distance to a face: its distance to the face's whole
+    surface, a plane, cylinder, sphere or torus; 0 for any other."""
+    adapted = _OCP["BRepAdaptor"].BRepAdaptor_Surface(face.wrapped)
+    kind = adapted.GetType()
+    if kind == _PLANE:
+        frame = adapted.Plane().Position()
+        o, normal = np.array(_xyz(frame.Location())), np.array(_xyz(frame.Direction()))
+        return np.abs((points - o) @ normal)
+    if kind == _SPHERE:
+        sphere = adapted.Sphere()
+        centre = np.array(_xyz(sphere.Location()))
+        return np.abs(np.linalg.norm(points - centre, axis=1) - sphere.Radius())
+    if kind in (_CYLINDER, _TORUS):
+        whole = adapted.Cylinder() if kind == _CYLINDER else adapted.Torus()
+        frame = whole.Position()
+        o, axis = np.array(_xyz(frame.Location())), np.array(_xyz(frame.Direction()))
+        w = points - o
+        up = w @ axis
+        out = np.linalg.norm(w - up[:, None] * axis, axis=1)
+        if kind == _CYLINDER:
+            return np.abs(out - whole.Radius())
+        return np.abs(np.hypot(out - whole.MajorRadius(), up) - whole.MinorRadius())
+    return np.zeros(len(points))

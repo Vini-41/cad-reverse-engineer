@@ -345,14 +345,9 @@ def _checks(results) -> tuple[list[str], list[list]]:
 
 
 def _anchor(e: dict) -> str:
-    """What an evidence item is anchored by: its quote, its probe, or its figure reading."""
+    """What an evidence item is anchored by: its quote, or its figure reading."""
     if "quote" in e:
         return f"“{e['quote']}”"
-    if "probe" in e:
-        where = f" at {e['at']}" if e.get("at") else ""
-        if e.get("between"):
-            where = f" between {', '.join(map(str, e['between']))}"
-        return f"probe {e['probe']}{where}"
     confirmed = "" if e.get("confirmed_by") else " (unconfirmed)"
     return f"figure {e.get('image')}: “{e.get('reading')}”{confirmed}"
 
@@ -641,21 +636,6 @@ def write(
             for e in p.evidence
         ],
     )
-    md += _section(
-        "## Probes of released geometry",
-        ["probe", "body", "kind", "records", "evaluates to", "result"],
-        [
-            [
-                f"{q['evidence']}.{q['key']}",
-                q["body"],
-                q["probe"],
-                f"{q['recorded']:g}",
-                f"{q['value']:.6g}",
-                "pass" if q["ok"] else "**MISMATCH**",
-            ]
-            for q in p.probes
-        ],
-    )
     (out / "report.md").write_text("\n".join(md) + "\n", encoding="utf8")
 
     data = {
@@ -695,7 +675,6 @@ def write(
         "rests_on_proposed": sorted(p.proposed),
         "measured": measured,
         "awaiting_confirmation": awaiting,
-        "probes": p.probes,
     }
     (out / "report.json").write_text(json.dumps(data, indent=2, default=str), encoding="utf8")
     return out / "report.md"

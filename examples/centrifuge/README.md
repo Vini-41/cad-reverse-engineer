@@ -8,7 +8,7 @@ A 3D-printed centrifuge built around an 80 mm computer fan, from Soma Poór, *A 
 scripts/cadrev check examples/centrifuge
 ```
 
-Expected status: `VERIFIED: 0 errors, 1 warning, 88/88 checks pass`
+Expected status: `VERIFIED: 0 errors, 1 warning, 15/15 checks pass`
 
 It takes about 15 seconds. Then open `build/assembly.step` in a CAD program and read `build/report.md`.
 
@@ -16,11 +16,11 @@ It takes about 15 seconds. Then open `build/assembly.step` in a CAD program and 
 
 A static assembly whose authors released STEP files. A fresh agent reconstructed it from the skill and these sources alone: the body, the bottom plate, the PCR-strip rotor for the 32.5 mm fan hub, the 80 mm fan as a frame and hub, and the four M3 screws.
 
-- **Dimensions come from the authors' files.** 74 probes read the body, the plate and the rotor: a bore's diameter, a hole pitch, a cut-out's corner. 86 of the model's 92 parameters rest on sources: these probes and the paper's quotes.
-- **Each built part is compared with the released one.** Three shape checks hold the body, plate and rotor to their STEP bodies, surface to surface.
+- **Dimensions come from the authors' files.** 74 parameters cite the STEP body they are read off: a bore's diameter, a hole pitch, a cut-out's corner. 87 of the model's 93 parameters rest on sources: the released bodies and the paper's quotes.
+- **Each built part is compared with the released one, in place.** The body, plate and rotor are built where their files hold them, and three shape checks compare each whole with its STEP body, surface to surface, within 0.001 mm: no part differs from its file by more than 1.3 µm. A passing shape check is what checks the parameters that cite its body.
 - **What is not built says why.** Ten released bodies are skipped with a reason: the variants not chosen, two fit testers, an arrow inlay and the tube adapters.
 - **A stated mass is checked.** The rotor weighs 16.02 g against the paper's 16 g, and the report says that check rests on a proposed PLA density.
-- **Sources that disagree are recorded.** The parts list gives the rocker switch as 19 × 12.5 mm and the body's cut-out for it is 19 × 13 mm: one of three conflicts, each with its resolution.
+- **Sources that disagree are recorded.** The design-file table describes the 36.6 mm PCR-strip rotor as for a 32.5 mm hub: a conflict, resolved as a copy error in the variant not built. Where a part the paper lists differs from what the body holds for it (the 19 × 12.5 mm rocker switch, the body's 19 × 13 mm cut-out), the switch is not built and its reason says so.
 - **What nothing holds is named.** The fan's motor is not built, so its hub and the rotor pressed onto it stand 2 mm clear of the plate, on nothing: the run's one warning. Each screw is held across the fit its boss leaves, which project.yaml names as the `clearance`.
 - **What the sources leave open is a question.** Six parameters are proposed, under three gaps: the fan's datasheet, how the fan seats, and the density of the print.
 

@@ -60,7 +60,15 @@ GEAR_BY = {"ratio": ("fraction", False), "lead": ("length", True)}
 AS_BUILT = "as built"  # names the end of a one-ended range that no param states: a move of 0
 _MOTION = {"joint": schema.JOINT, "gear": schema.GEAR, "cable": schema.CABLE}
 # What model.py's build may return.
-_RETURNS = ("parts", "datums", "assembly", "threads", "loops", *(f"{kind}s" for kind in _MOTION))
+_RETURNS = (
+    "parts",
+    "datums",
+    "assembly",
+    "sheets",
+    "threads",
+    "loops",
+    *(f"{kind}s" for kind in _MOTION),
+)
 
 
 @dataclass
@@ -97,6 +105,9 @@ class Model:
     datums: dict[str, tuple[float, float, float]]
     assembly: dict  # instance -> (part name, Location)
     used: set[str]  # the params model.py read
+    # Where each part cut from a region of a cut file lies on its sheet: <source>@<x>,<y> ->
+    # (part name, Location), carrying its outline (released.outline) onto the region.
+    sheets: dict = field(default_factory=dict)
     joints: dict = field(default_factory=dict)
     loops: dict = field(default_factory=dict)
     gears: dict = field(default_factory=dict)
@@ -237,9 +248,11 @@ def _contract(result) -> None:
     for name, param in result.get("threads", {}).items():
         if not isinstance(param, str):
             raise Fault(f"thread at {name} must name a thread param, not {param!r}")
-    for inst, entry in result.get("assembly", {}).items():
-        if not (_listed(entry, 2) and isinstance(entry[0], str) and isinstance(entry[1], Location)):
-            raise Fault(f"assembly instance {inst} must be a (part name, Location) pair")
+    for key, what in (("assembly", "assembly instance"), ("sheets", "sheets region")):
+        for name, entry in result.get(key, {}).items():
+            placed = _listed(entry, 2) and isinstance(entry[0], str)
+            if not (placed and isinstance(entry[1], Location)):
+                raise Fault(f"{what} {name} must be a (part name, Location) pair")
     for name, pair in result.get("loops", {}).items():
         if not (_listed(pair, 2) and all(isinstance(d, str) for d in pair)):
             raise Fault(f"loop {name} must be two <instance>.<feature> datums, not {pair!r}")
@@ -329,6 +342,7 @@ def build(p: Project) -> Model | None:
         },
         assembly=result.get("assembly", {}),
         used=params.used,
+        sheets=result.get("sheets", {}),
         **{f"{kind}s": result.get(f"{kind}s", {}) for kind in ("joint", "loop", "gear", "cable")},
     )
     declared = result.get("threads", {})

@@ -383,20 +383,30 @@ def build_screw(p, d):
     return cyl_y(p.screw_d / 2, 0, p.screw_l)
 
 
+def in_file(part, d, name, y):
+    """part and its datums moved y along Y: into the frame its released file holds it in."""
+    for key in [k for k in d if k.startswith(f"{name}.")]:
+        x0, y0, z0 = d[key]
+        d[key] = (x0, y0 + y, z0)
+    return part.moved(Location((0, y, 0)))
+
+
 def build(p):
     d = {}
     body = build_body(p, d)
-    plate = build_plate(p, d)
-    rotor = build_rotor(p, d)
+    # Each released part is built in its file's frame: the plate's file holds it where the
+    # assembly places it, under the body; the rotor's, its skirt rotor_file_y below the origin.
+    plate = in_file(build_plate(p, d), d, "plate", -p.body_h)
+    rotor = in_file(build_rotor(p, d), d, "rotor", -p.rotor_file_y)
     fan_frame, fan_hub = build_fan(p, d)
     screw = build_screw(p, d)
 
     assembly = {
         "body_1": ("body", Location((0, 0, 0))),
-        "plate_1": ("plate", Location((0, -p.body_h, 0))),
+        "plate_1": ("plate", Location((0, 0, 0))),
         "fan_frame_1": ("fan_frame", Location((0, p.fan_top_y, 0), (0, p.fan_rot, 0))),
         "fan_hub_1": ("fan_hub", Location((0, p.fan_top_y, 0))),
-        "rotor_1": ("rotor", Location((0, p.rotor_seat_y, 0))),
+        "rotor_1": ("rotor", Location((0, p.rotor_seat_y + p.rotor_file_y, 0))),
     }
     n = int(p.screw_n)
     for k in range(n):

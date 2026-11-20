@@ -16,13 +16,12 @@ from conftest import (
     FOLD,
     INPUT_RANGE,
     KNEE,
+    LINK_AT,
     LOOP,
     M3_SCREW,
     PAPER,
-    PROBE,
     SCREW,
     SHEET,
-    SHEET_PROBE,
     SLIDE,
     SKILL,
     TEN_LONG,
@@ -40,7 +39,6 @@ from conftest import (
     open_chain,
     pdf,
     place,
-    probed,
     released,
     remodel,
     sheet,
@@ -134,27 +132,6 @@ def _released(*then, **kwargs):
     return lambda r, t: (released(r, t, **kwargs), [step(r, t) for step in then])
 
 
-def _probed(**entry):
-    return lambda r, t: probed(r, t, **entry)
-
-
-# A ring, its 30 mm hole about (20, 20), and an island cut inside the hole; and a circle datum
-# through three points of the ring's hole, whose centre lies on the island.
-ISLAND = """\
-<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 100 100">
-  <path fill="black" fill-rule="evenodd" d="M 0 0 H 40 V 40 H 0 Z
-    M 5 20 a 15 15 0 1 0 30 0 a 15 15 0 1 0 -30 0 Z"/>
-  <path fill="black" d="M 15 15 h 10 v 10 h -10 Z"/>
-</svg>
-"""
-RING_BORE = {
-    "ring.r1": [5, 20],
-    "ring.r2": [20, 5],
-    "ring.r3": [35, 20],
-    "ring.bore": {"circle": ["ring.r1", "ring.r2", "ring.r3"]},
-}
-
-
 def _sheet(*then, **kwargs):
     return lambda r, t: (sheet(r, t, **kwargs), [step(r, t) for step in then])
 
@@ -204,7 +181,6 @@ def _planned(**plan):
 RESIN = "The link weighs 1.8 g in resin of 1.2 g/cm3."
 EXTRA = "{id: extra, source: paper, locator: Sec. 3, quote: branches of 60 mm diameter"
 ANGLE = "{id: n, kind: angle, between: [link.b, link.a, link.top], evidence: N1, key: v"
-SQUARE = ["link_step.b", "link_step.a", "link_step.top"]  # top lies above a, along z
 
 LINK_FINDINGS = {
     # The project and its files.
@@ -236,9 +212,18 @@ LINK_FINDINGS = {
     "schema: a file's key that is none": lambda r, t: edit(
         r, "params.yaml", lambda d: d.update(parmas=d.pop("params"))
     ),
-    "schema: a released datum of two numbers": _released(
-        lambda r, t: add(r, datums="link_step.a: [1, 2]")
+    # Probes, released datums and a shape check's datum pairs and tol are gone, so each is
+    # unknown, with no rule of its own.
+    "schema: a datum on a released body": _released(
+        lambda r, t: add(r, datums="link_step.a: [-15, 0, 0]")
     ),
+    "schema: a probe": _released(
+        _ledger(
+            "{id: P, source: link_step, locator: l, probe: bbox, axes: {L: x}, values: {L: 40}}"
+        )
+    ),
+    "schema: a shape check's datum pairs": _released(pairs=[["link.a", "link.a"]] * 3),
+    "schema: a shape check's tol": _released(tol=0.01),
     "schema: an up axis that is none": _meta(up="x"),
     "target": _meta(target="TODO name the object"),
     "target: none": _meta(target=None),
@@ -275,12 +260,11 @@ LINK_FINDINGS = {
     "evidence-id": _ledger(EXTRA.replace("extra", "pitch") + ", scope: context, reason: r}"),
     "evidence-source": _evidence("pitch", source="nowhere"),
     "evidence-locator": _evidence("pitch", locator=None),
-    "evidence-anchor: no quote, image or probe": _evidence("pitch", quote=None),
+    "evidence-anchor: no quote or image": _evidence("pitch", quote=None),
     "evidence-anchor: a quote from a file that is no text": _released(
         _ledger("{id: q, source: link_step, locator: l, quote: x, scope: context, reason: r}")
     ),
     "evidence-values": _ledger(EXTRA + "}"),
-    "evidence-values: a probe": _probed(values=None),
     "evidence-scope": _ledger(EXTRA + ", scope: not-modeled}"),
     "evidence-unused": _ledger(EXTRA + ", values: {d: 60}}"),
     "quote-not-found": _evidence("pitch", quote="spaced 31 mm apart"),
@@ -471,6 +455,9 @@ LINK_FINDINGS = {
     "param-basis": _param("hole_d", basis="assumed"),
     "param-from": _param("link_W", **{"from": "T1-link.D"}),
     "param-from: measured off no image": _measured(**{"from": "pitch"}),
+    "param-from: a released body, with no value": _released(
+        lambda r, t: change(r, "params", "pitch", **{"from": "link_step"})
+    ),
     "param-mismatch: a source value": _param("pitch", value=31),
     "param-mismatch: a derived value": _params(
         "half: {basis: derived, expr: pitch / 2, value: 14}"
@@ -517,6 +504,9 @@ LINK_FINDINGS = {
     "model-build: no build function": _model("def build(p):", "def make(p):"),
     "model-return: not a mapping": _model("    return {", "    return []\n    _ = {"),
     "model-return: a part that is no shape": _model('{"link": link}', '{"link": p.pitch}'),
+    "model-return: a sheets region that is no pair": _model(
+        '"datums": datums', '"sheets": {"sheet@1,2": "link"}, "datums": datums'
+    ),
     "model-return: a part name no file could take": _model('{"link": link}', '{"a/b": link}'),
     "model-return: a datum that is no point": _model("(p.pitch / 2, 0, 0)", "(p.pitch / 2, 0)"),
     "model-return: an instance that is no pair": _model('("link", Location())', '"link"'),
@@ -529,29 +519,6 @@ LINK_FINDINGS = {
     ),
     "assembly-part": lambda r, t: remodel(r, '("link", Location())', '("pin", Location())'),
     "datum-off-solid": _model("(-p.pitch / 2, 0, p.link_H / 2)", "(-p.pitch / 2, 0, p.link_H)"),
-    "datum-off-solid: a released datum off its body": _released(
-        lambda r, t: add(r, datums="link_step.far: [0, 0, 0]")
-    ),
-    "datum-off-solid: a released datum naming no body": lambda r, t: add(
-        r, datums="nowhere.a: [0, 0, 0]"
-    ),
-    "datum-off-solid: a probe's sheet datum off its region's edge": _sheet(
-        _ledger(SHEET_PROBE | {"between": ["sheet.a", "sheet.b"]})
-    ),
-    "datum-off-solid: a sheet datum a derived one names off every region's edge": _sheet(
-        lambda r, t: add(
-            r, datums={"sheet.x": [30, 42.5], "sheet.m": {"mid": ["sheet.x", "sheet.side"]}}
-        )
-    ),
-    "datum-off-solid: a probe's derived sheet datum off its region's edge": lambda r, t: (
-        add_source(r, t, "ring.svg", ISLAND, "ring", "geometry"),
-        add(r, datums=RING_BORE),
-        add(r, evidence=SHEET_PROBE | {"source": "ring", "body": "ring@20,20", "between": None}),
-        change(r, "evidence", "P-s", probe="diameter", at="ring.bore"),
-    ),
-    "datum-off-solid: a cut file's datum outside every region": _sheet(
-        lambda r, t: add(r, datums="sheet.far: [1, 1]")
-    ),
     # Checks.
     "check-id": _check("{id: env, kind: interference}"),
     "check-kind": _checks("clear", kind="overlap"),
@@ -664,29 +631,19 @@ LINK_FINDINGS = {
     "check-config: an expect naming a key its entry lacks": _expecting("pitch.d * 1"),
     "check-config: an expect that does not parse": _expecting("pitch.pitch *"),
     "check-config: an expect dividing by zero": _expecting("pitch.pitch / 0"),
-    "check-config: a shape aligned by two pairs": _released(
-        pairs=[["link.a", "link_step.a"], ["link.b", "link_step.b"]]
-    ),
-    "check-config: a shape aligned by datums on one line": _released(
-        lambda r, t: add(r, datums="link_step.mid: [100, 50, 20]"),
-        pairs=[
-            ["link.a", "link_step.a"],
-            ["link.b", "link_step.b"],
-            ["link.side", "link_step.mid"],
-        ],
-    ),
-    "check-config: a shape pair naming another part's datum": _released(
-        pairs=[["pin.a", "link_step.a"]] * 3
-    ),
-    "check-config: a shape pair naming no released datum": _released(
-        pairs=[["link.a", "link_step.z"]] * 3
-    ),
     "check-config: a shape against a body that is none": _released(body="link_step#2"),
     "check-config: a shape against a solid, projected": _released(along="z"),
     "check-config: a shape against a region, not projected": _sheet(along=None),
     "check-config: a shape against a region, along no axis": _sheet(along="w"),
     "check-config: a shape against a point inside no region": _sheet(body="sheet@100,50"),
     "check-config: a shape against a cut file, no region named": _sheet(body="sheet"),
+    "check-config: a shape against a region the sheet places no part on": _sheet(places={}),
+    "check-config: a shape against a region the sheet places another part on": _sheet(
+        lambda r, t: remodel(r, f'"{LINK_AT}": ("link"', f'"{LINK_AT}": ("pin"')
+    ),
+    "check-config: a shape against a region the sheet places two parts on": _sheet(
+        places={LINK_AT: (40, 42.5, False), "sheet@50,42": (40, 42.5, False)}
+    ),
     "check-config: a shape of a part with no face square to the axis": _sheet(
         _model('{"link": link}', '{"link": Sphere(p.link_L)}')
     ),
@@ -698,46 +655,6 @@ LINK_FINDINGS = {
     "tolerance-cap: tol above 5% of what an expect works out": lambda r, t: (
         _expecting("pitch.pitch * 1")(r, t),
         change(r, "checks", "pitch", tol=1.51),
-    ),
-    "tolerance-cap: a shape's tol above 1% of its body": _released(tol=0.5),
-    "tolerance-cap: a probe's tol": _probed(tol=0.5),
-    "probe-mismatch": _probed(values={"L": 40.002, "W": 5, "H": 8}),
-    "evidence-anchor: a probe of a source that is no geometry": _probed(source="paper"),
-    "evidence-anchor: a probe of a cut file naming no region": _sheet(
-        _ledger(PROBE | {"source": "sheet", "axes": {"L": "x", "W": "y"}, "values": {"L": 40}})
-    ),
-    "evidence-anchor: a diameter probe of a region at no circle datum": _sheet(
-        _ledger(SHEET_PROBE | {"probe": "diameter", "at": "sheet.side"})
-    ),
-    "evidence-anchor: a probe of a region at a datum outside it": _sheet(
-        lambda r, t: add(r, datums={"sheet.plate": [130, 50]}),
-        _ledger(SHEET_PROBE | {"between": ["sheet.bore_a", "sheet.plate"]}),
-    ),
-    "evidence-anchor: a probe of a body that is none": _probed(body="link_step#2"),
-    "evidence-anchor: a probe of a kind that is none": _probed(probe="volume"),
-    "evidence-anchor: a bbox probe along no axis": _probed(axes={"L": "w", "W": "x", "H": "z"}),
-    "evidence-anchor: a distance probe of two values": _probed(
-        probe="distance", between=["link_step.a", "link_step.b"]
-    ),
-    "evidence-anchor: a distance probe between an undeclared datum": _probed(
-        probe="distance", between=["link_step.a", "link_step.z"], values={"v": 30}
-    ),
-    "evidence-anchor: an angle probe between two datums": _probed(
-        probe="angle", between=["link_step.a", "link_step.b"], values={"v": 90}
-    ),
-    "evidence-anchor: an angle probe whose datum projects onto its vertex": _probed(
-        probe="angle", between=SQUARE, values={"v": 90}, along="z"
-    ),
-    "evidence-anchor: an angle probe along no axis": _probed(
-        probe="angle", between=SQUARE, values={"v": 90}, along="w"
-    ),
-    "evidence-anchor: a diameter probe at no datum": _probed(probe="diameter", values={"v": 3}),
-    "evidence-anchor: a diameter probe on no cylindrical face": _probed(
-        probe="diameter", at="link_step.a", values={"v": 3}
-    ),
-    "evidence-anchor: a diameter probe at a mid datum": lambda r, t: (
-        probed(r, t, probe="diameter", at="link_step.m", values={"v": 3}),
-        add(r, datums={"link_step.m": {"mid": ["link_step.a", "link_step.b"]}}),
     ),
 }
 
@@ -998,17 +915,13 @@ LINK_DAMAGE = {
     "sources is a mapping": _meta(sources={"paper": {"kind": "paper"}}),
     "source path is a directory": _sourced(path="sources"),
     "source path outside the project": _sourced(path="/etc/hosts"),
-    "source without a path, with a datum": lambda r, t: (
-        _sourced(kind="geometry")(r, t),
-        add(r, datums="x.a: [1, 2, 3]"),
-    ),
+    "source of geometry without a path": _sourced(kind="geometry"),
     "text source that is not UTF-8": lambda r, t: add_source(r, t, "b.txt", b"\xff\xfe 30 mm"),
     "geometry source of a truncated STL": lambda r, t: add_source(
         r, t, "g.stl", b"\0" * 80 + (1000).to_bytes(4, "little") + b"\1" * 25, "g", "geometry"
     ),
     "cut file of malformed XML": _sheet(svg="<svg><path d=", check=False),
     "cut file path of malformed data": _sheet(svg=SHEET.replace("M 50 0 h 10", "M 50 0 q !")),
-    "cut file datum of text": _sheet(lambda r, t: add(r, datums="sheet.a: [x, y]")),
     "cut file skip within a list of numbers": _sheet(
         lambda r, t: add(r, skipped="{source: sheet, within: [1, 2], reason: r}")
     ),
@@ -1018,14 +931,15 @@ LINK_DAMAGE = {
     "shape of a point on a released solid": _released(body="link_step@1,2"),
     "shape of a point with no number": _sheet(body="sheet@a,b"),
     "shape along a number": _sheet(along=3),
-    "shape without pairs or body": _check("{id: s, kind: shape, part: link}"),
+    "shape without a body": _check("{id: s, kind: shape, part: link}"),
     "shape of a part that is none": _released(part="pin"),
-    "shape pairs of one datum": _released(pairs=[["link.a"]] * 3),
     "shape against a source that is no geometry": _released(body="paper"),
-    "probe of an unregistered source": _ledger(PROBE | {"source": "nowhere"}),
-    "probe with a value in words": _probed(values={"L": "forty", "W": 5, "H": 8}),
-    "probe between one datum": _probed(probe="angle", between=["link_step.a"], values={"v": 1}),
-    "datums is a list": lambda r, t: edit(r, "evidence.yaml", lambda d: d.update(datums=[1, 2])),
+    "sheets placing at a number": _sheet(
+        lambda r, t: remodel(r, f'"{LINK_AT}": ("link", Location(', f'"{LINK_AT}": (3, Location(')
+    ),
+    "param citing a body with a value of text": _released(
+        lambda r, t: change(r, "params", "pitch", **{"from": "link_step", "value": "x"})
+    ),
     "reading is a number": _ledger(
         "{id: im, source: paper, locator: F, image: x.png, reading: 30, values: {v: 30}}"
     ),
@@ -1071,10 +985,6 @@ LINK_DAMAGE = {
     "param value of infinity": _param("hole_d", value=float("inf")),
     "ledger value that is not a number": _evidence("pitch", values={"pitch": float("nan")}),
     "datum named by a number": _model('"link.a":', '1: (0, 0, 0), "link.a":'),
-    "derived datum on no body, its own input": lambda r, t: add(
-        r, datums={"nowhere.c": {"circle": ["nowhere.c"] * 3}}
-    ),
-    "derived datum on a cut file": _sheet(lambda r, t: add(r, datums={"sheet.c": {"mid": []}})),
     "instance named by a number": _model('"link_1":', '1: ("link", Location()), "link_1":'),
 }
 MECH_DAMAGE = {

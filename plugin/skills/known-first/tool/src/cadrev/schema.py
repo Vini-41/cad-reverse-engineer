@@ -10,7 +10,7 @@ counts as absent.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from .sources import word_number
@@ -43,6 +43,8 @@ class Record:
     fields: dict
     required: tuple[str, ...] = ()
     exclusive: tuple[tuple[str, ...], ...] = ()  # groups of keys of which an entry gives one
+    # By an entry's kind, the keys it does not take, which are unknown for that kind.
+    unknown_for: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 _TYPES = {"int": int, "bool": bool, "number": NUMBER, "word": NUMBER_OR_WORD, "any": TEXT_OR_NUMBER}
@@ -56,23 +58,24 @@ def _spec(text: str):
     return _TYPES.get(text, str)
 
 
-def record(fields: str, exclusive: tuple = (), **nested) -> Record:
+def record(fields: str, exclusive: tuple = (), unknown_for: dict | None = None, **nested) -> Record:
     """A Record from its fields, each `name` (text) or `name:type`, a `!` after the name marking it
-    required; nested gives the fields that are records themselves."""
+    required; unknown_for gives the fields an entry of each kind does not take, and nested the
+    fields that are records themselves."""
     specs, required = dict(nested), []
-    for field in fields.split():
-        name, _, kind = field.partition(":")
+    for given in fields.split():
+        name, _, kind = given.partition(":")
         if name.endswith("!"):
             name = name[:-1]
             required.append(name)
         specs[name] = _spec(kind)
-    return Record(specs, tuple(required), exclusive)
+    return Record(specs, tuple(required), exclusive, unknown_for or {})
 
 
 SOURCE = record("id! kind path sha256 citation url")
 EVIDENCE = record(
     "id! source page:int locator quote values:{word} scope reason image image_sha256 reading:any "
-    "confirmed_by probe body axes:{str} between:[str] along at tol:number"
+    "confirmed_by"
 )
 SKIP = record("source page:int pages:[int] quote from to body within:[[number]] reason")
 CONFLICT = record("id:any evidence:[str] summary resolution")
@@ -86,10 +89,10 @@ CHECK = record(
     "along at density counts:{str} add:[str] tol:number tol_rel:number max_volume:number "
     "pairs:[[str]] pose:{any} from:{any} joint cable body ends:[str] interpretation",
     exclusive=(("part", "instances"), ("part", "thread")),
+    # A shape check compares its part with its body in place, at tolerance.length.
+    unknown_for={"shape": ("pairs", "tol")},
     sweep=record("joint! steps!"),
 )
-# A datum on a released body: a point, or one derived from datums declared on the same body.
-DATUM = (Items(NUMBER), record("circle:[str] mid:[str]", exclusive=(("circle", "mid"),)))
 # A part's mass: its datasheet mass, or a density its volume is weighed by; one param either way.
 PART = record("mass density", exclusive=(("mass", "density"),))
 GAP = record("id! question ask")
@@ -119,7 +122,6 @@ FILES = {
         "evidence": (EVIDENCE, list),
         "skipped": (SKIP, list),
         "conflicts": (CONFLICT, list),
-        "datums": (DATUM, dict),
     },
     "params.yaml": {"params": (PARAM, dict), "parts": (PART, dict)},
     "checks.yaml": {"checks": (CHECK, list)},
@@ -188,8 +190,11 @@ def conform(value, spec, where: str, problems: list[str]) -> Any:
             return {k: conform(v, spec.of, f"{where}.{k}", problems) for k, v in value.items()}
     elif isinstance(spec, Record):
         if isinstance(value, dict):
+            kind = str(value.get("kind"))
             for key in value:
-                if key not in spec.fields:
+                if key in spec.unknown_for.get(kind, ()):
+                    problems.append(f"{where}: unknown key {key!r} for kind {kind}")
+                elif key not in spec.fields:
                     problems.append(
                         f"{where}: unknown key {key!r}; if it is the rest of a value split at a "
                         "comma, quote that value"

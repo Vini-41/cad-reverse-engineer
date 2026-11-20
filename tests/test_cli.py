@@ -289,7 +289,7 @@ def test_check_prints_each_finding_then_the_status_line_with_its_counts(proj_dir
 REPORT_KEYS = {
     "status", "exact", "known_first", "waiting", "counts", "findings", "checks", "tolerances",
     "overlap_limits", "motion", "masses", "params", "bases",
-    "rests_on_proposed", "measured", "awaiting_confirmation", "probes",
+    "rests_on_proposed", "measured", "awaiting_confirmation",
     "threads", "drawings", "material", "follows", "plan", "held",
 }  # fmt: skip
 
@@ -351,7 +351,7 @@ def test_report_json_holds_the_run_as_data(proj_dir):
         "coarsened": {},
         "dropped": False,
     }
-    assert (report["masses"], report["probes"]) == ({}, [])
+    assert report["masses"] == {}
 
 
 def test_check_names_its_slowest_check(mech_dir):
