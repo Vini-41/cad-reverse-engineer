@@ -315,7 +315,8 @@ def test_cable_wound_on_a_wheel_closes_its_joints_in_proportion_and_a_stroke_rea
     opening, listed = run.md.split("## Motion")
     assert "and 1 cable (listed under Motion)" in opening and "Cable `cord`" not in opening
     assert "Cable `cord` through rail_1.up → slider_1.down, wound on input" in listed
-    assert [s.get("site") for s in mjcf(mech_dir).iter("site") if s.get("site")] == path
+    (spatial,) = mjcf(mech_dir).iter("spatial")  # the cable, with no stiffness of its own
+    assert spatial.attrib == {"name": "cord"} and [s.get("site") for s in spatial] == path
     assert coupled(mech_dir) == {
         "cord_slide": ("slide", "input", pytest.approx([0, -20 / math.radians(30), 0, 0, 0])),
         "cord_knee": ("knee", "input", pytest.approx([0, -2, 0, 0, 0])),

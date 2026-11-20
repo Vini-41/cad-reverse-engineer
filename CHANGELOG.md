@@ -21,7 +21,7 @@ From a mechanical engineer's review of v0.1.0, of a run on a patent, and of a me
 - The last line and the report count `1 error` and `1 warning` as one.
 - **One way to run each thing.** `cadrev check --no-build` is the quick run: `cadrev coverage` and `--no-coverage` are gone, since it sweeps coverage with every other rule that needs no build. `cadrev init` names a project after its directory. project.yaml's `model_literals` is gone: model.py holds 0, 1, 2, 0.5, 90, 180, 270 and 360, and any other number is a param.
 - **Figure overlays and elastic tendons are gone.** `overlays.yaml` drew the model's edges over a figure and added no pass or fail: a part's drawing is what is held beside its figure now. A `tendons` entry carried a stiffness no check read into a kinematic model; a cord is a cable, and model.py returning a key cadrev does not read is a `[model-return]` error. Delete either from a project that has it.
-- **report.json is the same for the same project.** It no longer times the build or each check; `cadrev check` still prints the slowest check.
+- **report.json holds no timings.** It no longer times the build or each check, so two runs of one project compare field by field; `cadrev check` still prints the slowest check, by its id in checks.yaml.
 - **The report holds only what there is to read.** A section with nothing in it is left out, and every tolerance and overlap limit other than the default is in one table.
 
 ## v0.1.0
