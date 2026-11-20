@@ -10,7 +10,9 @@ import re
 
 from .project import Project
 
-MODEL_LITERALS = (0, 1, 2, -1, 0.5, 90, 180, 270, 360)  # model_literals when project.yaml sets none
+# The numbers model.py may hold, a sign aside: they keep halving, unit vectors and right-angle
+# turns readable. Any other number is a param.
+MODEL_LITERALS = (0, 1, 2, 0.5, 90, 180, 270, 360)
 MODEL_IMPORTS = ("build123d", "math")
 # What reads a file: build123d's importers (import_step, import_stl, ...) and its mesh reader. A
 # part loaded from a released file is compared with itself, and its params check nothing.
@@ -55,7 +57,7 @@ def _fold(node: ast.AST) -> float | None:
 
 def lint(p: Project) -> bool:
     """Whether model.py is there to build. [model-literal] for each number in it other than
-    model_literals, a sign aside; [model-import] for each import but build123d and math, and each
+    MODEL_LITERALS, a sign aside; [model-import] for each import but build123d and math, and each
     name that reads a file."""
     path = p.root / "model.py"
     if not path.is_file():
@@ -69,7 +71,6 @@ def lint(p: Project) -> bool:
             "model-syntax", f"model.py{f' line {line}' if line else ''}: {getattr(exc, 'msg', exc)}"
         )
         return False
-    allowed = [abs(float(v)) for v in p.meta.get("model_literals", MODEL_LITERALS)]
     folded: set[ast.AST] = set()  # nodes inside a number already judged
     for node in ast.walk(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
@@ -93,7 +94,9 @@ def lint(p: Project) -> bool:
         value = None if node in folded else _fold(node)
         if value is not None:
             folded.update(ast.walk(node))
-            if not any(math.isclose(abs(value), a, rel_tol=1e-9, abs_tol=1e-12) for a in allowed):
+            if not any(
+                math.isclose(abs(value), a, rel_tol=1e-9, abs_tol=1e-12) for a in MODEL_LITERALS
+            ):
                 p.error(
                     "model-literal",
                     f"model.py:{getattr(node, 'lineno', '?')}: {ast.unparse(node)} is a number "

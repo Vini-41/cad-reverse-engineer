@@ -256,18 +256,6 @@ def test_lint_finds_every_number_import_and_file_read_and_nothing_else(proj_dir)
     assert set(run.errors) == {"model-literal", "model-import"}  # and it still builds
 
 
-def test_widened_model_literals_let_their_numbers_in_and_are_shown(proj_dir):
-    add_line(proj_dir, "extra = 7.5 + 90")
-    meta(proj_dir, model_literals=[0, 1, 2, 7.5])
-    run = check(proj_dir)
-    assert flagged(run, "model-literal") == {5}  # 7.5 + 90 folds to 97.5, which is not allowed
-    add_line(proj_dir, "allowed = 7.5 * p.pitch / 2")
-    remodel(proj_dir, "    extra = 7.5 + 90\n", "")
-    run = check(proj_dir)
-    assert run.status == "VERIFIED" and run.report["model_literals"] == [0, 1, 2, 7.5]
-    assert "`model_literals` allows 0, 1, 2, 7.5 in model.py" in run.md
-
-
 def test_model_that_fails_to_build_still_reports_the_ledger(proj_dir):
     add_line(proj_dir, "raise ValueError(p.pitch)")
     run = check(proj_dir)
@@ -300,9 +288,8 @@ def test_check_passes_within_its_tolerance_and_the_report_lists_each_one_loosene
     run = check(proj_dir)
     assert run.result("env.L")["ok"] == (where != "nowhere")
     assert run.errors == (["check-failed"] if where == "nowhere" else [])
+    # An interference check's limit is tolerance.length cubed, and listed when that is not 1e-9.
     assert (run.report["tolerances"], run.report["overlap_limits"]) == (tolerances, limits)
-    # An interference check's limit is tolerance.length cubed, and shown when that is not 1e-9.
-    assert ("| clear | 1e-06 |" in run.md) == bool(limits)
 
 
 def test_interference_names_the_worst_overlap_and_passes_under_a_stated_limit(proj_dir):
@@ -315,7 +302,6 @@ def test_interference_names_the_worst_overlap_and_passes_under_a_stated_limit(pr
     run = check(proj_dir)
     assert run.result("clear")["ok"] and run.status == "VERIFIED"
     assert run.report["overlap_limits"] == [{"check": "clear", "max_volume": 750}]
-    assert "| clear | 750 |" in run.md
 
 
 def test_interference_between_instances_of_a_part_of_no_solid_is_its_finding(proj_dir):

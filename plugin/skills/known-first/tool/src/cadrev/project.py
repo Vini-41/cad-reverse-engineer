@@ -179,10 +179,9 @@ class Project:
 
     @property
     def thread_standard(self) -> str:
-        """The table a proposed thread comes from: project.yaml's threads, else the Unified one
-        where the project's length unit is of the inch and the ISO metric one where it is not."""
-        own = "unified" if self.units["length"] in threads.INCH_UNITS else "metric"
-        return self.meta.get("threads", own)
+        """The table a proposed thread comes from: the Unified one where the project's length
+        unit is of the inch, and the ISO metric one where it is not."""
+        return "unified" if self.units["length"] in threads.INCH_UNITS else "metric"
 
     @property
     def screws(self) -> dict[str, str]:

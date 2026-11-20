@@ -129,24 +129,24 @@ def compared_with(c: dict) -> str:
     return str(c["expect"]) if "expect" in c else f"{c['evidence']}.{c['key']}"
 
 
-def plan(p: Project) -> set[int]:
+def comparable(p: Project) -> set[int]:
     """Hold each check to what the ledger alone can tell: that it has something to compare with,
     of the quantity it compares, within a tolerance under the cap. The checks, by index, left with
     nothing to compare with are not evaluated."""
-    unplanned = set()
+    incomparable = set()
     for i, c in enumerate(p.checks):
         cid, before = c["id"], len(p.findings)
         with p.filing("check-config", f"check {cid}: "):
             _comparable(p, c)
         if len(p.findings) > before:
-            unplanned.add(i)
+            incomparable.add(i)
         if c.get("kind") in KINDS:
-            _held(p, c)
+            _quantities(p, c)
         for key in POSES:
             for ref in (c.get(key) or {}).values():
                 if isinstance(ref, str):  # a number is a pose fixed by definition
                     p.hold(ref, ("angle", "length"), f"in check {cid}'s {key}")
-    return unplanned
+    return incomparable
 
 
 def _comparable(p: Project, c: dict) -> None:
@@ -187,7 +187,7 @@ def _comparable(p: Project, c: dict) -> None:
         raise Fault("give axes, each value of its evidence item and the axis it runs along")
 
 
-def _held(p: Project, c: dict) -> None:
+def _quantities(p: Project, c: dict) -> None:
     """The values check c compares are printed in the quantity it compares, and its tolerance is
     under the cap: tol to TOL_CAP of each value, tol_rel to TOL_REL_CAP."""
     cid, name = c["id"], c["kind"]
@@ -267,8 +267,8 @@ class Checks:
     """One verification run's checks, evaluated on a built model: on the assembly as built, or
     for a check that names a pose, where its mechanism places it."""
 
-    def __init__(self, p: Project, model: Model, mechanism: Mechanism | None, unplanned: set[int]):
-        self.p, self.model, self.mechanism, self.unplanned = p, model, mechanism, unplanned
+    def __init__(self, p: Project, model: Model, mechanism: Mechanism | None, skipped: set[int]):
+        self.p, self.model, self.mechanism, self.skipped = p, model, mechanism, skipped
         # What the check being evaluated has read: the assemblies it was evaluated at, and for a
         # mass check the parts it weighs and those it weighs uncounted.
         self.read_at: list[Model] = []
@@ -294,7 +294,7 @@ class Checks:
             evaluate = self._kinds.get(str(c.get("kind")))
             if evaluate is None:
                 p.error("check-kind", f"check {cid}: unknown kind {c.get('kind')!r}")
-            elif i not in self.unplanned:
+            elif i not in self.skipped:
                 try:
                     placed, pose = self._posed(c)
                     for result in evaluate(c, placed):
@@ -326,7 +326,7 @@ class Checks:
     def _hold_joint_values(self) -> None:
         """[unit-quantity] for each pose value, and each end of a range check of a joint's own
         value, printed as the other quantity than its joint's: a length for a revolute joint.
-        Printed as any other quantity, it is plan's finding already. And such a range check's
+        Printed as any other quantity, it is comparable's finding already. And such a range check's
         tolerance, in its joint's quantity, held to its cap."""
         for c in self.p.checks:
             named = [

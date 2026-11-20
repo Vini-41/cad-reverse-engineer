@@ -9,7 +9,6 @@ from conftest import (
     add_quote,
     add_reading,
     add_source,
-    cadrev,
     change,
     check,
     edit,
@@ -232,10 +231,10 @@ SWEPT = {
 
 def test_coverage_lists_each_stated_quantity_whole_and_no_look_alike(proj_dir, tmp_path):
     add_source(proj_dir, tmp_path, "notes.txt", "\n".join(SWEPT), "notes")
-    lines = cadrev("coverage", proj_dir)[1].splitlines()
-    listed = [line.removeprefix("notes p1: ").split("  …")[0] for line in lines[:-1]]
+    found = check(proj_dir, "--no-build").messages("coverage")
+    said = "notes p1: unledgered stated quantity "
+    listed = [message.removeprefix(said).split("  …")[0] for message in found]
     assert listed == [candidate for candidates in SWEPT.values() for candidate in candidates]
-    assert lines[-1] == f"{len(listed)} unledgered stated quantities"
 
 
 def test_html_source_is_quoted_and_swept_as_its_rendered_text(proj_dir, tmp_path):
@@ -393,7 +392,7 @@ def test_known_first_project_lists_what_waits_in_place_of_findings(proj_dir, tmp
     waiting = run.md.split("## Waiting")[1].split("\n## ")[0]
     assert "| pin.L | 12 | notes | Sec. 3 |" in waiting and "| G-pin |" in waiting
     assert "**Known first**" in run.md
-    assert "G-pin" not in run.md.split("## Open gaps")[1].split("\n## ")[0]
+    assert run.md.count("G-pin") == 1  # under Waiting alone, not among the open gaps
     # Without it the same project is held to every rule again.
     meta(proj_dir, known_first=None)
     run = check(proj_dir)

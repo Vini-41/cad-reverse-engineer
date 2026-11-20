@@ -163,7 +163,7 @@ The status of a project in which every number is accounted for and every check p
 The status of a project that would be VERIFIED except that some readings await human confirmation.
 
 **PARTIAL**:
-The status of a verification run that skipped the build or the coverage sweep, and so makes no claim.
+The status of a verification run that skipped the build, and so makes no claim.
 
 **Exact**:
 VERIFIED with no parameter resting on a proposed value, physics values and a sweep's resolution (how many poses it evaluates) aside: exactness is judged over what the sources state about geometry and kinematics.

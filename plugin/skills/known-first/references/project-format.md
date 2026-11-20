@@ -30,7 +30,6 @@ follows: design                                # optional: design | function; de
 up: y                    # optional: the axis the object stands on, z unless said
 tolerance: {length: 0.001, angle: 0.01}        # how closely the model must realise a source value
 clearance: fit_gap       # optional: the length param of the loosest fit
-model_literals: [0, 1, 2, -1, 0.5, 90, 180, 270, 360]   # optional: the numbers model.py may hold
 known_first: true        # optional: build only what the sources settle (Known first)
 sources:                 # written by `cadrev source`; keep it the last key
   - id: paper
@@ -45,7 +44,7 @@ sources:                 # written by `cadrev source`; keep it the last key
 - `target` names the object, its version and its configuration, and where the authors released several variants, the one built.
 - `tolerance` is the model's, how closely it realises a value, and not what a shop works to: that is the [plan](#planyaml)'s to say. `tolerance.angle` is in degrees whatever `units.angle` says.
 - **Every instance is held**: it touches another instance, or sits within `clearance` of one, so the assembly is one object. `clearance` names the length param of the loosest fit, the largest gap the model leaves between two parts that hold each other: a pin centred in its running hole, a tongue between its fork's cheeks. Without it, parts touch, which two do within `tolerance.length`, the slack a named clearance gets too. An instance further than that from every other floats, and so does a group whose instances hold only each other: a `[held]` warning, and an error under a [plan](#planyaml). Build what holds it (a spring's hooks, a seat), or move it onto what does. The warning stands where the `target` leaves out what holds it, a bearing or a second unit. A known-first project with no plan is not held to this: what holds a part may wait.
-- `units.length` is the user's answer to metric or US: `mm` or `in`. A proposed thread and a proposed screw length come from its table, ISO metric for a metric unit and Unified for `in`; a project that mixes the two says `threads: metric` or `threads: unified`. A STEP file holds the object at its true size in either.
+- `units.length` is the user's answer to metric or US: `mm` or `in`. A proposed thread and a proposed screw length come from its table, ISO metric for a metric unit and Unified for `in`. A STEP file holds the object at its true size in either.
 - `material` and `follows` are the complete model's other two answers: what its made parts are made of and how, and whether a feature that is hard to make that way is built as the sources show it (`design`) or replaced by one that does the same job (`function`). The report prints both.
 - `cadrev source` with an id already registered refreshes that entry: its file, hash and whatever the command states. That is how a source is restored into a clone or replaced by a new download.
 - **Text sources** are quote-checked and swept: PDF, DOCX, TXT, MD, HTML (read as its rendered text). Save a web datasheet as HTML or TXT to quote it. Video and image files anchor image evidence only.
@@ -224,7 +223,7 @@ A thread param gives `thread`, a designation, in place of a value:
 - **The designation** is one the ISO metric table holds (`M3`, or with a fine pitch `M8x1`; ISO 261's first- and second-choice diameters, M1 to M39) or the Unified one (`1/4-20`, `10-32`, `UNC` or `UNF` optional; #0 to 1 in). Write a number size without its `#`, which YAML reads as a comment. A size or pitch its table does not hold is a finding that lists what the size takes.
 - **Its clearance hole** is ISO 273's medium series or ASME B18.2.8's normal fit; a declared hole may be any size up to the coarse series or the loose fit. Those list none for M1.1, M2.2, #12 and 9/16, so a hole clearing one of them takes a param of its own and is not declared.
 - **With basis `source`**, `from` names the evidence item whose quote or reading prints the designation; the item needs no `values` for it. A size printed before a length (`M3x10`) states the coarse thread, and so does one a drawing calls out by the count of its holes (`4-M3`, `6-M2.0`), a count a [`count` check](#checksyaml) compares. A source's thread is taken as stated, from either table.
-- **With basis `proposed`**, the thread comes from the project's table: its length unit's, or `threads` in project.yaml.
+- **With basis `proposed`**, the thread comes from the table of the project's length unit.
 - **Its value** is its major diameter in the project's length unit, so a derived `expr` may read it; model.py reads its tap drill, clearance hole and pitch from it ([modeling.md](modeling.md#threads)). It is a checked param once model.py declares it on a hole or shank.
 - **A screw** is a thread param that names its `length`, a length param of its own: `source` where a source states the screw's length, else `proposed`. A proposed length is a standard one of its thread's table, within `tolerance.length`: ISO 888's preferred lengths from 2 to 300 mm, or ASME B18.3's increments from 1/8 to 10 in. A screw is bought, so its length is never `derived`: a boss or a hole that holds the screw is derived from the length. The report prints the screw as it is ordered (`M3×10`, `1/4-20 UNC × 3/4 in`). A thread param without a length is a thread alone: a mounting hole left for the user's own screw, or a nut.
 
@@ -409,7 +408,7 @@ steps:                   # the assembly sequence
 | **VERIFIED** | no error: every number is accounted for and every check passes, even if some params are proposed | 0 |
 | **VERIFIED PENDING REVIEW** | VERIFIED but for figure readings without `confirmed_by` | 0 |
 | **NOT VERIFIED** | at least one error | 1 |
-| **PARTIAL** | `--no-build` or `--no-coverage` skipped part of the run, so it makes no claim and writes no report | 1 |
+| **PARTIAL** | `--no-build` skipped the build, so it makes no claim and writes no report | 1 |
 
 **Exact** qualifies VERIFIED: no param rests on a proposed value, physics values and a sweep's `steps` aside. report.md prints it under the status.
 

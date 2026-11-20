@@ -38,8 +38,8 @@ DATASHEET = (
 
 def test_init_scaffolds_a_project_short_only_of_its_target(tmp_path):
     root = tmp_path / "gripper"
-    assert cadrev("init", root, "--name", "claw")[0] == 0
-    assert yaml.safe_load((root / "project.yaml").read_text())["name"] == "claw"
+    assert cadrev("init", root)[0] == 0
+    assert yaml.safe_load((root / "project.yaml").read_text())["name"] == "gripper"
     run = check(root)
     assert (run.status, run.rules) == ("NOT VERIFIED", ["target"])
     code, out = cadrev("init", root)
@@ -191,31 +191,12 @@ def test_crop_writes_the_region_and_prints_the_hash_evidence_pins(proj_dir):
     assert f"image_sha256: {sha256(target)}" in out
 
 
-def test_coverage_lists_each_unledgered_quantity_and_exits_by_whether_there_is_one(proj_dir):
-    assert cadrev("coverage", proj_dir) == (0, "0 unledgered stated quantities\n")
+def test_check_names_each_unledgered_quantity_in_its_context(proj_dir):
     edit(proj_dir, "evidence.yaml", lambda d: d.pop("skipped"))
-    code, out = cadrev("coverage", proj_dir)
-    lines = out.splitlines()
-    assert code == 1 and lines[-1] == "1 unledgered stated quantities"
-    assert lines[0].startswith("paper p1: 60 mm") and "branches of 60 mm diameter" in lines[0]
-
-
-@pytest.mark.parametrize(
-    "rule, damage",
-    [
-        (
-            "source-id",
-            lambda r: edit(r, "project.yaml", lambda d: d["sources"].append(d["sources"][0])),
-        ),
-        ("source-missing", lambda r: (r / "sources" / "paper.txt").unlink()),
-    ],
-)
-def test_coverage_of_a_source_registered_twice_or_missing_names_it_and_exits_1(
-    proj_dir, rule, damage
-):
-    damage(proj_dir)
-    code, out = cadrev("coverage", proj_dir)
-    assert code == 1 and f"[{rule}]" in out
+    run = check(proj_dir, "--no-build")
+    (message,) = run.messages("coverage")
+    assert message.startswith("paper p1: unledgered stated quantity 60 mm")
+    assert "branches of 60 mm diameter" in message
 
 
 def _confirmed(root):
@@ -238,7 +219,6 @@ EARNED = {
         (),
     ),
     "without the build": ("PARTIAL", lambda r: None, ("--no-build",)),
-    "without the coverage sweep": ("PARTIAL", lambda r: None, ("--no-coverage",)),
     "without the build, whatever is wrong": ("PARTIAL", _broken, ("--no-build",)),
 }
 
@@ -263,7 +243,7 @@ def test_partial_run_leaves_an_earlier_report_as_it_was(proj_dir):
     assert {f: f.read_bytes() for f in (proj_dir / "build").rglob("*") if f.is_file()} == before
 
 
-@pytest.mark.parametrize("command", ["check", "coverage", "text", "figures", "source"])
+@pytest.mark.parametrize("command", ["check", "text", "figures", "source"])
 @pytest.mark.parametrize("refusal", ["project-missing", "format-missing", "format-unknown"])
 def test_every_command_refuses_a_project_it_cannot_read_and_writes_nothing(
     proj_dir, tmp_path, command, refusal
@@ -297,7 +277,7 @@ def test_check_prints_each_finding_then_the_status_line_with_its_counts(proj_dir
 
 REPORT_KEYS = {
     "status", "exact", "known_first", "waiting", "counts", "findings", "checks", "tolerances",
-    "overlap_limits", "motion", "masses", "model_literals", "params", "bases",
+    "overlap_limits", "motion", "masses", "params", "bases",
     "rests_on_proposed", "measured", "awaiting_confirmation", "probes", "build_seconds",
     "threads", "drawings", "material", "follows", "plan", "held",
 }  # fmt: skip
@@ -363,7 +343,7 @@ def test_report_json_holds_the_run_as_data(proj_dir):
         "coarsened": {},
         "dropped": False,
     }
-    assert (report["masses"], report["model_literals"], report["probes"]) == ({}, None, [])
+    assert (report["masses"], report["probes"]) == ({}, [])
 
 
 def test_check_names_its_slowest_check_from_the_seconds_report_json_gives_each(mech_dir):

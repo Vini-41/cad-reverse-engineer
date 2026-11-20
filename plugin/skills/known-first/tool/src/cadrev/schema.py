@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from .sources import word_number
-from .threads import STANDARDS
 
 NUMBER = "number"
 # A number, or a cardinal in words read as the number it names: a ledger value written as printed.
@@ -117,8 +116,6 @@ FILES = {
         "units": (dict, None),
         "tolerance": (record("length:number angle:number"), None),
         "clearance": (str, None),
-        "model_literals": (Items(NUMBER), None),
-        "threads": (OneOf(tuple(STANDARDS)), None),
         "material": (str, None),
         "follows": (OneOf(FOLLOWS), None),
         "up": (OneOf(("y", "z")), None),
