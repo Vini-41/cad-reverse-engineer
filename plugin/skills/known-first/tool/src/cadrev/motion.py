@@ -166,17 +166,12 @@ class Mechanism:
                     self.coarsened[name] = coarser
         return fits
 
-    def _cable_tendons(self) -> dict[str, str]:
-        """cable -> the name of its spatial tendon in the MJCF: its own, unless a tendon has it."""
-        taken = set(self.model.tendons)
-        return {name: _unique(name, taken) for name in self.model.cables}
-
-    def _physics(self, kind: str, entry: dict) -> dict[str, str]:
-        """The MJCF attributes of the physics params a joint or tendon names, in its units."""
+    def _physics(self, joint: dict) -> dict[str, str]:
+        """The MJCF attributes of the physics params a joint names, in its units."""
         return {
-            attr: _num(self.p.values[entry[key]] * self._size(quantity))
-            for key, (attr, quantity) in physics_of(kind, entry).items()
-            if key in entry
+            attr: _num(self.p.values[joint[key]] * self._size(quantity))
+            for key, (attr, quantity) in physics_of(joint).items()
+            if key in joint
         }
 
     def _xml(self) -> str:
@@ -189,11 +184,10 @@ class Mechanism:
             ET.SubElement(asset, "mesh", name=name, file=f"{name}.stl")
         moved_by = {j["child"]: (name, j) for name, j in model.joints.items()}
         sites: dict[str, list[str]] = {}
-        paths = [*model.loops.values(), *(t["path"] for t in model.tendons.values())]
-        for path in [*paths, *(c["path"] for c in model.cables.values())]:
+        for path in [*model.loops.values(), *(c["path"] for c in model.cables.values())]:
             for datum in path:
                 on = sites.setdefault(model.instance_datum(datum)[0], [])
-                if datum not in on:  # a datum two loops or tendons name is one site
+                if datum not in on:  # a datum two loops or cables name is one site
                     on.append(datum)
 
         def body(parent: ET.Element, inst: str, parent_location) -> None:
@@ -212,7 +206,7 @@ class Mechanism:
                 if "range" in joint:
                     size = self._joint_size(name)
                     attrs["range"] = _num(*(value * size for _, value in range_ends(p, joint)))
-                ET.SubElement(element, "joint", attrs | self._physics("joint", joint))
+                ET.SubElement(element, "joint", attrs | self._physics(joint))
             ET.SubElement(element, "geom", type="mesh", mesh=part, contype="0", conaffinity="0")
             if (weighed := model.masses.get(part)) is not None:
                 ET.SubElement(
@@ -250,16 +244,12 @@ class Mechanism:
                     joint2=c.driver,
                     polycoef=polycoef,
                 )
-        if model.tendons or model.cables:
+        if model.cables:
+            # A cable is a spatial tendon with no stiffness: its length is only read.
             tendon = ET.SubElement(root, "tendon")
-            spatials = [
-                ({"name": n} | self._physics("tendon", t), t) for n, t in model.tendons.items()
-            ]
-            # A cable has no stiffness: its length is only read.
-            spatials += [({"name": n}, model.cables[c]) for c, n in self._cable_tendons().items()]
-            for attrs, entry in spatials:
-                spatial = ET.SubElement(tendon, "spatial", attrs)
-                for datum in entry["path"]:
+            for name, cable in model.cables.items():
+                spatial = ET.SubElement(tendon, "spatial", name=name)
+                for datum in cable["path"]:
                     ET.SubElement(spatial, "site", site=datum)
         actuated = [name for name, j in model.moving.items() if j["drive"] == "actuated"]
         if actuated:

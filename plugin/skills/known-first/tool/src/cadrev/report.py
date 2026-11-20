@@ -126,7 +126,7 @@ def motion(p: Project, model: Model, coarsened: dict) -> dict:
         if "range" in j:
             (low, lo), (high, hi) = range_ends(p, j)
             joints[name]["range"] = {"from": [low, high], "value": list(printed(lo, hi))}
-        joints[name] |= valued(j, physics_of("joint", j))
+        joints[name] |= valued(j, physics_of(j))
     cables = {}
     for name, c in model.cables.items():
         cables[name] = {"path": list(c["path"])}
@@ -138,10 +138,6 @@ def motion(p: Project, model: Model, coarsened: dict) -> dict:
         "gears": {
             name: {"driver": g["driver"], "driven": g["driven"]} | valued(g, GEAR_BY)
             for name, g in model.gears.items()
-        },
-        "tendons": {
-            name: {"path": list(t["path"])} | valued(t, physics_of("tendon", t))
-            for name, t in model.tendons.items()
         },
         "cables": cables,
         "coarsened": coarsened,
@@ -370,18 +366,15 @@ def write(
     p: Project,
     status: str,
     results: list[Result],
-    images: list[Path],
     drawn: list[Path],
     model: Model | None,
     coarsened: dict,
-    build_seconds: float | None,
     planned: dict | None,
     holds: dict | None,
 ) -> Path:
-    """Write build/report.md and build/report.json; model is None when none was built,
-    build_seconds is None where no build ran, planned is the plan as plan.check lists it, None
-    where the project has none or nothing was built to hold it to, and holds is what held.check
-    found, None where it was not asked."""
+    """Write build/report.md and build/report.json; model is None when none was built, planned
+    is the plan as plan.check lists it, None where the project has none or nothing was built to
+    hold it to, and holds is what held.check found, None where it was not asked."""
     out = p.root / "build"
     out.mkdir(exist_ok=True)
     findings = sorted(p.findings, key=lambda f: f.level != "error")  # errors first
@@ -678,16 +671,6 @@ def write(
             for q in p.probes
         ],
     )
-    if images:
-        md += [
-            "## Figure overlays",
-            "",
-            "Model edges (magenta) over the figure, scaled by the cited dimension (blue). Visual "
-            "comparison only.",
-            "",
-            *(f"![{i.stem}](overlays/{i.name})" for i in images),
-            "",
-        ]
     (out / "report.md").write_text("\n".join(md) + "\n", encoding="utf8")
 
     data = {
@@ -696,7 +679,6 @@ def write(
         "findings": [asdict(f) for f in findings],
         # A result gives the keys that apply to its kind alone only where they do.
         "checks": [{k: v for k, v in asdict(r).items() if v is not None} for r in results],
-        "build_seconds": build_seconds,
         "tolerances": tolerances,
         "overlap_limits": limits,
         "exact": exact,

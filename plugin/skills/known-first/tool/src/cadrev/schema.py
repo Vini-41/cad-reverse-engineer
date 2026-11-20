@@ -93,17 +93,12 @@ DATUM = (Items(NUMBER), record("circle:[str] mid:[str]", exclusive=(("circle", "
 # A part's mass: its datasheet mass, or a density its volume is weighed by; one param either way.
 PART = record("mass density", exclusive=(("mass", "density"),))
 GAP = record("id! question ask")
-OVERLAY = record(
-    "id:any image part instance view origin:[number] mirror:bool color",
-    calibration=record("pixels:[[number]] evidence"),
-)
 # What model.py's build returns for a mechanism, held to the same shapes as the YAML.
 JOINT = record(
     "type parent child axis:[str] range:[str] drive damping stiffness friction spring_rest"
 )
 GEAR = record("driver driven ratio lead")
 CABLE = record("path:[str] wheel closes:{str}")
-TENDON = record("path:[str] stiffness damping")
 # A step of the plan: the instances it places, the screws it drives of each thread param, and
 # how. `with` is a Python keyword, which a mapping's key may be.
 STEP = record("place:[str] with:{int} note")
@@ -131,7 +126,6 @@ FILES = {
     "params.yaml": {"params": (PARAM, dict), "parts": (PART, dict)},
     "checks.yaml": {"checks": (CHECK, list)},
     "gaps.yaml": {"gaps": (GAP, list)},
-    "overlays.yaml": {"overlays": (OVERLAY, list)},
     # The plan: how each part is made, in one operation or several in order; what is bought for
     # a part, a screw or anything else; and the steps that assemble the instances.
     "plan.yaml": {

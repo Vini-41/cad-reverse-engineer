@@ -9,7 +9,7 @@ A registered, hash-pinned document that states things about the object: a paper,
 _Avoid_: reference, input
 
 **Figure**:
-An image in a source: a plot, photo, drawing or video frame. Figure crops and overlays are taken from it.
+An image in a source: a plot, photo, drawing or video frame. Figure crops are taken from it.
 _Avoid_: source figure, source image, source pixel
 
 **Ledger**:
@@ -59,7 +59,7 @@ _Avoid_: assumed, guessed
 A question that, once answered, would replace a proposed or measured value, or the choice a derived parameter's computation makes, with a stated one. In a known-first project, a gap no parameter names is what a waiting part asks.
 
 **Physics value**:
-A parameter only the simulation reads, such as a joint's damping or friction, a spring's stiffness or rest, or a tendon's elasticity; it has a basis like any other but shapes no geometry.
+A parameter only the simulation reads, such as a joint's damping or friction, or a spring's stiffness or rest; it has a basis like any other but shapes no geometry.
 _Avoid_: simulation parameter, tuning value
 
 **Spring rest**:
@@ -97,7 +97,7 @@ How far a gear's slide moves per full turn of its revolute joint, a length; nega
 _Avoid_: pitch (for a lead; a screw with several starts has a lead several times its thread pitch), ratio (for a lead)
 
 **Cable**:
-An inextensible cord laid through datums on several instances, whose length the posed assembly gives; one wound on a wheel joint drives the joints it closes, each moving in proportion to the wheel's turn toward its closed pose. Unlike a tendon, a cable does not stretch.
+An inextensible cord laid through datums on several instances, whose length the posed assembly gives; one wound on a wheel joint drives the joints it closes, each moving in proportion to the wheel's turn toward its closed pose. A cable does not stretch: how far an elastic cord stretches is behaviour, which the kinematic model leaves out.
 _Avoid_: tendon (for an inextensible cord)
 
 **Wheel**:

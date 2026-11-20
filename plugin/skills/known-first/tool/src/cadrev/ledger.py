@@ -48,9 +48,6 @@ def check(p: Project) -> None:
     for part, entry in p.parts.items():
         for by, name in entry.items():
             p.hold_param(name, (by,), f"in params.yaml parts.{part}")
-    for o in p.overlays:
-        if ref := (o.get("calibration") or {}).get("evidence"):
-            p.hold(ref, ("length",), f"overlay {o.get('id', '?')} calibration")
 
 
 def check_sources(p: Project) -> None:

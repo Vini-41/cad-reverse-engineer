@@ -248,7 +248,6 @@ _FILES = {
     "parts": "params.yaml",
     "checks": "checks.yaml",
     "gaps": "gaps.yaml",
-    "overlays": "overlays.yaml",
     "sources": "project.yaml",
     "make": "plan.yaml",
     "buy": "plan.yaml",
@@ -258,7 +257,7 @@ _FILES = {
 
 def add(root: Path, **entries) -> None:
     """Add to the project's collections, each as data or as YAML text: an entry or a list of them
-    for evidence, skipped, conflicts, checks, gaps, overlays and the plan's steps; a mapping of
+    for evidence, skipped, conflicts, checks, gaps and the plan's steps; a mapping of
     names for params, parts, datums and the plan's make and buy."""
     for key, given in entries.items():
         new = yaml.safe_load(given) if isinstance(given, str) else given
