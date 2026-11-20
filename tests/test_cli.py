@@ -267,6 +267,12 @@ def test_every_command_refuses_a_project_it_cannot_read_and_writes_nothing(
     assert {f: f.read_bytes() for f in proj_dir.rglob("*") if f.is_file()} == before
 
 
+def test_a_format_1_project_is_refused_by_one_finding_naming_the_version_that_reads_it(proj_dir):
+    meta(proj_dir, format=1)
+    run = check(proj_dir)
+    assert run.rules == ["format-unknown"] and "0.2.0" in run.messages("format-unknown")[0]
+
+
 def test_check_prints_each_finding_then_the_status_line_with_its_counts(proj_dir):
     add(proj_dir, gaps="{id: G2}")
     change(proj_dir, "checks", "pitch", tol=1.51)
@@ -302,7 +308,6 @@ def test_report_json_holds_the_run_as_data(proj_dir):
         "source": 4,
         "measured": 0,
         "proposed": 1,
-        "physics_proposed": 0,
     }
     assert [(f["level"], f["rule"]) for f in report["findings"]] == [
         ("error", "tolerance-cap"),

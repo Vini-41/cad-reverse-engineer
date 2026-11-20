@@ -61,7 +61,7 @@ Read every page with `cadrev text <dir> <source>`, and view every image `cadrev 
 - Copy each quote from `cadrev text` output, the text the matcher sees.
 - A number printed only inside a figure is image evidence. Crop its label with `cadrev crop <dir> <image> LEFT TOP RIGHT BOTTOM --name <name>`, which prints the `image` and `image_sha256` the item takes. The box is in pixels of the file you crop, whose size `cadrev figures` prints, so scale it from the size you viewed the image at. View the crop, and write the `reading` exactly as printed. A scale bar is evidence only where a measured param is scaled against it.
 - The coverage sweep lists numbers printed with a unit. A count printed without one (a table cell, `3 planets`) and a ratio (`7.2:1`) are yours to find: ledger each one a param or a check will use.
-- Stated ranges of motion and physics values (a spring's stiffness) are ledgered too; the motion stage reads them.
+- Stated ranges of motion are ledgered too; the motion stage reads them. A stated spring, damper or friction is [`not-modeled`](references/project-format.md#evidence-the-ledger).
 - A value stated in several places is ledgered at each, one in scope and the rest restatements. A disagreement between sources is a conflict. A stated quantity about something else (a test object, a load, a rig, a result) is skipped with a reason.
 
 Done when every figure has been viewed and its labels ledgered, and `cadrev check <dir> --no-build` reports nothing about the evidence or its coverage but values not yet used, which the later stages use.
@@ -88,7 +88,7 @@ Write params.yaml for the settled parts. Each dimension takes the strongest basi
 - A tooth count is a `source` param, and a gear ratio a `derived` param written from the counts, so the ratio traces to the table.
 - A screw or a thread the sources state is a [thread param](references/project-format.md#threads): its designation from the ISO metric or the Unified table, which supplies its diameter, its pitch, its tap drill and its clearance hole. A stated screw length is the length param it names.
 - **A part waits** where the sources leave one of its dimensions open. It takes no params, and a gap in gaps.yaml whose question names the part ("What diameter are the finger link's pins?"), so the hand-over can group what waits by part. A stated value of a waiting part waits with it.
-- Joint ranges, poses and physics values wait for stage 8.
+- Joint ranges and poses wait for stage 8.
 
 Done when every feature of every settled part has a param, and every waiting part has its gap.
 
@@ -127,7 +127,6 @@ Then the rest:
 - A posed check for every value a source states at a joint angle or stroke, and for motion stated across a gear (a carrier's turn per sun turn, a carriage's travel per screw turn) a check with `from`. An angle reads unsigned from 0 to 180°, so place its datums where a sign error moves the angle the other way.
 - Each stated range read into its joint's range params, confirmed by a `range` check, with an interference `sweep` across the joint.
 - Gears as the worked examples build them ([gears](references/modeling.md#joints-and-loops), [a planetary train](references/project-format.md#worked-example-a-planetary-train)).
-- Physics values in the joint that applies them. Only the simulation reads one, so one no source states is `proposed`, with a gap.
 - **Motion waits** where the sources leave a range, a ratio or a pose open: the value waits with its gap, and so does the motion that needs it. Where every joint waits, the model stays static.
 
 Where a stated pose or range end leaves a loop open or pushes a joint out of range, fix the link lengths, the ranges or the as-built zero. Near a toggle (two links collinear) the solve itself can fail on links that do close: report that end to the user rather than trimming a stated range.

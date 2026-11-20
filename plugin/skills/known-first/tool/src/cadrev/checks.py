@@ -1,8 +1,8 @@
 """checks.yaml: what each check compares the geometry with, and its evaluation on the built model.
 
-A check compares with the ledger, never with params: a value its evidence and key name, one its
-expect works out from ledger values, or for a claim a direction of change. What the check reads
-besides (a pose, a density, a joint's range) decides what its result rests on.
+A check compares with the ledger, never with params: a value its evidence and key name, or one
+its expect works out from ledger values. What the check reads besides (a pose, a density, a
+joint's range) decides what its result rests on.
 """
 
 from __future__ import annotations
@@ -35,12 +35,10 @@ KINDS = {
     "diameter": Kind("length", expects=True),
     "mass": Kind("mass", expects=True),  # within tol_rel, a fraction, which has no default
     "range": Kind("angle"),  # a joint's own value where it names no datums
-    "stroke": Kind("length", expects=True, changes=True),  # or a claim in place of a value
+    "stroke": Kind("length", expects=True, changes=True),
     "shape": Kind("length"),  # tol capped against its released body's size
     "count": Kind("count", expects=True),  # compared exactly
 }
-# What a claim says a stroke does between its two poses: the sign of its shortening.
-CLAIMS = {"shortens": 1, "lengthens": -1}
 # The loosest a shape check may be, as a fraction of its body's bbox diagonal.
 BODY_CAP = 0.01
 
@@ -156,21 +154,9 @@ def _comparable(p: Project, c: dict) -> None:
         if "expect" in c:
             raise Fault(f"expect is for a check that compares one value; kind {name} takes none")
         return
-    if "claim" in c and name != "stroke":
-        raise Fault(f"claim is for a stroke check; kind {name} takes none")
     if "from" in c and not kind.changes:
         raise Fault(f"from is for a distance, angle or stroke check; kind {name} takes none")
-    if "claim" in c:
-        if "key" in c or "expect" in c or "tol" in c or "tol_rel" in c:
-            raise Fault(
-                "a claim replaces key and expect, and passes beyond tolerance.length, so it takes "
-                "no tol"
-            )
-        if c["claim"] not in CLAIMS:
-            raise Fault(f"claim {c['claim']} is neither {' nor '.join(CLAIMS)}")
-        if p.item(str(c.get("evidence"))) is None:
-            raise Fault("a claim cites the evidence item that states it")
-    elif "expect" in c:
+    if "expect" in c:
         if not kind.expects:
             raise Fault(f"expect is for a check that compares one value; kind {name} takes none")
         if "evidence" in c:
@@ -181,7 +167,7 @@ def _comparable(p: Project, c: dict) -> None:
     elif kind.expects and "evidence" not in c:
         raise Fault("give evidence and key, or expect, the value it is compared with")
     elif name == "stroke" and "key" not in c:
-        raise Fault("give key, the ledger value its stroke is compared with, or a claim")
+        raise Fault("give key, the ledger value its stroke is compared with")
     elif name == "bbox" and not c.get("axes"):
         raise Fault("give axes, each value of its evidence item and the axis it runs along")
 
@@ -638,13 +624,7 @@ class Checks:
             start_pose = {}
         shortening = start.path_length(cable["path"]) - placed.path_length(cable["path"])
         shown = f" shortening of {name}"
-        if "claim" in c:
-            tol = p.length_tol  # the model's resolution: a change within it is no change
-            expected = f"{c['claim']} by more than {tol:g} ({c['evidence']})"
-            ok = CLAIMS[c["claim"]] * shortening > tol
-            result = Result(cid, "stroke", ok, expected, f"{shortening:.4g}{shown}")
-        else:
-            result = self._compare(c, cid, compared_with(c), shortening, shown)
+        result = self._compare(c, cid, compared_with(c), shortening, shown)
         result.pose, result.from_pose = pose, start_pose
         yield result
 

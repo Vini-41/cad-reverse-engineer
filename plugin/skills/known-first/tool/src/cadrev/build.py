@@ -54,22 +54,6 @@ JOINT_TYPES = {
     "fixed": JointType(None, None, "stays"),
 }
 DRIVES = ("actuated", "passive")
-# The physics values a revolute joint or a slide may name, each a param: the MJCF attribute it
-# is written to, and its quantity.
-PHYSICS = {
-    "revolute": {
-        "damping": ("damping", "torsional damping"),
-        "stiffness": ("stiffness", "torsional stiffness"),
-        "friction": ("frictionloss", "torque"),
-        "spring_rest": ("springref", "angle"),
-    },
-    "slide": {
-        "damping": ("damping", "linear damping"),
-        "stiffness": ("stiffness", "linear stiffness"),
-        "friction": ("frictionloss", "force"),
-        "spring_rest": ("springref", "length"),
-    },
-}
 # What a gear is stated by: the quantity of its param, and whether it couples a revolute joint
 # with a slide (a lead) or two joints of one type (a ratio).
 GEAR_BY = {"ratio": ("fraction", False), "lead": ("length", True)}
@@ -182,22 +166,6 @@ def gear_by(gear: dict) -> tuple[str, str]:
     """What a gear is stated by: (ratio or lead, its param)."""
     key = next(k for k in GEAR_BY if k in gear)
     return key, gear[key]
-
-
-def physics_of(joint: dict) -> dict[str, tuple[str, str]]:
-    """The physics values a joint may name, from PHYSICS; none for a fixed joint."""
-    return PHYSICS.get(joint["type"], {})
-
-
-def physics_slots(model: Model) -> dict[str, list[tuple[str, str, str]]]:
-    """Each param a joint names as a physics value, with each place it applies: what a finding
-    calls the place, the MJCF attribute, and its quantity."""
-    slots: dict[str, list] = {}
-    for name, joint in model.joints.items():
-        for key, (attr, quantity) in physics_of(joint).items():
-            if key in joint:
-                slots.setdefault(joint[key], []).append((f"joint {name}'s {key}", attr, quantity))
-    return slots
 
 
 class Coupling(NamedTuple):
@@ -446,7 +414,7 @@ def _threaded(p: Project, model: Model, at: str, param: str, faces: dict[tuple, 
 
 def _hold_units(p: Project, model: Model, threaded: set[str]) -> None:
     """Each param the model reads or exports is printed in a unit of the quantity it is used as,
-    a physics value goes nowhere else, and each param is read by something."""
+    and each param is read by something."""
     for name in sorted(model.used):
         p.hold_param(name, ("length", "angle", "count"), "in model.py")
     ranges = {n for joint in model.joints.values() for n in joint.get("range", [])}
@@ -470,26 +438,10 @@ def _hold_units(p: Project, model: Model, threaded: set[str]) -> None:
             coupled.add(param)
             if joint in model.moving:
                 p.hold_param(param, (model.quantity(joint),), f"as cable {name}'s closed {joint}")
-    slots = physics_slots(model)
-    for name, places in sorted(slots.items()):
-        for place, _, quantity in places:
-            if quantity is not None:
-                p.hold_param(name, (quantity,), f"as {place}")
-        if name in p.params and name not in p.physics:
-            p.error(
-                "param-physics",
-                f"param {name}: {places[0][0]} is a physics value, so mark the param physics: true",
-            )
     named = {n for c in p.checks for n in ledger.named_by_checks(p, c)}
     fit = {p.meta.get("clearance")} - {None}  # the loosest fit
-    for name in sorted(p.physics & (model.used | named | ranges | coupled | fit)):
-        p.error(
-            "param-physics",
-            f"param {name}: is marked physics: true, but the model's geometry, a joint range, a "
-            "check or project.yaml's clearance reads it; a physics value only goes to a joint",
-        )
     # A screw's length is what is bought, whether or not the model reads it.
-    exported = ranges | coupled | slots.keys() | set(ledger.mass_params(p)) | threaded
+    exported = ranges | coupled | set(ledger.mass_params(p)) | threaded
     exported |= set(p.screws.values()) | fit
     derived = {n for spec in p.params.values() for n in expr_names(str(spec.get("expr") or ""))}
     p.resolution = ledger.resolution(p) - model.used - derived - exported
@@ -511,8 +463,8 @@ def _worked_from(p: Project, name: str, through: tuple[str, ...] = ()) -> list[s
 
 
 def _motion_faults(p: Project, model: Model) -> bool:
-    """File [model-joint], [model-loop], [model-gear], [model-cable] and [model-return] for each
-    joint, loop, gear and cable the assembly cannot hold; whether there is any."""
+    """File [model-joint], [model-loop], [model-gear] and [model-cable] for each joint, loop, gear
+    and cable the assembly cannot hold; whether there is any."""
     before = len(p.findings)
     moved_by: dict[str, str] = {}  # child instance -> the joint moving it
     for name, joint in model.joints.items():
@@ -549,10 +501,6 @@ def _motion_faults(p: Project, model: Model) -> bool:
             _cable_fault(p, model, cable, closed_by)
         for joint in cable.get("closes", {}):
             closed_by.setdefault(joint, name)
-    with p.filing("model-return", "model.build "):
-        for param, places in physics_slots(model).items():
-            if param not in p.values:
-                raise Fault(f"{places[0][0]} names {param}, which params.yaml does not define")
     return len(p.findings) > before
 
 
@@ -569,8 +517,6 @@ def _joint_fault(p: Project, model: Model, joint: dict, moved_by: dict) -> None:
                 f"{', '.join(extra)}; make it revolute or slide if it moves"
             )
         return
-    if "spring_rest" in joint and "stiffness" not in joint:
-        raise Fault("spring_rest names no spring without a stiffness")
     points = []
     for datum in joint["axis"]:
         if prefix(datum, model.assembly) != joint["child"]:

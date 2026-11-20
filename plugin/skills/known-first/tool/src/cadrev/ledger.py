@@ -80,10 +80,7 @@ def check_sources(p: Project) -> None:
 
 def _evidence(p: Project) -> None:
     """Each ledger item is anchored in its source and states the values it records."""
-    # A statement of a direction needs no values where only claim checks cite it.
-    keyed = {ref.partition(".")[0] for c in p.checks for ref in compared_refs(c)}
-    directions = {str(c.get("evidence")) for c in p.checks if "claim" in c} - keyed
-    # Nor does a statement of a thread, which a thread param reads by its designation.
+    # A statement of a thread needs no values: a thread param reads it by its designation.
     threaded = {str(spec.get("from")) for spec in p.params.values() if "thread" in spec}
     for e in p.evidence:
         eid, values = e["id"], e.get("values") or {}
@@ -91,7 +88,7 @@ def _evidence(p: Project) -> None:
             if e.get("source") not in p.sources:
                 raise Fault(f"unknown source {e.get('source')!r}", "evidence-source")
             needed = "probe" in e or (
-                "quote" in e and e.get("scope") != "context" and eid not in directions | threaded
+                "quote" in e and e.get("scope") != "context" and eid not in threaded
             )
             if needed and not values:
                 p.error("evidence-values", f"{eid}: needs values (or scope: context)")
@@ -347,9 +344,6 @@ def coverage(p: Project) -> None:
     for sid, s in p.sources.items():
         geometry = s.get("kind") == "geometry"
         if sid in p.unread_geometry if geometry else not (p.available(sid) and p.is_text(sid)):
-            continue
-        if s.get("coverage") is False:
-            p.warn("coverage-off", f"source {sid}: coverage: false, so the sweep does not read it")
             continue
         skips = [k for k in p.skipped if k.get("source") == sid]
         for k in skips:
@@ -787,15 +781,11 @@ def _feeding(p: Project, names: set[str]) -> set[str]:
 def unchecked(p: Project, read: set[str], model_reads: set[str]) -> None:
     """[unchecked-source] for each source param no check checks, where read is the params the
     checks read and model_reads those model.py reads. A check checks the params whose ledger value
-    it compares and what the params it reads are derived from. No check sees a physics value, nor
-    a param read only on the way to one, unless model.py reads it too."""
-    feeds_physics = _feeding(p, p.physics) - p.physics
-    physics_only = feeds_physics - _feeding(p, p.params.keys() - p.physics - feeds_physics)
+    it compares and what the params it reads are derived from."""
     checked = _feeding(p, read)
     # A screw's length the model does not read shapes no geometry: it says what is bought.
     bought = set(p.screws.values()) - _feeding(p, model_reads)
-    unchecked = p.params.keys() - checked - p.physics - physics_only - bought
-    unchecked |= physics_only & _feeding(p, model_reads) - checked
+    unchecked = p.params.keys() - checked - bought
     compared = {ref for c in p.checks for ref in compared_refs(c)}
     for name, spec in p.params.items():
         if name in unchecked and spec.get("basis") == "source" and spec.get("from") not in compared:

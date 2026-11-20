@@ -10,7 +10,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from . import checks, ledger
-from .build import GEAR_BY, Model, physics_of, prefix, printed, range_ends
+from .build import GEAR_BY, Model, prefix, printed, range_ends
 from .checks import Result
 from .motion import pose_text
 from .project import BASES, DEFAULT_TOL, RESTS_ON, Project
@@ -64,12 +64,9 @@ def tally(headline: dict[str, int]) -> str:
 
 
 def counts(p: Project, results: list[Result]) -> dict[str, int]:
-    """The headline numbers: the params by what they rest on, proposed physics values apart."""
+    """The headline numbers: the params by what they rest on."""
     errors = sum(f.level == "error" for f in p.findings)
-    apart = p.proposed & p.physics
-    rest = {
-        b: sum(basis == b and n not in apart for n, basis in p.rests_on.items()) for b in RESTS_ON
-    }
+    rest = {b: sum(basis == b for basis in p.rests_on.values()) for b in RESTS_ON}
     return {
         "errors": errors,
         "warnings": len(p.findings) - errors,
@@ -77,7 +74,6 @@ def counts(p: Project, results: list[Result]) -> dict[str, int]:
         "checks_passed": sum(r.ok for r in results),
         "params": len(p.params),
         **rest,
-        "physics_proposed": len(apart),
     }
 
 
@@ -126,7 +122,6 @@ def motion(p: Project, model: Model, coarsened: dict) -> dict:
         if "range" in j:
             (low, lo), (high, hi) = range_ends(p, j)
             joints[name]["range"] = {"from": [low, high], "value": list(printed(lo, hi))}
-        joints[name] |= valued(j, physics_of(j))
     cables = {}
     for name, c in model.cables.items():
         cables[name] = {"path": list(c["path"])}
@@ -415,7 +410,6 @@ def write(
         for gap, g in p.gaps.items()
         if waits is None or affected[gap]  # a known-first project lists the rest as waiting
     ]
-    physics = headline["physics_proposed"]
     isometric = [d for d in drawn if d.parent == out]
     sheets = {d.stem: d for d in drawn if d.parent.name == "drawings"}
     threaded = [] if model is None else threads(p, model)
@@ -425,27 +419,18 @@ def write(
         f"**{status}**: {tally(headline)}. "
         f"{headline['checks_passed']}/{headline['checks']} geometry checks pass.",
         f"Of {headline['params']} parameters, {headline['source']} rest on sources, "
-        f"{headline['measured']} on measured values and {headline['proposed']} on proposed values"
-        + (
-            f"; {physics} more {'is a' if physics == 1 else 'are'} proposed physics "
-            f"value{'s' * (physics != 1)}."
-            if physics
-            else "."
-        ),
+        f"{headline['measured']} on measured values and {headline['proposed']} on proposed "
+        "values.",
         "",
     ]
     if exact:
-        aside = [f"{physics} physics value{'s' * (physics != 1)}"] if physics else []
         resolution = sorted(p.proposed & p.resolution)
-        if resolution:
-            aside.append(
-                f"the sweep resolution{'s' * (len(resolution) != 1)} {', '.join(resolution)}"
-            )
-        many = len(aside) > 1 or physics > 1 or len(resolution) > 1
+        many = len(resolution) > 1
         md += [
-            "**Exact**: no geometry or kinematic parameter rests on a proposed value; "
-            f"{' and '.join(aside)} {'are' if many else 'is'} proposed."
-            if aside
+            "**Exact**: no parameter rests on a proposed value but the sweep "
+            f"resolution{'s' * many} {', '.join(resolution)}, which {'are' if many else 'is'} "
+            "proposed."
+            if resolution
             else "**Exact**: no parameter rests on a proposed value.",
             "",
         ]

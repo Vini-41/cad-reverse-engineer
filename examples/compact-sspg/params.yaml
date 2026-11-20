@@ -163,7 +163,7 @@ params:
   sec_z:    {basis: derived, expr: car_h - sec_boss_h, gap: G-place, interpretation: "the secondary carrier's plate rests on the pins' tops, the bosses around the pin ends"}
 
   # ---- mass model
-  print_density: {basis: proposed, value: 0.00124, rationale: "PLA at 1.24 g/cm3 (the paper prints in PLA at 100% infill); weighs the printed parts for the MJCF", gap: G-density, physics: true}
+  print_density: {basis: proposed, value: 0.00124, rationale: "PLA at 1.24 g/cm3 (the paper prints in PLA at 100% infill); weighs the printed parts for the MJCF", gap: G-density}
 
 parts:
   planet_gear: {density: print_density}

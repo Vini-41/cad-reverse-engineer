@@ -21,7 +21,9 @@ import yaml
 
 from . import Fault, released, schema, sources, threads, units
 
-FORMAT = 1  # the project.yaml format this cadrev reads
+FORMAT = 2  # the project.yaml format this cadrev reads
+# Each earlier format, with the last cadrev that reads it; none is migrated.
+READ_BY = {1: "0.2.0"}
 # Findings after which nothing else in the project is read and every command refuses it.
 REFUSED = ("project-missing", "format-missing", "format-unknown")
 BASES = ("source", "derived", "measured", "proposed")
@@ -212,19 +214,14 @@ class Project:
         return {n: v for n, v in self.values.items() if isinstance(v, threads.Size)}
 
     @property
-    def physics(self) -> set[str]:
-        """Params marked physics: true, which only the simulation reads."""
-        return {name for name, spec in self.params.items() if spec.get("physics") is True}
-
-    @property
     def proposed(self) -> set[str]:
         return {name for name, basis in self.rests_on.items() if basis == "proposed"}
 
     @property
     def inexact(self) -> set[str]:
-        """The proposed params that keep a VERIFIED project from being exact: all but physics
-        values and a sweep's resolution."""
-        return self.proposed - self.physics - self.resolution
+        """The proposed params that keep a VERIFIED project from being exact: all but a sweep's
+        resolution."""
+        return self.proposed - self.resolution
 
     # Sources.
 
@@ -622,6 +619,8 @@ def read_meta(root: Path, findings: list[Finding]) -> dict:
         ("format-missing", "is missing") if fmt is None else ("format-unknown", f"is {fmt!r}")
     )
     why = f"project.yaml: format {what}; this cadrev reads format: {FORMAT}"
+    if type(fmt) is int and fmt in READ_BY:
+        why += f", and cadrev {READ_BY[fmt]} reads format: {fmt}"
     findings.append(Finding("error", rule, why))
     return {}
 

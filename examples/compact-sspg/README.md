@@ -22,7 +22,7 @@ A gear train whose authors released only meshes. A fresh agent reconstructed it 
 - **The teeth are checked for interference.** The involutes mesh at zero backlash, so the overlap limit is raised to a sliver, 0.001 mm³, and the report lists that limit as non-default.
 - **What is not built says why.** Two released bodies are skipped with a reason: the earlier carrier, superseded by the updated one, and the motor casing, outside the target.
 - **What nothing holds is named.** The bearings are left out, so the two carriers stand 0.88 mm from the planets, on nothing: the run's one warning. The sun, the planets and the ring hold each other tooth on tooth.
-- **What the sources leave open is a question.** 14 of 146 parameters are proposed, under six gaps: the tooth form, the fillet radii, how the parts locate axially.
+- **What the sources leave open is a question.** 15 of 146 parameters are proposed, under six gaps: the tooth form, the fillet radii, how the parts locate axially.
 
 One reading comes from a figure: Fig. 4(a)'s label "(a) SSPG (MN8014, 7.2:1)", held as the hashed crop `figures/crops/fig4a-label.png`. A named reviewer checked it against the crop, recorded as `confirmed_by` in `ledger_paper.yaml`, which `ledger.py` carries into `evidence.yaml`. It restates the quoted 7.2:1, so it is context.
 

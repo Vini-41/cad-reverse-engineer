@@ -58,14 +58,6 @@ _Avoid_: assumed, guessed
 **Gap**:
 A question that, once answered, would replace a proposed or measured value, or the choice a derived parameter's computation makes, with a stated one. In a known-first project, a gap no parameter names is what a waiting part asks.
 
-**Physics value**:
-A parameter only the simulation reads, such as a joint's damping or friction, or a spring's stiffness or rest; it has a basis like any other but shapes no geometry.
-_Avoid_: simulation parameter, tuning value
-
-**Spring rest**:
-The joint value at which a joint's spring exerts no torque, or no force on a slide, measured from the assembly as built like a pose. A spring preloaded against a stop rests outside its joint's range.
-_Avoid_: preset, preload, springref
-
 **Thread**:
 A standard screw thread, named by its designation in the ISO metric table or the Unified one (`M3`, `M8x1`, `1/4-20`). A thread param holds one, stated by a source or proposed from the project's table, and the table gives its diameter, pitch, tap drill and clearance hole. The model declares it on the plain hole or shank made for it and never cuts it: what a CAD program calls a cosmetic thread.
 _Avoid_: screw size (for a designation), thread size (for a diameter typed beside a pitch), modelled thread
@@ -124,10 +116,6 @@ _Avoid_: test, assertion
 What a check's evaluation read: the params the check names (its pose, its sweep's steps, a mass check's density), the params the model gives it (its joint's range ends, the ratio or lead of each gear and the turn and closed values of each cable a pose moves a joint through) and the parts it weighs. What the check rests on is judged from them.
 _Avoid_: dependencies, inputs (of a check)
 
-**Claim**:
-What a check compares with in place of a ledger value, where a source states a direction but prints no number: a stroke check's `shortens` or `lengthens`, passing only when the change between its two poses exceeds the length tolerance. The statement it cites is a quote with no values.
-_Avoid_: assertion, inequality check
-
 **Checked param**:
 A param some check reads (see Reads), directly or through a param derived from it, or whose ledger value some check compares. A source param that is not one is unchecked.
 _Avoid_: covered (by a check), confirmed (by a check)
@@ -166,7 +154,7 @@ The status of a project that would be VERIFIED except that some readings await h
 The status of a verification run that skipped the build, and so makes no claim.
 
 **Exact**:
-VERIFIED with no parameter resting on a proposed value, physics values and a sweep's resolution (how many poses it evaluates) aside: exactness is judged over what the sources state about geometry and kinematics.
+VERIFIED with no parameter resting on a proposed value but a sweep's resolution, how many poses it evaluates.
 _Avoid_: verified (for this stronger state)
 
 ## Workflow
@@ -178,7 +166,7 @@ The first part taken through modelling, checks and the report before any other p
 The first closed loop of a mechanism taken through its joints, the MJCF export and a posed check before any other joint is declared.
 
 **Known first**:
-A project that builds only its settled parts, those whose every dimension the sources settle (quoted, worked out from quotes, probed or measured), and lists what waits. No parameter rests on a proposed value, physics values and a sweep's resolution aside. The user then builds on it, or has the reconstruction propose the rest as the complete model.
+A project that builds only its settled parts, those whose every dimension the sources settle (quoted, worked out from quotes, probed or measured), and lists what waits. No parameter rests on a proposed value but a sweep's resolution. The user then builds on it, or has the reconstruction propose the rest as the complete model.
 _Avoid_: draft model, sources-only model
 
 **Waiting**:
