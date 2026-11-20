@@ -45,8 +45,10 @@ def test_init_scaffolds_a_project_short_only_of_its_target(tmp_path):
     code, out = cadrev("init", root)
     assert code == 1 and "not empty" in out
     # A name YAML would read as something else is still the project's name.
-    assert cadrev("init", tmp_path / "yes")[0] == 0
-    assert yaml.safe_load((tmp_path / "yes" / "project.yaml").read_text())["name"] == "yes"
+    for name in ("yes", "gear-🛠"):
+        assert cadrev("init", tmp_path / name)[0] == 0
+        written = (tmp_path / name / "project.yaml").read_text(encoding="utf8")
+        assert yaml.safe_load(written)["name"] == name
 
 
 def test_source_copies_the_file_pins_its_hash_and_lists_it_last(proj_dir, tmp_path):
