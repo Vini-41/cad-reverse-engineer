@@ -54,7 +54,6 @@ from conftest import (
 WARNINGS = {
     "cable-on-axis",
     "conflict-open",
-    "coverage-off",
     "gap-unused",
     "param-unused",
     "quote-page",
@@ -211,8 +210,8 @@ LINK_FINDINGS = {
     # The project and its files.
     "project-missing": lambda r, t: (r / "project.yaml").unlink(),
     "format-missing": _meta(format=None),
-    "format-unknown": _meta(format=2),
-    "format-unknown: text": _meta(format="1"),
+    "format-unknown": _meta(format=3),
+    "format-unknown: text": _meta(format="2"),
     "yaml-syntax": lambda r, t: write(r, "params.yaml", "params:\n  a: [unclosed\n"),
     "yaml-syntax: not UTF-8": lambda r, t: (r / "gaps.yaml").write_bytes(b"\xff\xfe"),
     "schema: an entry without its id": lambda r, t: change(r, "checks", "pitch", id=None),
@@ -227,6 +226,12 @@ LINK_FINDINGS = {
         r, parts="link: {mass: pitch, density: pitch}"
     ),
     "schema: a source with a license": lambda r, t: change(r, "sources", "paper", license="MIT"),
+    # Format 2 removed these keys, so each is unknown, with no rule of its own.
+    "schema: a source out of the coverage sweep": lambda r, t: change(
+        r, "sources", "paper", coverage=False
+    ),
+    "schema: a param marked physics": _param("hole_d", physics=True),
+    "schema: a check with a claim": _checks("pitch", claim="shortens"),
     "schema: a file that is a list": lambda r, t: write(r, "params.yaml", "- a\n- b\n"),
     "schema: a file's key that is none": lambda r, t: edit(
         r, "params.yaml", lambda d: d.update(parmas=d.pop("params"))
@@ -378,10 +383,6 @@ LINK_FINDINGS = {
         add(r, params="fit: {basis: derived, expr: -hole_d}"),
         meta(r, clearance="fit"),
     ),
-    "param-physics: a physics value as the clearance": lambda r, t: (
-        change(r, "params", "hole_d", physics=True),
-        meta(r, clearance="hole_d"),
-    ),
     "unit-quantity: a mass as the clearance": lambda r, t: (
         add_quote(r, t, "Each screw weighs 10 g.", values={"m": 10}),
         add(r, params="fit: {basis: source, from: N1.m}"),
@@ -435,7 +436,6 @@ LINK_FINDINGS = {
     ),
     "coverage: a released body nothing compares": _released(check=False),
     "coverage: a region of a cut file": _sheet(check=False),
-    "coverage-off": lambda r, t: change(r, "sources", "paper", coverage=False),
     "skip-reason": _skip("{source: paper, quote: branches of 60 mm diameter}"),
     "skip-anchor": _skip("{source: paper, reason: test condition}"),
     "skip-anchor: from without to": _skip("{source: paper, from: Tests, reason: test}"),
@@ -650,10 +650,9 @@ LINK_FINDINGS = {
     "check-config: a stroke of a cable that is none": _check(
         "{id: s, kind: stroke, cable: cord, evidence: pitch, key: pitch}"
     ),
-    "check-config: a stroke with neither key nor claim": _check(
+    "check-config: a stroke with no key": _check(
         "{id: s, kind: stroke, cable: cord, evidence: pitch}"
     ),
-    "check-config: a claim on another kind": _checks("pitch", claim="shortens"),
     "check-config: from on a kind that takes none": _checks("env", **{"from": {}}),
     "check-config: expect beside evidence": _checks("pitch", expect="pitch.pitch"),
     "check-config: expect on a kind that takes none": _checks(
@@ -766,16 +765,6 @@ INPUT = '"parent": "rail_1", "child": "crank_1"'
 DRAW = "{id: draw, kind: stroke, cable: cord, evidence: S2, "
 
 
-def _corded(claim: str, **fields):
-    """The slider-crank with a cord from the crank pivot to the slider, and a stroke check of it
-    posed at the stated turn."""
-    return lambda r, t: (
-        remodel(r, LOOP, LOOP + "\n        " + CORD),
-        add(r, checks=DRAW + "pose: {input: S2.turn}, " + claim),
-        change(r, "checks", "draw", **fields),
-    )
-
-
 MECH_FINDINGS = {
     "loop-open: as built": _model("Location((2 * bx, 0, p.H))", "Location((2 * bx + p.W, 0, p.H))"),
     "loop-open: at a pose": _check(
@@ -798,7 +787,6 @@ MECH_FINDINGS = {
     "model-joint: a child another joint moves": _model('"child": "slider_1"', '"child": "crank_1"'),
     "model-joint: a ring of joints": _model(INPUT, INPUT.replace("rail_1", "coupler_1")),
     "model-joint: a fixed joint with an axis": _model('"type": "slide"', '"type": "fixed"'),
-    "model-joint: a spring rest with no stiffness": _model(KNEE, '"spring_rest": "rest", ' + KNEE),
     "model-loop": _model(LOOP, LOOP.replace("slider_1.up", "slider_1.nope")),
     "model-gear: a joint the model lacks": _chain(
         FOLD.replace("knee", "ankle"), fold=PROPOSED % -2
@@ -839,12 +827,14 @@ MECH_FINDINGS = {
         WOUND.replace(', "closes": {"slide": "pull"}', "")
     ),
     "model-return: a key build may not return": _model(LOOP, LOOP + '\n        "tendons": {},'),
-    "model-return: a physics value params.yaml lacks": _model(KNEE, '"damping": "knee_c", ' + KNEE),
+    # Format 2 removed a joint's physics values, so each is an unknown key.
+    "model-return: a joint's damping": _model(KNEE, '"damping": "rest", ' + KNEE),
+    "model-return: a joint's stiffness": _model(KNEE, '"stiffness": "rest", ' + KNEE),
+    "model-return: a joint's friction": _model(KNEE, '"friction": "rest", ' + KNEE),
+    "model-return: a joint's spring rest": _model(KNEE, '"spring_rest": "rest", ' + KNEE),
     "cable-on-axis": _wound(
         WOUND.replace("slider_1.down", "coupler_1.up").replace('{"slide"', '{"knee"')
     ),
-    "param-physics: a joint's damping not marked so": _model(KNEE, '"damping": "W", ' + KNEE),
-    "param-physics: a physics value the geometry reads": _param("W", physics=True),
     "part-mass: a placed part with no entry": lambda r, t: edit(
         r, "params.yaml", lambda d: d["parts"].pop("slider")
     ),
@@ -884,10 +874,6 @@ MECH_FINDINGS = {
         remodel(r, LOOP, LOOP + "\n        " + CORD),
         add(r, checks=DRAW + "key: reach}"),
     ),
-    "check-config: a claim that is neither": _corded("claim: tightens}"),
-    "check-config: a claim beside a key": _corded("claim: shortens, key: reach}"),
-    "check-config: a claim with a tolerance": _corded("claim: shortens, tol: 1}"),
-    "check-config: a claim citing no evidence item": _corded("claim: shortens}", evidence="S9"),
     "tolerance-cap: a range's tol above 5% of its span": _checks("swing", tol=6.1),
 }
 
@@ -1061,7 +1047,6 @@ LINK_DAMAGE = {
         write(r, name, "") for name in ("evidence.yaml", "params.yaml", "checks.yaml", "gaps.yaml")
     ],
     "check tol in words": _checks("pitch", tol="wide"),
-    "check claim is a list": _checks("pitch", claim=["shortens"]),
     "check from is a number": _checks("pitch", **{"from": 3}),
     "bbox without axes": _checks("env", axes=None),
     "bbox without evidence": _checks("env", evidence=None),

@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from . import Fault, units
-from .build import JOINT_TYPES, Model, couplings, physics_of, printed, range_ends
+from .build import JOINT_TYPES, Model, couplings, printed, range_ends
 from .project import Project
 
 # Steps from the as-built pose to the one a check names: each step starts from the last, so the
@@ -166,14 +166,6 @@ class Mechanism:
                     self.coarsened[name] = coarser
         return fits
 
-    def _physics(self, joint: dict) -> dict[str, str]:
-        """The MJCF attributes of the physics params a joint names, in its units."""
-        return {
-            attr: _num(self.p.values[joint[key]] * self._size(quantity))
-            for key, (attr, quantity) in physics_of(joint).items()
-            if key in joint
-        }
-
     def _xml(self) -> str:
         p, model = self.p, self.model
         root = ET.Element("mujoco", model=str(p.meta.get("name", "model")))
@@ -206,7 +198,7 @@ class Mechanism:
                 if "range" in joint:
                     size = self._joint_size(name)
                     attrs["range"] = _num(*(value * size for _, value in range_ends(p, joint)))
-                ET.SubElement(element, "joint", attrs | self._physics(joint))
+                ET.SubElement(element, "joint", attrs)
             ET.SubElement(element, "geom", type="mesh", mesh=part, contype="0", conaffinity="0")
             if (weighed := model.masses.get(part)) is not None:
                 ET.SubElement(

@@ -69,7 +69,7 @@ def record(fields: str, exclusive: tuple = (), **nested) -> Record:
     return Record(specs, tuple(required), exclusive)
 
 
-SOURCE = record("id! kind path sha256 citation url coverage:bool")
+SOURCE = record("id! kind path sha256 citation url")
 EVIDENCE = record(
     "id! source page:int locator quote values:{word} scope reason image image_sha256 reading:any "
     "confirmed_by probe body axes:{str} between:[str] along at tol:number"
@@ -78,13 +78,13 @@ SKIP = record("source page:int pages:[int] quote from to body within:[[number]] 
 CONFLICT = record("id:any evidence:[str] summary resolution")
 PARAM = record(
     "basis from value:number expr thread:any length method uncertainty:any rationale gap "
-    "interpretation physics:bool"
+    "interpretation"
 )
 CHECK = record(
     "id!:any kind part thread instances:[str] parts:[str] evidence key expect axes:{str} "
     "between:[str] "
     "along at density counts:{str} add:[str] tol:number tol_rel:number max_volume:number "
-    "pairs:[[str]] pose:{any} from:{any} claim joint cable body ends:[str] interpretation",
+    "pairs:[[str]] pose:{any} from:{any} joint cable body ends:[str] interpretation",
     exclusive=(("part", "instances"), ("part", "thread")),
     sweep=record("joint! steps!"),
 )
@@ -94,9 +94,7 @@ DATUM = (Items(NUMBER), record("circle:[str] mid:[str]", exclusive=(("circle", "
 PART = record("mass density", exclusive=(("mass", "density"),))
 GAP = record("id! question ask")
 # What model.py's build returns for a mechanism, held to the same shapes as the YAML.
-JOINT = record(
-    "type parent child axis:[str] range:[str] drive damping stiffness friction spring_rest"
-)
+JOINT = record("type parent child axis:[str] range:[str] drive")
 GEAR = record("driver driven ratio lead")
 CABLE = record("path:[str] wheel closes:{str}")
 # A step of the plan: the instances it places, the screws it drives of each thread param, and

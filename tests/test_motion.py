@@ -1,5 +1,5 @@
-"""A model that moves: joints and loops posed through MuJoCo, gears, cables, ranges, sweeps,
-physics values, the mass model and the MJCF export."""
+"""A model that moves: joints and loops posed through MuJoCo, gears, cables, ranges, sweeps, the
+mass model and the MJCF export."""
 
 import importlib
 import math
@@ -164,7 +164,6 @@ def test_gear_the_loops_do_not_allow_leaves_its_poses_unreached(mech_dir):
     [
         ("model-joint", '"crank_1.up"]', '"crank_1.a"]'),
         ("model-loop", "slider_1.up", "slider_1.nope"),
-        ("model-return", KNEE, '"damping": "knee_c", ' + KNEE),
     ],
 )
 def test_fault_in_what_moves_keeps_the_build_and_drops_the_motion(mech_dir, rule, old, new):
@@ -323,28 +322,23 @@ def test_cable_wound_on_a_wheel_closes_its_joints_in_proportion_and_a_stroke_rea
     }
 
 
-def test_stroke_of_a_cable_is_compared_with_a_stated_direction_or_a_worked_length(mech_dir):
+def test_stroke_of_a_cable_is_compared_with_a_worked_length_as_built_or_between_two_poses(
+    mech_dir,
+):
     # A cord from the crank pivot to the slider is as long as the slider is far.
     remodel(mech_dir, LOOP, LOOP + "\n        " + CORD)
     cord = "kind: stroke, cable: cord"
     add(
         mech_dir,
         checks=f"""\
-- {{id: shortens, {cord}, evidence: S2, claim: shortens, {TURNED}}}
-- {{id: not-lengthens, {cord}, evidence: S2, claim: lengthens, {TURNED}}}
-- {{id: not-moved, {cord}, evidence: S2, claim: shortens, {TURNED}, from: {{input: S2.turn}}}}
-- {{id: lengthens, {cord}, evidence: S2, claim: lengthens, from: {{input: S2.turn}},
-   pose: {{input: S3.low}}}}
 - {{id: worked, {cord}, {TURNED}, expect: "{REACH % "S1.rest"} - S2.reach"}}
 - {{id: paid-out, {cord}, from: {{input: S2.turn}}, pose: {{input: S3.low}},
    expect: "S2.reach - {REACH % "S1.rest + S3.low"}"}}
 """,
     )
     run = check(mech_dir)
-    failed = [c["id"] for c in run.report["checks"] if not c["ok"]]
-    assert failed == ["not-lengthens", "not-moved"] and run.rules == ["check-failed"] * 2
-    assert run.result("shortens")["expected"] == "shortens by more than 0.001 (S2)"
-    assert number(run.result("shortens")) == pytest.approx(BUILT - STOOD, abs=5e-3)
+    assert run.status == "VERIFIED" and run.rules == []
+    assert number(run.result("worked")) == pytest.approx(BUILT - STOOD, abs=5e-3)
     assert run.result("worked")["expect"]["value"] == pytest.approx(BUILT - STOOD)
     # A stroke with `from` is taken between two poses: here the cord pays out, a negative stroke.
     paid = run.result("paid-out")
@@ -354,59 +348,21 @@ def test_stroke_of_a_cable_is_compared_with_a_stated_direction_or_a_worked_lengt
     assert run.report["motion"]["cables"] == {"cord": {"path": ["rail_1.up", "slider_1.down"]}}
 
 
-SPRUNG = "The knee spring is 0.25 N·m/rad, preset at 45°, its damper 0.002 N·m·s/rad."
-PHYSICS = """\
-knee_k: {basis: source, from: N1.k, physics: true}
-knee_rest: {basis: source, from: N1.rest, physics: true}
-knee_c: {basis: source, from: N1.c, physics: true}
-knee_f: {basis: proposed, value: 2, rationale: light friction, gap: G1, physics: true}
-"""
-SPRING = '"stiffness": "knee_k", "spring_rest": "knee_rest", "damping": "knee_c", '
+SPRUNG = "The knee spring is 0.25 N·m/rad, its damper 0.002 N·m·s/rad, its friction 3 N·mm."
+SLID = "The slider's spring is 0.5 N/mm, its damper 0.01 N·s/mm, its friction 2 N."
+# What MuJoCo's joint and tendon would take a spring, a damper or a friction in.
+SIMULATED = {"stiffness", "damping", "frictionloss", "springref", "springlength"}
 
 
-def test_physics_values_reach_the_mjcf_in_its_units_and_shape_no_geometry(mech_dir, tmp_path):
-    add_quote(mech_dir, tmp_path, SPRUNG, values={"k": 0.25, "rest": 45, "c": 0.002})
-    remodel(mech_dir, KNEE, SPRING + '"friction": "knee_f", ' + KNEE)
-    add(mech_dir, params=PHYSICS)
+def test_a_stated_spring_damper_or_friction_is_a_value_the_model_leaves_unbuilt(mech_dir, tmp_path):
+    values = {"k": 0.25, "c": 0.002, "f": 3, "slide_k": 0.5, "slide_c": 0.01, "slide_f": 2}
+    unbuilt = {"scope": "not-modeled", "reason": "the kinematic model claims no behaviour"}
+    add_quote(mech_dir, tmp_path, f"{SPRUNG} {SLID}", values=values, **unbuilt)
     run = check(mech_dir)
-    # No check sees a physics value, so a source one needs none; a proposed one is counted apart.
+    # Its units read, and set aside, it covers what it states: no coverage or unused finding.
     assert run.status == "VERIFIED" and run.rules == []
-    counts = run.report["counts"]
-    assert (counts["proposed"], counts["physics_proposed"]) == (3, 1)
-    assert "3 on proposed values; 1 more is a proposed physics value." in run.md
-    # The report gives each in the project's units: N·mm per radian and degrees.
-    knee = run.report["motion"]["joints"]["knee"]
-    assert {k: v["value"] for k, v in knee.items() if isinstance(v, dict)} == {
-        "stiffness": 250,
-        "spring_rest": 45,
-        "damping": 2,
-        "friction": 2,
-    }
-    # The MJCF is in mm, g and s, so a newton is 1e6 g·mm/s², and angles are radians.
-    (joint,) = [j for j in mjcf(mech_dir).iter("joint") if j.get("name") == "knee"]
-    written = ("stiffness", "springref", "damping", "frictionloss")
-    assert [float(joint.get(k, 0)) for k in written] == pytest.approx(
-        [2.5e8, math.radians(45), 2e6, 2e6]
-    )
-
-
-def test_a_slides_physics_values_are_a_force_per_length_and_a_force(mech_dir, tmp_path):
-    quote = "The slider's spring is 0.5 N/mm, its damper 0.01 N·s/mm, its friction 2 N."
-    add_quote(mech_dir, tmp_path, quote, values={"k": 0.5, "c": 0.01, "f": 2})
-    sprung = '"stiffness": "slide_k", "damping": "slide_c", "friction": "slide_f", "drive"'
-    remodel(mech_dir, '"slider_1.x"], "drive"', '"slider_1.x"], ' + sprung)
-    add(
-        mech_dir,
-        params={
-            f"slide_{key}": {"basis": "source", "from": f"N1.{key}", "physics": True}
-            for key in "kcf"
-        },
-    )
-    run = check(mech_dir)
-    assert run.status == "VERIFIED" and run.rules == []
-    (joint,) = [j for j in mjcf(mech_dir).iter("joint") if j.get("name") == "slide"]
-    written = ("stiffness", "damping", "frictionloss")
-    assert [float(joint.get(k, 0)) for k in written] == pytest.approx([5e5, 1e4, 2e6])
+    exported = {key for element in mjcf(mech_dir).iter() for key in element.attrib}
+    assert exported & SIMULATED == set()
 
 
 RANGED = "The crank stands from 10° to 80° above the rail, the slider 78.7846 mm to 13.8919 mm out."
@@ -504,25 +460,28 @@ def test_sweep_finds_the_pose_where_two_instances_collide_across_a_joints_range(
     assert "steps" in run.report["rests_on_proposed"]
 
 
-def test_proposed_sweep_steps_and_physics_values_leave_a_project_exact(mech_dir):
+def test_a_sweeps_resolution_alone_is_set_aside_from_exact(mech_dir):
     for name, expr in {"W": "L / 8", "H": "L / 10", "hole": "L / 20"}.items():
         change(mech_dir, "params", name, basis="derived", expr=expr, value=None, rationale=None)
         change(mech_dir, "params", name, gap=None)
     write(mech_dir, "gaps.yaml", "gaps: []\n")
-    remodel(mech_dir, KNEE, '"damping": "knee_c", ' + KNEE)
     add(
         mech_dir,
-        params="""\
-steps: {basis: proposed, value: 3, rationale: coarse}
-knee_c: {basis: proposed, value: 2, rationale: light damping, physics: true}
-""",
+        params="steps: {basis: proposed, value: 3, rationale: coarse}",
         checks=f"{{id: clear, {SWEEP}, pairs: [[rail_1, coupler_1]]}}",
     )
     run = check(mech_dir)
     assert run.status == "VERIFIED" and run.report["exact"] is True
-    assert run.report["rests_on_proposed"] == ["knee_c", "steps"]
-    assert "1 physics value and the sweep resolution steps are proposed" in run.md
-    assert run.messages("param-gap") == ["param knee_c: proposed value names no gap to close it"]
+    assert run.report["rests_on_proposed"] == ["steps"]
+    # A density shapes no geometry, yet proposed it is a value the sources leave open.
+    change(mech_dir, "evidence", "S4", values={"total": 6.1, "slider": 2})
+    change(mech_dir, "evidence", "S4", quote="weighs 6.1 g with its 2 g slider")
+    add(mech_dir, skipped="{source: paper, quote: resin of 1.2 g/cm3, reason: unread}")
+    change(mech_dir, "params", "rho", basis="proposed", value=0.0012, rationale="resin", gap="G1")
+    change(mech_dir, "params", "rho", **{"from": None})
+    write(mech_dir, "gaps.yaml", "gaps: [{id: G1, question: which resin}]\n")
+    run = check(mech_dir)
+    assert run.status == "VERIFIED" and run.rules == [] and run.report["exact"] is False
 
 
 def test_mass_check_without_a_density_weighs_each_instance_by_the_mass_model(mech_dir):

@@ -20,7 +20,7 @@ Every file is read against the shapes shown here: an entry with a key not shown,
 ## project.yaml
 
 ```yaml
-format: 1                # written by `cadrev init`; cadrev refuses a project of another format
+format: 2                # written by `cadrev init`; cadrev refuses a project of another format
 name: gripper
 target: Version-3 two-finger gripper as reported in Doe 2025, fingers open (not the Fig. S4 prototype)
 units: {length: mm, angle: deg, mass: g}       # also force and time; defaults mm, deg, g, N, s
@@ -37,7 +37,6 @@ sources:                 # written by `cadrev source`; keep it the last key
     sha256: …
     citation: …
     url: https://doi.org/…
-    coverage: false      # optional: leave this source out of the coverage sweep (a 200-page catalogue)
 ```
 
 - `target` names the object, its version and its configuration, and where the authors released several variants, the one built.
@@ -109,8 +108,8 @@ evidence:
 - **How numbers read.** A decimal comma is one number (`3,5 mm` is 3.5) and so is a fraction before a unit (`1 1/2 in` is 1.5); both ends of a range are values; a number labelling a figure, table, equation or section is not one. A cardinal from zero to ninety-nine in words is a number ("Eight tension springs" states 8, written `n: 8` or `n: eight`). A comma before exactly three digits (`1,250`) reads two ways, so take that value from where it is printed in another form.
 - **Image evidence** covers numbers that exist only in pixels: figure labels, drawing dimensions, video frames. The crop is hashed so the reviewed image cannot change under its reading. Until a named human writes `confirmed_by`, the reading holds the project at VERIFIED PENDING REVIEW. The image a `measured` param scales off is image evidence too and needs no `values`: its `reading` transcribes any label and names the reference it is scaled against.
 - **`scope`** sets a statement aside, with a `reason`:
-  - `not-modeled`: a real statement about something the reconstruction does not build: what lies outside the device (a test rig, the electronics), a part the target's configuration leaves out, a part whose motion cadrev's joint types cannot model (a flexure), or a feature that a project following the function replaces with one easier to make. It keeps its `values`, so the report shows what was left unbuilt.
-  - `context`: a statement that informs interpretation but is not a dimension of a modelled feature. A restatement is context: a value stated in several places is ledgered at each, the statement a param or check reads stays in scope (a quote rather than a figure reading where both exist), and each other one says `restates <id>`. Statements whose values differ are a conflict, not a restatement.
+  - `not-modeled`: a real statement about something the reconstruction does not build: what lies outside the device (a test rig, the electronics), a part the target's configuration leaves out, a part whose motion cadrev's joint types cannot model (a flexure), a feature that a project following the function replaces with one easier to make, or behaviour the kinematic model leaves out (a spring's stiffness, a damping, a friction). It keeps its `values`, so the report shows what was left unbuilt.
+  - `context`: a statement that informs interpretation but is not a dimension of a modelled feature. A restatement is context: a value stated in several places is ledgered at each, the statement a param or check reads stays in scope (a quote rather than a figure reading where both exist), and each other one says `restates <id>`. Statements whose values differ are a conflict, not a restatement. A direction of change stated with no length (the cable lengthens between two poses) is context too, its reason saying so: no check compares a direction.
 - Every value of an in-scope item is used by a param's `from` or compared by a check.
 
 ### Probes: released geometry
@@ -189,7 +188,6 @@ params:
   pitch:      {basis: derived,  expr: link_L - 2 * end_margin, value: 34}
   pin_x:      {basis: derived,  expr: link_L / 2, gap: G-pin-x, interpretation: "pin centred along the link"}
   palm_w:     {basis: measured, from: v1-frame-316, value: 30.4, method: "mat grid scale, 10 px/mm", uncertainty: "±1.5 mm"}
-  knee_c:     {basis: proposed, value: 50, rationale: "light damping", gap: G-damping, physics: true}
 parts:                       # the mass model
   palm:  {density: resin_density}
   servo: {mass: servo_mass}
@@ -205,7 +203,6 @@ parts:                       # the mass model
 - **`interpretation`** says how a value maps onto geometry where that is a choice: which axis, envelope or pitch, which feature, which configuration.
 - **A derived param whose `expr` makes a placement choice** (pins at the centres of the rounded ends, a frame centred in its sole) names the `gap` whose answer would settle it. A choice several params share can instead be one proposed param they all read (`end_margin` above).
 - **Rests on.** A param rests on its own basis; a derived one on the weakest basis among the params its `expr` reads (proposed < measured < source), or on proposed where it names a gap. The report's headline counts params by what they rest on. An `expr` that reads no param traces to nothing: give the number its own basis.
-- **A physics value** is a param only the simulation reads (a joint's damping, stiffness, spring rest or friction), marked `physics: true` and named by the joint that applies it ([modeling.md](modeling.md#joints-and-loops)). It is in the project's units of its quantity, per radian on a revolute joint (stiffness in N·mm/rad by default) and per length on a slide (N/mm), a friction a torque or a force; a `spring_rest` is a joint value, like a pose. It shapes no geometry, so no check compares it, and a proposed one leaves a project exact.
 - **The mass model**, `parts`, weighs each part by one param: `mass`, a datasheet mass, for a purchased part, or `density`, which its volume is multiplied by, for a printed one. The MJCF export, the report and a mass check without `density` all weigh by it, so they never disagree. In a model with joints every part an instance places needs an entry.
 
 ### Threads
@@ -293,7 +290,7 @@ A mechanism ([modeling.md](modeling.md#joints-and-loops)) can be checked moved. 
      along: x, evidence: S2-screw, key: lead, from: {}, pose: {screw: 360}}    # one turn, in degrees
   - {id: claw-stroke, kind: stroke, cable: claw, evidence: S1-servo, key: stroke, tol: 1.5}
   - {id: perch, kind: stroke, cable: leg_cord, from: {shin: shin_max}, pose: {servo: turn},
-     evidence: P3-eq1, claim: shortens}
+     evidence: P3-eq1, key: draw}
 ```
 
 - **A pose value moves its joint from the assembly as built**: a revolute joint's in the project's angle unit, a slide's in its length unit. Build the assembly at the configuration the source measures from, so a stated value is the pose value itself.
@@ -301,7 +298,7 @@ A mechanism ([modeling.md](modeling.md#joints-and-loops)) can be checked moved. 
 - cadrev sets the joints the pose names, holds every other `actuated` joint as built, and moves the `passive` joints until every loop closes, on MuJoCo's model of the exported mechanism. A gear moves its other joint with the one a pose sets, a cable its closed joints with its wheel, through any chain. The check is then evaluated on the model's own geometry, placed where MuJoCo puts each body. Name `instances` on a posed check: a part's own frame reads the same at every pose.
 - A pose the mechanism cannot reach is a finding, and its checks are not evaluated: a loop that stays open there, or a gear or cable the loops do not allow (`[loop-open]`: links too short, past a toggle, or coupled against the ring), or a joint pushed outside its `range` (`[joint-range]`).
 - **`from`** on a `distance`, `angle` or `stroke` check names a second pose, and the check compares the change between the two: a slide's travel per screw turn, a carrier's turn per sun turn. `from: {}` is as built.
-- **`stroke`** compares how far a cable shortens, as built to posed, with a ledger value. Without `pose` it is posed at the cable's wheel at its full turn. Where a source states only a direction of change, `claim: shortens` or `claim: lengthens` replaces `key`, cites the item stating it in `evidence`, and passes when the cable changes that way by more than `tolerance.length`.
+- **`stroke`** compares how far a cable shortens, as built to posed or between `from` and `pose`, with a printed length. Without `pose` it is posed at the cable's wheel at its full turn. A direction stated with no length is [`context`](#evidence-the-ledger).
 
 ### Ranges and sweeps
 
@@ -391,13 +388,13 @@ steps:                   # the assembly sequence
 | **NOT VERIFIED** | at least one error | 1 |
 | **PARTIAL** | `--no-build` skipped the build, so it makes no claim and writes no report | 1 |
 
-**Exact** qualifies VERIFIED: no param rests on a proposed value, physics values and a sweep's `steps` aside. report.md prints it under the status.
+**Exact** qualifies VERIFIED: no param rests on a proposed value, a sweep's `steps` aside. report.md prints it under the status.
 
 ## Known first
 
 `known_first: true` holds a project to what the sources settle: the parts whose every dimension is quoted, worked out from quotes, probed or measured.
 
-- A param resting on proposed is an error, physics values and a sweep's `steps` aside, so a known-first project that is VERIFIED is exact.
+- A param resting on proposed is an error, a sweep's `steps` aside, so a known-first project that is VERIFIED is exact.
 - An in-scope ledger value nothing uses **waits**, and so does a gap no param names, the question a waiting part asks. The report lists both under Waiting. Everything else holds: the whole ledger is still harvested and covered.
 
 Removing `known_first` returns the project to the full rules. A value the user supplies is `proposed`, its `rationale` naming them, so remove `known_first` first.

@@ -139,6 +139,7 @@ MM = {
     "at 40% infill": (40, 0.4),
     "a 10 ml cavity": (10, 10000),
     "a spring of 0.25 N·m/rad": (0.25, 250),
+    "a damper of 0.002 N·m·s/rad": (0.002, 2),
     "a cord of 300 N/m": (300, 0.3),
     "a sun of 25 teeth": (25, 25),
     # A drawing's count of threaded holes is a count, whatever its thread size spells.
