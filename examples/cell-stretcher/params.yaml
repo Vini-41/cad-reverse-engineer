@@ -1,7 +1,7 @@
 # The only place numbers enter the model. basis: source | derived | measured | proposed.
 # Cut-file dimensions are proposed: the cut files (Acryl6MM.svg, Acryl3MM.svg) draw contours without
-# dimensions and a cut file cannot be probed, so each value is read off its region and the
-# region's shape check confirms the part reproduces it.
+# dimensions, so each value is read off its region, and the region's shape check holds the part
+# to it. Where each region lies on its sheet, its x and y, cites the region.
 params:
   # ---------------------------------------------------------------- sheets
   t6: {basis: source, from: E-t6.t, interpretation: "thickness of every Acryl6MM part, along each part's z"}
@@ -34,7 +34,7 @@ params:
   ec_w: {basis: proposed, value: 294, rationale: "width of the motor-end end plates, regions acryl6mm@49.28,342.62 and @49.28,414.51", gap: G-acryl6}
   ec_h1: {basis: proposed, value: 132.5, rationale: "motor-end plates: outer profile holes from the centre", gap: G-acryl6}
   ec_h2: {basis: proposed, value: 112.5, rationale: "motor-end plates: inner profile holes from the centre", gap: G-acryl6}
-  dsub_w: {basis: proposed, value: 28.81, rationale: "D-sub cut-out width; drawn as a trapezoid with rounded corners, modelled as a rounded rectangle (shape check tol 1.2)", gap: G-acryl6}
+  dsub_w: {basis: proposed, value: 28.81, rationale: "D-sub cut-out width; drawn as a trapezoid with rounded corners, modelled as a rounded rectangle", gap: G-acryl6}
   dsub_h: {basis: proposed, value: 11.118, rationale: "D-sub cut-out height", gap: G-acryl6}
   dsub_r: {basis: proposed, value: 2.5, rationale: "D-sub cut-out corner radius, approximating the drawn trapezoid's rounded corners", gap: G-acryl6}
   dsub_y: {basis: proposed, value: 24.274, rationale: "D-sub cut-out and connector window centre from the top edge", gap: G-acryl6}
@@ -84,7 +84,7 @@ params:
   fw_w: {basis: proposed, value: 72.939, rationale: "wide frame length, region acryl6mm@468.52,206.74", gap: G-acryl6}
   fn_w: {basis: proposed, value: 66.892, rationale: "narrow frame length, region acryl6mm@399.92,206.61", gap: G-acryl6}
   fr_h: {basis: proposed, value: 44.572, rationale: "frame width", gap: G-acryl6}
-  fr_r: {basis: proposed, value: 4.6, rationale: "frame corners, drawn as Bezier corners 5.14 x 4.08, modelled as one radius (shape check tol 0.5)", gap: G-acryl6}
+  fr_r: {basis: proposed, value: 4.6, rationale: "frame corners, drawn as Bezier corners 5.14 x 4.08, modelled as one radius", gap: G-acryl6}
   fr_win_h: {basis: proposed, value: 35, rationale: "frame window width", gap: G-acryl6}
   fr_win_r: {basis: proposed, value: 4.4, rationale: "frame window corners, drawn as Bezier corners 5.0 x 3.89, modelled as one radius", gap: G-acryl6}
   fw_win_w: {basis: proposed, value: 50.251, rationale: "wide frame window length", gap: G-acryl6}
@@ -141,15 +141,15 @@ params:
   foot_d: {basis: proposed, value: 20, rationale: "rubber foot diameter", gap: G-feet}
   foot_h: {basis: source, from: E-feet.h, interpretation: "M5 x 15 mm read as a 15 mm tall foot on an M5 stud"}
   # ---------------------------------------------------------------- clamp (Clamp.stl)
-  cl_L: {basis: source, from: P-cl-env.L, interpretation: "clamp length over its two lobes, x"}
-  cl_W: {basis: source, from: P-cl-env.W, interpretation: "clamp depth, notch edge to lobe tops, y"}
-  cl_H: {basis: source, from: P-cl-env.H, interpretation: "height of the U wall, z"}
-  cl_hole: {basis: source, from: P-cl-hole.d, interpretation: "post-hole diameter"}
-  cl_pitch: {basis: source, from: P-cl-pitch.p, interpretation: "post-hole pitch, the lobes' centres"}
-  cl_t: {basis: source, from: P-cl-plate.t, interpretation: "plate thickness"}
-  cl_nin: {basis: source, from: P-cl-nin.w, interpretation: "notch width at the open edge, inside the wall"}
-  cl_nout: {basis: source, from: P-cl-nout.w, interpretation: "wall width at the open edge, outside"}
-  cl_nflat: {basis: source, from: P-cl-flat.w, interpretation: "straight run of the notch between its two arcs"}
+  cl_L: {basis: source, from: clamp, value: 33, interpretation: "clamp length over its two lobes, x"}
+  cl_W: {basis: source, from: clamp, value: 11.5, interpretation: "clamp depth, notch edge to lobe tops, y"}
+  cl_H: {basis: source, from: clamp, value: 5, interpretation: "height of the U wall, z"}
+  cl_hole: {basis: source, from: clamp, value: 3, interpretation: "post-hole diameter"}
+  cl_pitch: {basis: source, from: clamp, value: 25, interpretation: "post-hole pitch, the lobes' centres"}
+  cl_t: {basis: source, from: clamp, value: 1, interpretation: "plate thickness"}
+  cl_nin: {basis: source, from: clamp, value: 18, interpretation: "notch width at the open edge, inside the wall"}
+  cl_nout: {basis: source, from: clamp, value: 20, interpretation: "wall width at the open edge, outside"}
+  cl_nflat: {basis: source, from: clamp, value: 10, interpretation: "straight run of the notch between its two arcs"}
   cl_c: {basis: derived, expr: cl_nflat / 2, interpretation: "the notch arcs' centres sit at the ends of its straight run"}
   cl_flat: {basis: proposed, value: 10, rationale: "straight back edge between the lobes, read from the STL's facet corners", gap: G-clamp}
   cl_ang: {basis: proposed, value: 45, rationale: "the side chamfers run at 45 degrees, tangent to the lobes, read from the STL", gap: G-clamp}
@@ -164,13 +164,13 @@ params:
   pf_r: {basis: proposed, value: 5, rationale: "platform corner radius, region acryl3mm@140,475", gap: G-acryl3}
   ring_od: {basis: proposed, value: 5, rationale: "the eight rings of acryl3mm@178.689,522 etc.", gap: G-ring}
   ring_mid_r: {basis: derived, expr: (ring_od + straw_d) / 4, interpretation: "mid-radius of the ring, where its shape-check datums sit"}
-  mf_w: {basis: source, from: P-mf-env.L, interpretation: "mould frame side"}
+  mf_w: {basis: source, from: moldframe, value: 50, interpretation: "mould frame side"}
   mf_h: {basis: source, from: E-frame-h.h, interpretation: "mould frame height, z"}
-  mf_hole_d: {basis: source, from: P-mf-hole.d, interpretation: "frame screw holes"}
-  mf_hole_p: {basis: source, from: P-mf-holep.p, interpretation: "frame screw-hole pitch, both ways"}
-  mf_win: {basis: source, from: P-mf-win.w, interpretation: "the square window, flat to flat"}
-  mf_lobe_p: {basis: source, from: P-mf-lobep.p, interpretation: "the window's corner lobes round the posts, centre pitch"}
-  mf_lobe_span: {basis: source, from: P-mf-lobespan.s, interpretation: "lobe top to lobe bottom across the window"}
+  mf_hole_d: {basis: source, from: moldframe, value: 4, interpretation: "frame screw holes"}
+  mf_hole_p: {basis: source, from: moldframe, value: 40, interpretation: "frame screw-hole pitch, both ways"}
+  mf_win: {basis: source, from: moldframe, value: 30, interpretation: "the square window, flat to flat"}
+  mf_lobe_p: {basis: source, from: moldframe, value: 25, interpretation: "the window's corner lobes round the posts, centre pitch"}
+  mf_lobe_span: {basis: source, from: moldframe, value: 35, interpretation: "lobe top to lobe bottom across the window"}
   sub_t: {basis: source, from: E-frame-h.h, interpretation: "the cast substrate is as thick as the frame is tall; the clamps sit on it"}
   # ---------------------------------------------------------------- layout
   bar_y: {basis: proposed, value: 60, rationale: "stationary bar placed on the long profiles 60 mm from their far end", gap: G-layout}
@@ -189,6 +189,158 @@ params:
   rho_pla: {basis: proposed, value: 0.00124, rationale: "printed clamps and mould frame, PLA", gap: G-mass}
   rho_rubber: {basis: proposed, value: 0.0011, rationale: "rubber feet", gap: G-mass}
   m_motor: {basis: proposed, value: 280, rationale: "a 40 mm NEMA 17 stepper", gap: G-motor}
+
+  # ---------------------------------------------------------------- where the sheets draw each cut part
+  end_far_in_1_x: {basis: source, from: "acryl6mm@19.78,532.27", value: 0.284261, interpretation: "where the sheet draws the part's origin, x"}
+  end_far_in_1_y: {basis: source, from: "acryl6mm@19.78,532.27", value: 528.716416, interpretation: "where the sheet draws the part's origin, y"}
+  end_far_out_1_x: {basis: source, from: "acryl6mm@19.78,460.47", value: 0.283846, interpretation: "where the sheet draws the part's origin, x"}
+  end_far_out_1_y: {basis: source, from: "acryl6mm@19.78,460.47", value: 456.922086, interpretation: "where the sheet draws the part's origin, y"}
+  end_motor_in_1_x: {basis: source, from: "acryl6mm@14.98,316.59", value: 0.283974, interpretation: "where the sheet draws the part's origin, x"}
+  end_motor_in_1_y: {basis: source, from: "acryl6mm@14.98,316.59", value: 313.039864, interpretation: "where the sheet draws the part's origin, y"}
+  end_motor_out_1_x: {basis: source, from: "acryl6mm@14.98,388.47", value: 0.283705, interpretation: "where the sheet draws the part's origin, x"}
+  end_motor_out_1_y: {basis: source, from: "acryl6mm@14.98,388.47", value: 384.922043, interpretation: "where the sheet draws the part's origin, y"}
+  carriage_top_1_x: {basis: source, from: "acryl6mm@19.78,133.17", value: 0.283592, interpretation: "where the sheet draws the part's origin, x"}
+  carriage_top_1_y: {basis: source, from: "acryl6mm@19.78,133.17", value: 130.921703, interpretation: "where the sheet draws the part's origin, y"}
+  carriage_face_1_x: {basis: source, from: "acryl6mm@29.53,226.22", value: 0.283874, interpretation: "where the sheet draws the part's origin, x"}
+  carriage_face_1_y: {basis: source, from: "acryl6mm@29.53,226.22", value: 223.921825, interpretation: "where the sheet draws the part's origin, y"}
+  carriage_face_2_x: {basis: source, from: "acryl6mm@29.53,179.22", value: 0.283874, interpretation: "where the sheet draws the part's origin, x"}
+  carriage_face_2_y: {basis: source, from: "acryl6mm@29.53,179.22", value: 176.921788, interpretation: "where the sheet draws the part's origin, y"}
+  carriage_flange_1_x: {basis: source, from: "acryl6mm@12.68,58.67", value: 0.28368, interpretation: "where the sheet draws the part's origin, x"}
+  carriage_flange_1_y: {basis: source, from: "acryl6mm@12.68,58.67", value: 54.921967, interpretation: "where the sheet draws the part's origin, y"}
+  carriage_partition_1_x: {basis: source, from: "acryl6mm@351.41,366.54", value: 344.657317, interpretation: "where the sheet draws the part's origin, x"}
+  carriage_partition_1_y: {basis: source, from: "acryl6mm@351.41,366.54", value: 364.238583, interpretation: "where the sheet draws the part's origin, y"}
+  carriage_partition_2_x: {basis: source, from: "acryl6mm@302.87,366.54", value: 296.115041, interpretation: "where the sheet draws the part's origin, x"}
+  carriage_partition_2_y: {basis: source, from: "acryl6mm@302.87,366.54", value: 364.238583, interpretation: "where the sheet draws the part's origin, y"}
+  carriage_end_1_x: {basis: source, from: "acryl6mm@351.41,415.24", value: 344.657317, interpretation: "where the sheet draws the part's origin, x"}
+  carriage_end_1_y: {basis: source, from: "acryl6mm@351.41,415.24", value: 413.238788, interpretation: "where the sheet draws the part's origin, y"}
+  carriage_end_2_x: {basis: source, from: "acryl6mm@302.87,415.24", value: 296.115041, interpretation: "where the sheet draws the part's origin, x"}
+  carriage_end_2_y: {basis: source, from: "acryl6mm@302.87,415.24", value: 413.238788, interpretation: "where the sheet draws the part's origin, y"}
+  stat_bar_1_x: {basis: source, from: "acryl6mm@19.5,272.92", value: 0.000219, interpretation: "where the sheet draws the part's origin, x"}
+  stat_bar_1_y: {basis: source, from: "acryl6mm@19.5,272.92", value: 270.923939, interpretation: "where the sheet draws the part's origin, y"}
+  mount_plate_1_x: {basis: source, from: "acryl6mm@430.2,475.44", value: 463.448017, interpretation: "where the sheet draws the part's origin, x"}
+  mount_plate_1_y: {basis: source, from: "acryl6mm@430.2,475.44", value: 513.562166, interpretation: "where the sheet draws the part's origin, y"}
+  mount_plate_2_x: {basis: source, from: "acryl6mm@501.24,475.44", value: 534.491853, interpretation: "where the sheet draws the part's origin, x"}
+  mount_plate_2_y: {basis: source, from: "acryl6mm@501.24,475.44", value: 513.562166, interpretation: "where the sheet draws the part's origin, y"}
+  mount_plate_3_x: {basis: source, from: "acryl6mm@465.84,475.44", value: 464.091488, interpretation: "where the sheet draws the part's origin, x"}
+  mount_plate_3_y: {basis: source, from: "acryl6mm@465.84,475.44", value: 473.437166, interpretation: "where the sheet draws the part's origin, y"}
+  mount_plate_4_x: {basis: source, from: "acryl6mm@394.8,475.44", value: 393.047651, interpretation: "where the sheet draws the part's origin, x"}
+  mount_plate_4_y: {basis: source, from: "acryl6mm@394.8,475.44", value: 473.437166, interpretation: "where the sheet draws the part's origin, y"}
+  mount_plate_5_x: {basis: source, from: "acryl6mm@465.84,558.46", value: 464.091488, interpretation: "where the sheet draws the part's origin, x"}
+  mount_plate_5_y: {basis: source, from: "acryl6mm@465.84,558.46", value: 556.454713, interpretation: "where the sheet draws the part's origin, y"}
+  mount_plate_6_x: {basis: source, from: "acryl6mm@394.8,558.46", value: 393.047651, interpretation: "where the sheet draws the part's origin, x"}
+  mount_plate_6_y: {basis: source, from: "acryl6mm@394.8,558.46", value: 556.454713, interpretation: "where the sheet draws the part's origin, y"}
+  mount_plate_7_x: {basis: source, from: "acryl6mm@430.2,558.46", value: 463.448017, interpretation: "where the sheet draws the part's origin, x"}
+  mount_plate_7_y: {basis: source, from: "acryl6mm@430.2,558.46", value: 596.579713, interpretation: "where the sheet draws the part's origin, y"}
+  mount_plate_8_x: {basis: source, from: "acryl6mm@501.24,558.46", value: 534.491853, interpretation: "where the sheet draws the part's origin, x"}
+  mount_plate_8_y: {basis: source, from: "acryl6mm@501.24,558.46", value: 596.579713, interpretation: "where the sheet draws the part's origin, y"}
+  mount_plate_9_x: {basis: source, from: "acryl6mm@465.84,517.35", value: 464.091488, interpretation: "where the sheet draws the part's origin, x"}
+  mount_plate_9_y: {basis: source, from: "acryl6mm@465.84,517.35", value: 515.345063, interpretation: "where the sheet draws the part's origin, y"}
+  mount_plate_10_x: {basis: source, from: "acryl6mm@394.8,517.35", value: 393.047651, interpretation: "where the sheet draws the part's origin, x"}
+  mount_plate_10_y: {basis: source, from: "acryl6mm@394.8,517.35", value: 515.345063, interpretation: "where the sheet draws the part's origin, y"}
+  mount_plate_11_x: {basis: source, from: "acryl6mm@430.2,517.35", value: 463.448017, interpretation: "where the sheet draws the part's origin, x"}
+  mount_plate_11_y: {basis: source, from: "acryl6mm@430.2,517.35", value: 555.470063, interpretation: "where the sheet draws the part's origin, y"}
+  mount_plate_12_x: {basis: source, from: "acryl6mm@501.24,517.35", value: 534.491853, interpretation: "where the sheet draws the part's origin, x"}
+  mount_plate_12_y: {basis: source, from: "acryl6mm@501.24,517.35", value: 555.470063, interpretation: "where the sheet draws the part's origin, y"}
+  frame_wide_1_x: {basis: source, from: "acryl6mm@466.09,237.98", value: 462.442683, interpretation: "where the sheet draws the part's origin, x"}
+  frame_wide_1_y: {basis: source, from: "acryl6mm@466.09,237.98", value: 235.746539, interpretation: "where the sheet draws the part's origin, y"}
+  frame_wide_2_x: {basis: source, from: "acryl6mm@466.09,378.02", value: 462.442683, interpretation: "where the sheet draws the part's origin, x"}
+  frame_wide_2_y: {basis: source, from: "acryl6mm@466.09,378.02", value: 375.795861, interpretation: "where the sheet draws the part's origin, y"}
+  frame_wide_3_x: {basis: source, from: "acryl6mm@466.09,190.4", value: 462.442683, interpretation: "where the sheet draws the part's origin, x"}
+  frame_wide_3_y: {basis: source, from: "acryl6mm@466.09,190.4", value: 188.172526, interpretation: "where the sheet draws the part's origin, y"}
+  frame_wide_4_x: {basis: source, from: "acryl6mm@466.09,425.06", value: 462.442683, interpretation: "where the sheet draws the part's origin, x"}
+  frame_wide_4_y: {basis: source, from: "acryl6mm@466.09,425.06", value: 422.835317, interpretation: "where the sheet draws the part's origin, y"}
+  frame_wide_5_x: {basis: source, from: "acryl6mm@466.09,285.01", value: 462.442683, interpretation: "where the sheet draws the part's origin, x"}
+  frame_wide_5_y: {basis: source, from: "acryl6mm@466.09,285.01", value: 282.785994, interpretation: "where the sheet draws the part's origin, y"}
+  frame_wide_6_x: {basis: source, from: "acryl6mm@466.09,330.45", value: 462.442683, interpretation: "where the sheet draws the part's origin, x"}
+  frame_wide_6_y: {basis: source, from: "acryl6mm@466.09,330.45", value: 328.221848, interpretation: "where the sheet draws the part's origin, y"}
+  frame_narrow_1_x: {basis: source, from: "acryl6mm@397.69,190.26", value: 394.34343, interpretation: "where the sheet draws the part's origin, x"}
+  frame_narrow_1_y: {basis: source, from: "acryl6mm@397.69,190.26", value: 188.033461, interpretation: "where the sheet draws the part's origin, y"}
+  frame_narrow_2_x: {basis: source, from: "acryl6mm@397.69,284.88", value: 394.34343, interpretation: "where the sheet draws the part's origin, x"}
+  frame_narrow_2_y: {basis: source, from: "acryl6mm@397.69,284.88", value: 282.646929, interpretation: "where the sheet draws the part's origin, y"}
+  frame_narrow_3_x: {basis: source, from: "acryl6mm@397.69,330.31", value: 394.34343, interpretation: "where the sheet draws the part's origin, x"}
+  frame_narrow_3_y: {basis: source, from: "acryl6mm@397.69,330.31", value: 328.082783, interpretation: "where the sheet draws the part's origin, y"}
+  frame_narrow_4_x: {basis: source, from: "acryl6mm@397.69,424.92", value: 394.34343, interpretation: "where the sheet draws the part's origin, x"}
+  frame_narrow_4_y: {basis: source, from: "acryl6mm@397.69,424.92", value: 422.696252, interpretation: "where the sheet draws the part's origin, y"}
+  frame_narrow_5_x: {basis: source, from: "acryl6mm@397.69,237.84", value: 394.34343, interpretation: "where the sheet draws the part's origin, x"}
+  frame_narrow_5_y: {basis: source, from: "acryl6mm@397.69,237.84", value: 235.60746, interpretation: "where the sheet draws the part's origin, y"}
+  frame_narrow_6_x: {basis: source, from: "acryl6mm@397.69,377.89", value: 394.34343, interpretation: "where the sheet draws the part's origin, x"}
+  frame_narrow_6_y: {basis: source, from: "acryl6mm@397.69,377.89", value: 375.656782, interpretation: "where the sheet draws the part's origin, y"}
+  corner_plate_1_x: {basis: source, from: "acryl6mm@398.55,145.36", value: 394.548124, interpretation: "where the sheet draws the part's origin, x"}
+  corner_plate_1_y: {basis: source, from: "acryl6mm@398.55,145.36", value: 143.360313, interpretation: "where the sheet draws the part's origin, y"}
+  corner_plate_2_x: {basis: source, from: "acryl6mm@478.98,145.36", value: 474.981499, interpretation: "where the sheet draws the part's origin, x"}
+  corner_plate_2_y: {basis: source, from: "acryl6mm@478.98,145.36", value: 143.360313, interpretation: "where the sheet draws the part's origin, y"}
+  corner_plate_3_x: {basis: source, from: "acryl6mm@398.55,104.86", value: 394.548124, interpretation: "where the sheet draws the part's origin, x"}
+  corner_plate_3_y: {basis: source, from: "acryl6mm@398.55,104.86", value: 102.861399, interpretation: "where the sheet draws the part's origin, y"}
+  corner_plate_4_x: {basis: source, from: "acryl6mm@478.98,104.86", value: 474.981499, interpretation: "where the sheet draws the part's origin, x"}
+  corner_plate_4_y: {basis: source, from: "acryl6mm@478.98,104.86", value: 102.861399, interpretation: "where the sheet draws the part's origin, y"}
+  switch_plate_1_x: {basis: source, from: "acryl6mm@547.86,189.38", value: 545.860914, interpretation: "where the sheet draws the part's origin, x"}
+  switch_plate_1_y: {basis: source, from: "acryl6mm@547.86,189.38", value: 186.377303, interpretation: "where the sheet draws the part's origin, y"}
+  rod_flange_1_x: {basis: source, from: "acryl6mm@356.83,339.62", value: 345.015076, interpretation: "where the sheet draws the part's origin, x"}
+  rod_flange_1_y: {basis: source, from: "acryl6mm@356.83,339.62", value: 338.587595, interpretation: "where the sheet draws the part's origin, y"}
+  rod_flange_2_x: {basis: source, from: "acryl6mm@356.83,316.47", value: 345.015076, interpretation: "where the sheet draws the part's origin, x"}
+  rod_flange_2_y: {basis: source, from: "acryl6mm@356.83,316.47", value: 315.44536, interpretation: "where the sheet draws the part's origin, y"}
+  rod_flange_3_x: {basis: source, from: "acryl6mm@316.19,339.62", value: 304.375055, interpretation: "where the sheet draws the part's origin, x"}
+  rod_flange_3_y: {basis: source, from: "acryl6mm@316.19,339.62", value: 338.587595, interpretation: "where the sheet draws the part's origin, y"}
+  rod_flange_4_x: {basis: source, from: "acryl6mm@316.19,316.47", value: 304.375055, interpretation: "where the sheet draws the part's origin, x"}
+  rod_flange_4_y: {basis: source, from: "acryl6mm@316.19,316.47", value: 315.44536, interpretation: "where the sheet draws the part's origin, y"}
+  motor_face_1_x: {basis: source, from: "acryl6mm@544.02,362.76", value: 541.323615, interpretation: "where the sheet draws the part's origin, x"}
+  motor_face_1_y: {basis: source, from: "acryl6mm@544.02,362.76", value: 360.055162, interpretation: "where the sheet draws the part's origin, y"}
+  motor_face_2_x: {basis: source, from: "acryl6mm@544.02,418.63", value: 541.323615, interpretation: "where the sheet draws the part's origin, x"}
+  motor_face_2_y: {basis: source, from: "acryl6mm@544.02,418.63", value: 415.932341, interpretation: "where the sheet draws the part's origin, y"}
+  motor_base_1_x: {basis: source, from: "acryl6mm@550.59,306.53", value: 541.141765, interpretation: "where the sheet draws the part's origin, x"}
+  motor_base_1_y: {basis: source, from: "acryl6mm@550.59,306.53", value: 303.828886, interpretation: "where the sheet draws the part's origin, y"}
+  motor_base_2_x: {basis: source, from: "acryl6mm@550.59,250.65", value: 541.141765, interpretation: "where the sheet draws the part's origin, x"}
+  motor_base_2_y: {basis: source, from: "acryl6mm@550.59,250.65", value: 247.951686, interpretation: "where the sheet draws the part's origin, y"}
+  motor_gusset_1_x: {basis: source, from: "acryl6mm@547.12,539.97", value: 598.423432, interpretation: "where the sheet draws the part's origin, x"}
+  motor_gusset_1_y: {basis: source, from: "acryl6mm@547.12,539.97", value: 591.265205, interpretation: "where the sheet draws the part's origin, y"}
+  motor_gusset_2_x: {basis: source, from: "acryl6mm@547.12,477.7", value: 598.423432, interpretation: "where the sheet draws the part's origin, x"}
+  motor_gusset_2_y: {basis: source, from: "acryl6mm@547.12,477.7", value: 529.002055, interpretation: "where the sheet draws the part's origin, y"}
+  motor_gusset_3_x: {basis: source, from: "acryl6mm@544.59,546.75", value: 537.8379, interpretation: "where the sheet draws the part's origin, x"}
+  motor_gusset_3_y: {basis: source, from: "acryl6mm@544.59,546.75", value: 544.050339, interpretation: "where the sheet draws the part's origin, y"}
+  motor_gusset_4_x: {basis: source, from: "acryl6mm@544.59,484.49", value: 537.8379, interpretation: "where the sheet draws the part's origin, x"}
+  motor_gusset_4_y: {basis: source, from: "acryl6mm@544.59,484.49", value: 481.787161, interpretation: "where the sheet draws the part's origin, y"}
+  mould_base_1_x: {basis: source, from: "acryl3mm@7.5,547.5", value: 5.000132, interpretation: "where the sheet draws the part's origin, x"}
+  mould_base_1_y: {basis: source, from: "acryl3mm@7.5,547.5", value: 545.000213, interpretation: "where the sheet draws the part's origin, y"}
+  mould_base_2_x: {basis: source, from: "acryl3mm@172.5,547.5", value: 170.000217, interpretation: "where the sheet draws the part's origin, x"}
+  mould_base_2_y: {basis: source, from: "acryl3mm@172.5,547.5", value: 545.000213, interpretation: "where the sheet draws the part's origin, y"}
+  mould_base_3_x: {basis: source, from: "acryl3mm@62.5,547.5", value: 60.00016, interpretation: "where the sheet draws the part's origin, x"}
+  mould_base_3_y: {basis: source, from: "acryl3mm@62.5,547.5", value: 545.000213, interpretation: "where the sheet draws the part's origin, y"}
+  mould_base_4_x: {basis: source, from: "acryl3mm@117.5,547.5", value: 115.000189, interpretation: "where the sheet draws the part's origin, x"}
+  mould_base_4_y: {basis: source, from: "acryl3mm@117.5,547.5", value: 545.000213, interpretation: "where the sheet draws the part's origin, y"}
+  mould_base_5_x: {basis: source, from: "acryl3mm@117.5,492.5", value: 115.000189, interpretation: "where the sheet draws the part's origin, x"}
+  mould_base_5_y: {basis: source, from: "acryl3mm@117.5,492.5", value: 490.000196, interpretation: "where the sheet draws the part's origin, y"}
+  mould_base_6_x: {basis: source, from: "acryl3mm@62.5,492.5", value: 60.00016, interpretation: "where the sheet draws the part's origin, x"}
+  mould_base_6_y: {basis: source, from: "acryl3mm@62.5,492.5", value: 490.000196, interpretation: "where the sheet draws the part's origin, y"}
+  platform_jig_1_x: {basis: source, from: "acryl3mm@7.5,492.5", value: 5.000182, interpretation: "where the sheet draws the part's origin, x"}
+  platform_jig_1_y: {basis: source, from: "acryl3mm@7.5,492.5", value: 490.000408, interpretation: "where the sheet draws the part's origin, y"}
+  platform_1_x: {basis: source, from: "acryl3mm@133.0,466.0", value: 130.00008, interpretation: "where the sheet draws the part's origin, x"}
+  platform_1_y: {basis: source, from: "acryl3mm@133.0,466.0", value: 465.000269, interpretation: "where the sheet draws the part's origin, y"}
+  platform_2_x: {basis: source, from: "acryl3mm@8.0,466.0", value: 5.000009, interpretation: "where the sheet draws the part's origin, x"}
+  platform_2_y: {basis: source, from: "acryl3mm@8.0,466.0", value: 465.000269, interpretation: "where the sheet draws the part's origin, y"}
+  platform_3_x: {basis: source, from: "acryl3mm@33.0,466.0", value: 30.000022, interpretation: "where the sheet draws the part's origin, x"}
+  platform_3_y: {basis: source, from: "acryl3mm@33.0,466.0", value: 465.000269, interpretation: "where the sheet draws the part's origin, y"}
+  platform_4_x: {basis: source, from: "acryl3mm@58.0,466.0", value: 55.00003, interpretation: "where the sheet draws the part's origin, x"}
+  platform_4_y: {basis: source, from: "acryl3mm@58.0,466.0", value: 465.000269, interpretation: "where the sheet draws the part's origin, y"}
+  platform_5_x: {basis: source, from: "acryl3mm@83.0,466.0", value: 80.000041, interpretation: "where the sheet draws the part's origin, x"}
+  platform_5_y: {basis: source, from: "acryl3mm@83.0,466.0", value: 465.000269, interpretation: "where the sheet draws the part's origin, y"}
+  platform_6_x: {basis: source, from: "acryl3mm@108.0,466.0", value: 105.000052, interpretation: "where the sheet draws the part's origin, x"}
+  platform_6_y: {basis: source, from: "acryl3mm@108.0,466.0", value: 485.000269, interpretation: "where the sheet draws the part's origin, y"}
+  post_ring_1_x: {basis: source, from: "acryl3mm@178.44,521.91", value: 176.188764, interpretation: "where the sheet draws the part's origin, x"}
+  post_ring_1_y: {basis: source, from: "acryl3mm@178.44,521.91", value: 521.537825, interpretation: "where the sheet draws the part's origin, y"}
+  post_ring_2_x: {basis: source, from: "acryl3mm@183.97,515.91", value: 181.720291, interpretation: "where the sheet draws the part's origin, x"}
+  post_ring_2_y: {basis: source, from: "acryl3mm@183.97,515.91", value: 515.537834, interpretation: "where the sheet draws the part's origin, y"}
+  post_ring_3_x: {basis: source, from: "acryl3mm@178.44,533.91", value: 176.188764, interpretation: "where the sheet draws the part's origin, x"}
+  post_ring_3_y: {basis: source, from: "acryl3mm@178.44,533.91", value: 533.537836, interpretation: "where the sheet draws the part's origin, y"}
+  post_ring_4_x: {basis: source, from: "acryl3mm@183.97,521.91", value: 181.720291, interpretation: "where the sheet draws the part's origin, x"}
+  post_ring_4_y: {basis: source, from: "acryl3mm@183.97,521.91", value: 521.537825, interpretation: "where the sheet draws the part's origin, y"}
+  post_ring_5_x: {basis: source, from: "acryl3mm@183.97,527.91", value: 181.720291, interpretation: "where the sheet draws the part's origin, x"}
+  post_ring_5_y: {basis: source, from: "acryl3mm@183.97,527.91", value: 527.537845, interpretation: "where the sheet draws the part's origin, y"}
+  post_ring_6_x: {basis: source, from: "acryl3mm@178.44,515.91", value: 176.188764, interpretation: "where the sheet draws the part's origin, x"}
+  post_ring_6_y: {basis: source, from: "acryl3mm@178.44,515.91", value: 515.537834, interpretation: "where the sheet draws the part's origin, y"}
+  post_ring_7_x: {basis: source, from: "acryl3mm@178.44,527.91", value: 176.188764, interpretation: "where the sheet draws the part's origin, x"}
+  post_ring_7_y: {basis: source, from: "acryl3mm@178.44,527.91", value: 527.537845, interpretation: "where the sheet draws the part's origin, y"}
+  post_ring_8_x: {basis: source, from: "acryl3mm@183.97,533.91", value: 181.720291, interpretation: "where the sheet draws the part's origin, x"}
+  post_ring_8_y: {basis: source, from: "acryl3mm@183.97,533.91", value: 533.537836, interpretation: "where the sheet draws the part's origin, y"}
 
 parts:
   end_far_in: {density: rho_pmma}

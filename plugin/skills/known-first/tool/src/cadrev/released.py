@@ -1,11 +1,10 @@
-"""Geometry the authors released: its bodies and what a probe or a shape check reads from them,
-with the datum geometry built parts share: where a datum lies on a solid, and the distances and
-angles between datums."""
+"""Geometry the authors released: its bodies and how a shape check compares a built part with
+one, with the datum geometry built parts share: where a datum lies on a solid, and the distances
+and angles between datums."""
 
 from __future__ import annotations
 
 import importlib
-import itertools
 import math
 import re
 from functools import cache
@@ -222,22 +221,6 @@ def _kept(what: str, shape, make):
     return _KEPT[key][1]
 
 
-def _outers(found: tuple) -> tuple:
-    """Each region's outer contour filled, its holes with it."""
-    from build123d import Face
-
-    return tuple(Face(region.outer_wire()) for region in found)
-
-
-def outlines_at(found: tuple, point: tuple[float, float], tol: float) -> list[int]:
-    """The indices of the regions in found whose outer contour point lies inside, or within tol
-    of: on the region or in one of its holes."""
-    from build123d import Vector
-
-    at = Vector(point[0], point[1], 0)
-    return [i for i, o in enumerate(_kept("outers", found, _outers)) if o.distance_to(at) <= tol]
-
-
 def inner_point(region) -> tuple[float, float]:
     """A point well inside region, to name it by: of a grid over its bbox, the one inside it
     farthest from its edges, rounded to 0.01."""
@@ -302,25 +285,6 @@ def off_solid(solid, point: tuple[float, float, float], tol: float) -> float | N
         if ends is not None:
             along = min(max((at - origin).dot(direction), ends[0]), ends[1])
             nearest = min(nearest, (at - (origin + direction * along)).length)
-    return None if nearest <= tol else nearest
-
-
-def off_corner(solid, point: tuple[float, float, float], tol: float) -> float | None:
-    """How far point is from the nearest corner of a solid's faces, or None if it lies within tol
-    of one."""
-    corners = _kept("corners", solid, lambda s: [(v.X, v.Y, v.Z) for v in s.vertices()])
-    nearest = min((math.dist(point, c) for c in corners), default=math.inf)
-    return None if nearest <= tol else nearest
-
-
-def off_edge(regions, point: tuple[float, ...], tol: float) -> float | None:
-    """How far point is on the sheet from the nearest edge of regions, an outer contour or a hole's,
-    or None if it lies on one within tol."""
-    from build123d import Compound, Vector
-
-    at = Vector(point[0], point[1], 0)
-    edges = (_kept("edges", region, lambda r: Compound(r.edges())) for region in regions)
-    nearest = min((e.distance_to(at) for e in edges), default=math.inf)
     return None if nearest <= tol else nearest
 
 
@@ -390,23 +354,6 @@ def diameter_at(solid, point: tuple[float, float, float], tol: float, name: str)
     return cylinder_at(solid, point, tol, name)[0]
 
 
-def circle(points, tol: float, names) -> tuple[tuple[float, float, float], float]:
-    """The centre and diameter of the circle through three datums' points; a Fault where two lie
-    within tol of each other or all three within tol of one line."""
-    import numpy as np
-
-    for (i, a), (j, b) in itertools.combinations(enumerate(points), 2):
-        if math.dist(a, b) <= tol:
-            raise Fault(f"{names[i]} and {names[j]} coincide, so no circle passes through them")
-    if collinear(list(points), tol):
-        raise Fault(f"{', '.join(names)} lie on one line, so no circle passes through them")
-    a, b, c = (np.asarray(q, float) for q in points)
-    u, w = a - c, b - c
-    normal = np.cross(u, w)
-    centre = c + np.cross((u @ u) * w - (w @ w) * u, normal) / (2 * (normal @ normal))
-    return (float(centre[0]), float(centre[1]), float(centre[2])), 2 * math.dist(a, centre)
-
-
 def _axis(along: str) -> int:
     """The index of the axis x, y or z that along names."""
     if along not in _TURNS:
@@ -445,56 +392,10 @@ def angle_at(points, tol: float, names, along: str | None = None) -> float:
     return math.degrees(math.atan2(math.hypot(*cross), sum(x * y for x, y in zip(u, w))))
 
 
-def collinear(points: list[tuple[float, float, float]], tol: float) -> bool:
-    """Whether points all lie within tol of one line, or of one point."""
-    if not points:
-        return True
-    a = points[0]
-    b = max(points, key=lambda q: math.dist(a, q))
-    span = math.dist(a, b)
-    if span <= tol:
-        return True
-    u = [(y - x) / span for x, y in zip(a, b)]
-    for q in points:
-        w = [y - x for x, y in zip(a, q)]
-        along = sum(x * y for x, y in zip(w, u))
-        if math.dist(w, [along * x for x in u]) > tol:
-            return False
-    return True
-
-
-def fit(ours: list, theirs: list) -> tuple[object, float, int]:
-    """The rigid motion (a build123d Location, no mirroring) that best carries the points ours onto
-    the points theirs, pair by pair, with the largest distance it leaves between a pair and the
-    index of that pair."""
-    import numpy as np
-    from build123d import Location, Plane
-
-    p, q = np.asarray(ours, float), np.asarray(theirs, float)
-    cp, cq = p.mean(axis=0), q.mean(axis=0)
-    u, _, vt = np.linalg.svd((p - cp).T @ (q - cq))
-    turn = np.diag([1.0, 1.0, float(np.sign(np.linalg.det(vt.T @ u.T)))])
-    rotation = vt.T @ turn @ u.T
-    shift = cq - rotation @ cp
-    left = np.linalg.norm(p @ rotation.T + shift - q, axis=1)
-    # The plane whose axes are the rotation's columns maps a point p to shift + rotation · p.
-    axes = [tuple(float(v) for v in rotation[:, i]) for i in (0, 2)]
-    where = Location(Plane(origin=tuple(float(v) for v in shift), x_dir=axes[0], z_dir=axes[1]))
-    worst = int(np.argmax(left))
-    return where, float(left[worst]), worst
-
-
-def projected(point: tuple[float, float, float], along: str) -> tuple[float, float, float]:
-    """Where point projects along the axis x, y or z onto the plane of a cut file's sheet (z 0),
-    the other two axes in turn as its x and y."""
-    i, j, _ = _TURNS[along]
-    return point[i], point[j], 0.0
-
-
 def outline(part, along: str):
-    """part's outline projected along the axis x, y or z onto the plane of a cut file's sheet, as
-    projected maps a point: the union of its plane faces square to that axis, as a cut part's
-    are."""
+    """part's outline projected along the axis x, y or z onto the plane of a cut file's sheet (z 0),
+    the other two axes in turn as its x and y: the union of its plane faces square to that axis, as
+    a cut part's are."""
     from build123d import GeomType, Location, Plane, Vector
 
     turn = [[1.0 if k == i else 0.0 for k in range(3)] for i in _TURNS[along]]
@@ -537,3 +438,10 @@ def surface_distance(a, b) -> tuple[float, tuple[float, float, float], bool]:
     from . import distance
 
     return distance.surface_distance(a, b, SAMPLES)
+
+
+def mesh_fit(part, mesh, tol: float):
+    """How part fits mesh, an STL body, at the points both hold exactly (see distance.py)."""
+    from . import distance
+
+    return distance.mesh_fit(part, mesh, tol, SAMPLES)

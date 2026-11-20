@@ -5,7 +5,7 @@ Three skills that turn a paper, patent or datasheet into parametric CAD, with ev
 - **CAD you can open and change**: a STEP file per part and one for the assembly, from a parametric build123d model whose every dimension is a named value in `params.yaml`.
 - **A mechanism that moves**: joints, gear ratios and lead screws exported to MuJoCo, with stated motion checked on the model.
 - **A drawing of each part**: three views and an isometric one, dimensioned with the checked values, with screw threads named from the ISO metric or Unified table.
-- **A report of where each dimension came from**: quoted from a document, probed from a file the authors released, or proposed because nothing states it, beside the question that would settle it.
+- **A report of where each dimension came from**: quoted from a document, read off a file the authors released, or proposed because nothing states it, beside the question that would settle it.
 - **A plan to make it**: how each part is made, what to buy and the assembly sequence, which `cadrev check` holds to the model.
 
 ## The skills

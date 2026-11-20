@@ -36,11 +36,16 @@ KINDS = {
     "mass": Kind("mass", expects=True),  # within tol_rel, a fraction, which has no default
     "range": Kind("angle"),  # a joint's own value where it names no datums
     "stroke": Kind("length", expects=True, changes=True),
-    "shape": Kind("length"),  # tol capped against its released body's size
+    "shape": Kind("length"),  # compared with its released body within tolerance.length
     "count": Kind("count", expects=True),  # compared exactly
 }
-# The loosest a shape check may be, as a fraction of its body's bbox diagonal.
-BODY_CAP = 0.01
+# What an STL's shape check found its largest deviation at, as its result says it.
+_MESH_FOUND = {
+    "mesh corner": "largest distance of a mesh corner from the part",
+    "part corner": "largest distance of a corner of the part from the nearest mesh corner",
+    "closed edge": "largest distance of a closed edge of the part from its third mesh corner",
+    "facet": "largest distance from the part of the centre of such a facet",
+}
 
 
 @dataclass
@@ -209,11 +214,9 @@ def capped(p: Project, c: dict, compared: str) -> None:
         return
     where = "" if "tol" in c else f" (tolerance.{compared})"
     refs = compared_refs(c)
-    # What the tolerance is capped against, each as (its name, its value, the fraction of it).
-    if name == "shape":
-        diagonal = f"body {c.get('body')}'s bbox diagonal"
-        caps = [(diagonal, lambda: p.body(str(c.get("body"))).bounding_box().diagonal, BODY_CAP)]
-    elif "expect" in c:
+    # What the tolerance is capped against, each as (its name, its value, the fraction of it). A
+    # shape check compares with no ledger value, so nothing caps it.
+    if "expect" in c:
         caps = [(f"expect {c['expect']}", lambda: p.expect(str(c["expect"])), TOL_CAP)]
     elif name == "range" and len(refs) == 2:  # the span between its ends: one is often 0
         span = lambda: p.stated(refs[1], compared) - p.stated(refs[0], compared)  # noqa: E731
@@ -716,11 +719,13 @@ class Checks:
         return volume
 
     def _shape(self, c: dict, placed: Model) -> Iterator[Result]:
-        """Its part carried onto its released body by the rigid motion that best fits its datum
-        pairs, then the largest distance between their surfaces against its tolerance; failed,
-        without that distance, where the pairs fit no closer than tolerance.length. A region of
-        a cut file is compared with the part's outline projected along an axis."""
-        p, cid, name = self.p, c["id"], str(c["body"])
+        """Its part, built in its released body's frame, compared whole with the body in place
+        within tolerance.length: a STEP's surfaces both ways, an STL at the points both hold
+        exactly (distance.mesh_fit), and a cut file's region with the part's outline projected
+        along an axis, where model.py's sheets places it."""
+        p, cid, name, tol = self.p, c["id"], str(c["body"]), self.p.length_tol
+        if c["part"] not in placed.parts:
+            raise Fault(f"{c['part']} is not a part model.build returns")
         part, body = placed.parts[c["part"]], p.body(name)
         sheet, along = released.at_point(name), c.get("along")
         if sheet is None and along is not None:
@@ -730,46 +735,54 @@ class Checks:
                 f"along names the axis x, y or z along which part {c['part']} is projected onto "
                 f"{name}"
             )
-        on = name if sheet is None else sheet[0]
-        pairs, ours, theirs = c.get("pairs") or [], [], []
-        for pair in pairs:
-            ok = len(pair) == 2 and prefix(pair[0], placed.parts) == c["part"]
-            if not ok or pair[0] not in placed.datums:
-                raise Fault(f"pair {pair} is not [a datum of part {c['part']}, a datum of {on}]")
-            point = placed.datums[pair[0]]
-            ours.append(point if sheet is None else released.projected(point, str(along)))
-            theirs.append(p.datum_on(pair[1], on))
-        if len(pairs) < 3 or released.collinear(theirs, p.length_tol):
-            raise Fault(
-                f"aligns by {len(pairs)} datum pairs; name three or more whose datums on the body "
-                "are not on one line"
-            )
-        where, residual, worst = released.fit(ours, theirs)
-        fitted = {"residual": printed(residual)[0]}
-        if residual > p.length_tol:
-            expected = f"datum pairs fit within {p.length_tol:g} (tolerance.length)"
-            a, b = pairs[worst]
-            measured = f"datum pairs fit within {residual:.4g}, {a} to {b} the farthest apart"
-            yield Result(cid, "shape", False, expected, measured, shape=fitted)
-            return
-        if sheet is None:
-            compared, (distance, at, on_body) = (
-                "surface",
-                released.surface_distance(part.moved(where), body),
-            )
-        else:
+        expected, mesh = f"within {tol:g} of body {name} (tolerance.length)", {}
+        if sheet is not None:
+            where = self._on_sheet(c, name)
             outline = released.outline(part, str(along)).moved(where)
-            compared, (distance, at, on_body) = (
-                "outline",
-                released.outline_distance(outline, body),
+            distance, at, on_body = released.outline_distance(outline, body)
+            ok, measured = distance <= tol, f"{distance:.4g} largest outline distance"
+        elif released.is_mesh(p.source_path(released.source_of(name))):
+            fit = released.mesh_fit(part, body, tol)
+            ok, distance, at = fit.ok, fit.distance, fit.at
+            on_body, mesh = (
+                fit.found in ("mesh corner", "facet"),
+                {"found": fit.found, "facets": fit.facets},
             )
-        tol = float(c.get("tol", p.length_tol))
-        fitted |= {"distance": printed(distance)[0], "worst_point": list(printed(*at))}
-        expected = f"{compared}s within {tol:g} of body {name}"
-        shown = ", ".join(f"{v:.4g}" for v in at)
-        on = f"body {name}" if on_body else f"part {c['part']}, in body {name}'s frame"
-        measured = f"{distance:.4g} largest {compared} distance, at ({shown}) on {on}"
-        yield Result(cid, "shape", distance <= tol, expected, measured, shape=fitted)
+            measured = f"{distance:.4g} " + _MESH_FOUND[fit.found]
+            if fit.facets:
+                facets = f"{fit.facets} facet{'s' * (fit.facets != 1)}"
+                measured = f"{facets} on no one smooth patch; {measured}"
+        else:
+            distance, at, on_body = released.surface_distance(part, body)
+            ok, measured = distance <= tol, f"{distance:.4g} largest surface distance"
+        shown, on = ", ".join(f"{v:.4g}" for v in at), f"body {name}" if on_body else ""
+        measured += f", at ({shown}) on {on or 'part ' + str(c['part'])}"
+        fitted = {"distance": printed(distance)[0], "worst_point": list(printed(*at))}
+        fitted |= mesh  # an STL's: what found its largest deviation, and the facets on no one patch
+        yield Result(cid, "shape", ok, expected, measured, shape=fitted)
+
+    def _on_sheet(self, c: dict, name: str):
+        """Where model.py's sheets places check c's part on the region its body names."""
+        p, model = self.p, self.model
+        region = p.region(name)
+        placing = []
+        for named, (part, where) in model.sheets.items():
+            try:
+                if p.region(named) == region:
+                    placing.append((named, part, where))
+            except Fault:
+                continue  # a name that is no region places nothing
+        if not placing:
+            raise Fault(
+                f"model.build's sheets places no part on region {name}; place part {c['part']} "
+                "there, as the cut file draws it"
+            )
+        if len(placing) > 1:
+            raise Fault(f"model.build's sheets places {len(placing)} parts on region {name}")
+        ((named, part, where),) = placing
+        if part != c["part"]:
+            raise Fault(f"model.build's sheets places part {part} on {named}, not {c['part']}")
+        return where
 
 
 def _at(c: dict) -> str:

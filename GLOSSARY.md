@@ -13,16 +13,12 @@ An image in a source: a plot, photo, drawing or video frame. Figure crops are ta
 _Avoid_: source figure, source image, source pixel
 
 **Ledger**:
-The record of every statement the sources make about the object, each a verbatim quote, a hashed figure crop or a probe.
+The record of every statement the text sources make about the object, each a verbatim quote or a hashed figure crop. Released geometry states shape, not text, so it has no entries: a shape check compares it with the part.
 _Avoid_: evidence list, extraction
 
 **Reading**:
 The label text of a figure crop, transcribed exactly as printed; it counts fully only once a named human has confirmed it.
 _Avoid_: quote (for image evidence)
-
-**Probe**:
-A ledger entry taken from a body in released geometry: its envelope, a distance or angle between datums on it, or a diameter, which cadrev evaluates from the file and compares with the design value the entry records. Unlike a reading, it needs no human confirmation.
-_Avoid_: geometry reading, measurement (for a value taken from released geometry)
 
 **Conflict**:
 Two ledger entries that disagree about the same feature; open until it carries a resolution.
@@ -73,7 +69,7 @@ One placement of a part in the assembly; a check over several instances reads th
 _Avoid_: copy, occurrence
 
 **Datum**:
-A named point on a part's solid that distance and angle checks read: on the axis of a cylindrical face (a pin, a hole, a pivot) or on a face. A released body's datum may instead be derived from datums on it, and so lie off its solid: the circle through three, read at its centre, or the midpoint of two.
+A named point on a built part's solid that distance and angle checks read: on the axis of a cylindrical face (a pin, a hole, a pivot) or on a face. A released body has none: its shape check compares it whole.
 _Avoid_: reference point, marker
 
 **Joint**:
@@ -117,7 +113,7 @@ What a check's evaluation read: the params the check names (its pose, its sweep'
 _Avoid_: dependencies, inputs (of a check)
 
 **Checked param**:
-A param some check reads (see Reads), directly or through a param derived from it, or whose ledger value some check compares. A source param that is not one is unchecked.
+A param some check reads (see Reads), directly or through a param derived from it, whose ledger value some check compares, or that cites a released body whose shape check passes. A source param that is not one is unchecked.
 _Avoid_: covered (by a check), confirmed (by a check)
 
 **Tolerance**:
@@ -129,7 +125,7 @@ The pass over every text source that lists each stated quantity no ledger quote 
 _Avoid_: coverage check, scan
 
 **Shape check**:
-A check that aligns a built part with its released body through pairs of datums and compares the largest distance between their surfaces with a length tolerance. It checks the shape as a whole, not the params that build it.
+A check that compares a built part whole with its released body in place, the part built in the body's frame, passing within the length tolerance: a STEP's surfaces both ways, an STL at the points both hold exactly, a cut file's region against the part's projected outline where the model places it on the sheet. A passing one checks every param citing the body.
 _Avoid_: mesh comparison, ICP check
 
 **Drawing**:
@@ -166,7 +162,7 @@ The first part taken through modelling, checks and the report before any other p
 The first closed loop of a mechanism taken through its joints, the MJCF export and a posed check before any other joint is declared.
 
 **Known first**:
-A project that builds only its settled parts, those whose every dimension the sources settle (quoted, worked out from quotes, probed or measured), and lists what waits. No parameter rests on a proposed value but a sweep's resolution. The user then builds on it, or has the reconstruction propose the rest as the complete model.
+A project that builds only its settled parts, those whose every dimension the sources settle (quoted, worked out from quotes, read off a released body or measured), and lists what waits. No parameter rests on a proposed value but a sweep's resolution. The user then builds on it, or has the reconstruction propose the rest as the complete model.
 _Avoid_: draft model, sources-only model
 
 **Waiting**:

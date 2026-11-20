@@ -467,10 +467,28 @@ def build(p):
     # ================================================================ assembly, as built: sun at 0, carrier pins at 90 + k * 360 / n
     # Mesh phases (fractions of a tooth pitch, 0 = tooth centre): each planet's tooth sits in the ring's tooth space where
     # they touch, and the sun's tooth sits in the planet's tooth space; planet k's turn psi and the sun's turn sigma follow.
-    assembly["casing_1"] = ("casing", Location((0, 0, 0)))
-    assembly["retainer_1"] = ("retainer", Location((0, 0, -p.ret_t)))
-    assembly["carrier_1"] = ("primary_carrier", Location((0, 0, 0)))
-    assembly["sec_1"] = ("secondary_carrier", Location((0, 0, p.sec_z)))
+    # Each part is built where its released file holds it, with its datums; an instance of it is
+    # placed where the assembly puts the part, through the inverse of that frame.
+    files = {
+        "planet_gear": Location((p.planet_file_x, p.planet_file_y, 0), (0, 0, 1), p.planet_file_turn),
+        "sun_gear": Location((p.sun_file_x, p.sun_file_y, 0)),
+        "primary_carrier": Location((p.car_file_x, p.car_file_y, p.car_file_z)),
+        "secondary_carrier": Location((p.sec_file_x, p.sec_file_y, p.sec_file_z)),
+        "casing": Location((p.cas_file_x, p.cas_file_y, 0)),
+        "retainer": Location((p.ret_file_x, 0, p.ret_file_z), (1, 0, 0), -90),
+    }
+    for name, frame in files.items():
+        parts[name] = parts[name].moved(frame)
+        for key in [k for k in datums if k.startswith(f"{name}.")]:
+            datums[key] = tuple((frame * Location(datums[key])).position)
+
+    def place(name, where):
+        return (name, where * files[name].inverse())
+
+    assembly["casing_1"] = place("casing", Location((0, 0, 0)))
+    assembly["retainer_1"] = place("retainer", Location((0, 0, -p.ret_t)))
+    assembly["carrier_1"] = place("primary_carrier", Location((0, 0, 0)))
+    assembly["sec_1"] = place("secondary_carrier", Location((0, 0, p.sec_z)))
     sigma = 0
     for k, ang in enumerate(pin_ang):
         g_r = frac((ang - rph) * zr / 360)
@@ -480,8 +498,8 @@ def build(p):
             f_s = frac(-g_p - 0.5)
             sigma = ang - p.sun_phase - f_s * 360 / zs
         x, y, _ = polar(cd, ang, 0)
-        assembly[f"planet_{k + 1}"] = ("planet_gear", Location((x, y, p.planet_z), (0, 0, psi)))
-    assembly["sun_1"] = ("sun_gear", Location((0, 0, p.sun_z), (0, 0, sigma)))
+        assembly[f"planet_{k + 1}"] = place("planet_gear", Location((x, y, p.planet_z), (0, 0, psi)))
+    assembly["sun_1"] = place("sun_gear", Location((0, 0, p.sun_z), (0, 0, sigma)))
 
     joints = {
         "sun": {"type": "revolute", "parent": "casing_1", "child": "sun_1", "axis": ["sun_1.axis_lo", "sun_1.axis_hi"], "drive": "actuated"},

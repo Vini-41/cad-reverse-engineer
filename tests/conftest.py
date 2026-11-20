@@ -16,7 +16,7 @@ from typing import NamedTuple
 
 import pytest
 import yaml
-from build123d import Box, Cylinder, Location, Pos, export_step, export_stl
+from build123d import Box, Cylinder, Pos, export_step, export_stl
 
 from cadrev import cli  # noqa: TID251
 
@@ -485,26 +485,8 @@ def open_chain(root: Path, motion: str, **params: str) -> None:
     add(root, params={name: yaml.safe_load(spec) for name, spec in params.items()})
 
 
-# Released geometry: the link as its authors released it, placed where the file puts it, a
-# quarter turn about Z and off the origin, so a shape check must carry the built link onto it.
-RELEASED_AT = Location((100, 50, 20), (0, 0, 1), 90)
-LINK_DATUMS = {"a": (-15, 0, 0), "b": (15, 0, 0), "top": (-15, 0, 4)}
-# Datums on the link's faces: an STL holds no cylinder, so no datum of its body lies on an axis.
-FACE_DATUMS = {"side": (0, 2.5, 0), "over": (0, 0, 4), "under": (0, 0, -4)}
-# The released link's envelope in the file's frame, where the quarter turn lays its length along
-# Y: a probe that restates Table 1.
-PROBE = {
-    "id": "P-link",
-    "source": "link_step",
-    "locator": "the released link",
-    "probe": "bbox",
-    "axes": {"L": "y", "W": "x", "H": "z"},
-    "values": {"L": 40, "W": 5, "H": 8},
-    "scope": "context",
-    "reason": "restates T1-link",
-}
-
-
+# Released geometry: the link as its authors released it. A released part is built in its body's
+# frame, so the file holds the link where model.py builds it and a shape check compares in place.
 def link_body(pitch: float = 30, extra_hole: bool = False):
     """The link as released: 40×5×8 with its two 3 mm holes pitch apart, and with extra_hole a
     2 mm hole at its middle that the built link lacks."""
@@ -514,33 +496,19 @@ def link_body(pitch: float = 30, extra_hole: bool = False):
     return body
 
 
-def released(
-    root: Path, tmp_path: Path, solid=None, at=RELEASED_AT, name="link.step", datums=None, **shape
-):
-    """Register solid (the link by default) placed at `at` as geometry source link_step, declare
-    on it the link's datums (a, b and top by default) where `at` puts them, and compare the built
-    link with it by shape check `shape`, whose other keys `shape` gives (check=False for no
-    check). Returns the file as the project holds it."""
+def released(root: Path, tmp_path: Path, solid=None, at=None, name="link.step", **shape):
+    """Register solid (the link by default), moved by `at` where given, as geometry source
+    link_step, and compare the built link with it by shape check `shape`, whose other keys `shape`
+    gives (check=False for no check). Returns the file as the project holds it."""
     path = tmp_path / name
     export = export_stl if name.endswith(".stl") else export_step
-    export((link_body() if solid is None else solid).moved(at), str(path))
+    body = link_body() if solid is None else solid
+    export(body if at is None else body.moved(at), str(path))
     register(root, path, "link_step", "geometry")
-    datums = LINK_DATUMS if datums is None else datums
-    placed = {
-        f"link_step.{k}": list((at * Location(point)).position) for k, point in datums.items()
-    }
-    add(root, datums=placed)
     if shape.pop("check", True):
-        pairs = [[f"link.{k}", f"link_step.{k}"] for k in datums]
         entry = {"id": "shape", "kind": "shape", "part": "link", "body": "link_step"}
-        add(root, checks=entry | {"pairs": pairs} | shape)
+        add(root, checks=entry | shape)
     return root / "sources" / name
-
-
-def probed(root: Path, tmp_path: Path, **entry) -> None:
-    """The link released and shape-checked, and probed by PROBE with entry's changes."""
-    released(root, tmp_path)
-    add(root, evidence=PROBE | entry)
 
 
 # A cut file drawn at half size: 600 mm wide over a 300-unit viewBox, so each length doubles. Its
@@ -558,44 +526,34 @@ SHEET = """\
 </svg>
 """
 LINK_AT = "sheet@30,41"
-# The link's hole centres and the middle of its long edge at y 45, where the built link's datums
-# a, b and side project along Z; and three points on each hole's edge, with the circle through
-# them, whose centre a probe reads.
-SHEET_DATUMS = {
-    "sheet.a": [25, 42.5],
-    "sheet.b": [55, 42.5],
-    "sheet.side": [40, 45],
-    **{
-        f"sheet.{h}{i}": [x + dx, 42.5 + dy]
-        for h, x in (("a", 25), ("b", 55))
-        for i, (dx, dy) in enumerate(((-1.5, 0), (0, -1.5), (1.5, 0)), 1)
-    },
-    **{f"sheet.bore_{h}": {"circle": [f"sheet.{h}{i}" for i in (1, 2, 3)]} for h in "ab"},
-}
-# A probe of the sheet's link: the spacing of its holes.
-SHEET_PROBE = {
-    "id": "P-s",
-    "source": "sheet",
-    "body": LINK_AT,
-    "locator": "link",
-    "probe": "distance",
-    "between": ["sheet.bore_a", "sheet.bore_b"],
-    "values": {"v": 30},
-    "scope": "context",
-    "reason": "restates pitch",
-}
+# Where model.py places the link on the sheet: its outline along Z, centred on the region at
+# (40, 42.5), not turned over.
+SHEET_PLACED = {LINK_AT: (40, 42.5, False)}
 
 
-def sheet(root: Path, tmp_path: Path, svg: str = SHEET, **shape) -> None:
-    """Register svg as cut file `sheet`, declare SHEET_DATUMS on it, and compare the built link
-    with its region by shape check `shape`, projected along Z (shape gives its other keys, None
-    dropping one; check=False for no check), skipping the plate by the rectangle around it."""
+def place_on_sheet(root: Path, places: dict) -> None:
+    """Have model.py place the link on each region places names, at (x, y) and turned over about
+    X or not, each number a param citing the region."""
+    entries = []
+    for i, (region, (x, y, over)) in enumerate(places.items()):
+        cite = {"basis": "source", "from": region}
+        add(root, params={f"s{i}_x": cite | {"value": x}, f"s{i}_y": cite | {"value": y}})
+        turn = ", (1, 0, 0), 180" if over else ""
+        entries.append(f'"{region}": ("link", Location((p.s{i}_x, p.s{i}_y, 0){turn}))')
+    remodel(root, ASSEMBLY, f'{ASSEMBLY}\n        "sheets": {{{", ".join(entries)}}},')
+
+
+def sheet(root: Path, tmp_path: Path, svg: str = SHEET, places: dict = SHEET_PLACED, **shape):
+    """Register svg as cut file `sheet`, have model.py place the link on it by `places`
+    (place_on_sheet), and compare the built link with its region by shape check `shape`, projected
+    along Z (shape gives its other keys, None dropping one; check=False for no check), skipping
+    the plate by the rectangle around it."""
     add_source(root, tmp_path, "sheet.svg", svg, "sheet", "geometry")
-    add(root, datums=SHEET_DATUMS)
+    if places:
+        place_on_sheet(root, places)
     if shape.pop("check", True):
-        pairs = [[f"link.{k}", f"sheet.{k}"] for k in ("a", "b", "side")]
         entry = {"id": "shape", "kind": "shape", "part": "link", "body": LINK_AT, "along": "z"}
-        entry = entry | {"pairs": pairs} | shape
+        entry = entry | shape
         add(root, checks={k: v for k, v in entry.items() if v is not None})
         add(root, skipped={"source": "sheet", "within": [[110, 30], [150, 70]], "reason": "plate"})
 

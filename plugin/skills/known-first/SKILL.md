@@ -9,11 +9,11 @@ compatibility: Runs its CLI locally through uv on Python 3.12-3.14; the first ru
 
 Rebuild what a published object's sources settle, as CAD a reviewer can audit number by number. Three files carry the audit, and `cadrev check` holds them to each other:
 
-- **The ledger** (`evidence.yaml`): every number the sources state about the object, each a verbatim quote, a hashed figure crop, or a probe of geometry the authors released.
+- **The ledger** (`evidence.yaml`): every number the sources state about the object, each a verbatim quote or a hashed figure crop. Geometry the authors released is compared whole with the part built from it.
 - **The params** (`params.yaml`): every number the model uses, each with its **basis**: `source`, `derived` or `measured`.
 - **The checks** (`checks.yaml`): every stated value the geometry should realise, compared on the built model with the ledger, never with the params.
 
-A part is **settled** when the sources settle its every dimension: quoted, worked out from quotes, probed or measured. Known first builds and checks the settled parts, and every other part **waits** with the question that would settle it. Nothing is proposed, so the model holds no guess.
+A part is **settled** when the sources settle its every dimension: quoted, worked out from quotes, read off a released body or measured. Known first builds and checks the settled parts, and every other part **waits** with the question that would settle it. Nothing is proposed, so the model holds no guess.
 
 The product is an honest report. `build/report.md` shows what the sources settle and lists what waits. A run ends on one [status](references/project-format.md#statuses): VERIFIED means every number is accounted for and every check passes, and nothing about how much the sources left open.
 
@@ -68,23 +68,19 @@ Done when every figure has been viewed and its labels ledgered, and `cadrev chec
 
 ### 4. Released geometry
 
-Geometry the authors released settles values no text states: probe them. A project with none goes to stage 5.
+Geometry the authors released settles values no text states, and one shape check holds the part to all of them at once. A project with none goes to stage 5.
 
-- **Datums** on each body go under `datums` in evidence.yaml, at coordinates read from the file by a short script of your own (`cadrev python <script>`): one that loads the file with build123d, reads an STL's triangle corners, or reads a cut file's contours in the sheet's frame ([project-format.md](references/project-format.md)).
-- **Probes** take each value a body settles (a hole spacing, a bore, an envelope, a thickness), recording the design value: `32.5`, not the file's `32.4999`.
-- **An STL body** holds only flat triangles: no cylindrical face, no axis, and a point mid-facet sits inside the true circle by the facet's sag. So every input to a [derived datum](references/project-format.md#probes-released-geometry) on it is a triangle corner read from the file, and a curved part's shape check takes a `tol` of that sag. Its routes:
-  - **A bore or a fillet:** a `diameter` probe `at` a `circle` datum through three corners on its rim or arc.
-  - **A bore's axis or a hole's centre:** that circle datum, whose centre a `distance` or `angle` probe reads.
-  - **A feature's phase about an axis:** an `angle` probe `along` the axis, at the bore's circle datum, between a hole's circle datum and the `mid` datum of a tooth's two tip corners.
-  - **A count of features about an axis:** an `angle` probe `along` the axis, at the bore's circle datum, between two adjacent features' centres, recording the design value (`60`, not `59.9999`), then a derived param `360 / <that angle's param>`. No probe counts features: the shape check is what confirms the count.
-- **Each body** is compared or skipped: a `shape` check against the part model.py will build from params to reproduce it, or a skip with a reason for a body that is not part of the device (a fit tester, a part of another device).
+- **Read each body** with a short script of your own (`cadrev python <script>`) that loads a STEP or STL with build123d, or a cut file's contours in the sheet's frame. Take from it each value the part needs (a hole spacing, a bore, an envelope, a thickness) as its design value, `32.5` and not the file's `32.4999`, and the frame the file holds the body in: where its origin and axes lie, since the part is built there.
+- **An STL body** holds only flat triangles, whose corners lie on the true surface and whose faces cut inside a curve: read an arc by its corners, a bore's diameter as the circle through three corners on its rim.
+- **Each body** is compared or skipped: a [`shape` check](references/project-format.md#checksyaml) against the part model.py will build in the body's frame, or a skip with a reason for a body that is not part of the device (a fit tester, a part of another device). A part cut from several regions of a cut file takes a shape check per region, and model.py's [`sheets`](references/modeling.md#contract) places it on each.
 
-Done when every body is named by a shape check or a skip, and every value a body settles that the model will use is probed.
+Done when every body is named by a shape check or a skip, and every value the model will use from a body is read off it.
 
 ### 5. Params
 
-Write params.yaml for the settled parts. Each dimension takes the strongest basis available: `source` (a quote, a reading or a probe), then `derived`, then `measured`.
+Write params.yaml for the settled parts. Each dimension takes the strongest basis available: `source` (a quote, a reading or a released body), then `derived`, then `measured`.
 
+- A value a released body settles cites the body, `from: <body>` with its `value`, and is checked once the body's shape check passes. So is each number of the frame the part is built in, or of a cut part's place on its sheet.
 - A tooth count is a `source` param, and a gear ratio a `derived` param written from the counts, so the ratio traces to the table.
 - A screw or a thread the sources state is a [thread param](references/project-format.md#threads): its designation from the ISO metric or the Unified table, which supplies its diameter, its pitch, its tap drill and its clearance hole. A stated screw length is the length param it names.
 - **A part waits** where the sources leave one of its dimensions open. It takes no params, and a gap in gaps.yaml whose question names the part ("What diameter are the finger link's pins?"), so the hand-over can group what waits by part. A stated value of a waiting part waits with it.

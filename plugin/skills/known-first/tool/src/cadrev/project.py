@@ -1,8 +1,8 @@
 """A reconstruction project: its files, what its ledger states, and the findings a run collects.
 
 The rule the whole package enforces: a number reaches the CAD only through params.yaml, every
-parameter declares its basis, and every source value is a verbatim quote, a pinned figure crop or
-a probe of released geometry, found in a hashed source.
+parameter declares its basis, and every source value is a verbatim quote or a pinned figure crop
+found in a hashed source, or a released body a shape check compares the model with.
 """
 
 from __future__ import annotations
@@ -35,8 +35,6 @@ AXES = {"x": 0, "y": 1, "z": 2}
 # The keys of a check that name a pose: the one a change is taken from, then the one it is
 # evaluated at.
 POSES = ("from", "pose")
-# What each kind of probe evaluates.
-PROBE_QUANTITY = {"bbox": "length", "distance": "length", "diameter": "length", "angle": "angle"}
 SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "geometry", "other")
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}
 MATH_NAMES = {
@@ -137,9 +135,6 @@ class Project:
     params: dict[str, dict]
     checks: list[dict]
     gaps: dict[str, dict]
-    # Datums declared on released bodies: <body>.<feature> -> its point in the body's frame, or
-    # {circle: [a, b, c]} or {mid: [a, b]} of datums declared on that body.
-    datums: dict[str, list | dict]
     # The mass model: part -> {mass: param} or {density: param}.
     parts: dict[str, dict]
     # plan.yaml's make, buy and steps; None for a project with no plan.
@@ -152,8 +147,6 @@ class Project:
     resolution: set[str] = field(default_factory=set)
     # Sources whose file is there but cannot be read as text or geometry.
     unreadable: set[str] = field(default_factory=set)
-    # Each probe's comparison, as report.json lists it.
-    probes: list[dict] = field(default_factory=list)
 
     def error(self, rule: str, message: str) -> None:
         self.findings.append(Finding("error", rule, message))
@@ -341,87 +334,6 @@ class Project:
             raise Fault(f"{name} is not a body of a geometry source")
         return self.bodies[name]
 
-    def released_datum(self, name: str) -> tuple[str, tuple[float, float, float]] | None:
-        """The body a datum declared in evidence.yaml lies on, and its point there; None for one
-        declared on no body. A cut file's datum lies on its sheet, at [x, y]."""
-        point = self.datums.get(name)
-        if isinstance(point, dict):
-            try:
-                return self.derived_datum(name)[:2]
-            except Fault:
-                return None  # the datum's own finding says why
-        if not isinstance(point, list):
-            return None
-        sheet = next((s for s in self.regions if name.startswith(f"{s}.")), None)
-        if sheet is not None:
-            return (sheet, (float(point[0]), float(point[1]), 0.0)) if len(point) == 2 else None
-        body = self._body_named(name)
-        if body is None or len(point) != 3:
-            return None
-        return body, (float(point[0]), float(point[1]), float(point[2]))
-
-    def derived_datum(self, name: str) -> tuple[str, tuple[float, float, float], float | None]:
-        """The body a derived datum lies on, its point and, for a circle, the circle's diameter:
-        the centre of the circle through three datums, or the midpoint of two. A Fault saying
-        why where the datums it names give none."""
-        entry = self.datums[name]
-        assert isinstance(entry, dict)  # called for a derived datum alone
-        form = next((f for f in ("circle", "mid") if f in entry), None)
-        if form is None:
-            raise Fault("give {circle: [a, b, c]} or {mid: [a, b]}")
-        through, count = [str(d) for d in entry[form]], 3 if form == "circle" else 2
-        if len(through) != count:
-            raise Fault(f"{form} takes {count} datums, not {len(through)}")
-        body = self._body_named(name)
-        if body is None:
-            raise Fault("names no body of a geometry source; name it <body>.<feature>")
-        points = []
-        for datum in through:
-            if isinstance(self.datums.get(datum), dict):
-                raise Fault(f"{datum} is itself derived; derive it from datums given as points")
-            named = self.released_datum(datum)
-            if named is None:
-                raise Fault(f"{datum} is no datum given as a point on a body")
-            if named[0] != body:
-                raise Fault(f"{datum} lies on body {named[0]}, not {body}")
-            points.append(named[1])
-        if form == "mid":
-            (ax, ay, az), (bx, by, bz) = points
-            return body, ((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2), None
-        centre, diameter = released.circle(points, self.length_tol, through)
-        return body, centre, diameter
-
-    def _body_named(self, name: str) -> str | None:
-        """The released body a datum's name <body>.<feature> names, if any: a solid, or a cut
-        file's sheet."""
-        named = (b for b in [*self.bodies, *self.regions] if name.startswith(f"{b}."))
-        return max(named, key=len, default=None)
-
-    def datum_on(self, name: str, body: str) -> tuple[float, float, float]:
-        """The point of a datum declared on released body `body`: on a cut file's region, a datum
-        of its sheet inside the region's outer contour, on its edge or derived from datums on it."""
-        named = self.released_datum(str(name))
-        at = released.at_point(body)
-        if at is not None and named is not None and named[0] == at[0]:
-            sid, index = self.region(body)
-            if index not in released.outlines_at(self.regions[sid], named[1][:2], self.length_tol):
-                raise Fault(f"{name} lies outside the outer contour of region {body}")
-            entry = self.datums.get(name)
-            through = [str(d) for f in entry.values() for d in f] if isinstance(entry, dict) else []
-            for datum in through or [name]:
-                point = (self.released_datum(datum) or named)[1]
-                gap = released.off_edge([self.regions[sid][index]], point, self.length_tol)
-                if gap:
-                    of = "" if datum == name else f", which {name} is derived from,"
-                    raise Fault(
-                        f"{datum}{of} is {gap:.4g} from the nearest edge of region {body}; place "
-                        "it on the outer contour or a hole's edge",
-                        "datum-off-solid",
-                    )
-        elif named is None or named[0] != body:
-            raise Fault(f"{name} is not a datum declared on {body}")
-        return named[1]
-
     # The ledger.
 
     def item(self, eid: str) -> dict | None:
@@ -450,18 +362,8 @@ class Project:
         stated = sources.quantities_in(text)
         return list(dict.fromkeys(u for v, u in stated if math.isclose(v, value, rel_tol=1e-9)))
 
-    def probe_of(self, ref: str) -> str | None:
-        """The kind of probe an evidence value is recorded by; None for a quote or a reading."""
-        if self._ledgered(ref) is None:
-            return None
-        kind = (self.item(str(ref).partition(".")[0]) or {}).get("probe")
-        return kind if kind in PROBE_QUANTITY else None
-
     def unit_of(self, ref: str) -> str | None:
-        """The unit an evidence value is printed in; None, the project's, where none is. A probe
-        records its value in the project's unit of the quantity it evaluates."""
-        if kind := self.probe_of(ref):
-            return self.units[PROBE_QUANTITY[kind]]
+        """The unit an evidence value is printed in; None, the project's, where none is."""
         printed = self.printed_units(ref)
         return printed[0] if printed else None
 
@@ -476,12 +378,11 @@ class Project:
         )
 
     def value(self, ref: str) -> float | None:
-        """An evidence value in the project's units, converted from the unit its quote prints; a
-        probe records its value in them, so it is read as recorded."""
+        """An evidence value in the project's units, converted from the unit its quote prints."""
         ledgered = self._ledgered(ref)
         if ledgered is None:
             return None
-        unit = None if self.probe_of(ref) else self.unit_of(ref)
+        unit = self.unit_of(ref)
         return ledgered[0] if unit is None else units.convert(ledgered[0], unit, self.units)
 
     def stated(self, ref: str, quantity: str | None = None) -> float:
@@ -558,11 +459,9 @@ class Project:
             if what in self.params:
                 source = (self.traced(what) or (what,))[0]
                 by = f"param {source}{'' if source == what else f' through {what}'} "
-            kind = self.probe_of(str(ref))
-            printed = f"{_a(kind)} probe's value in" if kind else "printed in"
             self.error(
                 "unit-quantity",
-                f"{ref} is {printed} {unit}, a unit of {units.quantity(unit)}, where "
+                f"{ref} is printed in {unit}, a unit of {units.quantity(unit)}, where "
                 f"{' or '.join(_a(q) for q in expected)} is expected ({by}{use})",
             )
         elif expected == ("count",):
@@ -642,7 +541,6 @@ def load(root: Path) -> Project:
         evidence=files["evidence.yaml"].get("evidence", []),
         skipped=files["evidence.yaml"].get("skipped", []),
         conflicts=files["evidence.yaml"].get("conflicts", []),
-        datums=files["evidence.yaml"].get("datums", {}),
         params=files["params.yaml"].get("params", {}),
         parts=files["params.yaml"].get("parts", {}),
         checks=files["checks.yaml"].get("checks", []),
