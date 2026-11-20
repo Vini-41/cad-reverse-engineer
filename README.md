@@ -187,7 +187,7 @@ The CLI runs on your machine and needs [uv](https://docs.astral.sh/uv/), with Py
 
 ## Development
 
-`scripts/check` is the repo's one check, run locally and by GitHub Actions on every pull request: ruff, pyright and the tests, which run every example. [`GLOSSARY.md`](GLOSSARY.md) defines the terms the skills, the CLI and its findings use, and [`docs/adr/`](docs/adr) records the decisions behind the rules.
+`scripts/check` is the repo's one check, run locally and by GitHub Actions on every pull request: ruff, pyright and the tests, which run every example. [`GLOSSARY.md`](GLOSSARY.md) defines the terms the skills, the CLI and its findings use.
 
 To report a problem, open an issue with the command you ran, the finding it printed, and the project directory or the paper.
 
