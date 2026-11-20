@@ -12,7 +12,6 @@ from pathlib import Path
 from . import checks, ledger
 from .build import GEAR_BY, Model, physics_of, prefix, printed, range_ends
 from .checks import Result
-from .lint import MODEL_LITERALS
 from .motion import pose_text
 from .project import BASES, DEFAULT_TOL, RESTS_ON, Project
 from .threads import STANDARDS
@@ -49,8 +48,8 @@ def awaiting_confirmation(p: Project) -> list[dict]:
 
 
 def status(p: Project, partial: bool = False) -> str:
-    """The one place a verification run's status is decided. A partial run skipped the build or
-    the coverage sweep, so it makes no claim."""
+    """The one place a verification run's status is decided. A partial run skipped the build, so
+    it makes no claim."""
     if partial:
         return PARTIAL
     if any(f.level == "error" for f in p.findings):
@@ -158,6 +157,14 @@ def _table(header: list[str], rows: list[list]) -> list[str]:
         cells = (str(cell).replace("|", "\\|").replace("\n", " ") for cell in row)
         lines.append("| " + " | ".join(cells) + " |")
     return lines + [""]
+
+
+def _section(title: str, header: list[str], rows: list[list], *said: str) -> list[str]:
+    """A section of report.md that is one table: its heading, what it says of the table, and the
+    table. A table with no rows has no section: the report holds only what there is to read."""
+    if not rows:
+        return []
+    return [title, "", *(line for text in said for line in (text, "")), *_table(header, rows)]
 
 
 def _motion_lines(moves: dict | None) -> list[str]:
@@ -341,14 +348,12 @@ def _by_part(model: Model, datums: list[str]) -> str:
     return ", ".join(f"{part} ×{n}" for part, n in counted.items())
 
 
-def _checks_table(results: list[Result]) -> list[str]:
-    return _table(
-        ["check", "result", "expected (evidence)", "measured", "interpretation"],
-        [
-            [r.id, "pass" if r.ok else "**FAIL**", r.expected, r.measured, _interpretation(r)]
-            for r in results
-        ],
-    )
+def _checks(results) -> tuple[list[str], list[list]]:
+    """Checks' results as a table of the report: its header and its rows."""
+    return ["check", "result", "expected (evidence)", "measured", "interpretation"], [
+        [r.id, "pass" if r.ok else "**FAIL**", r.expected, r.measured, _interpretation(r)]
+        for r in results
+    ]
 
 
 def _anchor(e: dict) -> str:
@@ -402,9 +407,6 @@ def write(
         if c.get("kind") == "interference"
         and not math.isclose(checks.overlap_limit(p, c), DEFAULT_TOL["length"] ** 3)
     ]
-    literals = p.meta.get("model_literals")
-    if literals is not None and [float(v) for v in literals] == [float(v) for v in MODEL_LITERALS]:
-        literals = None
     measured = [
         {
             "param": n,
@@ -508,24 +510,20 @@ def write(
             ["gap", "question", "close by"],
             [[g["gap"], g["question"] or "", g["ask"] or ""] for g in waits["gaps"]],
         )
-    md += [
-        "## Open gaps",
-        "",
-        "What the sources leave open. Each answer would replace the params beside its question "
-        "with a stated value.",
-        "",
-    ]
     affected = {gap: [n for n, s in p.params.items() if s.get("gap") == gap] for gap in p.gaps}
-    md += _table(
+    md += _section(
+        "## Open gaps",
         ["gap", "question", "close by", "params"],
         [
             [gap, g.get("question", ""), g.get("ask", ""), ", ".join(affected[gap])]
             for gap, g in p.gaps.items()
             if waits is None or affected[gap]  # a known-first project lists the rest as waiting
         ],
+        "What the sources leave open. Each answer would replace the params beside its question "
+        "with a stated value.",
     )
-    md += ["## Conflicts between sources", ""]
-    md += _table(
+    md += _section(
+        "## Conflicts between sources",
         ["id", "evidence", "summary", "resolution"],
         [
             [
@@ -558,20 +556,25 @@ def write(
             "[plan.md](plan.md).",
             "",
         ]
-    md += [
-        "## Parts",
-        "",
-        "Each part's drawing, dimensioned as built, and the checks that compare that part alone "
-        "with the sources.",
-        "",
-    ]
+    if model is not None and model.parts:
+        md += [
+            "## Parts",
+            "",
+            "Each part's drawing, dimensioned as built, and the checks that compare that part "
+            "alone with the sources.",
+            "",
+        ]
     for name in model.parts if model else []:
         md += [f"### {name}", ""]
         if name in sheets:
             md += [f"![{name}](drawings/{sheets[name].name})", ""]
-        md += _checks_table([r for r in results if r.part == name])
-    md += ["## Assembly", "", "The checks that read instances where the assembly places them.", ""]
-    md += _checks_table([r for r in results if r.part is None])
+        header, rows = _checks(r for r in results if r.part == name)
+        md += _table(header, rows) if rows else []
+    md += _section(
+        "## Assembly",
+        *_checks(r for r in results if r.part is None),
+        "The checks that read instances where the assembly places them.",
+    )
     md += _motion_section(moves)
     if model is not None and threaded:
         md += [
@@ -600,28 +603,17 @@ def write(
                 for t, screw in zip(threaded, bought)
             ],
         )
-    md += ["## Non-default tolerances", ""]
-    md += _table(
+    md += _section(
+        "## Non-default tolerances",
         ["check", "kind", "tolerance"],
         [
             [t["check"], t["kind"], next(f"{k} {t[k]:g}" for k in ("tol", "tol_rel") if k in t)]
             for t in tolerances
-        ],
-    )
-    md += ["## Non-default overlap limits", ""]
-    md += _table(["check", "max_volume"], [[o["check"], f"{o['max_volume']:g}"] for o in limits])
-    md += ["## Model literal override", ""]
-    if literals is None:
-        md += ["_None._", ""]
-    else:
-        allowed, default = (
-            ", ".join(f"{v:g}" for v in values) for values in (literals, MODEL_LITERALS)
-        )
-        md += [
-            f"project.yaml `model_literals` allows {allowed} in model.py, in place of the default "
-            f"{default}.",
-            "",
         ]
+        + [[o["check"], "interference", f"max_volume {o['max_volume']:g}"] for o in limits],
+        "Each check that compares within a tolerance, or allows an overlap, other than the "
+        "default.",
+    )
     md += [
         "## Parameters",
         "",
@@ -647,8 +639,8 @@ def write(
             for n, s in p.params.items()
         ],
     )
-    md += ["## Measured parameters", ""]
-    md += _table(
+    md += _section(
+        "## Measured parameters",
         ["param", "value", "from", "method", "uncertainty"],
         [
             [
@@ -675,8 +667,8 @@ def write(
             for e in p.evidence
         ],
     )
-    md += ["## Probes of released geometry", ""]
-    md += _table(
+    md += _section(
+        "## Probes of released geometry",
         ["probe", "body", "kind", "records", "evaluates to", "result"],
         [
             [
@@ -711,7 +703,6 @@ def write(
         "build_seconds": build_seconds,
         "tolerances": tolerances,
         "overlap_limits": limits,
-        "model_literals": literals,
         "exact": exact,
         "known_first": p.known_first,
         "waiting": waits,

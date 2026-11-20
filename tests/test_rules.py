@@ -251,7 +251,6 @@ LINK_FINDINGS = {
     "schema: a released datum of two numbers": _released(
         lambda r, t: add(r, datums="link_step.a: [1, 2]")
     ),
-    "schema: threads that names no table": _meta(threads="whitworth"),
     "schema: an up axis that is none": _meta(up="x"),
     "target": _meta(target="TODO name the object"),
     "target: none": _meta(target=None),
@@ -332,17 +331,14 @@ LINK_FINDINGS = {
     "param-proposed: a thread with no rationale": _params(
         "screw: {basis: proposed, thread: M3, gap: G1}"
     ),
-    "thread-standard": lambda r, t: (meta(r, threads="unified"), add(r, params=THREAD % "M3")),
+    "thread-standard": _params(THREAD % "4-40"),
     "model-thread: a hole of neither its thread nor its clearance": _threaded("M5", "link.a"),
     "model-thread: a datum on no cylinder": _threaded("M3", "link.side"),
     "model-thread: a hole declared twice": lambda r, t: (
         add(r, params=THREAD % "M3"),
         remodel(r, ASSEMBLY, ASSEMBLY + '"threads": {"link.a": "screw", "link.top": "screw"},'),
     ),
-    "model-thread: a hole of no thread whose table gives no clearance": lambda r, t: (
-        meta(r, threads="unified"),
-        _threaded("12-24", "link.a")(r, t),
-    ),
+    "model-thread: a hole of no thread whose table gives no clearance": _threaded("M2.2", "link.a"),
     "model-build: the clearance hole of a size its table gives none": lambda r, t: (
         add(r, params=THREAD % "M2.2"),
         add_line(r, "spare = p.screw.clearance"),
@@ -1004,7 +1000,6 @@ LINK_DAMAGE = {
     "param value in words": _param("hole_d", value="three"),
     "thread that is a number": _params("screw: {basis: proposed, thread: 3, rationale: r}"),
     "thread that is a list": _params("screw: {basis: proposed, thread: [M3], rationale: r}"),
-    "threads is a mapping": _meta(threads={"table": "metric"}),
     "threads of the model is a list": _model(ASSEMBLY, ASSEMBLY + '"threads": ["link.a"],'),
     "screw length that is a number": _screwed("screw: {basis: proposed, thread: M3, length: 10}"),
     "screw length of infinity": _screwed(TEN_LONG.replace("10", ".inf")),
@@ -1047,7 +1042,6 @@ LINK_DAMAGE = {
     "unit is null": _meta(units={"length": None}),
     "tolerance of zero": _meta(tolerance={"length": 0}),
     "tolerance is text": _meta(tolerance="tight"),
-    "model_literals is a number": _meta(model_literals=5),
     "known_first is text": _meta(known_first="x"),
     "sources is a mapping": _meta(sources={"paper": {"kind": "paper"}}),
     "source path is a directory": _sourced(path="sources"),
@@ -1180,9 +1174,8 @@ MECH_DAMAGE = {
 def _survives(root) -> None:
     """Whatever the project holds, every command that reads it ends by its own exit code."""
     check(root)  # asserts a status or a refusal, the exit code that goes with it, no traceback
-    for command in ("coverage", "text"):
-        code, out = cadrev(command, root, *(["paper"] if command == "text" else []))
-        assert code in (0, 1) and "Traceback" not in out, out
+    code, out = cadrev("text", root, "paper")
+    assert code in (0, 1) and "Traceback" not in out, out
 
 
 @pytest.mark.parametrize("damage", LINK_DAMAGE)

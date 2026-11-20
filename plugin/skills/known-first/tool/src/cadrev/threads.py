@@ -15,8 +15,7 @@ from typing import NamedTuple
 
 STANDARDS = {"metric": "ISO metric", "unified": "Unified"}
 INCH = 25.4  # millimetres
-# The project length units of the inch, in which a proposed thread is a Unified one unless
-# project.yaml's threads says otherwise.
+# The project length units of the inch, in which a proposed thread is a Unified one.
 INCH_UNITS = ("in", "ft", "thou")
 
 # ISO 888's nominal lengths from 2 to 300 mm, less those it brackets as to be avoided where

@@ -342,10 +342,10 @@ def _quote_spans(page: str, quote: str) -> list[tuple[int, int]]:
     return []
 
 
-def coverage(p: Project) -> list[tuple[str, str, str]]:
-    """The coverage sweep: each stated quantity of a text source that no quote or skip covers, as
-    (source, p<page>, the quantity in its context), and each body of a geometry source that no
-    shape check or skip covers, as (source, body <name>, why). Each is a [coverage] error."""
+def coverage(p: Project) -> None:
+    """The coverage sweep: a [coverage] error for each stated quantity of a text source that no
+    quote or skip covers, named by its page and shown in its context, and for each body of a
+    geometry source that no shape check or skip covers."""
     uncovered = []
     for sid, s in p.sources.items():
         geometry = s.get("kind") == "geometry"
@@ -365,7 +365,6 @@ def coverage(p: Project) -> list[tuple[str, str, str]]:
     for sid, where, line in uncovered:
         what = "" if where.startswith("body ") else "unledgered stated quantity "
         p.error("coverage", f"{sid} {where}: {what}{line}")
-    return uncovered
 
 
 def _uncovered_text(p: Project, sid: str, skips: list[dict]) -> list[tuple[str, str, str]]:
@@ -654,14 +653,12 @@ def _thread(p: Project, name: str, spec: dict) -> threads.Size:
         if not spec.get("gap"):
             p.warn("param-gap", f"param {name}: proposed value names no gap to close it")
         if thread.standard != p.thread_standard:
-            said = "threads" in p.meta
-            why = "as its threads says" if said else f"its length unit being {p.units['length']}"
             p.error(
                 "thread-standard",
                 f"param {name}: proposes {thread.name} from the "
                 f"{threads.STANDARDS[thread.standard]} table, and the project's is the "
-                f"{threads.STANDARDS[p.thread_standard]} one, {why}; a proposed thread comes "
-                "from the project's table, which threads in project.yaml may set",
+                f"{threads.STANDARDS[p.thread_standard]} one, its length unit being "
+                f"{p.units['length']}; a proposed thread comes from its length unit's table",
             )
     return size
 

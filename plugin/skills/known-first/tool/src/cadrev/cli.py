@@ -29,7 +29,7 @@ def cmd_init(args) -> int:
         return 1
     shutil.copytree(TEMPLATE, root, dirs_exist_ok=True)
     meta = root / "project.yaml"
-    meta.write_text(meta.read_text().replace("NAME", args.name or root.name))
+    meta.write_text(meta.read_text().replace("NAME", root.name))
     print(f"created {root}")
     return 0
 
@@ -158,21 +158,6 @@ def cmd_crop(args) -> int:
     return 0
 
 
-def cmd_coverage(args) -> int:
-    p = _open(args)
-    if p is None:
-        return 1
-    before = len(p.findings)
-    ledger.check_sources(p)  # so the sweep leaves out a source it cannot read, and says why
-    problems = p.findings[before:]
-    _print(problems, sys.stderr)
-    missing = ledger.coverage(p)
-    for sid, where, line in missing:
-        print(f"{sid} {where}: {line}")
-    print(f"{len(missing)} unledgered stated quantities")
-    return 1 if missing or any(f.level == "error" for f in p.findings) else 0
-
-
 def cmd_check(args) -> int:
     from . import checks, lint, report
 
@@ -182,12 +167,9 @@ def cmd_check(args) -> int:
         print(f"\n{report.NOT_VERIFIED}: the project was not read, so no report was written.")
         return 1
     ledger.check(p)
-    unplanned = checks.plan(p)
+    incomparable = checks.comparable(p)
     modelled = lint.lint(p)
-    if not args.no_coverage:
-        ledger.coverage(p)
-    # A partial run makes no claim, so it writes nothing to build/.
-    partial = args.no_build or args.no_coverage
+    ledger.coverage(p)
     results, images, drawn, model, coarsened, build_seconds = [], [], [], None, {}, None
     planned, holds = None, None
     read = {name for c in p.checks for name in ledger.named_by_checks(p, c)}
@@ -202,42 +184,36 @@ def cmd_check(args) -> int:
         if model is not None:
             mechanism = motion.Mechanism(p, model) if model.joints else None
             print("evaluating checks.yaml", flush=True)
-            results, read = checks.Checks(p, model, mechanism, unplanned).run()
+            results, read = checks.Checks(p, model, mechanism, incomparable).run()
             planned = plan.check(p, model)
             holds = held.check(p, model)
             coarsened = mechanism.coarsened if mechanism else {}
-            if not partial:
-                written = build.export(p, model) + (mechanism.write() if mechanism else [])
-                for path in written:
-                    print(f"wrote {path.relative_to(p.root)}")
-                drawn = drawing.render(p, model, results, planned, holds)
-                sheets = sum(path.parent.name == "drawings" for path in drawn)
-                views = sum(path.parent.name == "steps" for path in drawn)
-                if sheets:
-                    print(f"wrote build/drawings/: {sheets} part drawing{'s' * (sheets != 1)}")
-                if len(drawn) > sheets + views:
-                    print("wrote build/isometric.png")
-                if views:
-                    print(f"wrote build/steps/: {views} step view{'s' * (views != 1)}")
-                images = overlay.render(p, model)
+            written = build.export(p, model) + (mechanism.write() if mechanism else [])
+            for path in written:
+                print(f"wrote {path.relative_to(p.root)}")
+            drawn = drawing.render(p, model, results, planned, holds)
+            sheets = sum(path.parent.name == "drawings" for path in drawn)
+            views = sum(path.parent.name == "steps" for path in drawn)
+            if sheets:
+                print(f"wrote build/drawings/: {sheets} part drawing{'s' * (sheets != 1)}")
+            if len(drawn) > sheets + views:
+                print("wrote build/isometric.png")
+            if views:
+                print(f"wrote build/steps/: {views} step view{'s' * (views != 1)}")
+            images = overlay.render(p, model)
     if model is not None:
         read |= {thread.param for thread in model.threads}  # each held to its thread's sizes
     ledger.unchecked(p, read, model.used if model else set())
     ledger.known_first(p)
-    status = report.status(p, partial)
+    status = report.status(p, partial=args.no_build)
     headline = report.counts(p, results)
     _print(p.findings)
     if results:
         slowest = max(results, key=lambda r: r.seconds)
         print(f"slowest check: {slowest.id} {slowest.seconds:.1f} s")
     found = f"{status}: {report.tally(headline)}"
-    if partial:
-        skipped = " and ".join(
-            what
-            for what, on in (("the build", args.no_build), ("the coverage sweep", args.no_coverage))
-            if on
-        )
-        print(f"\n{found}; skipped {skipped}, so no claim is made and no report was written.")
+    if args.no_build:  # a partial run makes no claim, so it writes nothing to build/
+        print(f"\n{found}; skipped the build, so no claim is made and no report was written.")
         return 1
     path = report.write(
         p, status, results, images, drawn, model, coarsened, build_seconds, planned, holds
@@ -266,7 +242,7 @@ def main(argv: list[str] | None = None) -> int:
         s.set_defaults(fn=fn)
         return s
 
-    command("init", cmd_init, "scaffold a reconstruction project").add_argument("--name")
+    command("init", cmd_init, "scaffold a reconstruction project")
     s = command("source", cmd_source, "copy a source into the project and pin its sha256", "file")
     s.add_argument("--id", required=True)
     s.add_argument("--kind", required=True, choices=project.SOURCE_KINDS)
@@ -293,10 +269,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument(
         "--zoom", type=int, default=1, help="enlarge the crop by this whole-number factor"
     )
-    command("coverage", cmd_coverage, "list stated quantities no evidence or skip covers")
     s = command("check", cmd_check, "verify everything, build the model, write build/report.md")
     s.add_argument("--no-build", action="store_true", help="skip model build and geometry checks")
-    s.add_argument("--no-coverage", action="store_true", help="skip the coverage sweep")
     sub.add_parser("python", help="run the Python cadrev runs on: a script of your own")
 
     try:

@@ -176,8 +176,7 @@ cadrev source my-project paper.pdf --id paper --kind paper --citation "Doe et al
 cadrev text my-project paper --page 4      # the exact text quotes are matched against
 cadrev figures my-project paper            # render each page, extract each figure
 cadrev crop my-project figures/paper/p004_01.jpg 850 160 1240 385 --name fig2a --zoom 2
-cadrev coverage my-project                 # stated quantities not yet ledgered or skipped
-cadrev check my-project                    # everything; writes build/
+cadrev check my-project                    # every rule and check; writes build/
 ```
 
 </details>
