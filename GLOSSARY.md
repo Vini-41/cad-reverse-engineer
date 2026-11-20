@@ -1,6 +1,6 @@
 # CAD reverse-engineering
 
-Rebuilding a published object, from a single part up to a mechanism, from its sources (including geometry its authors released) as parametric CAD, optionally with a kinematic model that exports to MuJoCo. Every number is traced to a quoted source or named as a reconstruction choice, and every stated value, motion included, is checked against the built model. The result can be modified, simulated kinematically and, with its plan, made. It does not cover the reconstructor's own measurements of a physical object, behavioural simulation, tolerance analysis, or whole robots (ADR-0007, ADR-0021).
+Rebuilding a published object, from a single part up to a mechanism, from its sources (including geometry its authors released) as parametric CAD, optionally with a kinematic model that exports to MuJoCo. Every number is traced to a quoted source or named as a reconstruction choice, and every stated value, motion included, is checked against the built model. The result can be modified, simulated kinematically and, with its plan, made. It does not cover the reconstructor's own measurements of a physical object, behavioural simulation, tolerance analysis, or whole robots.
 
 ## Evidence
 

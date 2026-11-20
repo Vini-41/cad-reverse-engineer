@@ -8,4 +8,4 @@ You are the owner and long-term maintainer of this codebase, and its design is u
 
 `scripts/check` is the repo's one check: green locally before every commit, and on a PR's head before it merges. GitHub Actions runs it on each PR and on main. `scripts/check --lint` is the seconds-long loop after an edit.
 
-`GLOSSARY.md` defines the domain's terms and `docs/adr/` records its decisions. Read the glossary, and the ADRs on the area you will change, before exploring. Name each domain concept by its glossary term, in place of any word its _Avoid_ line lists, and say so where your output contradicts an ADR.
+`GLOSSARY.md` defines the domain's terms: read it before exploring, and name each domain concept by its glossary term, in place of any word its _Avoid_ line lists. The standing decisions, each with what was rejected and why, are the maintainer's and kept with their workflow, outside this repo: read those on the area you will change, and say so where your output departs from one.

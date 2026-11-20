@@ -117,7 +117,7 @@ class _Token(NamedTuple):
 
 
 def word_number(text: str) -> int | None:
-    """The cardinal text is in words, whole ("Eight", "twenty-four"), or None (ADR-0005)."""
+    """The cardinal text is in words, whole ("Eight", "twenty-four"), or None."""
     m = _WORD_NUMBER.fullmatch(text.strip().lower())
     return int(_word_value(m)) if m else None
 
