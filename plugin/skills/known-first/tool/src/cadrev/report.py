@@ -151,7 +151,7 @@ def motion(p: Project, model: Model, coarsened: dict) -> dict:
 
 def _table(header: list[str], rows: list[list]) -> list[str]:
     if not rows:
-        return ["_None._", ""]
+        return []
     lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
     for row in rows:
         cells = (str(cell).replace("|", "\\|").replace("\n", " ") for cell in row)
@@ -162,9 +162,8 @@ def _table(header: list[str], rows: list[list]) -> list[str]:
 def _section(title: str, header: list[str], rows: list[list], *said: str) -> list[str]:
     """A section of report.md that is one table: its heading, what it says of the table, and the
     table. A table with no rows has no section: the report holds only what there is to read."""
-    if not rows:
-        return []
-    return [title, "", *(line for text in said for line in (text, "")), *_table(header, rows)]
+    table = _table(header, rows)
+    return [title, "", *(line for text in said for line in (text, "")), *table] if table else []
 
 
 def _motion_lines(moves: dict | None) -> list[str]:
@@ -298,17 +297,15 @@ def _plan_md(
         # One operation beside its part, several as the sequence they are done in.
         md += [f"{part}: {how[0]}"] if len(how) == 1 else [part, *_numbered(how, "  ")]
     md += [*([] if planned["make"] else ["_None._"]), "", "## Buy", ""]
-    md += _table(
-        ["item", "quantity", "what"],
+    bought = [
         [
-            [
-                b["item"],
-                "" if b["count"] is None else b["count"],
-                ": ".join(filter(None, [b.get("thread"), b["what"]])),
-            ]
-            for b in planned["buy"]
-        ],
-    )
+            b["item"],
+            "" if b["count"] is None else b["count"],
+            ": ".join(filter(None, [b.get("thread"), b["what"]])),
+        ]
+        for b in planned["buy"]
+    ]
+    md += _table(["item", "quantity", "what"], bought) or ["_None._", ""]
     md += ["## Assemble", ""]
     if not planned["steps"]:
         return md + ["_No steps: the assembly places one instance._", ""]
@@ -419,6 +416,12 @@ def write(
         if s.get("basis") == "measured"
     ]
 
+    affected = {gap: [n for n, s in p.params.items() if s.get("gap") == gap] for gap in p.gaps}
+    gaps = [
+        [gap, g.get("question", ""), g.get("ask", ""), ", ".join(affected[gap])]
+        for gap, g in p.gaps.items()
+        if waits is None or affected[gap]  # a known-first project lists the rest as waiting
+    ]
     physics = headline["physics_proposed"]
     isometric = [d for d in drawn if d.parent == out]
     sheets = {d.stem: d for d in drawn if d.parent.name == "drawings"}
@@ -455,9 +458,10 @@ def write(
         ]
     if waits is not None:
         n = len(waits["gaps"])
+        listed = ", listed under Waiting" if waits["values"] or n else ""
         md += [
             f"**Known first**: {waiting_clause(p)}, with {n} gap{'s' * (n != 1)} no param "
-            "names, listed under Waiting.",
+            f"names{listed}.",
             "",
         ]
     material, follows = p.meta.get("material"), p.meta.get("follows")
@@ -468,8 +472,10 @@ def write(
     md += [
         "VERIFIED means every number in the model is accounted for and the geometry matches "
         "every checked source value. It does not mean the sources fully define the part: "
-        "proposed parameters are reconstruction choices, listed under Open gaps beside the "
-        "questions that would settle them.",
+        "proposed parameters are reconstruction choices"
+        + (
+            ", listed under Open gaps beside the questions that would settle them." if gaps else "."
+        ),
         "",
     ]
     if status == PENDING_REVIEW:
@@ -483,15 +489,15 @@ def write(
     if findings:
         md += ["## Findings", ""]
         md += [f"- **{f.level}** `{f.rule}`: {f.message}" for f in findings] + [""]
-    md += ["## Sources", ""]
-    md += _table(
+    md += _section(
+        "## Sources",
         ["id", "kind", "citation", "sha256"],
         [
             [s["id"], s.get("kind"), s.get("citation"), str(s.get("sha256", ""))[:12]]
             for s in p.meta.get("sources", [])
         ],
     )
-    if waits is not None:
+    if waits is not None and (waits["values"] or waits["gaps"]):
         md += [
             "## Waiting",
             "",
@@ -510,15 +516,10 @@ def write(
             ["gap", "question", "close by"],
             [[g["gap"], g["question"] or "", g["ask"] or ""] for g in waits["gaps"]],
         )
-    affected = {gap: [n for n, s in p.params.items() if s.get("gap") == gap] for gap in p.gaps}
     md += _section(
         "## Open gaps",
         ["gap", "question", "close by", "params"],
-        [
-            [gap, g.get("question", ""), g.get("ask", ""), ", ".join(affected[gap])]
-            for gap, g in p.gaps.items()
-            if waits is None or affected[gap]  # a known-first project lists the rest as waiting
-        ],
+        gaps,
         "What the sources leave open. Each answer would replace the params beside its question "
         "with a stated value.",
     )
@@ -568,8 +569,7 @@ def write(
         md += [f"### {name}", ""]
         if name in sheets:
             md += [f"![{name}](drawings/{sheets[name].name})", ""]
-        header, rows = _checks(r for r in results if r.part == name)
-        md += _table(header, rows) if rows else []
+        md += _table(*_checks(r for r in results if r.part == name))
     md += _section(
         "## Assembly",
         *_checks(r for r in results if r.part is None),
@@ -604,8 +604,8 @@ def write(
             ],
         )
     md += _section(
-        "## Non-default tolerances",
-        ["check", "kind", "tolerance"],
+        "## Non-default tolerances and overlap limits",
+        ["check", "kind", "value"],
         [
             [t["check"], t["kind"], next(f"{k} {t[k]:g}" for k in ("tol", "tol_rel") if k in t)]
             for t in tolerances
@@ -614,13 +614,8 @@ def write(
         "Each check that compares within a tolerance, or allows an overlap, other than the "
         "default.",
     )
-    md += [
+    md += _section(
         "## Parameters",
-        "",
-        "Declared basis: " + " · ".join(f"{b}: {bases[b]}" for b in BASES),
-        "",
-    ]
-    md += _table(
         ["param", "value", "basis", "from / expr", "note"],
         [
             [
@@ -638,6 +633,7 @@ def write(
             ]
             for n, s in p.params.items()
         ],
+        "Declared basis: " + " · ".join(f"{b}: {bases[b]}" for b in BASES),
     )
     md += _section(
         "## Measured parameters",
@@ -653,8 +649,8 @@ def write(
             for m in measured
         ],
     )
-    md += ["## Evidence", ""]
-    md += _table(
+    md += _section(
+        "## Evidence",
         ["id", "source", "locator", "values", "anchor"],
         [
             [

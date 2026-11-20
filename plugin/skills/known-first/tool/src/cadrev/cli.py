@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -29,7 +30,8 @@ def cmd_init(args) -> int:
         return 1
     shutil.copytree(TEMPLATE, root, dirs_exist_ok=True)
     meta = root / "project.yaml"
-    meta.write_text(meta.read_text().replace("NAME", root.name))
+    # Its directory's name, as text whatever YAML would read it as: `.` has a name, `yes` is one.
+    meta.write_text(meta.read_text().replace("NAME", json.dumps(root.resolve().name)))
     print(f"created {root}")
     return 0
 
