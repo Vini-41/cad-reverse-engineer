@@ -31,7 +31,8 @@ def cmd_init(args) -> int:
     shutil.copytree(TEMPLATE, root, dirs_exist_ok=True)
     meta = root / "project.yaml"
     # Its directory's name, as text whatever YAML would read it as: `.` has a name, `yes` is one.
-    meta.write_text(meta.read_text().replace("NAME", json.dumps(root.resolve().name)))
+    name = json.dumps(root.resolve().name, ensure_ascii=False)
+    meta.write_text(meta.read_text(encoding="utf8").replace("NAME", name), encoding="utf8")
     print(f"created {root}")
     return 0
 
