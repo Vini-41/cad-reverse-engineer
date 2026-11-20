@@ -1,0 +1,27 @@
+{
+ "project": "C3",
+ "probes": 74,
+ "probe_seconds": 1.6,
+ "build_seconds": 0.57,
+ "rows": [
+  {
+   "check": "plate-shape",
+   "part": "plate",
+   "body": "plate_step",
+   "kind": "step",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 34.0
+   },
+   "deviation": 0.4999999806383215,
+   "at": [
+    20.261,
+    -34.5,
+    -52.631
+   ],
+   "on_body": 1.0,
+   "ok": false,
+   "seconds": 0.11
+  }
+ ]
+}

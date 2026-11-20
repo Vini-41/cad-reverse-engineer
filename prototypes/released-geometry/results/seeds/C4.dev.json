@@ -1,0 +1,27 @@
+{
+ "project": "C4",
+ "probes": 74,
+ "probe_seconds": 1.29,
+ "build_seconds": 0.56,
+ "rows": [
+  {
+   "check": "body-shape",
+   "part": "body",
+   "body": "body_step",
+   "kind": "step",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 0.0
+   },
+   "deviation": 3.499999999867926,
+   "at": [
+    20.153,
+    -3.5,
+    22.274
+   ],
+   "on_body": 0.0,
+   "ok": false,
+   "seconds": 1.06
+  }
+ ]
+}

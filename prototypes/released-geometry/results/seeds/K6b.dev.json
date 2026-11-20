@@ -1,0 +1,49 @@
+{
+ "project": "K6b",
+ "probes": 107,
+ "probe_seconds": 10.41,
+ "build_seconds": 13.15,
+ "rows": [
+  {
+   "check": "planet-shape",
+   "part": "planet_gear",
+   "body": "planet",
+   "kind": "stl",
+   "frame": {
+    "turn_deg": 177.2308,
+    "shift": 23.6853
+   },
+   "corners": 908,
+   "corner_dev": 0.005032249602941119,
+   "corner_at": [
+    10.993,
+    15.056,
+    22.135
+   ],
+   "occ_points": 304,
+   "part_points": 1306,
+   "corners_over": 304,
+   "part_points_over": 784,
+   "part_dev": 0.2733574263120539,
+   "part_at": [
+    "vertex",
+    [
+     31.561,
+     10.861,
+     22.135
+    ]
+   ],
+   "facets": 1816,
+   "facets_over": 1265,
+   "facet_dev": 0.05922720463616268,
+   "facet_at": [
+    22.669,
+    17.31,
+    19.801
+   ],
+   "deviation": 0.2733574263120539,
+   "ok": false,
+   "seconds": 7.12
+  }
+ ]
+}

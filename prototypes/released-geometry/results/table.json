@@ -1,0 +1,460 @@
+[
+ {
+  "seed": "C1",
+  "example": "centrifuge",
+  "kind": "bore 2% off",
+  "what": "body bore 126 -> 128.52",
+  "today": true,
+  "today_probe_checks": [
+   "chk-B-bore"
+  ],
+  "today_shape_checks": [
+   "body-shape"
+  ],
+  "today_other_checks": [],
+  "today_rules": [
+   "datum-off-solid"
+  ],
+  "comparison": true,
+  "comparison_detail": [
+   "body-shape: 7.11e-07->1.26"
+  ]
+ },
+ {
+  "seed": "C2",
+  "example": "centrifuge",
+  "kind": "hole moved",
+  "what": "plate's four screw holes 0.5 out (boss_pcd + 1)",
+  "today": true,
+  "today_probe_checks": [
+   "chk-B-boss-pcd"
+  ],
+  "today_shape_checks": [
+   "body-shape",
+   "plate-shape"
+  ],
+  "today_other_checks": [],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "plate-shape: 5.55e-07->0.472"
+  ]
+ },
+ {
+  "seed": "C3",
+  "example": "centrifuge",
+  "kind": "feature missing",
+  "what": "plate's fourth screw hole left out",
+  "today": true,
+  "today_probe_checks": [],
+  "today_shape_checks": [
+   "plate-shape"
+  ],
+  "today_other_checks": [
+   "clear"
+  ],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "plate-shape: 5.55e-07->0.5"
+  ]
+ },
+ {
+  "seed": "C4",
+  "example": "centrifuge",
+  "kind": "feature added",
+  "what": "a 3 mm hole through the body's deck",
+  "today": true,
+  "today_probe_checks": [],
+  "today_shape_checks": [
+   "body-shape"
+  ],
+  "today_other_checks": [],
+  "today_rules": [
+   "model-literal"
+  ],
+  "comparison": true,
+  "comparison_detail": [
+   "body-shape: 7.11e-07->3.5"
+  ]
+ },
+ {
+  "seed": "C5",
+  "example": "centrifuge",
+  "kind": "turned one feature over",
+  "what": "body turned 180 deg about its axis, onto its other fan hole",
+  "today": false,
+  "today_probe_checks": [],
+  "today_shape_checks": [],
+  "today_other_checks": [],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "body-shape: 7.11e-07->6.39"
+  ]
+ },
+ {
+  "seed": "C6",
+  "example": "centrifuge",
+  "kind": "param off a little",
+  "what": "body diameter + 0.005",
+  "today": true,
+  "today_probe_checks": [],
+  "today_shape_checks": [
+   "body-shape"
+  ],
+  "today_other_checks": [
+   "body-envelope.L",
+   "body-envelope.W"
+  ],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "body-shape: 7.11e-07->0.00251"
+  ]
+ },
+ {
+  "seed": "K1",
+  "example": "compact-sspg",
+  "kind": "bore 2% off",
+  "what": "planet bore 10 -> 10.2",
+  "today": true,
+  "today_probe_checks": [
+   "p-P-bore"
+  ],
+  "today_shape_checks": [
+   "planet-shape"
+  ],
+  "today_other_checks": [],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "planet-shape: corners 0.00152->0.1 (260->300 past tol), part points 0.273->0.273 (780->782), facets off a patch 1043->1167"
+  ]
+ },
+ {
+  "seed": "K1b",
+  "example": "compact-sspg",
+  "kind": "bore 2% off",
+  "what": "retainer bore x 1.02",
+  "today": true,
+  "today_probe_checks": [
+   "p-R-id"
+  ],
+  "today_shape_checks": [
+   "retainer-shape"
+  ],
+  "today_other_checks": [],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "retainer-shape: corners 5.94e-06->0.705 (0->76 past tol), part points 1.3e-07->0.705 (0->2), facets off a patch 0->250"
+  ]
+ },
+ {
+  "seed": "K2",
+  "example": "compact-sspg",
+  "kind": "hole moved",
+  "what": "retainer's bolt holes 0.5 out (ret_hole_d + 1)",
+  "today": true,
+  "today_probe_checks": [
+   "p-R-hR"
+  ],
+  "today_shape_checks": [
+   "retainer-shape"
+  ],
+  "today_other_checks": [],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "retainer-shape: corners 5.94e-06->0.5 (0->60 past tol), part points 1.3e-07->0.197 (0->12), facets off a patch 0->258"
+  ]
+ },
+ {
+  "seed": "K3",
+  "example": "compact-sspg",
+  "kind": "feature missing",
+  "what": "retainer's last bolt hole left out",
+  "today": true,
+  "today_probe_checks": [],
+  "today_shape_checks": [
+   "retainer-shape"
+  ],
+  "today_other_checks": [],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "retainer-shape: corners 5.94e-06->5.94e-06 (0->0 past tol), part points 1.3e-07->1.3e-07 (0->0), facets off a patch 0->24"
+  ]
+ },
+ {
+  "seed": "K4",
+  "example": "compact-sspg",
+  "kind": "feature added",
+  "what": "a bolt hole added between the retainer's first two",
+  "today": true,
+  "today_probe_checks": [],
+  "today_shape_checks": [
+   "retainer-shape"
+  ],
+  "today_other_checks": [],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "retainer-shape: corners 5.94e-06->5.94e-06 (0->0 past tol), part points 1.3e-07->inf (0->2), facets off a patch 0->0"
+  ]
+ },
+ {
+  "seed": "K5",
+  "example": "compact-sspg",
+  "kind": "turned one feature over",
+  "what": "sun turned one tooth about its axis",
+  "today": true,
+  "today_probe_checks": [
+   "p-S-pcd"
+  ],
+  "today_shape_checks": [],
+  "today_other_checks": [],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "sun-shape: corners 0.00324->2 (150->298 past tol), part points 0.109->0.704 (300->312), facets off a patch 609->1052"
+  ]
+ },
+ {
+  "seed": "K6",
+  "example": "compact-sspg",
+  "kind": "param off by less than the facet sag",
+  "what": "retainer outside diameter + 0.01 (its rim's facets sag 0.13)",
+  "today": true,
+  "today_probe_checks": [
+   "p-R-od"
+  ],
+  "today_shape_checks": [
+   "retainer-shape"
+  ],
+  "today_other_checks": [],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "retainer-shape: corners 5.94e-06->5.94e-06 (0->0 past tol), part points 1.3e-07->0.005 (0->2), facets off a patch 0->82"
+  ]
+ },
+ {
+  "seed": "K6b",
+  "example": "compact-sspg",
+  "kind": "param off by less than the facet sag",
+  "what": "planet counterbore + 0.01",
+  "today": true,
+  "today_probe_checks": [
+   "p-P-cb"
+  ],
+  "today_shape_checks": [],
+  "today_other_checks": [],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "planet-shape: corners 0.00152->0.00503 (260->304 past tol), part points 0.273->0.273 (780->784), facets off a patch 1043->1265"
+  ]
+ },
+ {
+  "seed": "Z1",
+  "example": "cell-stretcher",
+  "kind": "bore 2% off",
+  "what": "clamp post hole 3 -> 3.06",
+  "today": true,
+  "today_probe_checks": [
+   "clamp-hole"
+  ],
+  "today_shape_checks": [
+   "shape-clamp"
+  ],
+  "today_other_checks": [],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "shape-clamp: corners 6.96e-06->0.03 (0->112 past tol), part points 4.67e-07->0.03 (0->4), facets off a patch 0->377"
+  ]
+ },
+ {
+  "seed": "Z2",
+  "example": "cell-stretcher",
+  "kind": "hole moved",
+  "what": "clamp's second post hole 0.5 along x, its datum too",
+  "today": true,
+  "today_probe_checks": [
+   "clamp-pitch"
+  ],
+  "today_shape_checks": [
+   "shape-clamp"
+  ],
+  "today_other_checks": [],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "shape-clamp: corners 6.96e-06->0.5 (0->26 past tol), part points 4.67e-07->0.0811 (0->2), facets off a patch 0->125"
+  ]
+ },
+ {
+  "seed": "Z3",
+  "example": "cell-stretcher",
+  "kind": "feature missing",
+  "what": "clamp's second post hole left out",
+  "today": true,
+  "today_probe_checks": [],
+  "today_shape_checks": [
+   "shape-clamp"
+  ],
+  "today_other_checks": [],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "shape-clamp: corners 6.96e-06->6.96e-06 (0->0 past tol), part points 4.67e-07->4.67e-07 (0->0), facets off a patch 0->56"
+  ]
+ },
+ {
+  "seed": "Z4",
+  "example": "cell-stretcher",
+  "kind": "feature added",
+  "what": "a 2 mm hole in the clamp's plate",
+  "today": true,
+  "today_probe_checks": [],
+  "today_shape_checks": [
+   "shape-clamp"
+  ],
+  "today_other_checks": [],
+  "today_rules": [
+   "model-literal"
+  ],
+  "comparison": true,
+  "comparison_detail": [
+   "shape-clamp: corners 6.96e-06->6.96e-06 (0->0 past tol), part points 4.67e-07->inf (0->2), facets off a patch 0->0"
+  ]
+ },
+ {
+  "seed": "Z6",
+  "example": "cell-stretcher",
+  "kind": "param off by less than the facet sag",
+  "what": "clamp post hole + 0.01",
+  "today": true,
+  "today_probe_checks": [
+   "clamp-hole"
+  ],
+  "today_shape_checks": [
+   "shape-clamp"
+  ],
+  "today_other_checks": [],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "shape-clamp: corners 6.96e-06->0.005 (0->112 past tol), part points 4.67e-07->0.005 (0->4), facets off a patch 0->377"
+  ]
+ },
+ {
+  "seed": "Y1",
+  "example": "cell-stretcher",
+  "kind": "bore 2% off",
+  "what": "mould base post holes x 1.02 (cut file)",
+  "today": true,
+  "today_probe_checks": [],
+  "today_shape_checks": [],
+  "today_other_checks": [
+   "straw-diameter"
+  ],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "shape-mould_base-1: 0.000349->0.0303",
+   "shape-mould_base-2: 0.000359->0.0303",
+   "shape-mould_base-3: 0.000361->0.0303",
+   "shape-mould_base-4: 0.000379->0.0303",
+   "shape-mould_base-5: 0.000391->0.0303",
+   "shape-mould_base-6: 0.000351->0.0303"
+  ]
+ },
+ {
+  "seed": "Y2",
+  "example": "cell-stretcher",
+  "kind": "hole moved",
+  "what": "mould base's first corner hole 0.5 along x (cut file)",
+  "today": true,
+  "today_probe_checks": [],
+  "today_shape_checks": [
+   "shape-mould_base-1",
+   "shape-mould_base-2",
+   "shape-mould_base-3",
+   "shape-mould_base-4",
+   "shape-mould_base-5",
+   "shape-mould_base-6"
+  ],
+  "today_other_checks": [],
+  "today_rules": [
+   "datum-off-solid"
+  ],
+  "comparison": true,
+  "comparison_detail": [
+   "shape-mould_base-1: 0.000349->0.5",
+   "shape-mould_base-2: 0.000359->0.5",
+   "shape-mould_base-3: 0.000361->0.5",
+   "shape-mould_base-4: 0.000379->0.5",
+   "shape-mould_base-5: 0.000391->0.5",
+   "shape-mould_base-6: 0.000351->0.5"
+  ]
+ },
+ {
+  "seed": "Y3",
+  "example": "cell-stretcher",
+  "kind": "feature missing",
+  "what": "mould base's last corner hole left out (cut file)",
+  "today": true,
+  "today_probe_checks": [],
+  "today_shape_checks": [
+   "shape-mould_base-1",
+   "shape-mould_base-2",
+   "shape-mould_base-3",
+   "shape-mould_base-4",
+   "shape-mould_base-5",
+   "shape-mould_base-6"
+  ],
+  "today_other_checks": [],
+  "today_rules": [],
+  "comparison": true,
+  "comparison_detail": [
+   "shape-mould_base-1: 0.000349->6.17",
+   "shape-mould_base-2: 0.000359->6.17",
+   "shape-mould_base-3: 0.000361->6.17",
+   "shape-mould_base-4: 0.000379->6.17",
+   "shape-mould_base-5: 0.000391->6.17",
+   "shape-mould_base-6: 0.000351->6.17"
+  ]
+ },
+ {
+  "seed": "Y4",
+  "example": "cell-stretcher",
+  "kind": "feature added",
+  "what": "a 3 mm hole at the mould base's centre (cut file)",
+  "today": true,
+  "today_probe_checks": [],
+  "today_shape_checks": [
+   "shape-mould_base-1",
+   "shape-mould_base-2",
+   "shape-mould_base-3",
+   "shape-mould_base-4",
+   "shape-mould_base-5",
+   "shape-mould_base-6"
+  ],
+  "today_other_checks": [],
+  "today_rules": [
+   "model-literal"
+  ],
+  "comparison": true,
+  "comparison_detail": [
+   "shape-mould_base-1: 0.000349->15.2",
+   "shape-mould_base-2: 0.000359->15.2",
+   "shape-mould_base-3: 0.000361->15.2",
+   "shape-mould_base-4: 0.000379->15.2",
+   "shape-mould_base-5: 0.000391->15.2",
+   "shape-mould_base-6: 0.000351->15.2"
+  ]
+ }
+]

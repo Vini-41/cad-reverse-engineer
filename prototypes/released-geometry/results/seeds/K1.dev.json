@@ -1,0 +1,49 @@
+{
+ "project": "K1",
+ "probes": 107,
+ "probe_seconds": 8.98,
+ "build_seconds": 14.75,
+ "rows": [
+  {
+   "check": "planet-shape",
+   "part": "planet_gear",
+   "body": "planet",
+   "kind": "stl",
+   "frame": {
+    "turn_deg": 177.2308,
+    "shift": 23.6853
+   },
+   "corners": 908,
+   "corner_dev": 0.10002574313135573,
+   "corner_at": [
+    11.75,
+    16.746,
+    18.635
+   ],
+   "occ_points": 300,
+   "part_points": 1306,
+   "corners_over": 300,
+   "part_points_over": 782,
+   "part_dev": 0.2733574263120539,
+   "part_at": [
+    "vertex",
+    [
+     31.561,
+     10.861,
+     22.135
+    ]
+   ],
+   "facets": 1816,
+   "facets_over": 1167,
+   "facet_dev": 0.15469515027993708,
+   "facet_at": [
+    11.832,
+    17.261,
+    13.59
+   ],
+   "deviation": 0.2733574263120539,
+   "ok": false,
+   "seconds": 8.5
+  }
+ ]
+}

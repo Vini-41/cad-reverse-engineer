@@ -1,0 +1,116 @@
+{
+ "project": "Y4",
+ "probes": 17,
+ "probe_seconds": 6.88,
+ "build_seconds": 2.05,
+ "rows": [
+  {
+   "check": "shape-mould_base-1",
+   "part": "mould_base",
+   "body": "acryl3mm@7.5,547.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 545.023
+   },
+   "deviation": 15.15090938147101,
+   "at": [
+    30.0,
+    568.5
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.02
+  },
+  {
+   "check": "shape-mould_base-2",
+   "part": "mould_base",
+   "body": "acryl3mm@172.5,547.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 570.8985
+   },
+   "deviation": 15.150898550481415,
+   "at": [
+    195.0,
+    568.5
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.02
+  },
+  {
+   "check": "shape-mould_base-3",
+   "part": "mould_base",
+   "body": "acryl3mm@62.5,547.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 548.2929
+   },
+   "deviation": 15.150930794648353,
+   "at": [
+    85.0,
+    568.5
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.02
+  },
+  {
+   "check": "shape-mould_base-4",
+   "part": "mould_base",
+   "body": "acryl3mm@117.5,547.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 557.001
+   },
+   "deviation": 15.150901979846406,
+   "at": [
+    138.5,
+    570.0
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.01
+  },
+  {
+   "check": "shape-mould_base-5",
+   "part": "mould_base",
+   "body": "acryl3mm@117.5,492.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 503.3141
+   },
+   "deviation": 15.150889041327527,
+   "at": [
+    138.5,
+    515.0
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.02
+  },
+  {
+   "check": "shape-mould_base-6",
+   "part": "mould_base",
+   "body": "acryl3mm@62.5,492.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 493.6599
+   },
+   "deviation": 15.150942180850652,
+   "at": [
+    85.0,
+    513.5
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.02
+  }
+ ]
+}

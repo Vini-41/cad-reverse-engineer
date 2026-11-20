@@ -1,0 +1,116 @@
+{
+ "project": "Y1",
+ "probes": 17,
+ "probe_seconds": 7.37,
+ "build_seconds": 3.47,
+ "rows": [
+  {
+   "check": "shape-mould_base-1",
+   "part": "mould_base",
+   "body": "acryl3mm@7.5,547.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 545.023
+   },
+   "deviation": 0.0302862262330953,
+   "at": [
+    18.582,
+    558.582
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.02
+  },
+  {
+   "check": "shape-mould_base-2",
+   "part": "mould_base",
+   "body": "acryl3mm@172.5,547.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 570.8985
+   },
+   "deviation": 0.03029602897099793,
+   "at": [
+    183.582,
+    558.582
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.02
+  },
+  {
+   "check": "shape-mould_base-3",
+   "part": "mould_base",
+   "body": "acryl3mm@62.5,547.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 548.2929
+   },
+   "deviation": 0.03026879881912464,
+   "at": [
+    73.333,
+    558.747
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.04
+  },
+  {
+   "check": "shape-mould_base-4",
+   "part": "mould_base",
+   "body": "acryl3mm@117.5,547.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 557.001
+   },
+   "deviation": 0.030316198515916163,
+   "at": [
+    128.582,
+    558.582
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.02
+  },
+  {
+   "check": "shape-mould_base-5",
+   "part": "mould_base",
+   "body": "acryl3mm@117.5,492.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 503.3141
+   },
+   "deviation": 0.030328385623230716,
+   "at": [
+    128.561,
+    503.561
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.03
+  },
+  {
+   "check": "shape-mould_base-6",
+   "part": "mould_base",
+   "body": "acryl3mm@62.5,492.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 493.6599
+   },
+   "deviation": 0.030283129213692417,
+   "at": [
+    73.333,
+    503.747
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.01
+  }
+ ]
+}

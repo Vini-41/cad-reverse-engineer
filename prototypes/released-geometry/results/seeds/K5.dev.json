@@ -1,0 +1,49 @@
+{
+ "project": "K5",
+ "probes": 107,
+ "probe_seconds": 9.14,
+ "build_seconds": 14.1,
+ "rows": [
+  {
+   "check": "sun-shape",
+   "part": "sun_gear",
+   "body": "sun",
+   "kind": "stl",
+   "frame": {
+    "turn_deg": 0.0002,
+    "shift": 23.3345
+   },
+   "corners": 1125,
+   "corner_dev": 1.9998786969557603,
+   "corner_at": [
+    28.518,
+    14.568,
+    40.135
+   ],
+   "occ_points": 298,
+   "part_points": 624,
+   "corners_over": 298,
+   "part_points_over": 312,
+   "part_dev": 0.7038359851545033,
+   "part_at": [
+    "closed edge",
+    [
+     11.703,
+     27.141,
+     42.135
+    ]
+   ],
+   "facets": 2266,
+   "facets_over": 1052,
+   "facet_dev": 1.7814040148422248,
+   "facet_at": [
+    12.256,
+    27.113,
+    38.135
+   ],
+   "deviation": 1.9998786969557603,
+   "ok": false,
+   "seconds": 4.85
+  }
+ ]
+}

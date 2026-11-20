@@ -1,0 +1,116 @@
+{
+ "project": "Y3",
+ "probes": 17,
+ "probe_seconds": 7.4,
+ "build_seconds": 2.07,
+ "rows": [
+  {
+   "check": "shape-mould_base-1",
+   "part": "mould_base",
+   "body": "acryl3mm@7.5,547.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 545.023
+   },
+   "deviation": 6.166885043919542,
+   "at": [
+    48.833,
+    588.833
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.01
+  },
+  {
+   "check": "shape-mould_base-2",
+   "part": "mould_base",
+   "body": "acryl3mm@172.5,547.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 570.8985
+   },
+   "deviation": 6.1668994716819725,
+   "at": [
+    213.833,
+    588.833
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.01
+  },
+  {
+   "check": "shape-mould_base-3",
+   "part": "mould_base",
+   "body": "acryl3mm@62.5,547.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 548.2929
+   },
+   "deviation": 6.1668565198403655,
+   "at": [
+    103.833,
+    588.833
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.01
+  },
+  {
+   "check": "shape-mould_base-4",
+   "part": "mould_base",
+   "body": "acryl3mm@117.5,547.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 557.001
+   },
+   "deviation": 6.166919424014509,
+   "at": [
+    158.833,
+    588.833
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.02
+  },
+  {
+   "check": "shape-mould_base-5",
+   "part": "mould_base",
+   "body": "acryl3mm@117.5,492.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 503.3141
+   },
+   "deviation": 6.166927995761171,
+   "at": [
+    158.833,
+    533.833
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.01
+  },
+  {
+   "check": "shape-mould_base-6",
+   "part": "mould_base",
+   "body": "acryl3mm@62.5,492.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 493.6599
+   },
+   "deviation": 6.16685651984038,
+   "at": [
+    103.833,
+    533.833
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.01
+  }
+ ]
+}

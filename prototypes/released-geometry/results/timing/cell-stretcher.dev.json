@@ -1,0 +1,1663 @@
+{
+ "project": "cell-stretcher",
+ "probes": 17,
+ "probe_seconds": 0.03,
+ "build_seconds": 1.87,
+ "rows": [
+  {
+   "check": "shape-clamp",
+   "part": "stretch_clamp",
+   "body": "clamp",
+   "kind": "stl",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 0.0
+   },
+   "corners": 320,
+   "corner_dev": 6.959678457119061e-06,
+   "corner_at": [
+    -16.404,
+    6.628,
+    1.0
+   ],
+   "occ_points": 0,
+   "part_points": 20,
+   "corners_over": null,
+   "part_points_over": 0,
+   "part_dev": 4.668008450892109e-07,
+   "part_at": [
+    "vertex",
+    [
+     9.378,
+     10.0,
+     0.0
+    ]
+   ],
+   "facets": 644,
+   "facets_over": 0,
+   "facet_dev": 0.0,
+   "facet_at": null,
+   "deviation": 6.959678457119061e-06,
+   "ok": true,
+   "seconds": 0.17,
+   "today_ok": true,
+   "today_measured": "0.009991 largest surface distance, at (16.15, 9.114, 0.125) on body clamp",
+   "today_seconds": 0.31
+  },
+  {
+   "check": "shape-moldframe",
+   "part": "mould_frame",
+   "body": "moldframe",
+   "kind": "stl",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 0.0
+   },
+   "corners": 9146,
+   "corner_dev": 1.9695922774622725e-06,
+   "corner_at": [
+    -16.245,
+    9.187,
+    0.0
+   ],
+   "occ_points": 0,
+   "part_points": 32,
+   "corners_over": null,
+   "part_points_over": 0,
+   "part_dev": 2.569223251924982e-07,
+   "part_at": [
+    "vertex",
+    [
+     -15.0,
+     8.17,
+     3.5
+    ]
+   ],
+   "facets": 18308,
+   "facets_over": 0,
+   "facet_dev": 0.0,
+   "facet_at": null,
+   "deviation": 1.9695922774622725e-06,
+   "ok": true,
+   "seconds": 2.24,
+   "today_ok": true,
+   "today_measured": "4.846e-05 largest surface distance, at (-17.49, 12.22, 0) on body moldframe",
+   "today_seconds": 6.41
+  },
+  {
+   "check": "shape-end_far_in-1",
+   "part": "end_far_in",
+   "body": "acryl6mm@19.78,532.27",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 528.7166
+   },
+   "deviation": 0.0030563452464022994,
+   "at": [
+    189.408,
+    587.593
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.04,
+   "today_ok": true,
+   "today_measured": "0.003056 largest outline distance, at (189.4, 587.6) on body acryl6mm@19.78,532.27",
+   "today_seconds": 0.04
+  },
+  {
+   "check": "shape-end_far_out-1",
+   "part": "end_far_out",
+   "body": "acryl6mm@19.78,460.47",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 456.9222
+   },
+   "deviation": 0.0029221028925003386,
+   "at": [
+    289.407,
+    515.799
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.002922 largest outline distance, at (289.4, 515.8) on body acryl6mm@19.78,460.47",
+   "today_seconds": 0.03
+  },
+  {
+   "check": "shape-end_motor_in-1",
+   "part": "end_motor_in",
+   "body": "acryl6mm@14.98,316.59",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 313.04
+   },
+   "deviation": 1.162344338118393,
+   "at": [
+    133.3,
+    341.762
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.04,
+   "today_ok": true,
+   "today_measured": "1.162 largest outline distance, at (133.3, 341.8) on part end_motor_in, in body acryl6mm@14.98,316.59's frame",
+   "today_seconds": 0.05
+  },
+  {
+   "check": "shape-end_motor_out-1",
+   "part": "end_motor_out",
+   "body": "acryl6mm@14.98,388.47",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 384.9222
+   },
+   "deviation": 0.03853312830516443,
+   "at": [
+    122.286,
+    400.73
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.03853 largest outline distance, at (122.3, 400.7) on body acryl6mm@14.98,388.47",
+   "today_seconds": 0.04
+  },
+  {
+   "check": "shape-carriage_top-1",
+   "part": "carriage_top",
+   "body": "acryl6mm@19.78,133.17",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 130.9219
+   },
+   "deviation": 0.00044817857035755364,
+   "at": [
+    68.784,
+    130.922
+   ],
+   "on_body": false,
+   "ok": true,
+   "seconds": 0.23,
+   "today_ok": true,
+   "today_measured": "0.0004482 largest outline distance, at (68.78, 130.9) on part carriage_top, in body acryl6mm@19.78,133.17's frame",
+   "today_seconds": 0.24
+  },
+  {
+   "check": "shape-carriage_face-1",
+   "part": "carriage_face",
+   "body": "acryl6mm@29.53,226.22",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 223.922
+   },
+   "deviation": 0.0008487120031328084,
+   "at": [
+    363.402,
+    237.509
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.3,
+   "today_ok": true,
+   "today_measured": "0.0008487 largest outline distance, at (363.4, 237.5) on body acryl6mm@29.53,226.22",
+   "today_seconds": 0.31
+  },
+  {
+   "check": "shape-carriage_face-2",
+   "part": "carriage_face",
+   "body": "acryl6mm@29.53,179.22",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 176.922
+   },
+   "deviation": 0.0008560402453493745,
+   "at": [
+    363.402,
+    190.509
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.31,
+   "today_ok": true,
+   "today_measured": "0.000856 largest outline distance, at (363.4, 190.5) on body acryl6mm@29.53,179.22",
+   "today_seconds": 0.31
+  },
+  {
+   "check": "shape-carriage_flange-1",
+   "part": "carriage_flange",
+   "body": "acryl6mm@12.68,58.67",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 54.9229
+   },
+   "deviation": 0.0005535706800004177,
+   "at": [
+    55.45,
+    121.255
+   ],
+   "on_body": false,
+   "ok": true,
+   "seconds": 0.16,
+   "today_ok": true,
+   "today_measured": "0.0005536 largest outline distance, at (55.45, 121.3) on part carriage_flange, in body acryl6mm@12.68,58.67's frame",
+   "today_seconds": 0.17
+  },
+  {
+   "check": "shape-carriage_partition-1",
+   "part": "carriage_partition",
+   "body": "acryl6mm@351.41,366.54",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 501.4563
+   },
+   "deviation": 4.58296895020797e-05,
+   "at": [
+    383.657,
+    364.239
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "4.583e-05 largest outline distance, at (383.7, 364.2) on body acryl6mm@351.41,366.54",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-carriage_partition-2",
+   "part": "carriage_partition",
+   "body": "acryl6mm@302.87,366.54",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 469.4186
+   },
+   "deviation": 6.5210865502524e-05,
+   "at": [
+    341.115,
+    381.239
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "6.521e-05 largest outline distance, at (341.1, 381.2) on body acryl6mm@302.87,366.54",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-carriage_end-1",
+   "part": "carriage_end",
+   "body": "acryl6mm@351.41,415.24",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 538.103
+   },
+   "deviation": 0.00037525988010831876,
+   "at": [
+    383.657,
+    453.239
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.0003753 largest outline distance, at (383.7, 453.2) on body acryl6mm@351.41,415.24",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-carriage_end-2",
+   "part": "carriage_end",
+   "body": "acryl6mm@302.87,415.24",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 508.38
+   },
+   "deviation": 0.0003773996393110584,
+   "at": [
+    335.115,
+    453.239
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.0003774 largest outline distance, at (335.1, 453.2) on body acryl6mm@302.87,415.24",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-stat_bar-1",
+   "part": "stat_bar",
+   "body": "acryl6mm@19.5,272.92",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 270.9239
+   },
+   "deviation": 0.0018186520636041226,
+   "at": [
+    379.043,
+    283.235
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.09,
+   "today_ok": true,
+   "today_measured": "0.001819 largest outline distance, at (379, 283.2) on body acryl6mm@19.5,272.92",
+   "today_seconds": 0.09
+  },
+  {
+   "check": "shape-mount_plate-1",
+   "part": "mount_plate",
+   "body": "acryl6mm@430.2,475.44",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 180.0,
+    "shift": 691.7586
+   },
+   "deviation": 0.0027803414151047383,
+   "at": [
+    453.749,
+    510.438
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.02,
+   "today_ok": true,
+   "today_measured": "0.00278 largest outline distance, at (453.7, 510.4) on body acryl6mm@430.2,475.44",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mount_plate-2",
+   "part": "mount_plate",
+   "body": "acryl6mm@501.24,475.44",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 180.0,
+    "shift": 741.2337
+   },
+   "deviation": 0.0028143656703861985,
+   "at": [
+    524.793,
+    510.438
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.02,
+   "today_ok": true,
+   "today_measured": "0.002814 largest outline distance, at (524.8, 510.4) on body acryl6mm@501.24,475.44",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mount_plate-3",
+   "part": "mount_plate",
+   "body": "acryl6mm@465.84,475.44",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 662.9659
+   },
+   "deviation": 0.002789280388452,
+   "at": [
+    473.79,
+    476.562
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.02,
+   "today_ok": true,
+   "today_measured": "0.002789 largest outline distance, at (473.8, 476.6) on body acryl6mm@465.84,475.44",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mount_plate-4",
+   "part": "mount_plate",
+   "body": "acryl6mm@394.8,475.44",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 615.3287
+   },
+   "deviation": 0.0028233047395753532,
+   "at": [
+    402.746,
+    476.562
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.02,
+   "today_ok": true,
+   "today_measured": "0.002823 largest outline distance, at (402.7, 476.6) on body acryl6mm@394.8,475.44",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mount_plate-5",
+   "part": "mount_plate",
+   "body": "acryl6mm@465.84,558.46",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 724.5846
+   },
+   "deviation": 0.0028091614031081004,
+   "at": [
+    473.79,
+    559.579
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.02,
+   "today_ok": true,
+   "today_measured": "0.002809 largest outline distance, at (473.8, 559.6) on body acryl6mm@465.84,558.46",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mount_plate-6",
+   "part": "mount_plate",
+   "body": "acryl6mm@394.8,558.46",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 681.2697
+   },
+   "deviation": 0.0028431858889186126,
+   "at": [
+    402.746,
+    559.579
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.02,
+   "today_ok": true,
+   "today_measured": "0.002843 largest outline distance, at (402.7, 559.6) on body acryl6mm@394.8,558.46",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mount_plate-7",
+   "part": "mount_plate",
+   "body": "acryl6mm@430.2,558.46",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 180.0,
+    "shift": 755.4411
+   },
+   "deviation": 0.00280364698418141,
+   "at": [
+    453.749,
+    593.455
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.02,
+   "today_ok": true,
+   "today_measured": "0.002804 largest outline distance, at (453.7, 593.5) on body acryl6mm@430.2,558.46",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mount_plate-8",
+   "part": "mount_plate",
+   "body": "acryl6mm@501.24,558.46",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 180.0,
+    "shift": 800.9923
+   },
+   "deviation": 0.0028376713973361587,
+   "at": [
+    524.793,
+    593.455
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.002838 largest outline distance, at (524.8, 593.5) on body acryl6mm@501.24,558.46",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mount_plate-9",
+   "part": "mount_plate",
+   "body": "acryl6mm@465.84,517.35",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 693.5139
+   },
+   "deviation": 0.0027922471525946386,
+   "at": [
+    473.79,
+    518.469
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.002792 largest outline distance, at (473.8, 518.5) on body acryl6mm@465.84,517.35",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mount_plate-10",
+   "part": "mount_plate",
+   "body": "acryl6mm@394.8,517.35",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 648.1259
+   },
+   "deviation": 0.002826271523861999,
+   "at": [
+    402.746,
+    518.469
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.02,
+   "today_ok": true,
+   "today_measured": "0.002826 largest outline distance, at (402.7, 518.5) on body acryl6mm@394.8,517.35",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mount_plate-11",
+   "part": "mount_plate",
+   "body": "acryl6mm@430.2,517.35",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 180.0,
+    "shift": 723.4161
+   },
+   "deviation": 0.002786987677295012,
+   "at": [
+    453.749,
+    552.346
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.02,
+   "today_ok": true,
+   "today_measured": "0.002787 largest outline distance, at (453.7, 552.3) on body acryl6mm@430.2,517.35",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mount_plate-12",
+   "part": "mount_plate",
+   "body": "acryl6mm@501.24,517.35",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 180.0,
+    "shift": 770.862
+   },
+   "deviation": 0.002821011977705724,
+   "at": [
+    524.793,
+    552.346
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.002821 largest outline distance, at (524.8, 552.3) on body acryl6mm@501.24,517.35",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-frame_wide-1",
+   "part": "frame_wide",
+   "body": "acryl6mm@466.09,237.98",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 519.0662
+   },
+   "deviation": 0.10098726208253304,
+   "at": [
+    462.793,
+    277.479
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.101 largest outline distance, at (462.8, 277.5) on part frame_wide, in body acryl6mm@466.09,237.98's frame",
+   "today_seconds": 0.04
+  },
+  {
+   "check": "shape-frame_wide-2",
+   "part": "frame_wide",
+   "body": "acryl6mm@466.09,378.02",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 595.8825
+   },
+   "deviation": 0.10099284935920494,
+   "at": [
+    462.793,
+    378.636
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.101 largest outline distance, at (462.8, 378.6) on part frame_wide, in body acryl6mm@466.09,378.02's frame",
+   "today_seconds": 0.04
+  },
+  {
+   "check": "shape-frame_wide-3",
+   "part": "frame_wide",
+   "body": "acryl6mm@466.09,190.4",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 499.2617
+   },
+   "deviation": 0.10098660272455874,
+   "at": [
+    462.793,
+    229.905
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.101 largest outline distance, at (462.8, 229.9) on part frame_wide, in body acryl6mm@466.09,190.4's frame",
+   "today_seconds": 0.04
+  },
+  {
+   "check": "shape-frame_wide-4",
+   "part": "frame_wide",
+   "body": "acryl6mm@466.09,425.06",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 626.6123
+   },
+   "deviation": 0.10098315277128597,
+   "at": [
+    462.793,
+    464.568
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.101 largest outline distance, at (462.8, 464.6) on part frame_wide, in body acryl6mm@466.09,425.06's frame",
+   "today_seconds": 0.04
+  },
+  {
+   "check": "shape-frame_wide-5",
+   "part": "frame_wide",
+   "body": "acryl6mm@466.09,285.01",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 542.0528
+   },
+   "deviation": 0.10097456907522315,
+   "at": [
+    462.793,
+    324.518
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.101 largest outline distance, at (462.8, 324.5) on part frame_wide, in body acryl6mm@466.09,285.01's frame",
+   "today_seconds": 0.04
+  },
+  {
+   "check": "shape-frame_wide-6",
+   "part": "frame_wide",
+   "body": "acryl6mm@466.09,330.45",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 567.0829
+   },
+   "deviation": 0.10099240508124095,
+   "at": [
+    462.793,
+    331.062
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.101 largest outline distance, at (462.8, 331.1) on part frame_wide, in body acryl6mm@466.09,330.45's frame",
+   "today_seconds": 0.04
+  },
+  {
+   "check": "shape-frame_narrow-1",
+   "part": "frame_narrow",
+   "body": "acryl6mm@397.69,190.26",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 436.8791
+   },
+   "deviation": 0.10057909750819888,
+   "at": [
+    460.885,
+    229.766
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.1006 largest outline distance, at (460.9, 229.8) on part frame_narrow, in body acryl6mm@397.69,190.26's frame",
+   "today_seconds": 0.04
+  },
+  {
+   "check": "shape-frame_narrow-2",
+   "part": "frame_narrow",
+   "body": "acryl6mm@397.69,284.88",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 485.1762
+   },
+   "deviation": 0.10060532868917647,
+   "at": [
+    460.885,
+    324.379
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.1006 largest outline distance, at (460.9, 324.4) on part frame_narrow, in body acryl6mm@397.69,284.88's frame",
+   "today_seconds": 0.04
+  },
+  {
+   "check": "shape-frame_narrow-3",
+   "part": "frame_narrow",
+   "body": "acryl6mm@397.69,330.31",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 512.9766
+   },
+   "deviation": 0.10058769821050131,
+   "at": [
+    460.885,
+    369.815
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.1006 largest outline distance, at (460.9, 369.8) on part frame_narrow, in body acryl6mm@397.69,330.31's frame",
+   "today_seconds": 0.04
+  },
+  {
+   "check": "shape-frame_narrow-4",
+   "part": "frame_narrow",
+   "body": "acryl6mm@397.69,424.92",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 578.0821
+   },
+   "deviation": 0.10057564064814535,
+   "at": [
+    460.885,
+    464.429
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.1006 largest outline distance, at (460.9, 464.4) on part frame_narrow, in body acryl6mm@397.69,424.92's frame",
+   "today_seconds": 0.04
+  },
+  {
+   "check": "shape-frame_narrow-5",
+   "part": "frame_narrow",
+   "body": "acryl6mm@397.69,237.84",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 459.3665
+   },
+   "deviation": 0.10057865233769483,
+   "at": [
+    460.885,
+    277.34
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.1006 largest outline distance, at (460.9, 277.3) on part frame_narrow, in body acryl6mm@397.69,237.84's frame",
+   "today_seconds": 0.04
+  },
+  {
+   "check": "shape-frame_narrow-6",
+   "part": "frame_narrow",
+   "body": "acryl6mm@397.69,377.89",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 544.6327
+   },
+   "deviation": 0.10058725304659813,
+   "at": [
+    460.885,
+    417.389
+   ],
+   "on_body": false,
+   "ok": false,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.1006 largest outline distance, at (460.9, 417.4) on part frame_narrow, in body acryl6mm@397.69,377.89's frame",
+   "today_seconds": 0.04
+  },
+  {
+   "check": "shape-corner_plate-1",
+   "part": "corner_plate",
+   "body": "acryl6mm@398.55,145.36",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 419.7862
+   },
+   "deviation": 0.002465200353722389,
+   "at": [
+    463.591,
+    155.672
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.02,
+   "today_ok": true,
+   "today_measured": "0.002465 largest outline distance, at (463.6, 155.7) on body acryl6mm@398.55,145.36",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-corner_plate-2",
+   "part": "corner_plate",
+   "body": "acryl6mm@478.98,145.36",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 496.1448
+   },
+   "deviation": 0.0024747865918749584,
+   "at": [
+    544.024,
+    155.672
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.02,
+   "today_ok": true,
+   "today_measured": "0.002475 largest outline distance, at (544, 155.7) on body acryl6mm@478.98,145.36",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-corner_plate-3",
+   "part": "corner_plate",
+   "body": "acryl6mm@398.55,104.86",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 407.7361
+   },
+   "deviation": 0.0024561063112490283,
+   "at": [
+    463.591,
+    115.173
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.02,
+   "today_ok": true,
+   "today_measured": "0.002456 largest outline distance, at (463.6, 115.2) on body acryl6mm@398.55,104.86",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-corner_plate-4",
+   "part": "corner_plate",
+   "body": "acryl6mm@478.98,104.86",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 485.9918
+   },
+   "deviation": 0.002465692584203454,
+   "at": [
+    544.024,
+    115.173
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.02,
+   "today_ok": true,
+   "today_measured": "0.002466 largest outline distance, at (544, 115.2) on body acryl6mm@478.98,104.86",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-switch_plate-1",
+   "part": "switch_plate",
+   "body": "acryl6mm@547.86,189.38",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 576.802
+   },
+   "deviation": 0.00359866866727913,
+   "at": [
+    560.166,
+    194.685
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.003599 largest outline distance, at (560.2, 194.7) on body acryl6mm@547.86,189.38",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-rod_flange-1",
+   "part": "rod_flange",
+   "body": "acryl6mm@356.83,339.62",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 483.4015
+   },
+   "deviation": 0.0058687555291383345,
+   "at": [
+    363.192,
+    343.876
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.005869 largest outline distance, at (363.2, 343.9) on body acryl6mm@356.83,339.62",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-rod_flange-2",
+   "part": "rod_flange",
+   "body": "acryl6mm@356.83,316.47",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 467.484
+   },
+   "deviation": 0.005904362822433831,
+   "at": [
+    363.192,
+    320.733
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.005904 largest outline distance, at (363.2, 320.7) on body acryl6mm@356.83,316.47",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-rod_flange-3",
+   "part": "rod_flange",
+   "body": "acryl6mm@316.19,339.62",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 455.2865
+   },
+   "deviation": 0.005871171655769053,
+   "at": [
+    321.576,
+    343.972
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.005871 largest outline distance, at (321.6, 344) on body acryl6mm@316.19,339.62",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-rod_flange-4",
+   "part": "rod_flange",
+   "body": "acryl6mm@316.19,316.47",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 438.3492
+   },
+   "deviation": 0.005906094653601793,
+   "at": [
+    321.576,
+    320.83
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.005906 largest outline distance, at (321.6, 320.8) on body acryl6mm@316.19,316.47",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-motor_face-1",
+   "part": "motor_face",
+   "body": "acryl6mm@544.02,362.76",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 650.1316
+   },
+   "deviation": 0.0005300169088247019,
+   "at": [
+    551.763,
+    370.494
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.00053 largest outline distance, at (551.8, 370.5) on body acryl6mm@544.02,362.76",
+   "today_seconds": 0.04
+  },
+  {
+   "check": "shape-motor_face-2",
+   "part": "motor_face",
+   "body": "acryl6mm@544.02,418.63",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 682.6647
+   },
+   "deviation": 0.0005452429812906214,
+   "at": [
+    551.763,
+    426.372
+   ],
+   "on_body": false,
+   "ok": true,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.0005452 largest outline distance, at (551.8, 426.4) on part motor_face, in body acryl6mm@544.02,418.63's frame",
+   "today_seconds": 0.04
+  },
+  {
+   "check": "shape-motor_base-1",
+   "part": "motor_base",
+   "body": "acryl6mm@550.59,306.53",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 620.6017
+   },
+   "deviation": 0.024364356736690705,
+   "at": [
+    558.142,
+    321.805
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.02436 largest outline distance, at (558.1, 321.8) on body acryl6mm@550.59,306.53",
+   "today_seconds": 0.03
+  },
+  {
+   "check": "shape-motor_base-2",
+   "part": "motor_base",
+   "body": "acryl6mm@550.59,250.65",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 595.2433
+   },
+   "deviation": 0.02435580577737876,
+   "at": [
+    558.142,
+    265.927
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.03,
+   "today_ok": true,
+   "today_measured": "0.02436 largest outline distance, at (558.1, 265.9) on body acryl6mm@550.59,250.65",
+   "today_seconds": 0.03
+  },
+  {
+   "check": "shape-motor_gusset-1",
+   "part": "motor_gusset",
+   "body": "acryl6mm@547.12,539.97",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 180.0,
+    "shift": 841.2521
+   },
+   "deviation": 8.498165800064001e-05,
+   "at": [
+    592.423,
+    591.265
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "8.498e-05 largest outline distance, at (592.4, 591.3) on body acryl6mm@547.12,539.97",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-motor_gusset-2",
+   "part": "motor_gusset",
+   "body": "acryl6mm@547.12,477.7",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 180.0,
+    "shift": 798.7201
+   },
+   "deviation": 0.00010602766479955146,
+   "at": [
+    592.423,
+    475.002
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.000106 largest outline distance, at (592.4, 475) on body acryl6mm@547.12,477.7",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-motor_gusset-3",
+   "part": "motor_gusset",
+   "body": "acryl6mm@544.59,546.75",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 765.0231
+   },
+   "deviation": 8.290972536718391e-05,
+   "at": [
+    543.838,
+    598.05
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "8.291e-05 largest outline distance, at (543.8, 598.1) on body acryl6mm@544.59,546.75",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-motor_gusset-4",
+   "part": "motor_gusset",
+   "body": "acryl6mm@544.59,484.49",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 722.0723
+   },
+   "deviation": 0.0001048469450837449,
+   "at": [
+    558.838,
+    529.787
+   ],
+   "on_body": false,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.0001048 largest outline distance, at (558.8, 529.8) on part motor_gusset, in body acryl6mm@544.59,484.49's frame",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mould_base-1",
+   "part": "mould_base",
+   "body": "acryl3mm@7.5,547.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 545.023
+   },
+   "deviation": 0.0003490906196344369,
+   "at": [
+    8.833,
+    548.833
+   ],
+   "on_body": false,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.0003491 largest outline distance, at (8.833, 548.8) on part mould_base, in body acryl3mm@7.5,547.5's frame",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mould_base-2",
+   "part": "mould_base",
+   "body": "acryl3mm@172.5,547.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 570.8985
+   },
+   "deviation": 0.00035889349768154197,
+   "at": [
+    173.833,
+    548.833
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.0003589 largest outline distance, at (173.8, 548.8) on body acryl3mm@172.5,547.5",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mould_base-3",
+   "part": "mould_base",
+   "body": "acryl3mm@62.5,547.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 548.2929
+   },
+   "deviation": 0.0003611583454515715,
+   "at": [
+    110.0,
+    595.0
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.0003612 largest outline distance, at (110, 595) on body acryl3mm@62.5,547.5",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mould_base-4",
+   "part": "mould_base",
+   "body": "acryl3mm@117.5,547.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 557.001
+   },
+   "deviation": 0.000379063325828312,
+   "at": [
+    118.833,
+    548.833
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.0003791 largest outline distance, at (118.8, 548.8) on body acryl3mm@117.5,547.5",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mould_base-5",
+   "part": "mould_base",
+   "body": "acryl3mm@117.5,492.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 503.3141
+   },
+   "deviation": 0.00039125025604471337,
+   "at": [
+    118.833,
+    493.833
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.0003913 largest outline distance, at (118.8, 493.8) on body acryl3mm@117.5,492.5",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-mould_base-6",
+   "part": "mould_base",
+   "body": "acryl3mm@62.5,492.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 493.6599
+   },
+   "deviation": 0.00035105829286842364,
+   "at": [
+    110.0,
+    540.0
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.0003511 largest outline distance, at (110, 540) on body acryl3mm@62.5,492.5",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-platform_jig-1",
+   "part": "platform_jig",
+   "body": "acryl3mm@7.5,492.5",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 490.0258
+   },
+   "deviation": 0.0045800285288925165,
+   "at": [
+    21.461,
+    506.462
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "0.00458 largest outline distance, at (21.46, 506.5) on body acryl3mm@7.5,492.5",
+   "today_seconds": 0.02
+  },
+  {
+   "check": "shape-platform-1",
+   "part": "platform",
+   "body": "acryl3mm@133.0,466.0",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 482.8305
+   },
+   "deviation": 4.291362269647361e-05,
+   "at": [
+    132.222,
+    465.843
+   ],
+   "on_body": false,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "4.291e-05 largest outline distance, at (132.2, 465.8) on part platform, in body acryl3mm@133.0,466.0's frame",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-platform-2",
+   "part": "platform",
+   "body": "acryl3mm@8.0,466.0",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 465.0272
+   },
+   "deviation": 3.7728108108271e-05,
+   "at": [
+    21.913,
+    465.381
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "3.773e-05 largest outline distance, at (21.91, 465.4) on body acryl3mm@8.0,466.0",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-platform-3",
+   "part": "platform",
+   "body": "acryl3mm@33.0,466.0",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 465.967
+   },
+   "deviation": 4.418033511300912e-05,
+   "at": [
+    47.778,
+    465.843
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "4.418e-05 largest outline distance, at (47.78, 465.8) on body acryl3mm@33.0,466.0",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-platform-4",
+   "part": "platform",
+   "body": "acryl3mm@58.0,466.0",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 468.2417
+   },
+   "deviation": 4.9505092244755204e-05,
+   "at": [
+    73.536,
+    466.465
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "4.951e-05 largest outline distance, at (73.54, 466.5) on body acryl3mm@58.0,466.0",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-platform-5",
+   "part": "platform",
+   "body": "acryl3mm@83.0,466.0",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 471.8318
+   },
+   "deviation": 5.76117886519693e-05,
+   "at": [
+    99.157,
+    467.222
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "5.761e-05 largest outline distance, at (99.16, 467.2) on body acryl3mm@83.0,466.0",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-platform-6",
+   "part": "platform",
+   "body": "acryl3mm@108.0,466.0",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 180.0,
+    "shift": 496.2361
+   },
+   "deviation": 6.668558637715156e-05,
+   "at": [
+    124.157,
+    467.222
+   ],
+   "on_body": true,
+   "ok": true,
+   "seconds": 0.01,
+   "today_ok": true,
+   "today_measured": "6.669e-05 largest outline distance, at (124.2, 467.2) on body acryl3mm@108.0,466.0",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-post_ring-1",
+   "part": "post_ring",
+   "body": "acryl3mm@178.44,521.91",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 550.495
+   },
+   "deviation": 0.0010974690413968714,
+   "at": [
+    180.998,
+    524.994
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.0,
+   "today_ok": true,
+   "today_measured": "0.001097 largest outline distance, at (181, 525) on body acryl3mm@178.44,521.91",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-post_ring-2",
+   "part": "post_ring",
+   "body": "acryl3mm@183.97,515.91",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 546.6279
+   },
+   "deviation": 0.0011611627935791797,
+   "at": [
+    186.53,
+    518.994
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.0,
+   "today_ok": true,
+   "today_measured": "0.001161 largest outline distance, at (186.5, 519) on body acryl3mm@183.97,515.91",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-post_ring-3",
+   "part": "post_ring",
+   "body": "acryl3mm@178.44,533.91",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 561.8769
+   },
+   "deviation": 0.0010934771406521616,
+   "at": [
+    180.998,
+    536.994
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.0,
+   "today_ok": true,
+   "today_measured": "0.001093 largest outline distance, at (181, 537) on body acryl3mm@178.44,533.91",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-post_ring-4",
+   "part": "post_ring",
+   "body": "acryl3mm@183.97,521.91",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 552.2903
+   },
+   "deviation": 0.0011645671399976981,
+   "at": [
+    186.53,
+    524.994
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.0,
+   "today_ok": true,
+   "today_measured": "0.001165 largest outline distance, at (186.5, 525) on body acryl3mm@183.97,521.91",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-post_ring-5",
+   "part": "post_ring",
+   "body": "acryl3mm@183.97,527.91",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 557.9597
+   },
+   "deviation": 0.001157170753956789,
+   "at": [
+    186.53,
+    530.994
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.0,
+   "today_ok": true,
+   "today_measured": "0.001157 largest outline distance, at (186.5, 531) on body acryl3mm@183.97,527.91",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-post_ring-6",
+   "part": "post_ring",
+   "body": "acryl3mm@178.44,515.91",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 544.814
+   },
+   "deviation": 0.0010940647863978052,
+   "at": [
+    180.998,
+    518.994
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.0,
+   "today_ok": true,
+   "today_measured": "0.001094 largest outline distance, at (181, 519) on body acryl3mm@178.44,515.91",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-post_ring-7",
+   "part": "post_ring",
+   "body": "acryl3mm@178.44,527.91",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 556.1827
+   },
+   "deviation": 0.0010900728539416646,
+   "at": [
+    180.998,
+    530.994
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.0,
+   "today_ok": true,
+   "today_measured": "0.00109 largest outline distance, at (181, 531) on body acryl3mm@178.44,527.91",
+   "today_seconds": 0.01
+  },
+  {
+   "check": "shape-post_ring-8",
+   "part": "post_ring",
+   "body": "acryl3mm@183.97,533.91",
+   "kind": "svg",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 563.6359
+   },
+   "deviation": 0.0011605751320599206,
+   "at": [
+    186.53,
+    536.994
+   ],
+   "on_body": true,
+   "ok": false,
+   "seconds": 0.0,
+   "today_ok": true,
+   "today_measured": "0.001161 largest outline distance, at (186.5, 537) on body acryl3mm@183.97,533.91",
+   "today_seconds": 0.01
+  }
+ ]
+}

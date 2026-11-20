@@ -1,0 +1,49 @@
+{
+ "project": "Z6",
+ "probes": 17,
+ "probe_seconds": 5.95,
+ "build_seconds": 1.75,
+ "rows": [
+  {
+   "check": "shape-clamp",
+   "part": "stretch_clamp",
+   "body": "clamp",
+   "kind": "stl",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 0.0
+   },
+   "corners": 320,
+   "corner_dev": 0.005000474981233186,
+   "corner_at": [
+    -11.149,
+    8.151,
+    0.0
+   ],
+   "occ_points": 112,
+   "part_points": 20,
+   "corners_over": 112,
+   "part_points_over": 4,
+   "part_dev": 0.004999496767581979,
+   "part_at": [
+    "closed edge",
+    [
+     -14.005,
+     7.5,
+     0.0
+    ]
+   ],
+   "facets": 644,
+   "facets_over": 377,
+   "facet_dev": 0.013381119769988539,
+   "facet_at": [
+    13.888,
+    6.955,
+    0.333
+   ],
+   "deviation": 0.013381119769988539,
+   "ok": false,
+   "seconds": 0.2
+  }
+ ]
+}

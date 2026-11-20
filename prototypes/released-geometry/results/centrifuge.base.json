@@ -1,0 +1,65 @@
+{
+ "project": "centrifuge",
+ "probes": 74,
+ "probe_seconds": 1.64,
+ "build_seconds": 0.57,
+ "rows": [
+  {
+   "check": "body-shape",
+   "part": "body",
+   "body": "body_step",
+   "kind": "step",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 0.0
+   },
+   "deviation": 7.110787062410579e-07,
+   "at": [
+    -39.798,
+    -26.396,
+    49.159
+   ],
+   "on_body": 1.0,
+   "ok": true,
+   "seconds": 8.35
+  },
+  {
+   "check": "plate-shape",
+   "part": "plate",
+   "body": "plate_step",
+   "kind": "step",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 34.0
+   },
+   "deviation": 5.550402239142899e-07,
+   "at": [
+    -52.874,
+    -35.375,
+    -32.742
+   ],
+   "on_body": 0.0,
+   "ok": true,
+   "seconds": 0.44
+  },
+  {
+   "check": "rotor-shape",
+   "part": "rotor",
+   "body": "rotor_pcr325_step",
+   "kind": "step",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 40.288
+   },
+   "deviation": 1.3404948333944352e-06,
+   "at": [
+    -29.177,
+    -4.943,
+    -34.186
+   ],
+   "on_body": 1.0,
+   "ok": true,
+   "seconds": 4.79
+  }
+ ]
+}

@@ -1,0 +1,45 @@
+{
+ "project": "K4",
+ "probes": 107,
+ "probe_seconds": 11.3,
+ "build_seconds": 13.24,
+ "rows": [
+  {
+   "check": "retainer-shape",
+   "part": "retainer",
+   "body": "bearing_retainer",
+   "kind": "stl",
+   "frame": {
+    "turn_deg": 90.0,
+    "shift": 62.2254
+   },
+   "corners": 310,
+   "corner_dev": 5.939519625030303e-06,
+   "corner_at": [
+    69.479,
+    0.0,
+    68.36
+   ],
+   "occ_points": 0,
+   "part_points": 18,
+   "corners_over": 0,
+   "part_points_over": 2,
+   "part_dev": Infinity,
+   "part_at": [
+    "closed edge",
+    [
+     22.0,
+     2.0,
+     9.359
+    ]
+   ],
+   "facets": 644,
+   "facets_over": 0,
+   "facet_dev": 0.0,
+   "facet_at": null,
+   "deviation": Infinity,
+   "ok": false,
+   "seconds": 0.13
+  }
+ ]
+}

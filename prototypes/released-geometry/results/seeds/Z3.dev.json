@@ -1,0 +1,49 @@
+{
+ "project": "Z3",
+ "probes": 17,
+ "probe_seconds": 6.45,
+ "build_seconds": 1.93,
+ "rows": [
+  {
+   "check": "shape-clamp",
+   "part": "stretch_clamp",
+   "body": "clamp",
+   "kind": "stl",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 0.0
+   },
+   "corners": 320,
+   "corner_dev": 6.959678457119061e-06,
+   "corner_at": [
+    -16.404,
+    6.628,
+    1.0
+   ],
+   "occ_points": 0,
+   "part_points": 18,
+   "corners_over": 0,
+   "part_points_over": 0,
+   "part_dev": 4.668008450892109e-07,
+   "part_at": [
+    "vertex",
+    [
+     9.378,
+     10.0,
+     0.0
+    ]
+   ],
+   "facets": 644,
+   "facets_over": 56,
+   "facet_dev": 0.3333333333333365,
+   "facet_at": [
+    12.277,
+    8.975,
+    0.667
+   ],
+   "deviation": 0.3333333333333365,
+   "ok": false,
+   "seconds": 0.2
+  }
+ ]
+}

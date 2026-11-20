@@ -1,0 +1,74 @@
+{
+ "project": "centrifuge",
+ "probes": 74,
+ "probe_seconds": 0.06,
+ "build_seconds": 0.46,
+ "rows": [
+  {
+   "check": "body-shape",
+   "part": "body",
+   "body": "body_step",
+   "kind": "step",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 0.0
+   },
+   "deviation": 7.110787062410579e-07,
+   "at": [
+    -39.798,
+    -26.396,
+    49.159
+   ],
+   "on_body": 1.0,
+   "ok": true,
+   "seconds": 7.56,
+   "today_ok": true,
+   "today_measured": "7.111e-07 largest surface distance, at (-39.8, -26.4, 49.16) on body body_step",
+   "today_seconds": 7.38
+  },
+  {
+   "check": "plate-shape",
+   "part": "plate",
+   "body": "plate_step",
+   "kind": "step",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 34.0
+   },
+   "deviation": 5.550402239142899e-07,
+   "at": [
+    -52.874,
+    -35.375,
+    -32.742
+   ],
+   "on_body": 0.0,
+   "ok": true,
+   "seconds": 0.33,
+   "today_ok": true,
+   "today_measured": "5.55e-07 largest surface distance, at (-52.87, -35.37, -32.74) on part plate, in body plate_step's frame",
+   "today_seconds": 0.33
+  },
+  {
+   "check": "rotor-shape",
+   "part": "rotor",
+   "body": "rotor_pcr325_step",
+   "kind": "step",
+   "frame": {
+    "turn_deg": 0.0,
+    "shift": 40.288
+   },
+   "deviation": 1.3404948333944352e-06,
+   "at": [
+    -29.177,
+    -4.943,
+    -34.186
+   ],
+   "on_body": 1.0,
+   "ok": true,
+   "seconds": 4.01,
+   "today_ok": true,
+   "today_measured": "1.34e-06 largest surface distance, at (-29.18, -4.943, -34.19) on body rotor_pcr325_step",
+   "today_seconds": 4.01
+  }
+ ]
+}

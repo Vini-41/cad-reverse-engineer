@@ -1,0 +1,268 @@
+{
+ "project": "compact-sspg",
+ "probes": 107,
+ "probe_seconds": 0.0,
+ "build_seconds": 11.24,
+ "rows": [
+  {
+   "check": "planet-shape",
+   "part": "planet_gear",
+   "body": "planet",
+   "kind": "stl",
+   "frame": {
+    "turn_deg": 177.2308,
+    "shift": 23.6853
+   },
+   "corners": 908,
+   "corner_dev": 0.0015150685824338974,
+   "corner_at": [
+    19.733,
+    0.826,
+    22.135
+   ],
+   "occ_points": 4,
+   "part_points": 1306,
+   "corners_over": null,
+   "part_points_over": 780,
+   "part_dev": 0.2733574263120539,
+   "part_at": [
+    "vertex",
+    [
+     31.561,
+     10.861,
+     22.135
+    ]
+   ],
+   "facets": 1816,
+   "facets_over": 1043,
+   "facet_dev": 0.00018187008167599511,
+   "facet_at": [
+    32.899,
+    20.428,
+    22.135
+   ],
+   "deviation": 0.2733574263120539,
+   "ok": false,
+   "seconds": 5.08,
+   "today_ok": true,
+   "today_measured": "0.06158 largest surface distance, at (11.87, 15.97, 18.63) on body planet",
+   "today_seconds": 4.81
+  },
+  {
+   "check": "sun-shape",
+   "part": "sun_gear",
+   "body": "sun",
+   "kind": "stl",
+   "frame": {
+    "turn_deg": 0.0002,
+    "shift": 23.3345
+   },
+   "corners": 1125,
+   "corner_dev": 0.00323612761496075,
+   "corner_at": [
+    18.29,
+    22.867,
+    8.0
+   ],
+   "occ_points": 4,
+   "part_points": 624,
+   "corners_over": null,
+   "part_points_over": 300,
+   "part_dev": 0.10882329994032197,
+   "part_at": [
+    "vertex",
+    [
+     22.021,
+     13.571,
+     38.135
+    ]
+   ],
+   "facets": 2266,
+   "facets_over": 609,
+   "facet_dev": 0.00719400785245063,
+   "facet_at": [
+    11.187,
+    20.133,
+    18.045
+   ],
+   "deviation": 0.10882329994032197,
+   "ok": false,
+   "seconds": 3.03,
+   "today_ok": true,
+   "today_measured": "0.07475 largest surface distance, at (32.85, 14.94, 41.63) on body sun",
+   "today_seconds": 2.35
+  },
+  {
+   "check": "carrier-shape",
+   "part": "primary_carrier",
+   "body": "carrier_updated",
+   "kind": "stl",
+   "frame": {
+    "turn_deg": 0.0002,
+    "shift": 41.0128
+   },
+   "corners": 1589,
+   "corner_dev": 0.003655627624999879,
+   "corner_at": [
+    33.825,
+    33.35,
+    0.21
+   ],
+   "occ_points": 1,
+   "part_points": 129,
+   "corners_over": null,
+   "part_points_over": 0,
+   "part_dev": 0.00024463888620835094,
+   "part_at": [
+    "vertex",
+    [
+     5.002,
+     16.626,
+     0.21
+    ]
+   ],
+   "facets": 3226,
+   "facets_over": 9,
+   "facet_dev": 0.08094832827151001,
+   "facet_at": [
+    33.351,
+    33.719,
+    0.21
+   ],
+   "deviation": 0.08094832827151001,
+   "ok": false,
+   "seconds": 0.89,
+   "today_ok": true,
+   "today_measured": "0.1047 largest surface distance, at (56.29, 26.61, 1.772) on body carrier_updated",
+   "today_seconds": 1.76
+  },
+  {
+   "check": "sec-shape",
+   "part": "secondary_carrier",
+   "body": "sec_carrier",
+   "kind": "stl",
+   "frame": {
+    "turn_deg": 0.0002,
+    "shift": 39.9526
+   },
+   "corners": 1039,
+   "corner_dev": 0.4204830947431032,
+   "corner_at": [
+    52.736,
+    15.024,
+    1.445
+   ],
+   "occ_points": 15,
+   "part_points": 107,
+   "corners_over": null,
+   "part_points_over": 3,
+   "part_dev": 0.30990777486477517,
+   "part_at": [
+    "closed edge",
+    [
+     43.176,
+     17.0,
+     0.278
+    ]
+   ],
+   "facets": 2102,
+   "facets_over": 982,
+   "facet_dev": 0.4070890107269692,
+   "facet_at": [
+    27.968,
+    56.054,
+    1.374
+   ],
+   "deviation": 0.4204830947431032,
+   "ok": false,
+   "seconds": 0.68,
+   "today_ok": true,
+   "today_measured": "0.4545 largest surface distance, at (3.785, 14.13, 1.198) on part secondary_carrier, in body sec_carrier's frame",
+   "today_seconds": 1.0
+  },
+  {
+   "check": "casing-shape",
+   "part": "casing",
+   "body": "gearbox_casing",
+   "kind": "stl",
+   "frame": {
+    "turn_deg": 0.0001,
+    "shift": 76.1235
+   },
+   "corners": 4411,
+   "corner_dev": 0.04703748151538497,
+   "corner_at": [
+    73.893,
+    13.006,
+    38.635
+   ],
+   "occ_points": 59,
+   "part_points": 3230,
+   "corners_over": null,
+   "part_points_over": 1860,
+   "part_dev": 0.26349949635456393,
+   "part_at": [
+    "vertex",
+    [
+     65.774,
+     91.866,
+     34.135
+    ]
+   ],
+   "facets": 8870,
+   "facets_over": 1495,
+   "facet_dev": 0.002671901943889611,
+   "facet_at": [
+    76.808,
+    84.994,
+    18.378
+   ],
+   "deviation": 0.26349949635456393,
+   "ok": false,
+   "seconds": 63.07,
+   "today_ok": true,
+   "today_measured": "0.1847 largest surface distance, at (15.4, 56.15, 9) on part casing, in body gearbox_casing's frame",
+   "today_seconds": 38.96
+  },
+  {
+   "check": "retainer-shape",
+   "part": "retainer",
+   "body": "bearing_retainer",
+   "kind": "stl",
+   "frame": {
+    "turn_deg": 90.0,
+    "shift": 62.2254
+   },
+   "corners": 310,
+   "corner_dev": 5.939519625030303e-06,
+   "corner_at": [
+    69.479,
+    0.0,
+    68.36
+   ],
+   "occ_points": 0,
+   "part_points": 16,
+   "corners_over": null,
+   "part_points_over": 0,
+   "part_dev": 1.3039647758424075e-07,
+   "part_at": [
+    "closed edge",
+    [
+     42.0,
+     -0.0,
+     4.0
+    ]
+   ],
+   "facets": 644,
+   "facets_over": 0,
+   "facet_dev": 0.0,
+   "facet_at": null,
+   "deviation": 5.939519625030303e-06,
+   "ok": true,
+   "seconds": 0.11,
+   "today_ok": true,
+   "today_measured": "0.1427 largest surface distance, at (30.11, 1.75, 85.6) on body bearing_retainer",
+   "today_seconds": 0.13
+  }
+ ]
+}
