@@ -117,8 +117,7 @@ class Model:
     threads: list[Threaded] = field(default_factory=list)
     # True when a finding dropped the joints, loops, couplings and cables build() returned.
     dropped: bool = False
-    # The joints the pose this assembly is placed at moves, itself or through a coupling, cable
-    # or loop.
+    # The joints the pose this assembly is placed at moves, itself or through a coupling or loop.
     moved: frozenset[str] = frozenset()
 
     @property
@@ -180,10 +179,9 @@ def coupling_by(coupling: dict) -> tuple[str, str]:
 
 
 class InStep(NamedTuple):
-    """Two joints that move in step, a coupling's or a cable's: driven at ratio times driver, in
-    the project's units of each; law says how, as a finding words it."""
+    """A coupling's two joints, moving in step: driven at ratio times driver, in the project's
+    units of each; law says how, as a finding words it."""
 
-    kind: str  # coupling or cable
     name: str
     driver: str
     driven: str
@@ -192,31 +190,22 @@ class InStep(NamedTuple):
 
 
 def in_step(p: Project, model: Model) -> list[InStep]:
-    """Each pair of joints moving in proportion: a coupling's, at its ratio or at its lead per full
-    turn of its revolute joint; and a cable's wheel with each joint it closes, at that joint's
-    closed value over the wheel's full turn."""
+    """Each coupling's pair of joints moving in proportion, at its ratio or at its lead per full
+    turn of its revolute joint."""
     found = []
     for name, coupling in model.couplings.items():
         key, param = coupling_by(coupling)
         driver, driven, value = coupling["driver"], coupling["driven"], p.values[param]
         if key == "ratio":
             law = f"moves {driven} {value:g} times {driver}"
-            found.append(InStep("coupling", name, driver, driven, value, law))
+            found.append(InStep(name, driver, driven, value, law))
             continue
         turn = 2 * math.pi / units.size("angle", p.units)
         turns = model.quantity(driver) == "angle"
         revolute, slide = (driver, driven) if turns else (driven, driver)
         law = f"moves {slide} {value:g} per full turn of {revolute}"
         ratio = value / turn if turns else turn / value
-        found.append(InStep("coupling", name, driver, driven, ratio, law))
-    for name, cable in model.cables.items():
-        if "wheel" in cable:
-            wheel = cable["wheel"]
-            turn = p.values[model.joints[wheel]["range"][0]]
-            for joint, param in cable["closes"].items():
-                closed = p.values[param]
-                law = f"closes {joint} to {closed:g} as {wheel} turns to {turn:g}"
-                found.append(InStep("cable", name, wheel, joint, closed / turn, law))
+        found.append(InStep(name, driver, driven, ratio, law))
     return found
 
 
@@ -296,8 +285,6 @@ def _unfit(kind: str, entry: dict) -> str | None:
             return "names a driver, a driven and one of ratio or lead"
     elif len(entry.get("path", ())) < 2:
         return f"path must be two or more datums, not {entry.get('path')!r}"
-    elif ("wheel" in entry) != ("closes" in entry):
-        return "wheel and closes go together"
     return None
 
 
@@ -379,7 +366,6 @@ def build(p: Project) -> Model | None:
     if _motion_faults(p, model):
         model.joints, model.loops, model.couplings, model.cables = {}, {}, {}, {}
         model.dropped = True
-    _cables_on_axes(p, model)
     model.masses = _mass_model(p, model)
     return model
 
@@ -444,17 +430,13 @@ def _hold_units(p: Project, model: Model, threaded: set[str]) -> None:
         coupled.add(param)
         p.hold_param(param, (COUPLING_BY[key][0],), f"as coupling {name}'s {key}")
         for count in _worked_from(p, param) if key == "ratio" else []:
-            # A ratio is worked out from counts, or from lengths as a belt's pulley diameters are.
+            # A ratio is worked out from counts, from lengths as a belt's pulley diameters are, or
+            # from angles as a cord's closed value over the travel of the joint that winds it.
             unit, ref = p.printed_as(count)
             if not (ref and p.prints_length(ref)):
                 counted = unit is None or units.quantity(unit) == "count"
-                expected = ("count",) if counted else ("count", "length")
+                expected = ("count",) if counted else ("count", "length", "angle")
                 p.hold_param(count, expected, f"in coupling {name}'s ratio")
-    for name, cable in model.cables.items():
-        for joint, param in cable.get("closes", {}).items():
-            coupled.add(param)
-            if joint in model.moving:
-                p.hold_param(param, (model.quantity(joint),), f"as cable {name}'s closed {joint}")
     named = {n for c in p.checks for n in ledger.named_by_checks(p, c)}
     fit = {p.meta.get("clearance")} - {None}  # the loosest fit
     # A screw's length is what is bought, whether or not the model reads it.
@@ -512,12 +494,10 @@ def _motion_faults(p: Project, model: Model) -> bool:
     for name, coupling in model.couplings.items():
         with p.filing("model-coupling", f"coupling {name}: "):
             _coupling_fault(p, model, coupling)
-    closed_by: dict[str, str] = {}
     for name, cable in model.cables.items():
         with p.filing("model-cable", f"cable {name}: "):
-            _cable_fault(p, model, cable, closed_by)
-        for joint in cable.get("closes", {}):
-            closed_by.setdefault(joint, name)
+            for datum in cable["path"]:
+                model.instance_datum(datum)
     return len(p.findings) > before
 
 
@@ -565,64 +545,9 @@ def _coupling_fault(p: Project, model: Model, coupling: dict) -> None:
         )
     if param not in p.values:
         raise Fault(f"{key} names {param}, which params.yaml does not define")
-    if key == "lead" and p.values[param] == 0:
-        raise Fault(f"lead {param} is 0, so the slide never moves")
-
-
-def _cable_fault(p: Project, model: Model, cable: dict, closed_by: dict) -> None:
-    first = model.instance_datum(cable["path"][0])[0]
-    for datum in cable["path"]:
-        model.instance_datum(datum)
-    if "wheel" not in cable:
-        return
-    wheel = cable["wheel"]
-    if wheel not in model.moving:
-        raise Fault(f"wheel {wheel} is {unmoving(model, wheel)}")
-    turn = model.joints[wheel].get("range", [])
-    if len(turn) != 1:
-        raise Fault(f"wheel {wheel} needs a one-ended range, its full turn from as built")
-    if p.values.get(turn[0]) == 0:
-        raise Fault(f"wheel {wheel}'s full turn {turn[0]} is 0, so it closes nothing")
-    if first == model.joints[wheel]["child"]:
-        raise Fault(
-            f"its path starts at {cable['path'][0]}, on the wheel; start it where the cable "
-            "leaves the wheel, on an instance the wheel does not turn"
-        )
-    tied = {c[k] for c in model.couplings.values() for k in ("driver", "driven")}
-    for joint, param in cable["closes"].items():
-        if joint not in model.moving:
-            raise Fault(f"closes {joint}, which is {unmoving(model, joint)}")
-        if joint == wheel:
-            raise Fault(f"closes its own wheel {wheel}")
-        if joint in tied:
-            raise Fault(f"closes {joint}, which a coupling ties")
-        if joint in closed_by:
-            raise Fault(f"closes {joint}, which cable {closed_by[joint]} closes too")
-        if param not in p.values:
-            raise Fault(f"closes {joint} to {param}, which params.yaml does not define")
-
-
-def _cables_on_axes(p: Project, model: Model) -> None:
-    """[cable-on-axis] for each path datum of a cable that lies on the axis of a revolute joint the
-    cable closes and turns with it: turning that joint leaves the cable's length unchanged."""
-    for name, cable in model.cables.items():
-        for joint in cable.get("closes", {}):
-            hinge = model.joints[joint]
-            if hinge["type"] != "revolute":
-                continue
-            turned, grew = {hinge["child"]}, True  # the instances the joint turns
-            while grew:
-                below = {j["child"] for j in model.joints.values() if j["parent"] in turned}
-                grew, turned = not below <= turned, turned | below
-            a, b = (model.placed(d) for d in hinge["axis"])
-            for datum in cable["path"]:
-                if model.instance_datum(datum)[0] in turned:
-                    if (model.placed(datum) - a).cross((b - a).normalized()).length <= p.length_tol:
-                        p.warn(
-                            "cable-on-axis",
-                            f"cable {name}: {datum} lies on the axis of {joint}, which it closes, "
-                            f"so turning {joint} leaves the cable's length unchanged",
-                        )
+    if p.values[param] == 0:
+        moved = "the slide" if key == "lead" else driven
+        raise Fault(f"{key} {param} is 0, so {moved} never moves")
 
 
 def _mass_model(p: Project, model: Model) -> dict[str, Mass]:

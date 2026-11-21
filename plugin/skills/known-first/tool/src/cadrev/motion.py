@@ -84,16 +84,6 @@ def _mesh(part, path: Path) -> tuple[bytes, dict | None]:
     return stl, coarser
 
 
-def _unique(name: str, taken: set[str]) -> str:
-    """name, or name_2, name_3... where taken has it; added to taken."""
-    found, n = name, 1
-    while found in taken:
-        n += 1
-        found = f"{name}_{n}"
-    taken.add(found)
-    return found
-
-
 class Mechanism:
     """A model with joints as MuJoCo holds it: its MJCF, the part meshes it reads, and the
     assembly placed at each pose a check asks for."""
@@ -133,7 +123,7 @@ class Mechanism:
         return self._size(self.model.quantity(joint))
 
     def _ratio(self, c) -> float:
-        """A pair in step's ratio in the MJCF's units of each joint."""
+        """A coupling's ratio in the MJCF's units of each joint."""
         return c.ratio * self._joint_size(c.driven) / self._joint_size(c.driver)
 
     def _as_built_loops(self) -> None:
@@ -224,14 +214,12 @@ class Mechanism:
             equality = ET.SubElement(root, "equality")
             for name, (a, b) in model.loops.items():
                 ET.SubElement(equality, "connect", name=name, site1=a, site2=b)
-            taken = {*model.loops, *model.couplings}
             for c in self.in_step:  # driven = ratio × driver
-                name = c.name if c.kind == "coupling" else _unique(f"{c.name}_{c.driven}", taken)
                 polycoef = _num(0, self._ratio(c), 0, 0, 0)
                 ET.SubElement(
                     equality,
                     "joint",
-                    name=name,
+                    name=c.name,
                     joint1=c.driven,
                     joint2=c.driver,
                     polycoef=polycoef,
@@ -267,14 +255,14 @@ class Mechanism:
         """The assembly with the named joints at values (in the project's units, from as built),
         every other actuated joint held as built and the passive ones solved to close the loops.
         A joint in free is where its check puts it, so its own range is not held against it. A
-        Fault where the pose sets a coupling's or cable's joints out of proportion; one already
+        Fault where the pose sets a coupling's joints out of proportion; one already
         filed where a loop stays open ([loop-open]) or a joint ends outside its range
         ([joint-range])."""
         if self.loaded is None:
             raise Fault()  # [mjcf-load] says no check with a pose is evaluated
         values = dict(values)
         changed = True
-        while changed:  # each joint a coupling or cable ties to one of them moves with it
+        while changed:  # each joint a coupling ties to one of them moves with it
             changed = False
             for c in self.in_step:
                 if c.driver in values and c.driven not in values:
@@ -285,14 +273,9 @@ class Mechanism:
             if c.driver in values and c.driven in values:
                 if not math.isclose(values[c.driven], c.ratio * values[c.driver], abs_tol=1e-9):
                     raise Fault(
-                        f"{pose_text(pose)}: {c.kind} {c.name} {c.law}, so set one of them and the "
-                        f"{c.kind} moves the other"
+                        f"{pose_text(pose)}: coupling {c.name} {c.law}, so set one of them and the "
+                        "coupling moves the other"
                     )
-            elif c.kind == "cable" and c.driven in values and not c.ratio:
-                raise Fault(
-                    f"{pose_text(pose)}: {c.kind} {c.name} {c.law}, so {c.driven} cannot set "
-                    f"{c.driver}; set {c.driver}"
-                )
         key = (tuple(sorted(values.items())), tuple(sorted(free)))
         if key not in self._posed:
             self._posed[key] = self._solve(values, pose_text(pose), free)
@@ -321,7 +304,7 @@ class Mechanism:
             for name, pair in model.loops.items()
         }
         jac1, jac2 = np.zeros((3, m.nv)), np.zeros((3, m.nv))
-        # Each pair in step whose joints values leaves free to move: (it, driven, driver, ratio).
+        # Each coupling whose joints values leaves free to move: (it, driven, driver, ratio).
         coupled = [
             (c, jid[c.driven], jid[c.driver], self._ratio(c))
             for c in self.in_step
@@ -373,15 +356,15 @@ class Mechanism:
                     "cannot close there, so checks at this pose are not evaluated",
                 )
                 reached = False
-        # The solve weighs a loop's gap and a pair in step's slip together, so a loop can close
-        # while a coupling or cable the loops do not allow slips.
+        # The solve weighs a loop's gap and a coupling's slip together, so a loop can close while
+        # a coupling the loops do not allow slips.
         for (c, *_), slip in zip(coupled, slips()) if reached else ():
             quantity = model.quantity(c.driven)
             off = slip / size[c.driven]  # in the project's unit
             if abs(off) > p.tolerance(quantity) / p.degrees(quantity):
                 p.error(
                     "loop-open",
-                    f"{c.kind} {c.name} {c.law}, but with {at} {c.driven} stands {off:.4g} off "
+                    f"coupling {c.name} {c.law}, but with {at} {c.driven} stands {off:.4g} off "
                     "that; the loops do not allow both, so checks at this pose are not evaluated",
                 )
                 reached = False

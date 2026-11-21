@@ -14,7 +14,6 @@ from conftest import (
     LOOP,
     SCREW,
     TURNED,
-    WOUND,
     add,
     add_quote,
     change,
@@ -272,53 +271,69 @@ def test_pose_at_a_number_is_a_test_condition_that_adds_no_basis_to_its_check(me
     assert (travel["rests_on"], travel["rests_on_params"]) == ("source", ["fold", "lead"])
 
 
-def test_cable_wound_on_a_wheel_closes_its_joints_in_proportion_and_a_stroke_reads_it(
+def test_a_cords_closing_is_couplings_and_a_stroke_reads_its_cable_where_they_pose_it(
     mech_dir, tmp_path
 ):
-    # The crank's joint is the wheel, its one-ended range the full turn: over it the cable draws
-    # the slider 20 mm in and folds the coupler back 60°, which keeps its tip on the rail.
+    # A cord the crank's joint winds in: over its stated 30° turn it draws the slider 20 mm in and
+    # folds the coupler back 60°, which keeps its tip on the rail. Each joint it closes is a
+    # coupling on the crank's joint, at a lead or ratio worked out from the closed value and the
+    # crank's travel, each a param of its own.
     add_quote(mech_dir, tmp_path, "The cord draws the slider 20 mm in.", values={"draw": 20})
     remodel(mech_dir, INPUT_RANGE, '"range": ["turn"]')
+    edit(
+        mech_dir, "params.yaml", lambda d: [d["params"].pop(n) for n in ("input_min", "input_max")]
+    )
+    change(mech_dir, "evidence", "S3", scope="not-modeled", reason="the cord turns the crank 30°")
+    closing = {
+        "pull": {"driver": "input", "driven": "slide", "lead": "pull_lead"},
+        "fold": {"driver": "input", "driven": "knee", "ratio": "fold_ratio"},
+    }
     open_chain(
         mech_dir,
-        WOUND.replace('"pull"}', '"pull", "knee": "fold"}'),
+        f'{CORD}\n        "couplings": {closing},',
         turn="{basis: source, from: S2.turn}",
         draw="{basis: source, from: N1.draw}",
         pull="{basis: derived, expr: -draw}",
         fold="{basis: derived, expr: -2 * turn}",
+        pull_lead="{basis: derived, expr: pull * 360 / turn}",
+        fold_ratio="{basis: derived, expr: fold / turn}",
         half="{basis: derived, expr: pull / 2}",
     )
     change(mech_dir, "checks", "swing", ends=["S2.turn"])
     add(
         mech_dir,
         checks=f"""\
-- {{id: draw, kind: stroke, cable: cord, evidence: N1, key: draw}}
+- {{id: draw, kind: stroke, cable: cord, {TURNED}, evidence: N1, key: draw}}
 - {{id: half, kind: angle, {STANDS}, pose: {{slide: half}}, expect: "S1.rest + S2.turn / 2"}}
 """,
     )
     run = check(mech_dir)
-    assert run.errors == [] and all(c["ok"] for c in run.report["checks"])
+    assert run.rules == [] and all(c["ok"] for c in run.report["checks"])
+    # The crank's turn closes both joints, so the stroke reads the cable where they put it, and
+    # rests on the lead and ratio its pose moves them through.
     draw = run.result("draw")
-    # With no pose of its own a stroke is taken at the wheel's full turn.
-    assert number(draw) == 20 and draw["pose"] == {"input": {"from": "turn", "value": 30}}
-    assert (draw["rests_on"], draw["rests_on_params"]) == ("source", ["turn", "pull", "fold"])
+    assert number(draw) == 20 and draw["pose"] == {"input": {"from": "S2.turn", "value": 30}}
+    assert (draw["rests_on"], draw["rests_on_params"]) == ("source", ["pull_lead", "fold_ratio"])
     # The joint's range is one-ended, so its range check compares the one end.
     assert number(run.result("reach")) == STOOD and run.result("swing.turn")["ok"]
-    # Posing a joint the cable closes sets the wheel: the slider half in is the crank half turned.
+    # Posing a joint the cord closes sets the crank: the slider half in is the crank half turned.
     assert number(run.result("half")) == 45
-    closes = {"slide": {"from": "pull", "value": -20}, "knee": {"from": "fold", "value": -60}}
+    motion = run.report["motion"]
     path = ["rail_1.up", "slider_1.down"]
-    cables = run.report["motion"]["cables"]
-    assert cables == {"cord": {"path": path, "wheel": "input", "closes": closes}}
+    assert motion["cables"] == {"cord": {"path": path}}
+    assert motion["couplings"]["pull"]["lead"] == {"from": "pull_lead", "value": -240}
+    assert motion["couplings"]["fold"]["ratio"] == {"from": "fold_ratio", "value": -2}
     # The report opens on the count, and lists each cable's path after the checks.
     opening, listed = run.md.split("## Motion")
     assert "and 1 cable (listed under Motion)" in opening and "Cable `cord`" not in opening
-    assert "Cable `cord` through rail_1.up → slider_1.down, wound on input" in listed
+    assert "Cable `cord` through rail_1.up → slider_1.down." in listed
     (spatial,) = mjcf(mech_dir).iter("spatial")  # the cable, with no stiffness of its own
     assert spatial.attrib == {"name": "cord"} and [s.get("site") for s in spatial] == path
+    # What cadrev poses is what it exports: the slider 20 mm in per 30° of crank, the coupler
+    # folding back twice as fast.
     assert coupled(mech_dir) == {
-        "cord_slide": ("slide", "input", pytest.approx([0, -20 / math.radians(30), 0, 0, 0])),
-        "cord_knee": ("knee", "input", pytest.approx([0, -2, 0, 0, 0])),
+        "pull": ("slide", "input", pytest.approx([0, -20 / math.radians(30), 0, 0, 0])),
+        "fold": ("knee", "input", pytest.approx([0, -2, 0, 0, 0])),
     }
 
 
