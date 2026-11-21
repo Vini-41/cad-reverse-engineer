@@ -213,7 +213,7 @@ def _interpretation(r: Result) -> str:
         named = r.rests_on_params + [
             f"{part} ({n} instances uncounted)" for part, n in (r.uncounted or {}).items()
         ]
-        notes.append(f"rests on {r.rests_on}: {', '.join(named)}")
+        notes.append(f"rests on {r.rests_on}" + f": {', '.join(named)}" * bool(named))
     return "; ".join(filter(None, notes))
 
 
@@ -399,10 +399,16 @@ def write(
     threaded = [] if model is None else threads(p, model)
     md = [f"# {p.meta.get('name', 'Reconstruction')}: verification report", ""]
     md += [f"![{path.stem}]({path.name})" for path in isometric] + [""] * bool(isometric)
+    on_brief = sorted(p.on_brief)
+    on_sources = (
+        f"{headline['source']} rest on the object's documents, {headline['brief']} on the brief"
+        if on_brief
+        else f"{headline['source']} rest on sources"
+    )
     md += [
         f"**{status}**: {tally(headline)}. "
         f"{headline['checks_passed']}/{headline['checks']} geometry checks pass.",
-        f"Of {headline['params']} parameters, {headline['source']} rest on sources, "
+        f"Of {headline['params']} parameters, {on_sources}, "
         f"{headline['measured']} on measured values and {headline['proposed']} on proposed "
         "values.",
         "",
@@ -410,12 +416,16 @@ def write(
     if exact:
         resolution = sorted(p.proposed & p.resolution)
         many = len(resolution) > 1
+        where = f" It rests on the brief, what its builder asked for, at {', '.join(on_brief)}."
         md += [
-            "**Exact**: no parameter rests on a proposed value but the sweep "
-            f"resolution{'s' * many} {', '.join(resolution)}, which {'are' if many else 'is'} "
-            "proposed."
-            if resolution
-            else "**Exact**: no parameter rests on a proposed value.",
+            (
+                "**Exact**: no parameter rests on a proposed value but the sweep "
+                f"resolution{'s' * many} {', '.join(resolution)}, which "
+                f"{'are' if many else 'is'} proposed."
+                if resolution
+                else "**Exact**: no parameter rests on a proposed value."
+            )
+            + where * bool(on_brief),
             "",
         ]
     if waits is not None:
@@ -587,7 +597,7 @@ def write(
                 str(s.get("basis"))
                 + (
                     f" (rests on {p.rests_on[n]})"
-                    if s.get("basis") == "derived" and n in p.rests_on
+                    if n in p.rests_on and p.rests_on[n] != s.get("basis")
                     else ""
                 ),
                 s.get("from") or s.get("expr") or "",
@@ -662,6 +672,7 @@ def write(
         },
         "bases": dict(bases),
         "rests_on_proposed": sorted(p.proposed),
+        "rests_on_brief": on_brief,
         "measured": measured,
         "awaiting_confirmation": awaiting,
     }

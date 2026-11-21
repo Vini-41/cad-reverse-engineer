@@ -28,15 +28,27 @@ READ_BY = {1: "0.2.0"}
 REFUSED = ("project-missing", "format-missing", "format-unknown")
 BASES = ("source", "derived", "measured", "proposed")
 # What a parameter can rest on, strongest first: a derived one rests on the weakest of its inputs.
-RESTS_ON = ("source", "measured", "proposed")
+# A source param quoted from the brief rests on the brief, what the builder asked for.
+RESTS_ON = ("source", "brief", "measured", "proposed")
 # tolerance.length, and tolerance.angle in degrees, where project.yaml sets none.
 DEFAULT_TOL = {"length": 1e-3, "angle": 0.01}
 AXES = {"x": 0, "y": 1, "z": 2}
 # The keys of a check that name a pose: the one a change is taken from, then the one it is
 # evaluated at.
 POSES = ("from", "pose")
-SOURCE_KINDS = ("paper", "supplement", "datasheet", "video", "drawing", "geometry", "other")
+SOURCE_KINDS = (
+    "paper",
+    "supplement",
+    "datasheet",
+    "video",
+    "drawing",
+    "geometry",
+    "brief",
+    "other",
+)
 TEXT_FORMATS = {".pdf", ".docx", ".txt", ".md", ".html", ".htm"}
+# A brief is plain text, so the sweep reads every word of it; a PDF may hold its words as images.
+BRIEF_FORMATS = {".txt", ".md"}
 MATH_NAMES = {
     name: getattr(math, name)
     for name in "pi sqrt sin cos tan asin acos atan atan2 radians degrees hypot".split()
@@ -217,6 +229,10 @@ class Project:
         return {name for name, basis in self.rests_on.items() if basis == "proposed"}
 
     @property
+    def on_brief(self) -> set[str]:
+        return {name for name, basis in self.rests_on.items() if basis == "brief"}
+
+    @property
     def inexact(self) -> set[str]:
         """The proposed params that keep a VERIFIED project from being exact: all but a sweep's
         resolution."""
@@ -345,6 +361,19 @@ class Project:
     def item(self, eid: str) -> dict | None:
         """The evidence item with id eid: the first, where an id is repeated."""
         return self._items.get(eid)
+
+    def statement(self, ref: str) -> dict | None:
+        """The evidence item ref names, by its id or as <id>.<key>."""
+        return self.item(ref) or self.item(ref.partition(".")[0])
+
+    def source_kind(self, item: dict) -> str | None:
+        """The kind of the source an evidence item is anchored in."""
+        return (self.sources.get(str(item.get("source"))) or {}).get("kind")
+
+    def quotes_brief(self, ref: str) -> bool:
+        """Whether ref names a statement of the brief."""
+        item = self.statement(ref)
+        return item is not None and self.source_kind(item) == "brief"
 
     @cached_property
     def _items(self) -> dict[str, dict]:
