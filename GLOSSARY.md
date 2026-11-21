@@ -24,7 +24,7 @@ _Avoid_: quote (for image evidence)
 Two ledger entries that disagree about the same feature; open until it carries a resolution.
 
 **Stated quantity**:
-A number a source prints with a unit, as an `a×b×c` product, as a diameter callout (`Ø 32.5`, a length) or as a thread size (`M3`, `1/4-20`); each one is ledgered or skipped.
+A number a source prints with a unit, as an `a×b×c` product, as a diameter callout (`Ø 32.5`, a length) or as a thread size (`M3`, `1/4-20`); each one is ledgered or skipped. A range printed with one unit (`5-10 mm`) is one stated quantity, and a MIN and a MAX each printed with its unit are two; a check compares either as a stated range, as it does a MIN or a MAX alone.
 _Avoid_: dimension (for anything that is not a size of the object's geometry), dimension candidate
 
 **Count**:
@@ -97,7 +97,7 @@ A configuration of the assembly given by joint values measured from the assembly
 _Avoid_: state, configuration (for the values themselves)
 
 **Check**:
-One comparison between the built geometry and a ledger value, or a value worked out from ledger values alone (an expect, such as module × teeth): an envelope, a distance or an angle between datums, a diameter, a mass, a count of instances or of threaded holes, an interference, or a whole part against its released body (a shape check).
+One comparison between the built geometry and a ledger value, a stated range, or a value worked out from ledger values alone (an expect, such as module × teeth): an envelope, a distance or an angle between datums, a diameter, a mass, a count of instances or of threaded holes, an interference, or a whole part against its released body (a shape check).
 _Avoid_: test, assertion
 
 **Reads**:

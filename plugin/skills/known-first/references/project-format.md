@@ -186,7 +186,7 @@ A thread param gives `thread`, a designation, in place of a value:
 
 ## checks.yaml
 
-A check compares the built geometry with the ledger, never with params: with the value its `evidence` and `key` name, or one its [`expect`](#worked-values-expect) works out from ledger values.
+A check compares the built geometry with the ledger, never with params: with the value its `evidence` and `key` name, one its [`expect`](#worked-values-expect) works out from ledger values, or a [stated range](#stated-ranges-min-and-max).
 
 ```yaml
 checks:
@@ -225,7 +225,7 @@ checks:
 
 **Over instances.** A `bbox`, `distance` or `angle` check that names `instances: [...]` in place of `part` is evaluated in the assembly frame, with its datums named `<instance>.<feature>`: an envelope of a subassembly, a spacing between parts. Datums of two different parts are only comparable this way.
 
-**Tolerances.** `tol` overrides `tolerance.length` (or `tolerance.angle`, in degrees) for one check, and is how far its evidence lets the value stray. It is capped at 5% of each value the check compares, `tol_rel` at 0.25, and a `range` check's `tol` at 5% of the span between its ends. A shape check takes no `tol`. The report lists every tolerance and overlap limit other than the default beside its check.
+**Tolerances.** `tol` overrides `tolerance.length` (or `tolerance.angle`, in degrees) for one check, and is how far its evidence lets the value stray. It is capped at 5% of each value the check compares, `tol_rel` at 0.25, and a `range` check's `tol` at 5% of the span between its ends. A shape check and a [stated range](#stated-ranges-min-and-max) take no `tol`. The report lists every tolerance and overlap limit other than the default beside its check.
 
 **What a check rests on.** A check rests on the weakest basis among the params it reads (a pose, a density, a count, its joint's range, the couplings a pose moves through), or on source when it reads none; the report shows it. A mass check on a proposed density confirms the model given that density, not the density. A `source` param should be checked, its ledger value compared by a check, the param read by one, or its body's shape check passing; one that is not raises a warning.
 
@@ -241,6 +241,28 @@ Where a source states the numbers a value is worked out from rather than the val
 ```
 
 Each ledger value reads as a check compares it: in the project's units, an angle in degrees, a rate per second ("1000 rpm" is 6000 °/s), and one printed with no unit as printed. Quote the expression, and put a space before a `-` that precedes an item, since an id may hold a hyphen. An expect reads no params: a param never supplies an expected value.
+
+### Stated ranges: `min` and `max`
+
+Where a source states a value as a MIN and a MAX, or one of them, a check that can take an [`expect`](#worked-values-expect) names `min`, `max` or both in place of `evidence` and `key`, each a ledger value `<item>.<key>`. It passes when the value it evaluates lies inside, each end within `tolerance.length` or `tolerance.angle`, how closely the model realises a value, and a `mass` or `count` exactly. The range is what the source allows, so the check takes no `tol` or `tol_rel`. Each end counts as compared.
+
+```yaml
+  - {id: body-width, kind: distance, between: [body.left, body.right], along: x,
+     min: T2.E_min, max: T2.E_max}
+  - {id: body-height, kind: distance, between: [body.seat, body.top], along: z, max: T2.A_max}
+```
+
+An envelope stated as a range takes a `distance` `along` its axis, between datums on its two faces.
+
+Where the source states no nominal, the value built to is a reconstruction choice. Give each end a `source` param and derive the param the model reads from them, with a `gap` and an `interpretation`, so it rests on proposed:
+
+```yaml
+  E_min: {basis: source, from: T2.E_min}
+  E_max: {basis: source, from: T2.E_max}
+  E: {basis: derived, expr: (E_min + E_max) / 2, gap: G-E, interpretation: "mid-range, no nominal stated"}
+  A_max: {basis: source, from: T2.A_max}
+  A: {basis: derived, expr: A_max, gap: G-A, interpretation: "built at its stated MAX, no nominal stated"}
+```
 
 ### Poses
 
