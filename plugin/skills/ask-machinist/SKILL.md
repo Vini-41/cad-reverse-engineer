@@ -11,7 +11,7 @@ A design costs little to change until someone has to make it. Put the project's 
 
 This skill works on a project of the [known-first](../known-first/SKILL.md) or the complete-model skill. Its CLI is known-first's, installed beside it ([Tool](../known-first/SKILL.md#tool)), and so are its file formats.
 
-## 1. Brief
+## 1. The model
 
 Run `cadrev check <dir>`, read `build/report.md`, and view `build/isometric.png` and every part's drawing in `build/drawings/`. The machinist needs two things:
 

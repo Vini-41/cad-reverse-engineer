@@ -17,7 +17,16 @@ from . import Fault, ledger, released, units
 from .build import JOINT_TYPES, Model, unmoving, coupling_by, prefix, printed, range_ends
 from .ledger import TOL_CAP, TOL_REL_CAP, above_cap
 from .motion import Mechanism, pose_text
-from .project import AXES, DEFAULT_TOL, POSES, RESTS_ON, Project, compared_refs, stated_range
+from .project import (
+    AXES,
+    DEFAULT_TOL,
+    POSES,
+    RESTS_ON,
+    Project,
+    compared_refs,
+    pose_refs,
+    stated_range,
+)
 
 
 class Kind(NamedTuple):
@@ -248,16 +257,17 @@ def capped(p: Project, c: dict, compared: str) -> None:
             break
 
 
-def rests_on(p: Project, reads: list[str], uncounted=()) -> tuple[str, list[str]]:
-    """What a check that read these params rests on: the weakest basis among them, or source when
-    it reads none, with the params resting on that basis; proposed, naming none, where a mass check
-    weighs a part in several instances with no stated count, since how many there are is then the
-    model's choice. A sweep's resolution states nothing about the object, so no check rests on
-    it."""
+def rests_on(p: Project, reads: list[str], uncounted=(), stated=()) -> tuple[str, list[str]]:
+    """What a check that read these params rests on: the weakest basis among them and the ledger
+    values it states (the brief where one is the brief's, else source), with the params resting
+    on that basis; proposed, naming none, where a mass check weighs a part in several instances
+    with no stated count, since how many there are is then the model's choice. A sweep's
+    resolution states nothing about the object, so no check rests on it."""
     bases = {
         n: p.rests_on.get(n, "proposed") for n in dict.fromkeys(reads) if n not in p.resolution
     }
-    weakest = max(bases.values(), key=RESTS_ON.index, default="source")
+    ledgered = "brief" if any(p.quotes_brief(ref) for ref in stated) else "source"
+    weakest = max([ledgered, *bases.values()], key=RESTS_ON.index)
     if uncounted and weakest != "proposed":
         return "proposed", []
     return weakest, [name for name, basis in bases.items() if basis == weakest]
@@ -311,7 +321,8 @@ class Checks:
                 slowest = (str(cid), seconds)
             reads = ledger.named_by_checks(p, c, weighs=self.weighs) + self._given(c)
             read |= set(reads)
-            basis, params = rests_on(p, reads, self.uncounted)
+            stated = [*compared_refs(c), *(v for v in pose_refs(c) if v not in p.params)]
+            basis, params = rests_on(p, reads, self.uncounted, stated)
             for r in found:
                 r.rests_on, r.rests_on_params, r.note = basis, params, c.get("interpretation", "")
                 r.part = part_of(c, self.model)

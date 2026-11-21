@@ -8,6 +8,7 @@ import re
 from . import Fault, released, sources, threads, units
 from .project import (
     BASES,
+    BRIEF_FORMATS,
     RESTS_ON,
     SOURCE_KINDS,
     Project,
@@ -58,6 +59,8 @@ def check_sources(p: Project) -> None:
             url = f"; download from {s['url']}" if s.get("url") else ""
             p.error("source-missing", f"source {sid}: {s.get('path')} not found{url}")
             continue
+        if s.get("kind") == "brief" and path.suffix.lower() not in BRIEF_FORMATS:
+            p.error("source-kind", f"source {sid}: a brief is a .txt or .md file")
         if s.get("sha256") != sources.sha256(path):
             p.error("source-hash", f"source {sid}: sha256 does not match {s.get('path')}")
         try:
@@ -357,7 +360,7 @@ def _params(p: Project) -> None:
         if "thread" in spec:
             with p.filing("param-thread", f"param {name}: "):
                 p.values[name] = _thread(p, name, spec)
-                p.rests_on[name] = basis if basis in RESTS_ON else "proposed"
+                p.rests_on[name] = _rests_on_itself(p, spec) if basis in RESTS_ON else "proposed"
             continue
         if "length" in spec:
             p.error(
@@ -374,7 +377,7 @@ def _params(p: Project) -> None:
                 )
             pending[name] = spec
             continue
-        p.rests_on[name] = basis
+        p.rests_on[name] = _rests_on_itself(p, spec)
         if basis == "source":
             ref = str(spec.get("from", ""))
             value = p.value(ref)
@@ -400,7 +403,7 @@ def _params(p: Project) -> None:
             item = p.item(str(spec.get("from", "")).partition(".")[0])
             if item is None or "image" not in item:
                 p.error("param-from", f"param {name}: measured needs from: an image evidence id")
-            elif (p.sources.get(str(item.get("source"))) or {}).get("kind") == "geometry":
+            elif p.source_kind(item) == "geometry":
                 # A geometry source holds no figure: an image anchored to it is a render of it.
                 p.error(
                     "param-from",
@@ -420,6 +423,13 @@ def _params(p: Project) -> None:
             p.values[name] = float(spec["value"])
     _derived(p, pending)
     _screws(p)
+
+
+def _rests_on_itself(p: Project, spec: dict) -> str:
+    """What a param that reads no other rests on: its basis, or the brief where it is a source
+    param quoted from one."""
+    quoted = spec["basis"] == "source" and p.quotes_brief(str(spec.get("from", "")))
+    return "brief" if quoted else spec["basis"]
 
 
 def is_body(p: Project, name: str) -> bool:
@@ -494,7 +504,7 @@ def _thread(p: Project, name: str, spec: dict) -> threads.Size:
         )
     if basis == "source":
         ref = str(spec.get("from", ""))
-        item = p.item(ref) or p.item(ref.partition(".")[0])
+        item = p.statement(ref)
         stated = None if item is None else item.get("quote", item.get("reading"))
         printed = threads.printed_in(str(stated or ""))
         if item is None or stated is None:

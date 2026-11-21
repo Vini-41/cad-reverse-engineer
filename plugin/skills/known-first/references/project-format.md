@@ -32,7 +32,7 @@ clearance: fit_gap       # optional: the length param of the loosest fit
 known_first: true        # optional: build only what the sources settle (Known first)
 sources:                 # written by `cadrev source`; keep it the last key
   - id: paper
-    kind: paper          # paper | supplement | datasheet | video | drawing | geometry | other
+    kind: paper          # paper | supplement | datasheet | video | drawing | geometry | brief | other
     path: sources/x.pdf
     sha256: …
     citation: …
@@ -46,6 +46,7 @@ sources:                 # written by `cadrev source`; keep it the last key
 - `material` and `follows` are the complete model's other two answers: what its made parts are made of and how, and whether a feature that is hard to make that way is built as the sources show it (`design`) or replaced by one that does the same job (`function`). The report prints both.
 - `cadrev source` with an id already registered refreshes that entry: its file, hash and whatever the command states. That is how a source is restored into a clone or replaced by a new download.
 - **Text sources** are quote-checked and swept: PDF, DOCX, TXT, MD, HTML (read as its rendered text). Save a web datasheet as HTML or TXT to quote it. Video and image files anchor image evidence only.
+- **The brief** (`kind: brief`) is what the user specified, in their own words, saved as a `.txt` or `.md` file. It is quoted, swept and held to conflicts like any other text source, and what [rests on](#paramsyaml) it is counted apart.
 - **Geometry sources** (`kind: geometry`) are what the authors released: STEP or STL, read in millimetres and converted to the project's length unit. A **body** is named by its source's id where the file holds one solid, else `<source>#<n>`, the nth solid in file order from 1. Where a part ships as both, register the STEP, which keeps the cylindrical faces and axes an STL flattens into triangles. A part a body ships is built in its frame and compared whole with it by a [shape check](#checksyaml).
 - **A cut file** is a laser-cut sheet, an SVG registered as `kind: geometry`. Its bodies are its regions, each an outer contour with the holes inside it, named by a point inside it: `<source>@<x>,<y>` (`plates@30,41`). Points are in the sheet's frame: from the page's top-left corner, x right and y down, at the scale the file declares with every transform applied, in the project's length unit. The coverage findings name each region by such a point, ready to copy.
 
@@ -108,7 +109,7 @@ evidence:
 - **How numbers read.** A decimal comma is one number (`3,5 mm` is 3.5) and so is a fraction before a unit (`1 1/2 in` is 1.5); both ends of a range are values; a number labelling a figure, table, equation or section is not one. A cardinal from zero to ninety-nine in words is a number ("Eight tension springs" states 8, written `n: 8` or `n: eight`). A comma before exactly three digits (`1,250`) reads two ways, so take that value from where it is printed in another form.
 - **Image evidence** covers numbers that exist only in pixels: figure labels, drawing dimensions, video frames. The crop is hashed so the reviewed image cannot change under its reading. Until a named human writes `confirmed_by`, the reading holds the project at VERIFIED PENDING REVIEW. The image a `measured` param scales off is image evidence too and needs no `values`: its `reading` transcribes any label and names the reference it is scaled against.
 - **`scope`** sets a statement aside, with a `reason`:
-  - `not-modeled`: a real statement about something the reconstruction does not build: what lies outside the device (a test rig, the electronics), a part the target's configuration leaves out, a part whose motion cadrev's joint types cannot model (a flexure), a feature that a project following the function replaces with one easier to make, or behaviour the kinematic model leaves out (a spring's stiffness, a damping, a friction). It keeps its `values`, so the report shows what was left unbuilt.
+  - `not-modeled`: a real statement about something the reconstruction does not build: what lies outside the device (a test rig, the electronics), a part the target's configuration leaves out, a part whose motion cadrev's joint types cannot model (a flexure), a feature that a project following the function replaces with one easier to make, a value the [brief](#projectyaml) overrides, or behaviour the kinematic model leaves out (a spring's stiffness, a damping, a friction). It keeps its `values`, so the report shows what was left unbuilt.
   - `context`: a statement that informs interpretation but is not a dimension of a modelled feature. A restatement is context: a value stated in several places is ledgered at each, the statement a param or check reads stays in scope (a quote rather than a figure reading where both exist), and each other one says `restates <id>`. Statements whose values differ are a conflict, not a restatement. A direction of change stated with no length (the cable lengthens between two poses) is context too, its reason saying so: no check compares a direction.
 - Every value of an in-scope item is used by a param's `from` or compared by a check.
 
@@ -139,6 +140,8 @@ conflicts:
 
 A conflict without a `resolution` stays open: a warning, listed in the report.
 
+Where the [brief](#projectyaml) overrides a document, the param and its check read the brief's value, the document's statement takes `scope: not-modeled` with a reason naming the conflict, and the `resolution` says why the builder's value stands.
+
 ## params.yaml
 
 ```yaml
@@ -163,7 +166,7 @@ parts:                       # the mass model
 
 - **`interpretation`** says how a value maps onto geometry where that is a choice: which axis, envelope or pitch, which feature, which configuration.
 - **A derived param whose `expr` makes a placement choice** (pins at the centres of the rounded ends, a frame centred in its sole) names the `gap` whose answer would settle it. A choice several params share can instead be one proposed param they all read (`end_margin` above).
-- **Rests on.** A param rests on its own basis; a derived one on the weakest basis among the params its `expr` reads (proposed < measured < source), or on proposed where it names a gap. The report's headline counts params by what they rest on. An `expr` that reads no param traces to nothing: give the number its own basis.
+- **Rests on.** A param rests on its own basis, and a `source` param quoted from the [brief](#projectyaml) on the brief; a derived one on the weakest among the params its `expr` reads (proposed < measured < brief < source), or on proposed where it names a gap. The report's headline counts params by what they rest on, and report.json's `rests_on_brief` names those on the brief. An `expr` that reads no param traces to nothing: give the number its own basis.
 - **The mass model**, `parts`, weighs each part by one param: `mass`, a datasheet mass, for a purchased part, or `density`, which its volume is multiplied by, for a printed one. The MJCF export, the report and a mass check without `density` all weigh by it, so they never disagree. In a model with joints every part an instance places needs an entry.
 
 ### Threads
@@ -227,7 +230,7 @@ checks:
 
 **Tolerances.** `tol` overrides `tolerance.length` (or `tolerance.angle`, in degrees) for one check, and is how far its evidence lets the value stray. It is capped at 5% of each value the check compares, `tol_rel` at 0.25, and a `range` check's `tol` at 5% of the span between its ends. A shape check and a [stated range](#stated-ranges-min-and-max) take no `tol`. The report lists every tolerance and overlap limit other than the default beside its check.
 
-**What a check rests on.** A check rests on the weakest basis among the params it reads (a pose, a density, a count, its joint's range, the couplings a pose moves through), or on source when it reads none; the report shows it. A mass check on a proposed density confirms the model given that density, not the density. A `source` param should be checked, its ledger value compared by a check, the param read by one, or its body's shape check passing; one that is not raises a warning.
+**What a check rests on.** A check rests on the weakest basis among the params it reads (a pose, a density, a count, its joint's range, the couplings a pose moves through) and the ledger values it compares or poses at, which are the brief's or else source; the report shows it. A mass check on a proposed density confirms the model given that density, not the density. A `source` param should be checked, its ledger value compared by a check, the param read by one, or its body's shape check passing; one that is not raises a warning.
 
 ### Worked values: `expect`
 
@@ -374,7 +377,7 @@ steps:                   # the assembly sequence
 | **NOT VERIFIED** | at least one error | 1 |
 | **PARTIAL** | `--no-build` skipped the build, so it makes no claim and writes no report | 1 |
 
-**Exact** qualifies VERIFIED: no param rests on a proposed value, a sweep's `steps` aside. report.md prints it under the status.
+**Exact** qualifies VERIFIED: no param rests on a proposed value, a sweep's `steps` aside. report.md prints it under the status, naming any param that rests on the [brief](#projectyaml).
 
 ## Known first
 
@@ -383,4 +386,4 @@ steps:                   # the assembly sequence
 - A param resting on proposed is an error, a sweep's `steps` aside, so a known-first project that is VERIFIED is exact.
 - An in-scope ledger value nothing uses **waits**, and so does a gap no param names, the question a waiting part asks. The report lists both under Waiting. Everything else holds: the whole ledger is still harvested and covered.
 
-Removing `known_first` returns the project to the full rules. A value the user supplies is `proposed`, its `rationale` naming them, so remove `known_first` first.
+Removing `known_first` returns the project to the full rules. A value the user supplies is quoted from the [brief](#projectyaml), so the project can stay known first.

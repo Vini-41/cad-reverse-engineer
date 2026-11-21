@@ -369,6 +369,115 @@ def test_project_with_no_proposed_param_is_exact_and_a_derived_choice_ends_that(
     assert "| G2 | where do the pins sit? |  | centres |" in run.md
 
 
+def briefed(root, tmp_path, text: str = "Drill the holes 3 mm across.") -> None:
+    """Take the hole's diameter, which the paper leaves open, from a brief."""
+    add_source(root, tmp_path, "brief.md", text, "brief", "brief")
+    quote = "{id: B1, source: brief, locator: par. 1, quote: the holes 3 mm across, values: {d: 3}}"
+    add(
+        root,
+        evidence=quote,
+        checks="{id: bore, kind: diameter, at: link.wall, evidence: B1, key: d}",
+    )
+    stated = {"basis": "source", "from": "B1.d", "value": None, "rationale": None, "gap": None}
+    change(root, "params", "hole_d", **stated)
+    write(root, "gaps.yaml", "gaps: []\n")
+
+
+def test_a_param_quoted_from_the_brief_is_counted_apart_from_the_objects_documents(
+    proj_dir, tmp_path
+):
+    briefed(proj_dir, tmp_path)
+    run = check(proj_dir)
+    assert run.status == "VERIFIED" and run.rules == []
+    hole = run.report["params"]["hole_d"]
+    assert (hole["basis"], hole["rests_on"]) == ("source", "brief")
+    counted = {b: run.report["counts"][b] for b in ("source", "brief", "measured", "proposed")}
+    assert counted == {"source": 4, "brief": 1, "measured": 0, "proposed": 0}
+    assert "1 on the brief" in run.md
+    # A check rests on the brief where the value it compares is the brief's.
+    assert (run.result("bore")["rests_on"], run.result("pitch")["rests_on"]) == ("brief", "source")
+
+
+def test_a_derived_param_rests_on_the_brief_unless_it_reads_something_weaker(proj_dir, tmp_path):
+    briefed(proj_dir, tmp_path)
+    add_reading(proj_dir, confirmed_by="A. Reviewer")
+    foot = "{basis: measured, from: F2, value: 5.5, method: by scale, uncertainty: ±0.3 mm}"
+    add(proj_dir, gaps="{id: G2, question: 'how far in?'}")
+    choice = "{basis: derived, expr: hole_d * 2, gap: G2, interpretation: two holes in}"
+    derived = {
+        "documents": "{basis: derived, expr: pitch / 2}",
+        "both": "{basis: derived, expr: pitch - hole_d}",
+        "weaker": "{basis: derived, expr: hole_d + foot}",
+        "choice": choice,
+    }
+    add(
+        proj_dir,
+        params=f"{{foot: {foot}, " + ", ".join(f"{k}: {v}" for k, v in derived.items()) + "}",
+    )
+    params = check(proj_dir).report["params"]
+    rests = {name: params[name]["rests_on"] for name in derived}
+    assert rests == {
+        "documents": "source",
+        "both": "brief",
+        "weaker": "measured",
+        "choice": "proposed",
+    }
+
+
+def test_the_coverage_sweep_lists_a_stated_quantity_of_the_brief_the_model_does_not_use(
+    proj_dir, tmp_path
+):
+    briefed(proj_dir, tmp_path, "Drill the holes 3 mm across. Keep it under 50 g.")
+    run = check(proj_dir)
+    assert run.errors == ["coverage"]
+    (listed,) = run.messages("coverage")
+    assert listed.startswith("brief p1") and "50 g" in listed
+    add(proj_dir, skipped="{source: brief, quote: under 50 g, reason: a wish for the print}")
+    assert check(proj_dir).rules == []
+
+
+@pytest.mark.parametrize("name", ["brief.png", "brief.pdf"])
+def test_a_brief_is_a_plain_text_file_so_the_sweep_reads_all_of_it(proj_dir, tmp_path, name):
+    content = png() if name.endswith(".png") else pdf(["Drill the holes 3 mm across."])
+    add_source(proj_dir, tmp_path, name, content, "brief", "brief")
+    assert "source-kind" in check(proj_dir).errors
+
+
+def test_a_brief_that_overrides_a_document_is_a_conflict_open_until_resolved(proj_dir, tmp_path):
+    briefed(proj_dir, tmp_path, "Drill the holes 3 mm across, and space them 32 mm apart.")
+    wider = "{id: B2, source: brief, locator: par. 1, quote: space them 32 mm apart"
+    add(proj_dir, evidence=wider + ", values: {pitch: 32}}")
+    add(proj_dir, conflicts="{id: K1, evidence: [B2, pitch], summary: 32 mm against 30 mm}")
+    change(proj_dir, "evidence", "pitch", scope="not-modeled", reason="the brief overrides it, K1")
+    change(proj_dir, "params", "pitch", **{"from": "B2.pitch"})
+    change(proj_dir, "checks", "pitch", evidence="B2")
+    run = check(proj_dir)
+    assert run.status == "VERIFIED" and run.rules == ["conflict-open"]
+    assert run.report["params"]["pitch"]["rests_on"] == "brief"
+    change(proj_dir, "conflicts", "K1", resolution="The builder's spacing, for their jig.")
+    run = check(proj_dir)
+    assert run.rules == [] and "The builder's spacing, for their jig." in run.md
+
+
+def test_exact_keeps_its_rule_and_says_where_it_rests_on_the_brief(proj_dir, tmp_path):
+    no_proposed(proj_dir)
+    run = check(proj_dir)
+    assert run.report["exact"] and run.report["rests_on_brief"] == []
+    change(proj_dir, "params", "hole_d", expr=None)
+    briefed(proj_dir, tmp_path)
+    run = check(proj_dir)
+    assert run.report["exact"] and run.report["rests_on_brief"] == ["hole_d"]
+    (exact,) = [line for line in run.md.splitlines() if line.startswith("**Exact**")]
+    assert "hole_d" in exact
+
+
+def test_a_known_first_project_may_rest_on_the_brief(proj_dir, tmp_path):
+    meta(proj_dir, known_first=True)
+    briefed(proj_dir, tmp_path)
+    run = check(proj_dir)
+    assert run.status == "VERIFIED" and run.rules == [] and run.report["exact"]
+
+
 # Known first: the link's every dimension is settled; a pin's length is stated, its diameter not.
 PIN = "{id: pin, source: notes, locator: Sec. 3, quote: Each pin is 12 mm long, values: {L: 12}}"
 PIN_GAP = "{id: G-pin, question: 'What diameter are the pins?', ask: authors}"

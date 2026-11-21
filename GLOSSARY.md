@@ -5,8 +5,12 @@ Rebuilding a published object, from a single part up to a mechanism, from its so
 ## Evidence
 
 **Source**:
-A registered, hash-pinned document that states things about the object: a paper, supplement, datasheet, video or drawing, or geometry its authors released (a STEP, STL or cut file), which states shape rather than text.
+A registered, hash-pinned document that states things about the object: a paper, supplement, datasheet, video or drawing, or geometry its authors released (a STEP, STL or cut file), which states shape rather than text. These are the *object's documents*: what its authors stated. The one other source is the brief.
 _Avoid_: reference, input
+
+**Brief**:
+What the user specified for the object, in their own words: a text file registered as a source of its own kind. It is ledgered and swept like any text source, and where it disagrees with the object's documents that is a conflict. It states what the object's builder asked for, so what rests on it is counted apart.
+_Avoid_: requirements, prompt
 
 **Figure**:
 An image in a source: a plot, photo, drawing or video frame. Figure crops are taken from it.
@@ -41,7 +45,7 @@ _Avoid_: exclusion, ignore
 The declared origin of a parameter's value: `source`, `derived`, `measured` or `proposed`. A parameter with basis `source` *traces to a source*.
 
 **Rests on**:
-The basis a value ultimately depends on. A parameter rests on its own basis; a derived one on the weakest among the parameters it is computed from, proposed being weaker than measured and measured weaker than source, or on proposed where its computation is itself a reconstruction choice. A check rests on the weakest among the parameters its Reads names, or on source when it names none.
+The basis a value ultimately depends on. A parameter rests on its own basis, one quoted from the brief on the brief; a derived one on the weakest among the parameters it is computed from, proposed being weaker than measured, measured than the brief and the brief than the object's documents, or on proposed where its computation is itself a reconstruction choice. A check rests on the weakest among the parameters its Reads names and the ledger values it compares or poses at, each the brief's or else source.
 _Avoid_: traces to (for a derived parameter), effective basis
 
 **Measured**:
