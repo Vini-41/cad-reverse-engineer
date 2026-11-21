@@ -1,6 +1,6 @@
 {
-  "include": ["plugin/skills/known-first/tool/src", "tests"],
-  "exclude": ["plugin/skills/known-first/tool/src/cadrev/template"],
-  "venvPath": "plugin/skills/known-first/tool",
+  "include": ["plugin/skills/build-model/tool/src", "tests"],
+  "exclude": ["plugin/skills/build-model/tool/src/cadrev/template"],
+  "venvPath": "plugin/skills/build-model/tool",
   "venv": ".venv"
 }

@@ -1,6 +1,6 @@
 # cad-reverse-engineer
 
-Three skills that turn a paper, patent or datasheet into parametric CAD, with every dimension traced to where it came from. Give your coding agent the documents a device was published in, and it builds:
+Two skills that turn a paper, patent or datasheet into parametric CAD, with every dimension traced to where it came from. Give your coding agent the documents a device was published in, and it builds:
 
 - **CAD you can open and change**: a STEP file per part and one for the assembly, from a parametric build123d model whose every dimension is a named value in `params.yaml`.
 - **A mechanism that moves**: joints, gear ratios and lead screws exported to MuJoCo, with stated motion checked on the model.
@@ -10,11 +10,10 @@ Three skills that turn a paper, patent or datasheet into parametric CAD, with ev
 
 ## The skills
 
-- **`known-first`** builds and checks only the parts whose every dimension the documents settle, and lists what they leave open as questions. It guesses nothing.
-- **`complete-model`** builds the whole object. It asks metric or US, the material, and whether to follow the design or the function, then proposes what the documents leave open from standard sizes: a thread from the table, a screw in a length you can buy.
+- **`build-model`** builds the parts the documents settle first. For the whole object it asks metric or US, the material, and whether to follow the design or the function, then proposes what they leave open from standard sizes: a thread from the table, a screw in a length you can buy. Ask for **known first** and it stops at the settled parts, with what waits listed as questions.
 - **`ask-machinist`** reviews the model as the person who has to make it, part by part, and writes the plan.
 
-Name the skill you want, or ask for the CAD. *"Reverse-engineer the gripper in this paper"* gets you the complete model. Say "build now" and it answers its questions from the documents.
+*"Reverse-engineer the gripper in this paper"* gets you the complete model, and *"with nothing guessed"* gets you known first. Say "build now" and it answers its questions from the documents.
 
 ## Install
 
@@ -39,12 +38,12 @@ Codex's default sandbox blocks network access, which the CLI needs to download i
 network_access = true
 ```
 
-Any agent that reads skills: `npx skills add Vini-41/cad-reverse-engineer --skill '*'`. Install all three, since `complete-model` and `ask-machinist` use the CLI that `known-first` holds.
+Any agent that reads skills: `npx skills add Vini-41/cad-reverse-engineer --skill '*'`. Install both, since `ask-machinist` uses the CLI that `build-model` holds.
 
 Built for Fable 5.2 and [benchmarked](https://github.com/Vini-41/cad-reverse-engineer/blob/main/docs/benchmark.md) across Anthropic's and OpenAI's frontier models.
 
 ## Requirements
 
-The skills' `cadrev` CLI runs locally on your machine and needs [uv](https://docs.astral.sh/uv/) and Python 3.12 to 3.14, which uv can install. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute), at the versions pinned in `skills/known-first/tool/uv.lock`. Under Codex, allow network access as above.
+The skills' `cadrev` CLI runs locally on your machine and needs [uv](https://docs.astral.sh/uv/) and Python 3.12 to 3.14, which uv can install. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute), at the versions pinned in `skills/build-model/tool/uv.lock`. Under Codex, allow network access as above.
 
 Three worked examples you can run, and the rest of the documentation: https://github.com/Vini-41/cad-reverse-engineer. MIT license.

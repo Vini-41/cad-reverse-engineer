@@ -4,7 +4,7 @@ If `~/Documents/Projects/cadrev/AGENTS.md` exists, read it first: it holds the m
 
 You are the owner and long-term maintainer of this codebase, and its design is up to you. It is kept lean for the frontier model: change or remove what is there before adding beside it.
 
-`plugin/` is the plugin as it installs: three skills, of which `known-first` holds the CLI and the file formats the other two use. The CLI's source is `plugin/skills/known-first/tool/src/cadrev/`; its tests are `tests/`, which drive it only through `cadrev.cli`. `scripts/cadrev` runs the CLI from anywhere, and `scripts/cadrev python` the Python it runs on.
+`plugin/` is the plugin as it installs: two skills, of which `build-model` holds the CLI and the file formats `ask-machinist` uses. The CLI's source is `plugin/skills/build-model/tool/src/cadrev/`; its tests are `tests/`, which drive it only through `cadrev.cli`. `scripts/cadrev` runs the CLI from anywhere, and `scripts/cadrev python` the Python it runs on.
 
 `scripts/check` is the repo's one check: green locally before every commit, and on a PR's head before it merges. GitHub Actions runs it on each PR and on main. `scripts/check --lint` is the seconds-long loop after an edit.
 

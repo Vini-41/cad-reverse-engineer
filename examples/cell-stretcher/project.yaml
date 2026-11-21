@@ -1,4 +1,4 @@
-# Reconstruction project. File formats: references/project-format.md in the known-first skill.
+# Reconstruction project. File formats: references/project-format.md in the build-model skill.
 format: 2   # version of these file formats; set by cadrev init
 name: cell-stretcher
 target: "Six-well uniaxial cell stretcher of Kah et al. 2021 (HardwareX 9, e00162) as released in its design files: the stretcher unit (aluminium frame, two lead-screw actuators, carriage, stationary bar, substrate mountings with the 3D-printed clamps, the stretch-holding frames of Acryl6MM) and the PDMS casting mould (Acryl3MM base, platform and parts, MoldFrame), at zero stretch with clamps fitted; the electronics and controller unit is not built"
