@@ -10,7 +10,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from . import checks, ledger
-from .build import GEAR_BY, Model, prefix, printed, range_ends
+from .build import COUPLING_BY, Model, prefix, printed, range_ends
 from .checks import Result
 from .motion import pose_text
 from .project import BASES, DEFAULT_TOL, RESTS_ON, Project
@@ -130,9 +130,9 @@ def motion(p: Project, model: Model, coarsened: dict) -> dict:
     return {
         "joints": joints,
         "loops": {name: list(pair) for name, pair in model.loops.items()},
-        "gears": {
-            name: {"driver": g["driver"], "driven": g["driven"]} | valued(g, GEAR_BY)
-            for name, g in model.gears.items()
+        "couplings": {
+            name: {"driver": c["driver"], "driven": c["driven"]} | valued(c, COUPLING_BY)
+            for name, c in model.couplings.items()
         },
         "cables": cables,
         "coarsened": coarsened,

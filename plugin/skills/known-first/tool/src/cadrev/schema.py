@@ -98,7 +98,7 @@ PART = record("mass density", exclusive=(("mass", "density"),))
 GAP = record("id! question ask")
 # What model.py's build returns for a mechanism, held to the same shapes as the YAML.
 JOINT = record("type parent child axis:[str] range:[str] drive")
-GEAR = record("driver driven ratio lead")
+COUPLING = record("driver driven ratio lead")
 CABLE = record("path:[str] wheel closes:{str}")
 # A step of the plan: the instances it places, the screws it drives of each thread param, and
 # how. `with` is a Python keyword, which a mapping's key may be.

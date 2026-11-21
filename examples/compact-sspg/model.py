@@ -506,9 +506,9 @@ def build(p):
         "carrier": {"type": "revolute", "parent": "casing_1", "child": "carrier_1", "axis": ["carrier_1.axis_lo", "carrier_1.axis_hi"], "drive": "passive"},
         "sec": {"type": "fixed", "parent": "carrier_1", "child": "sec_1"},
     }
-    gears = {"sun_carrier": {"driver": "sun", "driven": "carrier", "ratio": "carrier_ratio"}}
+    couplings = {"sun_carrier": {"driver": "sun", "driven": "carrier", "ratio": "carrier_ratio"}}
     for k in range(n_pl):
         joints[f"planet_{k + 1}"] = {"type": "revolute", "parent": "carrier_1", "child": f"planet_{k + 1}",
                                      "axis": [f"planet_{k + 1}.axis_seat", f"planet_{k + 1}.axis"], "drive": "passive"}
-        gears[f"carrier_planet_{k + 1}"] = {"driver": "carrier", "driven": f"planet_{k + 1}", "ratio": "planet_ratio"}
-    return {"parts": parts, "datums": datums, "assembly": assembly, "joints": joints, "gears": gears}
+        couplings[f"carrier_planet_{k + 1}"] = {"driver": "carrier", "driven": f"planet_{k + 1}", "ratio": "planet_ratio"}
+    return {"parts": parts, "datums": datums, "assembly": assembly, "joints": joints, "couplings": couplings}

@@ -705,18 +705,18 @@ MECH_FINDINGS = {
     "model-joint: a ring of joints": _model(INPUT, INPUT.replace("rail_1", "coupler_1")),
     "model-joint: a fixed joint with an axis": _model('"type": "slide"', '"type": "fixed"'),
     "model-loop": _model(LOOP, LOOP.replace("slider_1.up", "slider_1.nope")),
-    "model-gear: a joint the model lacks": _chain(
+    "model-coupling: a joint the model lacks": _chain(
         FOLD.replace("knee", "ankle"), fold=PROPOSED % -2
     ),
-    "model-gear: one joint twice": _chain(FOLD.replace("knee", "input"), fold=PROPOSED % -2),
-    "model-gear: a ratio across a hinge and a slide": _chain(
+    "model-coupling: one joint twice": _chain(FOLD.replace("knee", "input"), fold=PROPOSED % -2),
+    "model-coupling: a ratio across a hinge and a slide": _chain(
         FOLD.replace("knee", "slide"), fold=PROPOSED % -2
     ),
-    "model-gear: a lead between two hinges": _chain(
+    "model-coupling: a lead between two hinges": _chain(
         FOLD.replace('"ratio"', '"lead"'), fold=PROPOSED % -2
     ),
-    "model-gear: a ratio params.yaml lacks": _chain(FOLD),
-    "model-gear: a lead of 0": _chain(SCREW, lead=PROPOSED % 0),
+    "model-coupling: a ratio params.yaml lacks": _chain(FOLD),
+    "model-coupling: a lead of 0": _chain(SCREW, lead=PROPOSED % 0),
     "model-cable: a path datum that is none": _wound(WOUND.replace("slider_1.down", "slider_1.z")),
     "model-cable: a wheel the model lacks": _wound(WOUND.replace('"input"', '"spool"')),
     "model-cable: a wheel with a two-ended range": _chain(WOUND, pull=PROPOSED % -20),
@@ -724,7 +724,7 @@ MECH_FINDINGS = {
     "model-cable: a path starting on the wheel": _wound(WOUND.replace("rail_1.up", "crank_1.up")),
     "model-cable: closing its own wheel": _wound(WOUND.replace('{"slide"', '{"input"')),
     "model-cable: closing a joint the model lacks": _wound(WOUND.replace('{"slide"', '{"ankle"')),
-    "model-cable: closing a joint a gear couples": _wound(
+    "model-cable: closing a joint a coupling couples": _wound(
         WOUND + "\n        " + SCREW, lead=PROPOSED % 8
     ),
     "model-cable: a closed param params.yaml lacks": _wound(WOUND.replace('"pull"', '"tug"')),
@@ -736,8 +736,11 @@ MECH_FINDINGS = {
         INPUT_RANGE, '"range": ["input_min", "rest", "input_max"]'
     ),
     "model-return: a loop of one datum": _model(LOOP, LOOP.replace(', "slider_1.up"', "")),
-    "model-return: a gear with both ratio and lead": _chain(
+    "model-return: a coupling with both ratio and lead": _chain(
         FOLD.replace("}}", ', "lead": "fold"}}'), fold=PROPOSED % -2
+    ),
+    "model-return: gears, the old name of couplings": _chain(
+        FOLD.replace('"couplings"', '"gears"'), fold=PROPOSED % -2
     ),
     "model-return: a cable path of one datum": _wound(WOUND.replace('"rail_1.up", ', "")),
     "model-return: a wheel without closes": _wound(
@@ -771,7 +774,7 @@ MECH_FINDINGS = {
         remodel(r, SLIDE, '"slide": {"type": "fixed", "parent": "rail_1", "child": "slider_1"},'),
         change(r, "checks", "stand", pose={"slide": "S2.turn"}),
     ),
-    "check-config: a pose setting a gear out of ratio": _chain(
+    "check-config: a pose setting a coupling out of ratio": _chain(
         FOLD,
         _checks("stand", pose={"input": "S2.turn", "knee": "S2.turn"}),
         fold=PROPOSED % -2,
@@ -997,7 +1000,7 @@ MECH_DAMAGE = {
     "cable closes that is None": _wound(WOUND.replace('{"slide": "pull"}', "None")),
     "joint axis of numbers": _model('"axis": ["crank_1.a", "crank_1.up"]', '"axis": [0, 1]'),
     "loops that are a list": _model(LOOP, '"loops": [["coupler_1.down", "slider_1.up"]],'),
-    "gear ratio that is a number": _chain(FOLD.replace('"fold"}', "p.L}")),
+    "coupling ratio that is a number": _chain(FOLD.replace('"fold"}', "p.L}")),
     "cable path of numbers": _wound(WOUND.replace('["rail_1.up", "slider_1.down"]', "[1, 2]")),
     "cable closes that is a list": _wound(WOUND.replace('{"slide": "pull"}', '["slide"]')),
     "mass model that is a list": lambda r, t: edit(

@@ -346,7 +346,7 @@ def test_report_json_holds_the_run_as_data(proj_dir):
     assert report["motion"] == {
         "joints": {},
         "loops": {},
-        "gears": {},
+        "couplings": {},
         "cables": {},
         "coarsened": {},
         "dropped": False,

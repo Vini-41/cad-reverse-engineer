@@ -227,7 +227,7 @@ checks:
 
 **Tolerances.** `tol` overrides `tolerance.length` (or `tolerance.angle`, in degrees) for one check, and is how far its evidence lets the value stray. It is capped at 5% of each value the check compares, `tol_rel` at 0.25, and a `range` check's `tol` at 5% of the span between its ends. A shape check takes no `tol`. The report lists every tolerance and overlap limit other than the default beside its check.
 
-**What a check rests on.** A check rests on the weakest basis among the params it reads (a pose, a density, a count, its joint's range, the gears a pose moves through), or on source when it reads none; the report shows it. A mass check on a proposed density confirms the model given that density, not the density. A `source` param should be checked, its ledger value compared by a check, the param read by one, or its body's shape check passing; one that is not raises a warning.
+**What a check rests on.** A check rests on the weakest basis among the params it reads (a pose, a density, a count, its joint's range, the couplings a pose moves through), or on source when it reads none; the report shows it. A mass check on a proposed density confirms the model given that density, not the density. A `source` param should be checked, its ledger value compared by a check, the param read by one, or its body's shape check passing; one that is not raises a warning.
 
 ### Worked values: `expect`
 
@@ -258,8 +258,8 @@ A mechanism ([modeling.md](modeling.md#joints-and-loops)) can be checked moved. 
 
 - **A pose value moves its joint from the assembly as built**: a revolute joint's in the project's angle unit, a slide's in its length unit. Build the assembly at the configuration the source measures from, so a stated value is the pose value itself.
 - **A number** is a pose fixed by definition, not a ledger value: the one turn a lead "per turn" is stated over, which no source gives a number for. It reads in its joint's unit and adds nothing to what the check rests on. A pose a source states ("turned 30° on") names its ledger value.
-- cadrev sets the joints the pose names, holds every other `actuated` joint as built, and moves the `passive` joints until every loop closes, on MuJoCo's model of the exported mechanism. A gear moves its other joint with the one a pose sets, a cable its closed joints with its wheel, through any chain. The check is then evaluated on the model's own geometry, placed where MuJoCo puts each body. Name `instances` on a posed check: a part's own frame reads the same at every pose.
-- A pose the mechanism cannot reach is a finding, and its checks are not evaluated: a loop that stays open there, or a gear or cable the loops do not allow (`[loop-open]`: links too short, past a toggle, or coupled against the ring), or a joint pushed outside its `range` (`[joint-range]`).
+- cadrev sets the joints the pose names, holds every other `actuated` joint as built, and moves the `passive` joints until every loop closes, on MuJoCo's model of the exported mechanism. A coupling moves its other joint with the one a pose sets, a cable its closed joints with its wheel, through any chain. The check is then evaluated on the model's own geometry, placed where MuJoCo puts each body. Name `instances` on a posed check: a part's own frame reads the same at every pose.
+- A pose the mechanism cannot reach is a finding, and its checks are not evaluated: a loop that stays open there, or a coupling or cable the loops do not allow (`[loop-open]`: links too short, past a toggle, or coupled against the ring), or a joint pushed outside its `range` (`[joint-range]`).
 - **`from`** on a `distance`, `angle` or `stroke` check names a second pose, and the check compares the change between the two: a slide's travel per screw turn, a carrier's turn per sun turn. `from: {}` is as built.
 - **`stroke`** compares how far a cable shortens, as built to posed or between `from` and `pose`, with a printed length. Without `pose` it is posed at the cable's wheel at its full turn. A direction stated with no length is [`context`](#evidence-the-ledger).
 
@@ -279,22 +279,22 @@ A joint's `range` is two params, each a pose value from as built, or one param f
 
 ### Worked example: a planetary train
 
-A planetary train with one member fixed is a chain of [gears](modeling.md#joints-and-loops), each ratio derived from the stated tooth counts, checked against values `expect` works out. Here a table of the module and tooth counts is ledgered as `T1`, and a stated "7.2:1" as `R1` (`{ratio: 7.2}`). The ring is fixed, the sun `actuated`, the carrier `passive` on the ring, and each planet a `passive` revolute joint on the carrier.
+A planetary train with one member fixed is a chain of [couplings](modeling.md#joints-and-loops), each ratio derived from the stated tooth counts, checked against values `expect` works out. Here a table of the module and tooth counts is ledgered as `T1`, and a stated "7.2:1" as `R1` (`{ratio: 7.2}`). The ring is fixed, the sun `actuated`, the carrier `passive` on the ring, and each planet a `passive` revolute joint on the carrier.
 
 ```yaml
 # params.yaml
   z_sun:         {basis: source,  from: T1.z_sun}             # likewise z_planet, z_ring, module
   carrier_ratio: {basis: derived, expr: z_sun / (z_sun + z_ring)}
   planet_ratio:  {basis: derived, expr: -z_ring / z_planet}          # planet on the carrier
-# model.py: "gears": {"sun_carrier": {"driver": "sun", "driven": "carrier", "ratio": "carrier_ratio"},
-#                     "carrier_planet_1": {"driver": "carrier", "driven": "planet_1", "ratio": "planet_ratio"}}
+# model.py: "couplings": {"sun_carrier": {"driver": "sun", "driven": "carrier", "ratio": "carrier_ratio"},
+#                         "carrier_planet_1": {"driver": "carrier", "driven": "planet_1", "ratio": "planet_ratio"}}
 # checks.yaml
   - {id: carrier-turn, kind: angle, instances: [ring_1, carrier_1],
      between: [ring_1.d, ring_1.a, carrier_1.d], from: {}, pose: {sun: 360},
      expect: "360 / R1.ratio"}                                  # 50° per sun turn
 ```
 
-The carrier's turn reads both gears' ratios, so the tooth counts are checked, while its expected value comes from the stated ratio: a wrong formula, a misread count or a sign error fails it. Place `ring_1.d` a quarter turn from the carrier's datum, so the unsigned angle stays on one side through the turn. The pitch diameter and planet-axis checks above then fail a ring count that breaks `z_ring = z_sun + 2 * z_planet`. A train with no member fixed is out of reach: a gear ties only two joints.
+The carrier's turn reads both couplings' ratios, so the tooth counts are checked, while its expected value comes from the stated ratio: a wrong formula, a misread count or a sign error fails it. Place `ring_1.d` a quarter turn from the carrier's datum, so the unsigned angle stays on one side through the turn. The pitch diameter and planet-axis checks above then fail a ring count that breaks `z_ring = z_sun + 2 * z_planet`. A train with no member fixed is out of reach: a coupling ties only two joints.
 
 ## gaps.yaml
 

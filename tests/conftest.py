@@ -203,10 +203,11 @@ checks:
     "model.py": MECH_MODEL,
 }
 # What replaces LOOP in an open chain, where no loop ties the knee and the slide to the crank: a
-# gear folding the coupler back twice as fast as the crank turns, which keeps its tip on the rail
-# as the loop does; a lead screw; and a cable wound on the crank's joint, pulling the slider in.
-FOLD = '"gears": {"fold": {"driver": "input", "driven": "knee", "ratio": "fold"}},'
-SCREW = '"gears": {"screw": {"driver": "input", "driven": "slide", "lead": "lead"}},'
+# coupling folding the coupler back twice as fast as the crank turns, which keeps its tip on the
+# rail as the loop does; a lead screw; and a cable wound on the crank's joint, pulling the slider
+# in.
+FOLD = '"couplings": {"fold": {"driver": "input", "driven": "knee", "ratio": "fold"}},'
+SCREW = '"couplings": {"screw": {"driver": "input", "driven": "slide", "lead": "lead"}},'
 CORD = '"cables": {"cord": {"path": ["rail_1.up", "slider_1.down"]}},'
 WOUND = CORD.replace("]}", '], "wheel": "input", "closes": {"slide": "pull"}}')
 
