@@ -1,4 +1,4 @@
-# Reconstruction project. File formats: references/project-format.md in the known-first skill.
+# Reconstruction project. File formats: references/project-format.md in the build-model skill.
 format: 2   # version of these file formats; set by cadrev init
 name: NAME
 target: TODO one sentence naming the object, version and configuration being reconstructed

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run this working tree's cadrev from anywhere, through the script the known-first skill ships:
+# Run this working tree's cadrev from anywhere, through the script the build-model skill ships:
 #
 #   scripts/cadrev check <dir> [--no-build]
-exec "$(dirname "$0")/../plugin/skills/known-first/cadrev" "$@"
+exec "$(dirname "$0")/../plugin/skills/build-model/cadrev" "$@"

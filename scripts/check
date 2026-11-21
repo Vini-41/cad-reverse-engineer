@@ -5,7 +5,7 @@
 #   scripts/check          # lint, types and every test, the examples among them
 #   scripts/check --lint   # ruff and pyright alone, in seconds, for after an edit
 set -euo pipefail
-cd "$(dirname "$0")/../plugin/skills/known-first/tool"
+cd "$(dirname "$0")/../plugin/skills/build-model/tool"
 uv sync -q --locked --extra test
 uv run ruff check ../../../..
 uv run ruff format --check ../../../..

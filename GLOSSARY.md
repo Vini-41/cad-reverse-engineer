@@ -56,7 +56,7 @@ The basis of a value the reconstruction chooses because no source states it.
 _Avoid_: assumed, guessed
 
 **Gap**:
-A question that, once answered, would replace a proposed or measured value, or the choice a derived parameter's computation makes, with a stated one. In a known-first project, a gap no parameter names is what a waiting part asks.
+A question that, once answered, would replace a proposed or measured value, or the choice a derived parameter's computation makes, with a stated one. A gap no parameter names yet is what a waiting part asks.
 
 **Thread**:
 A standard screw thread, named by its designation in the ISO metric table or the Unified one (`M3`, `M8x1`, `1/4-20`). A thread param holds one, stated by a source or proposed from the project's table, and the table gives its diameter, pitch, tap drill and clearance hole. The model declares it on the plain hole or shank made for it and never cuts it: what a CAD program calls a cosmetic thread.
@@ -158,11 +158,11 @@ The first part taken through modelling, checks and the report before any other p
 The first closed loop of a mechanism taken through its joints, the MJCF export and a posed check before any other joint is declared.
 
 **Known first**:
-A project that builds only its settled parts, those whose every dimension the sources settle (quoted, worked out from quotes, read off a released body or measured), and lists what waits. No parameter rests on a proposed value but a sweep's resolution. The user then builds on it, or has the reconstruction propose the rest as the complete model.
+A project whose build stops at its settled parts, those whose every dimension the sources settle (quoted, worked out from quotes, read off a released body or measured), and lists what waits. No parameter rests on a proposed value but a sweep's resolution. The user then builds on it, or has the reconstruction propose the rest as the complete model.
 _Avoid_: draft model, sources-only model
 
 **Waiting**:
-Of a part in a known-first project: not settled, since it needs a value the sources leave open, and so not built. Of a stated value: one no parameter uses and no check compares, as a waiting part's are.
+Of a part: not settled, since it needs a value the sources leave open, and so not built: for good in a known-first project, and until it is proposed in a complete model. Of a stated value: one no parameter uses and no check compares, as a waiting part's are.
 _Avoid_: pending (for a value; PENDING REVIEW is a status), deferred
 
 **Complete model**:
