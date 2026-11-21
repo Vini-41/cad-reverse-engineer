@@ -349,10 +349,12 @@ def test_stroke_of_a_cable_is_compared_with_a_worked_length_as_built_or_between_
 - {{id: worked, {cord}, {TURNED}, expect: "{REACH % "S1.rest"} - S2.reach"}}
 - {{id: paid-out, {cord}, from: {{input: S2.turn}}, pose: {{input: S3.low}},
    expect: "S2.reach - {REACH % "S1.rest + S3.low"}"}}
+- {{id: at-most, {cord}, {TURNED}, max: S2.reach}}
 """,
     )
     run = check(mech_dir)
     assert run.status == "VERIFIED" and run.rules == []
+    assert run.result("at-most")["expected"] == "≤ 40 (S2.reach)"
     assert number(run.result("worked")) == pytest.approx(BUILT - STOOD, abs=5e-3)
     assert run.result("worked")["expect"]["value"] == pytest.approx(BUILT - STOOD)
     # A stroke with `from` is taken between two poses: here the cord pays out, a negative stroke.

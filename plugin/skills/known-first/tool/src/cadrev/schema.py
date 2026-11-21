@@ -84,8 +84,8 @@ PARAM = record(
     "interpretation"
 )
 CHECK = record(
-    "id!:any kind part thread instances:[str] parts:[str] evidence key expect axes:{str} "
-    "between:[str] "
+    "id!:any kind part thread instances:[str] parts:[str] evidence key expect min max "
+    "axes:{str} between:[str] "
     "along at density counts:{str} add:[str] tol:number tol_rel:number max_volume:number "
     "pairs:[[str]] pose:{any} from:{any} joint cable body ends:[str] interpretation",
     exclusive=(("part", "instances"), ("part", "thread")),

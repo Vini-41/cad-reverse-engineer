@@ -26,7 +26,7 @@ Write them in [project.yaml](../known-first/references/project-format.md#project
 Take known-first's stages for the whole object. They differ here:
 
 - **1. Scope** writes the three answers beside the target and leaves `known_first` out. A known-first project is carried on by removing it, and goes to stage 5.
-- **5. Params** gives every part its params. A dimension takes the strongest basis available, and `proposed` where no source settles it, as [Proposing](#proposing) says.
+- **5. Params** gives every part its params. A dimension takes the strongest basis available, and `proposed` where no source settles it, as [Proposing](#proposing) says. A value stated only as a range is [derived inside it](../known-first/references/project-format.md#stated-ranges-min-and-max), with its gap.
 - **6. Model** builds and places every part the sources' parts tables list, the settled ones first.
 - **7. Checks** keeps a stated total mass's check where a density or a count it reads is proposed. Hold that value at its rationale rather than tuning it until the check passes: the report then shows the check rests on a proposed value, and the gap is what closes it. A proposed param changed to turn any check green names that check in its `rationale`, since the check then confirms the choice rather than a source.
 - **8. Motion** proposes a range, a ratio or a pose no source states, with its gap, and declares the motion that needs it.

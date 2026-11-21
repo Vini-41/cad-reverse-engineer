@@ -1,8 +1,8 @@
 """checks.yaml: what each check compares the geometry with, and its evaluation on the built model.
 
-A check compares with the ledger, never with params: a value its evidence and key name, or one
-its expect works out from ledger values. What the check reads besides (a pose, a density, a
-joint's range) decides what its result rests on.
+A check compares with the ledger, never with params: a value its evidence and key name, one its
+expect works out from ledger values, or a stated range its min and max name. What the check reads
+besides (a pose, a density, a joint's range) decides what its result rests on.
 """
 
 from __future__ import annotations
@@ -17,12 +17,12 @@ from . import Fault, ledger, released, units
 from .build import JOINT_TYPES, Model, unmoving, coupling_by, prefix, printed, range_ends
 from .ledger import TOL_CAP, TOL_REL_CAP, above_cap
 from .motion import Mechanism, pose_text
-from .project import AXES, DEFAULT_TOL, POSES, RESTS_ON, Project, compared_refs
+from .project import AXES, DEFAULT_TOL, POSES, RESTS_ON, Project, compared_refs, stated_range
 
 
 class Kind(NamedTuple):
     quantity: str  # what it compares in
-    expects: bool = False  # may compare with a value its expect works out from the ledger
+    one_value: bool = False  # compares one value: may take an expect, or a stated range
     changes: bool = False  # may take a from pose, and then compares the change between two poses
 
 
@@ -30,14 +30,14 @@ class Kind(NamedTuple):
 # check compares an overlap with a limit instead.
 KINDS = {
     "bbox": Kind("length"),
-    "distance": Kind("length", expects=True, changes=True),
-    "angle": Kind("angle", expects=True, changes=True),
-    "diameter": Kind("length", expects=True),
-    "mass": Kind("mass", expects=True),  # within tol_rel, a fraction, which has no default
+    "distance": Kind("length", one_value=True, changes=True),
+    "angle": Kind("angle", one_value=True, changes=True),
+    "diameter": Kind("length", one_value=True),
+    "mass": Kind("mass", one_value=True),  # within tol_rel, a fraction, which has no default
     "range": Kind("angle"),  # a joint's own value where it names no datums
-    "stroke": Kind("length", expects=True, changes=True),
+    "stroke": Kind("length", one_value=True, changes=True),
     "shape": Kind("length"),  # compared with its released body within tolerance.length
-    "count": Kind("count", expects=True),  # compared exactly
+    "count": Kind("count", one_value=True),  # compared exactly
 }
 # What an STL's shape check found its largest deviation at, as its result says it.
 _MESH_FOUND = {
@@ -127,7 +127,10 @@ def overlap_limit(p: Project, c: dict) -> float:
 
 
 def compared_with(c: dict) -> str:
-    """What check c compares with, as its result names it: its expect, else its ledger value."""
+    """What check c compares with, as its result names it: its expect, the ends of its stated
+    range, else its ledger value."""
+    if ends := stated_range(c):
+        return " to ".join(ends.values())
     return str(c["expect"]) if "expect" in c else f"{c['evidence']}.{c['key']}"
 
 
@@ -155,21 +158,28 @@ def _comparable(p: Project, c: dict) -> None:
     """A Fault where check c names nothing it could be compared with."""
     name = c.get("kind")
     kind = KINDS.get(str(name))
+    ends = stated_range(c)
+    if ("expect" in c or ends) and (kind is None or not kind.one_value):
+        what = "expect" if "expect" in c else "a stated range"
+        raise Fault(f"{what} is for a check that compares one value; kind {name} takes none")
     if kind is None:  # an interference check; an unknown kind is [check-kind]'s to say
-        if "expect" in c:
-            raise Fault(f"expect is for a check that compares one value; kind {name} takes none")
         return
     if "from" in c and not kind.changes:
         raise Fault(f"from is for a distance, angle or stroke check; kind {name} takes none")
-    if "expect" in c:
-        if not kind.expects:
-            raise Fault(f"expect is for a check that compares one value; kind {name} takes none")
+    if ends:
+        if beside := sorted(c.keys() & {"evidence", "key", "expect", "tol", "tol_rel"}):
+            raise Fault(f"a stated range is what it compares with, so it takes no {beside[0]}")
+        if len(ends) == 2:
+            low, high = (p.stated(ref, quantity(c)) for ref in ends.values())
+            if low > high:
+                raise Fault(f"min {ends['min']} ({low:g}) is above max {ends['max']} ({high:g})")
+    elif "expect" in c:
         if "evidence" in c:
             raise Fault("give expect or evidence, not both")
         worked = p.expect(str(c["expect"]))
         if name == "count" and abs(worked - round(worked)) > 1e-9:
             raise Fault(f"expect {c['expect']!r} works out to {worked:g}, which is no count")
-    elif kind.expects and "evidence" not in c:
+    elif kind.one_value and "evidence" not in c:
         raise Fault("give evidence and key, or expect, the value it is compared with")
     elif name == "stroke" and "key" not in c:
         raise Fault("give key, the ledger value its stroke is compared with")
@@ -205,7 +215,7 @@ def capped(p: Project, c: dict, compared: str) -> None:
     """[tolerance-cap] where check c's tolerance, in the quantity it compares, is above the cap."""
     cid, name = c["id"], c["kind"]
     found = tolerance(p, c, compared)
-    if found is None:
+    if found is None or stated_range(c):  # a stated range sets no tolerance of its own
         return
     key, tol = found
     if key == "tol_rel":
@@ -444,11 +454,14 @@ class Checks:
         """The value a check evaluates against the ledger value at ref, or the value its expect
         works out: it passes within the check's tolerance."""
         p = self.p
-        expected = p.expect(ref) if "expect" in c else p.stated(ref, compared or quantity(c))
         found = tolerance(p, c, compared)
+        if stated_range(c):  # a mass has no tolerance of the model's, so it holds its ends exactly
+            text, at = f"{measured:.4g}{shown}", compared or quantity(c)
+            return self._inside(c, rid, measured, text, at, found[1] if found else 0.0)
         if found is None:
             raise KeyError("tol_rel")  # the only tolerance a comparing check can lack
         key, tol = found
+        expected = p.expect(ref) if "expect" in c else p.stated(ref, compared or quantity(c))
         band = ""
         if key == "tol_rel":
             tol, band = tol * expected, f" ±{tol:.0%}"
@@ -462,6 +475,25 @@ class Checks:
             expect={"expr": ref, "value": printed(expected)[0]} if "expect" in c else None,
             miss=None if off <= tol else f"off by {off:.3g}, tolerance {tol:.3g}",
         )
+
+    def _inside(
+        self, c: dict, rid: str, value: float, shown: str, compared: str, tol: float = 0.0
+    ) -> Result:
+        """Value against the stated range check c names: it passes inside, each end within tol,
+        how closely the model realises a value."""
+        stated = {end: self.p.stated(ref, compared) for end, ref in stated_range(c).items()}
+        miss = None
+        for end, at in stated.items():
+            beyond = at - value if end == "min" else value - at
+            if beyond > tol:
+                miss = f"off by {beyond:.3g}" + (f", tolerance {tol:.3g}" if tol else "")
+        if len(stated) == 2:
+            limits = f"{stated['min']:g} to {stated['max']:g}"
+        else:
+            ((end, at),) = stated.items()
+            limits = f"{'≥' if end == 'min' else '≤'} {at:g}"
+        expected = f"{limits} ({compared_with(c)})"
+        return Result(rid, c["kind"], miss is None, expected, shown, miss=miss)
 
     def _measured(self, c: dict, placed: Model, evaluate, shown: tuple[str, str]) -> Result:
         """Check c's result: the value evaluate returns where it is posed, or with from its change
@@ -511,9 +543,6 @@ class Checks:
     def _count(self, c: dict, placed: Model) -> Iterator[Result]:
         """How many instances of its part the assembly places; or, of its thread, how many holes
         and shanks carry it, each once per instance of its part, or once where none places it."""
-        ref = compared_with(c)
-        stated = round(self.p.expect(ref)) if "expect" in c else self.p.stated(ref, "count")
-        worked = {"expr": ref, "value": printed(stated)[0]} if "expect" in c else None
         placed_parts = Counter(name for name, _ in placed.assembly.values())
         if "thread" in c:
             thread = str(c["thread"])
@@ -532,6 +561,12 @@ class Checks:
                 raise Fault(f"{part} is not a part model.build returns")
             found = placed_parts[part]
             measured = f"{found} instance{'s' * (found != 1)} of {part}"
+        if stated_range(c):
+            yield self._inside(c, c["id"], found, measured, "count")
+            return
+        ref = compared_with(c)
+        stated = round(self.p.expect(ref)) if "expect" in c else self.p.stated(ref, "count")
+        worked = {"expr": ref, "value": printed(stated)[0]} if "expect" in c else None
         expected = f"{stated:g} ({ref})"
         yield Result(c["id"], "count", stated == found, expected, measured, expect=worked)
 

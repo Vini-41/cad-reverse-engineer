@@ -537,6 +537,22 @@ LINK_FINDINGS = {
     "check-config: one datum where a distance needs two": _checks("pitch", between=["link.a"]),
     "check-config: no evidence and no expect": _checks("pitch", evidence=None, key=None),
     "check-config: an expect on an interference check": _checks("clear", expect="pitch.pitch"),
+    "check-config: a stated range on a bbox": _checks("env", max="pitch.pitch"),
+    "check-config: a stated range on an interference check": _checks("clear", max="pitch.pitch"),
+    "check-config: a stated range on a shape check": _released(_checks("shape", max="pitch.pitch")),
+    "check-config: a stated range beside its evidence": _checks("pitch", max="pitch.pitch"),
+    "check-config: a stated range beside an expect": _checks(
+        "pitch", evidence=None, key=None, expect="pitch.pitch", max="pitch.pitch"
+    ),
+    "check-config: a stated range with a tolerance of its own": _checks(
+        "pitch", evidence=None, key=None, max="pitch.pitch", tol=0.1
+    ),
+    "check-config: a stated range whose min is above its max": _checks(
+        "pitch", evidence=None, key=None, min="T1-link.L", max="T1-link.H"
+    ),
+    "check-config: a stated range end that is none": _checks(
+        "pitch", evidence=None, key=None, max="pitch.nope"
+    ),
     "check-config: three datums where a distance needs two": _checks(
         "pitch", between=["link.a", "link.b", "link.top"]
     ),
@@ -670,6 +686,7 @@ DRAW = "{id: draw, kind: stroke, cable: cord, evidence: S2, "
 
 
 MECH_FINDINGS = {
+    "check-config: a stated range on a range check": _checks("swing", max="S3.high"),
     "loop-open: as built": _model("Location((2 * bx, 0, p.H))", "Location((2 * bx + p.W, 0, p.H))"),
     "loop-open: at a pose": _check(
         "{id: far, kind: distance, instances: [rail_1, slider_1], evidence: S2, key: reach, "

@@ -11,6 +11,7 @@ from conftest import (
     PAPER,
     add,
     add_line,
+    add_quote,
     change,
     check,
     ledgered,
@@ -144,6 +145,121 @@ def test_each_check_kind_passes_on_what_the_ledger_states_and_fails_on_what_it_d
     # An interference check says how many pairs it tried, all of them where it lists none.
     assert (results["clear"]["pairs"], results["listed"]["pairs"]) == (3, 1)
     assert results["clear"]["measured"] == "0 over 3 pairs (all)"
+
+
+# A datasheet's table: the link's pitch, built to 30, against ranges around and beside it.
+TABLE = "Pitch 29.5 mm MIN, 30.5 mm MAX. Next 30.2 mm MIN, 31 mm MAX. Last 28 mm MIN, 29.8 mm MAX."
+TABLE_VALUES = {"low": 29.5, "high": 30.5, "above": 30.2, "far": 31, "under": 28, "below": 29.8}
+PITCH = "kind: distance, between: [link.a, link.b]"
+
+
+def test_check_against_a_stated_range_passes_inside_and_fails_outside(proj_dir, tmp_path):
+    add_quote(proj_dir, tmp_path, TABLE, values=TABLE_VALUES)
+    add(
+        proj_dir,
+        checks=f"""\
+- {{id: inside, {PITCH}, min: N1.low, max: N1.high}}
+- {{id: not-under-min, {PITCH}, min: N1.above, max: N1.far}}
+- {{id: not-over-max, {PITCH}, min: N1.under, max: N1.below}}
+- {{id: at-most, {PITCH}, max: N1.high}}
+- {{id: not-at-most, {PITCH}, max: N1.below}}
+- {{id: at-least, {PITCH}, min: N1.low}}
+- {{id: not-at-least, {PITCH}, min: N1.above}}
+""",
+    )
+    run = check(proj_dir)
+    ranged = [c for c in run.report["checks"] if c["id"] not in ("env.L", "env.H", "env.W")]
+    ranged = {c["id"]: c for c in ranged if c["id"] not in ("pitch", "clear")}
+    assert {cid for cid, c in ranged.items() if not c["ok"]} == {
+        cid for cid in ranged if cid.startswith("not-")
+    }
+    assert len(ranged) == 7 and run.errors == ["check-failed"] * 4
+    assert ranged["inside"]["expected"] == "29.5 to 30.5 (N1.low to N1.high)"
+    assert ranged["at-most"]["expected"] == "≤ 30.5 (N1.high)"
+    assert ranged["at-least"]["expected"] == "≥ 29.5 (N1.low)"
+
+
+def test_each_kind_that_compares_one_value_takes_a_stated_range(proj_dir, tmp_path):
+    text = "Holes of 2.9 mm to 3.1 mm, square at 89° to 91°, 1 to 2 links, of 1.7 g to 1.9 g in "
+    values = {"d_lo": 2.9, "d_hi": 3.1, "sq_lo": 89, "sq_hi": 91, "n_lo": 1, "n_hi": 2}
+    values |= {"m_lo": 1.7, "m_hi": 1.9, "rho": 1.2}
+    add_quote(proj_dir, tmp_path, text + "resin of 1.2 g/cm3.", values=values)
+    add(
+        proj_dir,
+        params="rho: {basis: source, from: N1.rho}",
+        checks="""\
+- {id: bore, kind: diameter, at: link.wall, min: N1.d_lo, max: N1.d_hi}
+- {id: square, kind: angle, between: [link.b, link.a, link.top], min: N1.sq_lo, max: N1.sq_hi}
+- {id: links, kind: count, part: link, min: N1.n_lo, max: N1.n_hi}
+- {id: not-links, kind: count, part: link, min: N1.n_hi}
+- {id: weight, kind: mass, parts: [link], density: rho, min: N1.m_lo, max: N1.m_hi}
+- {id: not-weight, kind: mass, parts: [link], density: rho, min: N1.m_hi}
+""",
+    )
+    run = check(proj_dir)
+    assert run.errors == ["check-failed"] * 2
+    assert [run.result(c)["ok"] for c in ("bore", "square", "links", "weight")] == [True] * 4
+    assert not run.result("not-links")["ok"] and not run.result("not-weight")["ok"]
+    assert run.result("not-links")["expected"] == "≥ 2 (N1.n_hi)"
+    assert run.result("weight")["expected"] == "1.7 to 1.9 (N1.m_lo to N1.m_hi)"
+
+
+def test_a_stated_range_holds_its_ends_to_how_closely_the_model_realises_a_value(
+    proj_dir, tmp_path
+):
+    text = "Pitch 0 mm MIN, 30 mm, 29.995 mm MIN, 30.005 mm MAX, 29.9995 mm MAX, or 29.99 mm MAX."
+    values = {"zero": 0, "same": 30, "low": 29.995, "high": 30.005, "near": 29.9995, "past": 29.99}
+    add_quote(proj_dir, tmp_path, text, values=values)
+    add(
+        proj_dir,
+        checks=f"""\
+- {{id: from-zero, {PITCH}, min: N1.zero}}
+- {{id: one-value, {PITCH}, min: N1.same, max: N1.same}}
+- {{id: narrow, {PITCH}, min: N1.low, max: N1.high}}
+- {{id: within-tolerance, {PITCH}, max: N1.near}}
+- {{id: not-past, {PITCH}, max: N1.past}}
+""",
+    )
+    run = check(proj_dir)
+    assert run.errors == ["check-failed"] and not run.result("not-past")["ok"]
+    held = ("from-zero", "one-value", "narrow", "within-tolerance")
+    assert all(run.result(cid)["ok"] for cid in held)
+
+
+def test_each_end_of_a_stated_range_counts_as_compared(proj_dir, tmp_path):
+    add_quote(proj_dir, tmp_path, TABLE, values={"low": 29.5, "high": 30.5})
+    assert check(proj_dir).rules.count("evidence-unused") == 2
+    # The pitch param's own value is then compared only through the range's end that names it.
+    change(proj_dir, "checks", "pitch", evidence=None, key=None, max="pitch.pitch")
+    add(proj_dir, checks=f"{{id: table, {PITCH}, min: N1.low, max: N1.high}}")
+    run = check(proj_dir)
+    assert "evidence-unused" not in run.rules and "unchecked-source" not in run.rules
+
+
+@pytest.mark.parametrize("chosen", ["(pitch_min + pitch_max) / 2", "pitch_max - 0.5"])
+def test_value_chosen_inside_a_range_is_a_derived_choice_resting_on_proposed(
+    proj_dir, tmp_path, chosen
+):
+    # The source states the pitch only as a range, so the 30 it is built to is the model's choice.
+    add_quote(proj_dir, tmp_path, TABLE, values={"low": 29.5, "high": 30.5})
+    change(proj_dir, "evidence", "pitch", scope="not-modeled", reason="another variant")
+    change(proj_dir, "checks", "pitch", evidence=None, key=None, min="N1.low", max="N1.high")
+    add(
+        proj_dir,
+        gaps="{id: G2, question: 'what is the nominal pitch?', ask: the maker}",
+        params="""\
+pitch_min: {basis: source, from: N1.low}
+pitch_max: {basis: source, from: N1.high}
+""",
+    )
+    choice = {"expr": chosen, "gap": "G2", "from": None}
+    change(proj_dir, "params", "pitch", basis="derived", interpretation="mid-range", **choice)
+    run = check(proj_dir)
+    assert run.status == "VERIFIED" and run.result("pitch")["ok"]
+    assert run.report["params"]["pitch"]["rests_on"] == "proposed"
+    assert run.report["params"]["pitch_max"]["rests_on"] == "source"
+    assert "| pitch | 30 | derived (rests on proposed) |" in run.md
+    assert "| G2 | what is the nominal pitch? | the maker | pitch |" in run.md
 
 
 def test_check_rests_on_the_weakest_param_it_reads_and_checks_the_source_ones(finger):

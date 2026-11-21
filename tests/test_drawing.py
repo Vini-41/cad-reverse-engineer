@@ -4,7 +4,7 @@ dimensioned by its checks, and the report that shows each part's checks under it
 import numpy as np
 import pytest
 from build123d import import_step
-from conftest import ASSEMBLY, change, check, meta, remodel
+from conftest import ASSEMBLY, add_quote, change, check, meta, remodel
 from PIL import Image
 
 
@@ -53,6 +53,21 @@ def test_drawing_dimensions_a_part_by_its_checks_as_built(proj_dir):
     assert inked(sheet, "grey") > grey + 100 and inked(sheet, "blue") < blue
     # A check that fails is drawn red, at the value the part was built to.
     change(proj_dir, "params", "pitch", basis="proposed", value=28, rationale="r", gap="G1")
+    assert "check-failed" in check(proj_dir).errors
+    assert inked(sheet, "red") > 100
+
+
+def test_drawing_prints_a_range_check_at_the_value_as_built(proj_dir, tmp_path):
+    sheet = proj_dir / "build" / "drawings" / "link.png"
+    check(proj_dir)
+    against_one_value = np.asarray(Image.open(sheet).convert("RGB"))
+    text = "Pitch 29.5 mm MIN, 30.5 mm MAX, or 29.8 mm MAX."
+    add_quote(proj_dir, tmp_path, text, values={"low": 29.5, "high": 30.5, "under": 29.8})
+    change(proj_dir, "checks", "pitch", evidence=None, key=None, min="N1.low", max="N1.high")
+    check(proj_dir)
+    assert np.array_equal(np.asarray(Image.open(sheet).convert("RGB")), against_one_value)
+    # Outside its range it is drawn red, still at the value the part was built to.
+    change(proj_dir, "checks", "pitch", min=None, max="N1.under")
     assert "check-failed" in check(proj_dir).errors
     assert inked(sheet, "red") > 100
 

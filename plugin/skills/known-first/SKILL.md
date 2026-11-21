@@ -100,7 +100,7 @@ Done when every settled part is built and `cadrev check <dir>` reports nothing a
 
 ### 7. Checks
 
-Add a check for every stated value the geometry should realise: `bbox` for an envelope, `distance` for a pitch or spacing, `angle`, `diameter` for a bore or a `Ø` callout, `count` for a stated number of instances or of threaded holes, `mass` for a stated mass, and `interference` across the assembly. Where a source states the numbers a value is worked out from (a pitch diameter from a module and a tooth count), the check compares with [`expect`](references/project-format.md#worked-values-expect).
+Add a check for every stated value the geometry should realise: `bbox` for an envelope, `distance` for a pitch or spacing, `angle`, `diameter` for a bore or a `Ø` callout, `count` for a stated number of instances or of threaded holes, `mass` for a stated mass, and `interference` across the assembly. Where a source states the numbers a value is worked out from (a pitch diameter from a module and a tooth count), the check compares with [`expect`](references/project-format.md#worked-values-expect). Where a source states a MIN and a MAX, or one of them, the check compares with that [stated range](references/project-format.md#stated-ranges-min-and-max) as printed.
 
 View each part's drawing in `build/drawings/` as its checks turn green. It shows the part in three views with each checked value as a dimension where the check reads it, so a datum on the wrong feature, or a feature no check reads, shows there first. Hold it beside the figures that show the part: an outline or a proportion that differs shows there too.
 
@@ -109,6 +109,7 @@ A check that is red is information. Turn it green by changing the model. The evi
 - **A tolerance is what the evidence allows**: an STL's facet sag, a value printed "approximately" or with a ±. Set each `tol` from its evidence and name that evidence in the check's `interpretation`.
 - **A check that passes only past that marks a disagreement.** Between the model and a source, revisit the choice behind it: another released variant may match. Between two sources (a stated mass against a released body's volume), record the conflict, check the source you build from, and keep the other statement as `context` naming the conflict.
 - **A stated mass waits** where its check would weigh a waiting part, or read a density or a count no source states.
+- **A range with no nominal leaves the value open**, so the part that needs it waits.
 
 Done when every check is green and the only findings left concern the motion values stage 8 reads. A static object is then VERIFIED or VERIFIED PENDING REVIEW and goes to stage 9.
 

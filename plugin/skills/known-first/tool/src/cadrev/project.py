@@ -108,6 +108,11 @@ def expect_refs(expr: str) -> list[str]:
     return list(dict.fromkeys(f"{m[1]}.{m[2]}" for m in _LEDGER_NAME.finditer(expr)))
 
 
+def stated_range(c: dict) -> dict[str, str]:
+    """The ends of the stated range check c names in place of one ledger value: min, max or both."""
+    return {end: str(c[end]) for end in ("min", "max") if end in c}
+
+
 def compared_refs(c: dict) -> list[str]:
     """The ledger values a check compares with the geometry, those its expect names among them."""
     eid = c.get("evidence")
@@ -116,6 +121,7 @@ def compared_refs(c: dict) -> list[str]:
         + ([f"{eid}.{c['key']}"] if c.get("key") else [])
         + [str(ref) for ref in c.get("ends") or []]
         + expect_refs(str(c.get("expect", "")))
+        + list(stated_range(c).values())
     )
 
 
