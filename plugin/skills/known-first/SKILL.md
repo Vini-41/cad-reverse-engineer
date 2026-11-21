@@ -116,13 +116,13 @@ Done when every check is green and the only findings left concern the motion val
 
 Declare joints and loops per [modeling.md](references/modeling.md#joints-and-loops), and poses, ranges and sweeps per [project-format.md](references/project-format.md#poses), among built instances alone.
 
-Take a tracer loop first: one closed loop with a value stated at a joint angle (a four-bar's output at a stated input), its joints, and a check posed at that angle, until MuJoCo loads `build/model.mjcf` and the check is green. Without such a value, take a loop whose joint has a stated range and its `range` check. A mechanism with no ring (a gearbox, a lead screw) takes its first gear the same way.
+Take a tracer loop first: one closed loop with a value stated at a joint angle (a four-bar's output at a stated input), its joints, and a check posed at that angle, until MuJoCo loads `build/model.mjcf` and the check is green. Without such a value, take a loop whose joint has a stated range and its `range` check. A mechanism with no ring (a gearbox, a lead screw) takes its first coupling the same way.
 
 Then the rest:
 
-- A posed check for every value a source states at a joint angle or stroke, and for motion stated across a gear (a carrier's turn per sun turn, a carriage's travel per screw turn) a check with `from`. An angle reads unsigned from 0 to 180°, so place its datums where a sign error moves the angle the other way.
+- A posed check for every value a source states at a joint angle or stroke, and for motion stated across a coupling (a carrier's turn per sun turn, a carriage's travel per screw turn) a check with `from`. An angle reads unsigned from 0 to 180°, so place its datums where a sign error moves the angle the other way.
 - Each stated range read into its joint's range params, confirmed by a `range` check, with an interference `sweep` across the joint.
-- Gears as the worked examples build them ([gears](references/modeling.md#joints-and-loops), [a planetary train](references/project-format.md#worked-example-a-planetary-train)).
+- Couplings as the worked examples build them ([couplings](references/modeling.md#joints-and-loops), [a planetary train](references/project-format.md#worked-example-a-planetary-train)).
 - **Motion waits** where the sources leave a range, a ratio or a pose open: the value waits with its gap, and so does the motion that needs it. Where every joint waits, the model stays static.
 
 Where a stated pose or range end leaves a loop open or pushes a joint out of range, fix the link lengths, the ranges or the as-built zero. Near a toggle (two links collinear) the solve itself can fail on links that do close: report that end to the user rather than trimming a stated range.

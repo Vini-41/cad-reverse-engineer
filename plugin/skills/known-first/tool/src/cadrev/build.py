@@ -1,5 +1,5 @@
 """Run model.py and hold what it returns to the model contract: parts, datums, the assembly, and
-for a mechanism its joints, loops, gears and cables."""
+for a mechanism its joints, loops, couplings and cables."""
 
 from __future__ import annotations
 
@@ -54,11 +54,11 @@ JOINT_TYPES = {
     "fixed": JointType(None, None, "stays"),
 }
 DRIVES = ("actuated", "passive")
-# What a gear is stated by: the quantity of its param, and whether it couples a revolute joint
-# with a slide (a lead) or two joints of one type (a ratio).
-GEAR_BY = {"ratio": ("fraction", False), "lead": ("length", True)}
+# What a coupling is stated by: the quantity of its param, and whether it couples a revolute
+# joint with a slide (a lead) or two joints of one type (a ratio).
+COUPLING_BY = {"ratio": ("fraction", False), "lead": ("length", True)}
 AS_BUILT = "as built"  # names the end of a one-ended range that no param states: a move of 0
-_MOTION = {"joint": schema.JOINT, "gear": schema.GEAR, "cable": schema.CABLE}
+_MOTION = {"joint": schema.JOINT, "coupling": schema.COUPLING, "cable": schema.CABLE}
 # What model.py's build may return.
 _RETURNS = (
     "parts",
@@ -110,15 +110,15 @@ class Model:
     sheets: dict = field(default_factory=dict)
     joints: dict = field(default_factory=dict)
     loops: dict = field(default_factory=dict)
-    gears: dict = field(default_factory=dict)
+    couplings: dict = field(default_factory=dict)
     cables: dict = field(default_factory=dict)
     masses: dict[str, Mass] = field(default_factory=dict)
     # Each hole or shank declared for a thread, once held to the thread's sizes.
     threads: list[Threaded] = field(default_factory=list)
-    # True when a finding dropped the joints, loops, gears and cables build() returned.
+    # True when a finding dropped the joints, loops, couplings and cables build() returned.
     dropped: bool = False
-    # The joints the pose this assembly is placed at moves, itself or through a gear, cable or
-    # loop.
+    # The joints the pose this assembly is placed at moves, itself or through a coupling, cable
+    # or loop.
     moved: frozenset[str] = frozenset()
 
     @property
@@ -173,17 +173,17 @@ def range_ends(p: Project, joint: dict) -> list[tuple[str, float]]:
     return ends if len(ends) == 2 else sorted([(AS_BUILT, 0.0), *ends], key=lambda end: end[1])
 
 
-def gear_by(gear: dict) -> tuple[str, str]:
-    """What a gear is stated by: (ratio or lead, its param)."""
-    key = next(k for k in GEAR_BY if k in gear)
-    return key, gear[key]
+def coupling_by(coupling: dict) -> tuple[str, str]:
+    """What a coupling is stated by: (ratio or lead, its param)."""
+    key = next(k for k in COUPLING_BY if k in coupling)
+    return key, coupling[key]
 
 
 class Coupling(NamedTuple):
     """Two joints that move in proportion: driven at ratio times driver, in the project's units of
     each; law says how, as a finding words it."""
 
-    kind: str  # gear or cable
+    kind: str  # coupling or cable
     name: str
     driver: str
     driven: str
@@ -192,23 +192,23 @@ class Coupling(NamedTuple):
 
 
 def couplings(p: Project, model: Model) -> list[Coupling]:
-    """Each pair of joints moving in proportion: a gear's, at its ratio or at its lead per full
+    """Each pair of joints moving in proportion: a coupling's, at its ratio or at its lead per full
     turn of its revolute joint; and a cable's wheel with each joint it closes, at that joint's
     closed value over the wheel's full turn."""
     found = []
-    for name, gear in model.gears.items():
-        key, param = gear_by(gear)
-        driver, driven, value = gear["driver"], gear["driven"], p.values[param]
+    for name, coupling in model.couplings.items():
+        key, param = coupling_by(coupling)
+        driver, driven, value = coupling["driver"], coupling["driven"], p.values[param]
         if key == "ratio":
             law = f"moves {driven} {value:g} times {driver}"
-            found.append(Coupling("gear", name, driver, driven, value, law))
+            found.append(Coupling("coupling", name, driver, driven, value, law))
             continue
         turn = 2 * math.pi / units.size("angle", p.units)
         turns = model.quantity(driver) == "angle"
         revolute, slide = (driver, driven) if turns else (driven, driver)
         law = f"moves {slide} {value:g} per full turn of {revolute}"
         ratio = value / turn if turns else turn / value
-        found.append(Coupling("gear", name, driver, driven, ratio, law))
+        found.append(Coupling("coupling", name, driver, driven, ratio, law))
     for name, cable in model.cables.items():
         if "wheel" in cable:
             wheel = cable["wheel"]
@@ -277,7 +277,7 @@ def _listed(value, count: int) -> bool:
 
 
 def _unfit(kind: str, entry: dict) -> str | None:
-    """Why a joint, gear or cable of the right shape still states no motion."""
+    """Why a joint, coupling or cable of the right shape still states no motion."""
     if kind == "joint":
         if entry.get("type") not in JOINT_TYPES:
             return f"type must be one of {', '.join(JOINT_TYPES)}, not {entry.get('type')!r}"
@@ -291,8 +291,8 @@ def _unfit(kind: str, entry: dict) -> str | None:
             return f"range must be one or two param names, not {entry['range']!r}"
         if entry.get("drive") not in DRIVES:
             return f"drive must be actuated or passive, not {entry.get('drive')!r}"
-    elif kind == "gear":
-        if len(GEAR_BY.keys() & entry.keys()) != 1 or not {"driver", "driven"} <= entry.keys():
+    elif kind == "coupling":
+        if len(COUPLING_BY.keys() & entry.keys()) != 1 or not {"driver", "driven"} <= entry.keys():
             return "names a driver, a driven and one of ratio or lead"
     elif len(entry.get("path", ())) < 2:
         return f"path must be two or more datums, not {entry.get('path')!r}"
@@ -315,7 +315,7 @@ def _failure(exc: BaseException, model: Path) -> str:
 def build(p: Project) -> Model | None:
     """The model model.py builds from the resolved params, held to the contract; None after a
     [model-build] or [model-return] finding. A finding on its motion keeps the build and drops
-    the joints, loops, gears and cables."""
+    the joints, loops, couplings and cables."""
     path = p.root / "model.py"
     spec = importlib.util.spec_from_file_location("cadrev_model", path)
     assert spec is not None and spec.loader is not None  # a .py path always gets a source loader
@@ -343,7 +343,10 @@ def build(p: Project) -> Model | None:
         assembly=result.get("assembly", {}),
         used=params.used,
         sheets=result.get("sheets", {}),
-        **{f"{kind}s": result.get(f"{kind}s", {}) for kind in ("joint", "loop", "gear", "cable")},
+        **{
+            f"{kind}s": result.get(f"{kind}s", {})
+            for kind in ("joint", "loop", "coupling", "cable")
+        },
     )
     declared = result.get("threads", {})
     _hold_units(p, model, set(declared.values()))
@@ -374,7 +377,7 @@ def build(p: Project) -> Model | None:
             p.error("assembly-part", f"assembly instance {inst}: unknown part {part!r}")
             del model.assembly[inst]
     if _motion_faults(p, model):
-        model.joints, model.loops, model.gears, model.cables = {}, {}, {}, {}
+        model.joints, model.loops, model.couplings, model.cables = {}, {}, {}, {}
         model.dropped = True
     _cables_on_axes(p, model)
     model.masses = _mass_model(p, model)
@@ -436,17 +439,17 @@ def _hold_units(p: Project, model: Model, threaded: set[str]) -> None:
         for param in joint.get("range", []):
             p.hold_param(param, (model.quantity(name),), f"in a {joint['type']} joint's range")
     coupled = set()
-    for name, gear in model.gears.items():
-        key, param = gear_by(gear)
+    for name, coupling in model.couplings.items():
+        key, param = coupling_by(coupling)
         coupled.add(param)
-        p.hold_param(param, (GEAR_BY[key][0],), f"as gear {name}'s {key}")
+        p.hold_param(param, (COUPLING_BY[key][0],), f"as coupling {name}'s {key}")
         for count in _worked_from(p, param) if key == "ratio" else []:
             # A ratio is worked out from counts, or from lengths as a belt's pulley diameters are.
             unit, ref = p.printed_as(count)
             if not (ref and p.prints_length(ref)):
                 counted = unit is None or units.quantity(unit) == "count"
                 expected = ("count",) if counted else ("count", "length")
-                p.hold_param(count, expected, f"in gear {name}'s ratio")
+                p.hold_param(count, expected, f"in coupling {name}'s ratio")
     for name, cable in model.cables.items():
         for joint, param in cable.get("closes", {}).items():
             coupled.add(param)
@@ -477,8 +480,8 @@ def _worked_from(p: Project, name: str, through: tuple[str, ...] = ()) -> list[s
 
 
 def _motion_faults(p: Project, model: Model) -> bool:
-    """File [model-joint], [model-loop], [model-gear] and [model-cable] for each joint, loop, gear
-    and cable the assembly cannot hold; whether there is any."""
+    """File [model-joint], [model-loop], [model-coupling] and [model-cable] for each joint, loop,
+    coupling and cable the assembly cannot hold; whether there is any."""
     before = len(p.findings)
     moved_by: dict[str, str] = {}  # child instance -> the joint moving it
     for name, joint in model.joints.items():
@@ -506,9 +509,9 @@ def _motion_faults(p: Project, model: Model) -> bool:
         with p.filing("model-loop", f"loop {name}: "):
             for datum in pair:
                 model.instance_datum(datum)
-    for name, gear in model.gears.items():
-        with p.filing("model-gear", f"gear {name}: "):
-            _gear_fault(p, model, gear)
+    for name, coupling in model.couplings.items():
+        with p.filing("model-coupling", f"coupling {name}: "):
+            _coupling_fault(p, model, coupling)
     closed_by: dict[str, str] = {}
     for name, cable in model.cables.items():
         with p.filing("model-cable", f"cable {name}: "):
@@ -547,15 +550,15 @@ def _joint_fault(p: Project, model: Model, joint: dict, moved_by: dict) -> None:
             raise Fault(f"range {low} {lo:g} exceeds {high} {hi:g}")
 
 
-def _gear_fault(p: Project, model: Model, gear: dict) -> None:
-    for key in ("driver", "driven"):
-        if gear[key] not in model.moving:
-            raise Fault(f"{key} {gear[key]} is {unmoving(model, gear[key])}")
-    if gear["driver"] == gear["driven"]:
-        raise Fault(f"driver and driven are both {gear['driver']}; a gear couples two joints")
-    key, param = gear_by(gear)
-    across = model.quantity(gear["driver"]) != model.quantity(gear["driven"])
-    if across != GEAR_BY[key][1]:
+def _coupling_fault(p: Project, model: Model, coupling: dict) -> None:
+    driver, driven = coupling["driver"], coupling["driven"]
+    for key, joint in (("driver", driver), ("driven", driven)):
+        if joint not in model.moving:
+            raise Fault(f"{key} {joint} is {unmoving(model, joint)}")
+    if driver == driven:
+        raise Fault(f"driver and driven are both {driver}; a coupling ties two joints")
+    key, param = coupling_by(coupling)
+    if (model.quantity(driver) != model.quantity(driven)) != COUPLING_BY[key][1]:
         raise Fault(
             f"a {key} does not couple these joints: a ratio couples two joints of one type, a "
             "lead a revolute joint and a slide"
@@ -585,14 +588,14 @@ def _cable_fault(p: Project, model: Model, cable: dict, closed_by: dict) -> None
             f"its path starts at {cable['path'][0]}, on the wheel; start it where the cable "
             "leaves the wheel, on an instance the wheel does not turn"
         )
-    geared = {g[k] for g in model.gears.values() for k in ("driver", "driven")}
+    coupled = {c[k] for c in model.couplings.values() for k in ("driver", "driven")}
     for joint, param in cable["closes"].items():
         if joint not in model.moving:
             raise Fault(f"closes {joint}, which is {unmoving(model, joint)}")
         if joint == wheel:
             raise Fault(f"closes its own wheel {wheel}")
-        if joint in geared:
-            raise Fault(f"closes {joint}, which a gear couples")
+        if joint in coupled:
+            raise Fault(f"closes {joint}, which a coupling ties")
         if joint in closed_by:
             raise Fault(f"closes {joint}, which cable {closed_by[joint]} closes too")
         if param not in p.values:

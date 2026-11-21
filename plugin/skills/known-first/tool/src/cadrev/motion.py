@@ -224,9 +224,9 @@ class Mechanism:
             equality = ET.SubElement(root, "equality")
             for name, (a, b) in model.loops.items():
                 ET.SubElement(equality, "connect", name=name, site1=a, site2=b)
-            taken = {*model.loops, *model.gears}
+            taken = {*model.loops, *model.couplings}
             for c in self.couplings:  # driven = ratio × driver
-                name = c.name if c.kind == "gear" else _unique(f"{c.name}_{c.driven}", taken)
+                name = c.name if c.kind == "coupling" else _unique(f"{c.name}_{c.driven}", taken)
                 polycoef = _num(0, self._ratio(c), 0, 0, 0)
                 ET.SubElement(
                     equality,
@@ -267,13 +267,14 @@ class Mechanism:
         """The assembly with the named joints at values (in the project's units, from as built),
         every other actuated joint held as built and the passive ones solved to close the loops.
         A joint in free is where its check puts it, so its own range is not held against it. A
-        Fault where the pose sets a gear's or cable's joints out of proportion; one already filed
-        where a loop stays open ([loop-open]) or a joint ends outside its range ([joint-range])."""
+        Fault where the pose sets a coupling's or cable's joints out of proportion; one already
+        filed where a loop stays open ([loop-open]) or a joint ends outside its range
+        ([joint-range])."""
         if self.loaded is None:
             raise Fault()  # [mjcf-load] says no check with a pose is evaluated
         values = dict(values)
         changed = True
-        while changed:  # each joint a gear or cable couples to one of them moves with it
+        while changed:  # each joint a coupling or cable ties to one of them moves with it
             changed = False
             for c in self.couplings:
                 if c.driver in values and c.driven not in values:

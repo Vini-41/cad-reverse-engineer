@@ -76,12 +76,12 @@ _Avoid_: reference point, marker
 How one instance moves relative to another: revolute (turning about an axis through two datums of the moving one), slide (sliding along such an axis) or fixed (moving with the other as one body). A revolute joint or slide is either actuated (an input) or passive (moved by the rest of the mechanism).
 _Avoid_: pivot (for the joint itself; a pivot is its datum), prismatic, weld, DOF
 
-**Gear**:
-A coupling of two joints, so one moves in step with the other: of one type at a stated ratio (meshed gears, a belt), or a revolute joint and a slide at a stated lead (a lead screw, a rack and pinion). A planetary train with one member fixed is a chain of gears: sun to carrier, and carrier to each planet.
-_Avoid_: transmission, mimic joint, screw joint
+**Coupling**:
+Two joints tied so one moves in step with the other: of one type at a stated ratio (meshed gears, a belt), or a revolute joint and a slide at a stated lead (a lead screw, a rack and pinion). A planetary train with one member fixed is a chain of couplings: sun to carrier, and carrier to each planet.
+_Avoid_: gear (for anything but a toothed wheel), transmission, mimic joint, screw joint
 
 **Lead**:
-How far a gear's slide moves per full turn of its revolute joint, a length; negative where the slide moves toward its axis's first datum as the revolute joint turns positive. A rack and pinion's is its pitch circumference.
+How far a coupling's slide moves per full turn of its revolute joint, a length; negative where the slide moves toward its axis's first datum as the revolute joint turns positive. A rack and pinion's is its pitch circumference.
 _Avoid_: pitch (for a lead; a screw with several starts has a lead several times its thread pitch), ratio (for a lead)
 
 **Cable**:
@@ -109,7 +109,7 @@ One comparison between the built geometry and a ledger value, or a value worked 
 _Avoid_: test, assertion
 
 **Reads**:
-What a check's evaluation read: the params the check names (its pose, its sweep's steps, a mass check's density), the params the model gives it (its joint's range ends, the ratio or lead of each gear and the turn and closed values of each cable a pose moves a joint through) and the parts it weighs. What the check rests on is judged from them.
+What a check's evaluation read: the params the check names (its pose, its sweep's steps, a mass check's density), the params the model gives it (its joint's range ends, the ratio or lead of each coupling and the turn and closed values of each cable a pose moves a joint through) and the parts it weighs. What the check rests on is judged from them.
 _Avoid_: dependencies, inputs (of a check)
 
 **Checked param**:

@@ -1,4 +1,4 @@
-"""A model that moves: joints and loops posed through MuJoCo, gears, cables, ranges, sweeps, the
+"""A model that moves: joints and loops posed through MuJoCo, couplings, cables, ranges, sweeps, the
 mass model and the MJCF export."""
 
 import importlib
@@ -69,7 +69,7 @@ def test_slider_crank_is_posed_through_its_loop_and_exported_as_the_report_descr
         "range": {"from": ["input_min", "input_max"], "value": [-20, 50]},
     }
     assert motion["loops"] == {"closure": ["coupler_1.down", "slider_1.up"]}
-    assert (motion["dropped"], motion["gears"], motion["cables"]) == (False, {}, {})
+    assert (motion["dropped"], motion["couplings"], motion["cables"]) == (False, {}, {})
     # The MJCF is that mechanism in the project's units, each body weighed by the mass model.
     m = mujoco.MjModel.from_xml_path(str(mech_dir / "build" / "model.mjcf"))
     hinge, slide = mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE
@@ -146,16 +146,16 @@ def test_pose_the_mechanism_cannot_reach_names_itself_and_leaves_its_check_uneva
     assert "far" not in ids and len(ids) == 7  # every other check is evaluated as before
 
 
-def test_gear_the_loops_do_not_allow_leaves_its_poses_unreached(mech_dir):
+def test_coupling_the_loops_do_not_allow_leaves_its_poses_unreached(mech_dir):
     # A screw from the slide to the knee, which the loop already sets as the crank turns: both
     # cannot hold. The loop's rows outweigh the screw's in the solve, so the loop closes within a
     # loose tolerance.length while the screw slips.
-    screw = '"gears": {"slip": {"driver": "slide", "driven": "knee", "lead": "lead"}},'
+    screw = '"couplings": {"slip": {"driver": "slide", "driven": "knee", "lead": "lead"}},'
     remodel(mech_dir, LOOP, f"{LOOP}\n        {screw}")
     add(mech_dir, params="lead: {basis: proposed, value: 3600, rationale: a screw, gap: G1}")
     meta(mech_dir, tolerance={"length": 0.1})
     run = check(mech_dir)
-    assert set(run.errors) == {"loop-open"} and "gear slip" in run.messages("loop-open")[0]
+    assert set(run.errors) == {"loop-open"} and "coupling slip" in run.messages("loop-open")[0]
     assert [c["id"] for c in run.report["checks"]] == ["length", "rest", "mass"]
 
 
@@ -176,15 +176,15 @@ def test_fault_in_what_moves_keeps_the_build_and_drops_the_motion(mech_dir, rule
     assert not (mech_dir / "build" / "model.mjcf").exists()
 
 
-def test_gear_moves_one_joint_with_the_other_by_its_ratio_and_a_screw_by_its_lead(
+def test_coupling_moves_one_joint_with_the_other_by_its_ratio_and_a_screw_by_its_lead(
     mech_dir, tmp_path
 ):
-    # The coupler geared to fold back twice as fast as the crank turns keeps its tip on the rail,
+    # The coupler coupled to fold back twice as fast as the crank turns keeps its tip on the rail,
     # as the loop did; a screw on the crank's joint carries the slider 12 mm per turn.
     add_quote(mech_dir, tmp_path, "The screw carries the slider 12 mm per turn.", values={"v": 12})
-    gears = FOLD.replace("}},", "}, ") + SCREW.removeprefix('"gears": {')
+    couplings = FOLD.replace("}},", "}, ") + SCREW.removeprefix('"couplings": {')
     fold = "{basis: proposed, value: -2, rationale: 'meshed to fold back', gap: G1}"
-    open_chain(mech_dir, gears, fold=fold, lead="{basis: source, from: N1.v}")
+    open_chain(mech_dir, couplings, fold=fold, lead="{basis: source, from: N1.v}")
     add(
         mech_dir,
         params="{at: {basis: source, from: S2.turn}, folded: {basis: derived, expr: fold * at}}",
@@ -198,11 +198,11 @@ def test_gear_moves_one_joint_with_the_other_by_its_ratio_and_a_screw_by_its_lea
     assert number(run.result("travel")) == 1 and number(run.result("reach")) == STOOD
     # Posing the driven joint moves its driver: the knee at -60 puts the crank at 30.
     assert number(run.result("driven")) == 60
-    # A check rests on the ratio or lead of each gear its pose moves a joint through.
+    # A check rests on the ratio or lead of each coupling its pose moves a joint through.
     reach, travel = run.result("reach"), run.result("travel")
     assert (reach["rests_on"], reach["rests_on_params"]) == ("proposed", ["fold"])
     assert (travel["rests_on"], travel["rests_on_params"]) == ("proposed", ["fold"])
-    assert run.report["motion"]["gears"] == {
+    assert run.report["motion"]["couplings"] == {
         "fold": {"driver": "input", "driven": "knee", "ratio": {"from": "fold", "value": -2}},
         "screw": {"driver": "input", "driven": "slide", "lead": {"from": "lead", "value": 12}},
     }
@@ -213,9 +213,9 @@ def test_gear_moves_one_joint_with_the_other_by_its_ratio_and_a_screw_by_its_lea
     }
 
 
-def test_a_check_rests_on_a_gear_driven_by_a_passive_joint_its_poses_loop_moves(mech_dir):
-    # A pin on the coupler, geared to the knee: turning the crank, the loop moves the knee, and
-    # the gear the pin.
+def test_a_check_rests_on_a_coupling_driven_by_a_passive_joint_its_poses_loop_moves(mech_dir):
+    # A pin on the coupler, coupled to the knee: turning the crank, the loop moves the knee, and
+    # the coupling the pin.
     remodel(
         mech_dir, "    datums = {", '    parts["pin"] = Cylinder(p.hole / 2, p.H)\n    datums = {'
     )
@@ -225,7 +225,7 @@ def test_a_check_rests_on_a_gear_driven_by_a_passive_joint_its_poses_loop_moves(
     remodel(
         mech_dir,
         LOOP,
-        LOOP + '"gears": {"wind": {"driver": "knee", "driven": "spin", "ratio": "wind"}},',
+        LOOP + '"couplings": {"wind": {"driver": "knee", "driven": "spin", "ratio": "wind"}},',
     )
     spin = '"spin": {"type": "revolute", "parent": "coupler_1", "child": "pin_1",'
     spin += ' "axis": ["pin_1.a", "pin_1.up"], "drive": "passive"},'
@@ -247,12 +247,12 @@ def test_pose_at_a_number_is_a_test_condition_that_adds_no_basis_to_its_check(me
     # range left out and the bars worked out from L, nothing is proposed and the project is exact.
     quote = "The screw carries the slider 12 mm per turn, and the coupler folds back at -2 times."
     add_quote(mech_dir, tmp_path, quote, values={"v": 12, "fold": -2})
-    gears = FOLD.replace("}},", "}, ") + SCREW.removeprefix('"gears": {')
+    couplings = FOLD.replace("}},", "}, ") + SCREW.removeprefix('"couplings": {')
     stated = {
         name: f"{{basis: source, from: N1.{key}}}"
         for name, key in [("fold", "fold"), ("lead", "v")]
     }
-    open_chain(mech_dir, gears, **stated)
+    open_chain(mech_dir, couplings, **stated)
     remodel(mech_dir, INPUT_RANGE + ",", "")
     edit(
         mech_dir, "params.yaml", lambda d: [d["params"].pop(n) for n in ("input_min", "input_max")]
@@ -411,7 +411,7 @@ TRAVEL = "The slider travels -5 mm to 5 mm from rest."
 
 def test_range_check_of_a_slides_own_value_is_held_to_tolerance_length(mech_dir, tmp_path):
     # tolerance.angle at 1° is 10% of the slide's 10 mm travel, but the slide's ends are lengths:
-    # the check is planned, compared and reported against tolerance.length alone. Geared, not
+    # the check is planned, compared and reported against tolerance.length alone. Coupled, not
     # looped, the slider travels on its own.
     fold = "{basis: proposed, value: -2, rationale: 'meshed to fold back', gap: G1}"
     open_chain(mech_dir, FOLD, fold=fold)

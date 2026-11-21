@@ -540,7 +540,7 @@ def build(p):
                                             "child": f"mount_mob_{k + 1}"}
         joints[f"fix_clamp_mob_{k + 1}"] = {"type": "fixed", "parent": f"mount_mob_{k + 1}",
                                              "child": f"clamp_mob_{k + 1}"}
-    gears = {
+    couplings = {
         "lead_l": {"driver": "motor_l", "driven": "carriage", "lead": "screw_lead"},
         "lead_r": {"driver": "carriage", "driven": "motor_r", "lead": "screw_lead_r"},
     }
@@ -628,4 +628,4 @@ def build(p):
         where = Location((x, y, 0), (0, 0, 1), turn)
         sheets[region] = (part, where * Location((0, 0, 0), (1, 0, 0), 180) if over else where)
     return {"parts": parts, "datums": datums, "assembly": assembly, "sheets": sheets, "joints": joints,
-            "gears": gears, "cables": cables}
+            "couplings": couplings, "cables": cables}

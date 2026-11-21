@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import NamedTuple
 
 from . import Fault, ledger, released, units
-from .build import JOINT_TYPES, Model, unmoving, gear_by, prefix, printed, range_ends
+from .build import JOINT_TYPES, Model, unmoving, coupling_by, prefix, printed, range_ends
 from .ledger import TOL_CAP, TOL_REL_CAP, above_cap
 from .motion import Mechanism, pose_text
 from .project import AXES, DEFAULT_TOL, POSES, RESTS_ON, Project, compared_refs
@@ -338,13 +338,13 @@ class Checks:
 
     def _given(self, c: dict) -> list[str]:
         """The params the model gives the check just evaluated: the range ends of a joint it names,
-        the ratio or lead of each gear its poses move a joint through, and for each cable whose
+        the ratio or lead of each coupling its poses move a joint through, and for each cable whose
         wheel they move, the wheel's turn and closed values."""
         model = self.model
         joint = c.get("joint") or (c.get("sweep") or {}).get("joint") or ""
         given = list(model.joints.get(joint, {}).get("range", ()))
         moved = set().union(*(placed.moved for placed in self.read_at))
-        given += (gear_by(g)[1] for g in model.gears.values() if g["driver"] in moved)
+        given += (coupling_by(c)[1] for c in model.couplings.values() if c["driver"] in moved)
         for cable in model.cables.values():
             if cable.get("wheel") in moved:
                 given += (model.joints[cable["wheel"]]["range"][0], *cable["closes"].values())

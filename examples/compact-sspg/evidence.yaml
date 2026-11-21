@@ -44,7 +44,7 @@ evidence:
     locator: "Sec. II-A"
     quote: "has the ring gear fixed, the sun gear driven by the motor, and the carrier providing the output"
     scope: context
-    reason: "the train's fixed member (ring), input (sun) and output (carrier): the joints and gears in model.py"
+    reason: "the train's fixed member (ring), input (sun) and output (carrier): the joints and couplings in model.py"
   - id: TRAIN-fig2
     source: paper
     page: 2
