@@ -47,7 +47,8 @@ Done when every thumbs down is turned, declined or reported.
 
 Write [plan.yaml](../known-first/references/project-format.md#planyaml):
 
-- **`make`**, for each part that is made: its operations in the order the shop does them. The stock, or the print's orientation and supports. Each cut with its tool where the tool is on the chart: the drill, the tap, the reamer. The tolerance the part is made to, the loosest that works, and each feature that needs tighter, with the reason. The finish, and the edges broken.
+- **`general_tolerance`**, one line for the whole object: the loosest that works.
+- **`make`**, for each part that is made: its operations in the order the shop does them. The stock, or the print's orientation and supports. Each cut with its tool where the tool is on the chart: the drill, the tap, the reamer. Each feature that needs tighter than the general tolerance, with the reason. The finish, and the edges broken.
 - **`buy`**, for each part that is bought: what is ordered, by its standard or catalogue designation. For each screw, its head and material; cadrev prints its thread and length. And anything else the steps use: an adhesive, a wire.
 - **`steps`**, the assembly sequence a person follows. Each step places instances onto what is already there, from a direction a hand and a tool can reach, drives its screws (`with`), and says how in its `note`: the tool, what to align, how tight, and what to check before the next step. What goes inside goes in first.
 - **What floats is an error under a plan.** Build what holds it, move it onto what does, or name the loosest fit as project.yaml's [`clearance`](../known-first/references/project-format.md#projectyaml).

@@ -338,8 +338,9 @@ A gap is a question whose answer would replace a proposed or measured value. The
 The plan says how the object is made and put together, once its design is accepted. `cadrev check` holds it to the built model and writes it as `build/plan.md`, the guide for whoever makes the object: each line with its quantity counted from the model, and each step that places an instance over its view.
 
 ```yaml
+general_tolerance: "±0.2 mm unless noted"   # optional: one line, for every made part
 make:                    # each part that is made: how, in one operation or several in order
-  body:  ["FDM print in PLA, deck face on the bed, no supports; ±0.2 mm", "ream the hub bore Ø32.5"]
+  body:  ["FDM print in PLA, deck face on the bed, no supports", "ream the hub bore Ø32.5 H7 for the bearing"]
   plate: "FDM print in PLA, flat"
 buy:                     # each part that is bought, each screw by its thread param, and anything else
   fan:       "AKYGA AW-8A-BK 80 mm 12 V fan"
@@ -350,6 +351,7 @@ steps:                   # the assembly sequence
   - {place: [fan_1, plate_1], with: {lid_screw: 4}, note: "Label towards the plate. 2.5 mm hex key, snug."}
 ```
 
+- **`general_tolerance`** is the one general tolerance of the made parts, a line of text, which the guide prints once. A feature that needs tighter says so in its part's `make`.
 - **Every part an instance places is made or bought**, one or the other. `make` gives its operations, as text; `buy` what is ordered. The plan counts each by its instances. A part made beside the object, a fit coupon or a jig, is a part no instance places: `make` lists it uncounted, and a step that places nothing says when it is used.
 - **A `buy` entry may also name a thread param**, for what is ordered of it (a screw's head and material, a nut, a threaded insert), which the guide prints after its thread and length. Any other name is listed as written, uncounted: an adhesive, a wire.
 - **Every instance is placed by exactly one step**; an assembly of one instance needs no steps. A step may also place nothing: one that only drives screws, or only says what to do.
@@ -364,6 +366,7 @@ steps:                   # the assembly sequence
 
 - **A drawing is dimensioned by its part's checks**: each unposed `bbox`, `distance`, `angle` and `diameter` check that reads the part in its own frame is a dimension where the check reads it, printed at the value as built, in blue where the check passes and red where it fails. An envelope no check compares is a reference dimension, in grey parentheses.
 - **A declared thread** is drawn as a drawing shows one, a thin three-quarter circle beside its hole or shank, and called out by its designation; a clearance hole by its diameter and the screw it clears.
+- **Under a plan, a made part's title line** prints project.yaml's `material` and the plan's `general_tolerance` beside its units and projection.
 - The views are named by the axis the object stands on, `up` in project.yaml. A drawing adds no pass or fail.
 
 ## Statuses

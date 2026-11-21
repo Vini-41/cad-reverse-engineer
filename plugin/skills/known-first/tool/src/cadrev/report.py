@@ -268,6 +268,8 @@ def _plan_md(
             "",
         ]
     md += ["## Make", ""]
+    if "general_tolerance" in planned:
+        md += [f"**General tolerance**: {planned['general_tolerance']}", ""]
     for made in planned["make"]:
         # A part no instance places is made beside the object: a coupon, a jig.
         part = f"- **{made['part']}**" + f" × {made['count']}" * bool(made["count"])

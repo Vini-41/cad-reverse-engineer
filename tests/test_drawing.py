@@ -4,8 +4,15 @@ dimensioned by its checks, and the report that shows each part's checks under it
 import numpy as np
 import pytest
 from build123d import import_step
-from conftest import ASSEMBLY, add_quote, change, check, meta, remodel
+from conftest import ASSEMBLY, add, add_quote, change, check, edit, meta, remodel
 from PIL import Image
+
+
+TITLE_ROWS = 150  # of a sheet, above its views
+
+
+def sheet_pixels(path) -> np.ndarray:
+    return np.asarray(Image.open(path).convert("RGB"))
 
 
 def inked(path, colour: str) -> int:
@@ -60,16 +67,79 @@ def test_drawing_dimensions_a_part_by_its_checks_as_built(proj_dir):
 def test_drawing_prints_a_range_check_at_the_value_as_built(proj_dir, tmp_path):
     sheet = proj_dir / "build" / "drawings" / "link.png"
     check(proj_dir)
-    against_one_value = np.asarray(Image.open(sheet).convert("RGB"))
+    against_one_value = sheet_pixels(sheet)
     text = "Pitch 29.5 mm MIN, 30.5 mm MAX, or 29.8 mm MAX."
     add_quote(proj_dir, tmp_path, text, values={"low": 29.5, "high": 30.5, "under": 29.8})
     change(proj_dir, "checks", "pitch", evidence=None, key=None, min="N1.low", max="N1.high")
     check(proj_dir)
-    assert np.array_equal(np.asarray(Image.open(sheet).convert("RGB")), against_one_value)
+    assert np.array_equal(sheet_pixels(sheet), against_one_value)
     # Outside its range it is drawn red, still at the value the part was built to.
     change(proj_dir, "checks", "pitch", min=None, max="N1.under")
     assert "check-failed" in check(proj_dir).errors
     assert inked(sheet, "red") > 100
+
+
+def test_no_plan_and_bought_part_keep_their_sheet_whatever_the_title_note(proj_dir):
+    sheet = proj_dir / "build" / "drawings" / "link.png"
+    check(proj_dir)
+    width = sheet_pixels(sheet).shape[1]
+    meta(proj_dir, name="a project name far longer than any sheet is wide " * 4)
+    check(proj_dir)
+    assert sheet_pixels(sheet).shape[1] == width
+    add(proj_dir, buy="link: a stock link")
+    check(proj_dir)
+    assert sheet_pixels(sheet).shape[1] == width
+
+
+def test_title_line_prints_the_authors_text_as_written(proj_dir):
+    # Read as math, this text cannot be drawn.
+    meta(proj_dir, material=r"$\notacommand$ steel")
+    add(proj_dir, make="link: mill it")
+    assert "drawings/link.png" in check(proj_dir).report["drawings"]
+
+
+def test_made_part_drawing_prints_material_and_general_tolerance_in_its_title(proj_dir):
+    sheet = proj_dir / "build" / "drawings" / "link.png"
+    meta(proj_dir, material="6061 aluminium, milled")
+    check(proj_dir)
+    no_plan = sheet_pixels(sheet)
+    add(proj_dir, make="link: mill it")
+    check(proj_dir)
+    material_alone = sheet_pixels(sheet)
+    edit(proj_dir, "plan.yaml", lambda d: d.update(general_tolerance="±0.2 mm unless noted"))
+    check(proj_dir)
+    both = sheet_pixels(sheet)
+    for before in (no_plan, material_alone):
+        assert before.shape == both.shape
+        assert not np.array_equal(before[:TITLE_ROWS], both[:TITLE_ROWS])
+        # Only the title line changes: the dimensions stay the part's checks, as built.
+        assert np.array_equal(before[TITLE_ROWS:], both[TITLE_ROWS:])
+    assert not np.array_equal(no_plan[:TITLE_ROWS], material_alone[:TITLE_ROWS])
+
+
+def test_bought_part_drawing_prints_neither(proj_dir):
+    sheet = proj_dir / "build" / "drawings" / "link.png"
+    meta(proj_dir, material="6061 aluminium, milled")
+    check(proj_dir)
+    no_plan = sheet_pixels(sheet)
+    add(proj_dir, buy="link: a stock link")
+    edit(proj_dir, "plan.yaml", lambda d: d.update(general_tolerance="±0.2 mm unless noted"))
+    assert check(proj_dir).rules == []
+    assert np.array_equal(sheet_pixels(sheet), no_plan)
+
+
+def test_long_title_line_widens_the_sheet_and_stays_on_it(proj_dir):
+    sheet = proj_dir / "build" / "drawings" / "link.png"
+    add(proj_dir, make="link: mill it")
+    check(proj_dir)
+    short = sheet_pixels(sheet)
+    line = "ISO 2768-mK, " + "linear and angular dimensions as the shop's own standard, " * 4
+    edit(proj_dir, "plan.yaml", lambda d: d.update(general_tolerance=line))
+    check(proj_dir)
+    long = sheet_pixels(sheet)
+    assert long.shape[1] > short.shape[1]
+    # The line ends inside the sheet: its last columns are white.
+    assert (long[:TITLE_ROWS, -20:] == 255).all()
 
 
 def test_part_that_is_no_solid_gets_its_finding_and_no_drawing(proj_dir):
