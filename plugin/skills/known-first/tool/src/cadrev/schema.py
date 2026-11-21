@@ -100,9 +100,13 @@ GAP = record("id! question ask")
 JOINT = record("type parent child axis:[str] range:[str] drive")
 COUPLING = record("driver driven ratio lead")
 CABLE = record("path:[str]")
-# A step of the plan: the instances it places, the screws it drives of each thread param, and
-# how. `with` is a Python keyword, which a mapping's key may be.
-STEP = record("place:[str] with:{int} note")
+# A step of the plan: the instances it places, the signed axis of the assembly's frame they come
+# from, the screws it drives of each thread param, and how. `from` and `with` are Python keywords,
+# which a mapping's key may be.
+STEP = Record(
+    record("place:[str] with:{int} note").fields
+    | {"from": OneOf(tuple(sign + axis for sign in "+-" for axis in "xyz"))}
+)
 
 # file -> top-level key -> (spec of each entry, the collection holding the entries or None)
 FILES = {

@@ -50,11 +50,11 @@ Write [plan.yaml](../known-first/references/project-format.md#planyaml):
 - **`general_tolerance`**, one line for the whole object: the loosest that works.
 - **`make`**, for each part that is made: its operations in the order the shop does them. The stock, or the print's orientation and supports. Each cut with its tool where the tool is on the chart: the drill, the tap, the reamer. Each feature that needs tighter than the general tolerance, with the reason. The finish, and the edges broken.
 - **`buy`**, for each part that is bought: what is ordered, by its standard or catalogue designation. For each screw, its head and material; cadrev prints its thread and length. And anything else the steps use: an adhesive, a wire.
-- **`steps`**, the assembly sequence a person follows. Each step places instances onto what is already there, from a direction a hand and a tool can reach, drives its screws (`with`), and says how in its `note`: the tool, what to align, how tight, and what to check before the next step. What goes inside goes in first.
+- **`steps`**, the assembly sequence a person follows, in pictures more than words. Each step places one significant part with its screws (`with`), and symmetric parts that come from one side together. Wherever a part goes onto another, `from` names the direction it comes from, one a hand and a tool can reach. The `note` is short: the tool, what to align, how tight, what to check before the next step. What goes inside goes in first.
 - **What floats is an error under a plan.** Build what holds it, move it onto what does, or name the loosest fit as project.yaml's [`clearance`](../known-first/references/project-format.md#projectyaml).
 - **A fit that asks for a test is tried before the parts are made.** Where a fit param's gap is `ask: test`, the plan says how: a coupon, a part of its own that no instance places, holding that fit around the proposed size, and a step that tries the real pin, screw or bearing in it.
 
-Done when `cadrev check` reports nothing about the plan and ends on the status it had, and each step's view in `build/steps/` shows what its note says.
+Done when `cadrev check` reports nothing about the plan and ends on the status it had, and each step's view in `build/steps/` shows its part going where its note says.
 
 ## 5. Hand over
 

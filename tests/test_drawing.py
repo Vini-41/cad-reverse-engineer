@@ -15,19 +15,44 @@ def sheet_pixels(path) -> np.ndarray:
     return np.asarray(Image.open(path).convert("RGB"))
 
 
-def inked(path, colour: str) -> int:
-    """How many pixels of a drawing are drawn in a colour: blue, red, grey, or the grey of what
-    a step's view shows as already placed."""
+def _drawn(path, colour: str):
+    """Where a drawing is drawn in a colour: blue, red, grey, black, the grey of what a step's
+    view shows as already placed, or the orange of its guideline."""
     r, g, b = (np.asarray(Image.open(path).convert("RGB")).astype(int)[:, :, i] for i in range(3))
     spread = np.maximum(np.maximum(r, g), b) - np.minimum(np.minimum(r, g), b)
-    drawn = {
+    return {
         "blue": (b > 140) & (r < 90),
         "red": (r > 170) & (g < 90) & (b < 90),
         "grey": (spread < 12) & (r > 90) & (r < 135),
+        "black": (r < 60) & (g < 60) & (b < 60),
         # What a step's view shows as already there: lighter than a reference dimension.
         "placed": (spread < 12) & (r >= 135) & (r < 150),
-    }
-    return int(drawn[colour].sum())
+        "guide": (r > 150) & (g > 60) & (g < 140) & (b < 90),
+    }[colour]
+
+
+def inked(path, colour: str) -> int:
+    """How many pixels of a drawing are drawn in a colour."""
+    return int(_drawn(path, colour).sum())
+
+
+def lowest(path, colour: str) -> float:
+    """How far up a view, under its title, a colour's lowest ink lies, as a share of its height."""
+    below_title = _drawn(path, colour)[150:]
+    return 1 - float(np.nonzero(below_title)[0].max()) / below_title.shape[0]
+
+
+def highest(path, colour: str) -> float:
+    """How far up a view, under its title, a colour's highest ink lies, as a share of its height."""
+    below_title = _drawn(path, colour)[150:]
+    return 1 - float(np.nonzero(below_title)[0].min()) / below_title.shape[0]
+
+
+def height(path, colour: str) -> float:
+    """How far up a view, under its title, a colour's ink lies on average, as a share of the
+    view's height."""
+    below_title = _drawn(path, colour)[150:]  # 0.75 in of title at 200 dpi
+    return 1 - float(np.nonzero(below_title)[0].mean()) / below_title.shape[0]
 
 
 def test_check_writes_the_isometric_view_and_a_drawing_of_each_part(proj_dir):
