@@ -17,5 +17,5 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          cache-dependency-glob: plugin/skills/known-first/tool/uv.lock
+          cache-dependency-glob: plugin/skills/build-model/tool/uv.lock
       - run: scripts/check

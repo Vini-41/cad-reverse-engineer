@@ -1,4 +1,4 @@
-"""The plugin as it ships from plugin/: what each channel's manifest names, its three skills'
+"""The plugin as it ships from plugin/: what each channel's manifest names, its skills'
 frontmatter and links, and the cadrev script that runs the tool."""
 
 import json
@@ -12,8 +12,8 @@ import yaml
 from conftest import REPO, SKILL, SKILLS
 
 PLUGIN = REPO / "plugin"
-# known-first ships the CLI and the file formats; the other two build on it from beside it.
-NAMES = ["ask-machinist", "complete-model", "known-first"]
+# build-model ships the CLI and the file formats; ask-machinist uses them from beside it.
+NAMES = ["ask-machinist", "build-model"]
 
 
 def test_plugin_ships_only_what_its_channels_accept():
@@ -63,9 +63,9 @@ def test_skill_frontmatter_names_itself_its_license_and_what_it_needs(name):
     assert 0 < len(front["description"]) <= 1024
     needs = front["compatibility"]
     assert len(needs) <= 500 and all(word in needs for word in ("uv", "3.12", "3.14", "network"))
-    # The CLI ships in known-first alone, and each other skill says it is used from beside it.
+    # The CLI ships in build-model alone, and the other skill says it is used from beside it.
     assert (SKILLS / name / "cadrev").is_file() == (name == SKILL.name)
-    assert name == SKILL.name or "known-first skill installed beside it" in needs
+    assert name == SKILL.name or "build-model skill installed beside it" in needs
 
 
 def test_every_relative_link_in_the_skills_names_a_file_and_a_heading_in_it():

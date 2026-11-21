@@ -22,8 +22,8 @@ from cadrev import cli  # noqa: TID251
 
 REPO = Path(__file__).resolve().parents[1]
 SKILLS = REPO / "plugin" / "skills"
-# The skill that ships the CLI and the file formats; the other skills build on it.
-SKILL = SKILLS / "known-first"
+# The skill that ships the CLI and the file formats; ask-machinist uses them from beside it.
+SKILL = SKILLS / "build-model"
 PASSING = ("VERIFIED PENDING REVIEW", "VERIFIED")
 STATUSES = ("NOT VERIFIED", *PASSING, "PARTIAL")
 REFUSED = "the project was not read, so no report was written"
