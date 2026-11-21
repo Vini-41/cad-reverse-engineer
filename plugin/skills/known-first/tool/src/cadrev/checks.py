@@ -175,6 +175,8 @@ def _comparable(p: Project, c: dict) -> None:
         raise Fault("give key, the ledger value its stroke is compared with")
     elif name == "bbox" and not c.get("axes"):
         raise Fault("give axes, each value of its evidence item and the axis it runs along")
+    if name == "stroke" and not c.get("pose"):
+        raise Fault("give pose, where its cable's stroke is taken")
 
 
 def _quantities(p: Project, c: dict) -> None:
@@ -613,8 +615,6 @@ class Checks:
         cable = self.model.cables.get(name)
         if cable is None:
             raise Fault("" if self.model.dropped else f"{name} is not a cable")
-        if not c.get("pose"):
-            raise Fault(f"name the pose cable {name}'s stroke is taken at")
         start, start_pose = self._posed(c, "from")
         if start_pose is None and "from" in c:
             start_pose = {}
