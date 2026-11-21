@@ -724,7 +724,7 @@ MECH_FINDINGS = {
     "model-cable: a path starting on the wheel": _wound(WOUND.replace("rail_1.up", "crank_1.up")),
     "model-cable: closing its own wheel": _wound(WOUND.replace('{"slide"', '{"input"')),
     "model-cable: closing a joint the model lacks": _wound(WOUND.replace('{"slide"', '{"ankle"')),
-    "model-cable: closing a joint a coupling couples": _wound(
+    "model-cable: closing a joint a coupling ties": _wound(
         WOUND + "\n        " + SCREW, lead=PROPOSED % 8
     ),
     "model-cable: a closed param params.yaml lacks": _wound(WOUND.replace('"pull"', '"tug"')),

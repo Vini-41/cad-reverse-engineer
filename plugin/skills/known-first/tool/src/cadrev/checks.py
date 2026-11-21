@@ -344,7 +344,7 @@ class Checks:
         joint = c.get("joint") or (c.get("sweep") or {}).get("joint") or ""
         given = list(model.joints.get(joint, {}).get("range", ()))
         moved = set().union(*(placed.moved for placed in self.read_at))
-        given += (coupling_by(c)[1] for c in model.couplings.values() if c["driver"] in moved)
+        given += (coupling_by(k)[1] for k in model.couplings.values() if k["driver"] in moved)
         for cable in model.cables.values():
             if cable.get("wheel") in moved:
                 given += (model.joints[cable["wheel"]]["range"][0], *cable["closes"].values())

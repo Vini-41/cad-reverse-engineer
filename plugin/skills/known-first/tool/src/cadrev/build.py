@@ -179,9 +179,9 @@ def coupling_by(coupling: dict) -> tuple[str, str]:
     return key, coupling[key]
 
 
-class Coupling(NamedTuple):
-    """Two joints that move in proportion: driven at ratio times driver, in the project's units of
-    each; law says how, as a finding words it."""
+class InStep(NamedTuple):
+    """Two joints that move in step, a coupling's or a cable's: driven at ratio times driver, in
+    the project's units of each; law says how, as a finding words it."""
 
     kind: str  # coupling or cable
     name: str
@@ -191,7 +191,7 @@ class Coupling(NamedTuple):
     law: str
 
 
-def couplings(p: Project, model: Model) -> list[Coupling]:
+def in_step(p: Project, model: Model) -> list[InStep]:
     """Each pair of joints moving in proportion: a coupling's, at its ratio or at its lead per full
     turn of its revolute joint; and a cable's wheel with each joint it closes, at that joint's
     closed value over the wheel's full turn."""
@@ -201,14 +201,14 @@ def couplings(p: Project, model: Model) -> list[Coupling]:
         driver, driven, value = coupling["driver"], coupling["driven"], p.values[param]
         if key == "ratio":
             law = f"moves {driven} {value:g} times {driver}"
-            found.append(Coupling("coupling", name, driver, driven, value, law))
+            found.append(InStep("coupling", name, driver, driven, value, law))
             continue
         turn = 2 * math.pi / units.size("angle", p.units)
         turns = model.quantity(driver) == "angle"
         revolute, slide = (driver, driven) if turns else (driven, driver)
         law = f"moves {slide} {value:g} per full turn of {revolute}"
         ratio = value / turn if turns else turn / value
-        found.append(Coupling("coupling", name, driver, driven, ratio, law))
+        found.append(InStep("coupling", name, driver, driven, ratio, law))
     for name, cable in model.cables.items():
         if "wheel" in cable:
             wheel = cable["wheel"]
@@ -216,7 +216,7 @@ def couplings(p: Project, model: Model) -> list[Coupling]:
             for joint, param in cable["closes"].items():
                 closed = p.values[param]
                 law = f"closes {joint} to {closed:g} as {wheel} turns to {turn:g}"
-                found.append(Coupling("cable", name, wheel, joint, closed / turn, law))
+                found.append(InStep("cable", name, wheel, joint, closed / turn, law))
     return found
 
 
@@ -588,13 +588,13 @@ def _cable_fault(p: Project, model: Model, cable: dict, closed_by: dict) -> None
             f"its path starts at {cable['path'][0]}, on the wheel; start it where the cable "
             "leaves the wheel, on an instance the wheel does not turn"
         )
-    coupled = {c[k] for c in model.couplings.values() for k in ("driver", "driven")}
+    tied = {c[k] for c in model.couplings.values() for k in ("driver", "driven")}
     for joint, param in cable["closes"].items():
         if joint not in model.moving:
             raise Fault(f"closes {joint}, which is {unmoving(model, joint)}")
         if joint == wheel:
             raise Fault(f"closes its own wheel {wheel}")
-        if joint in coupled:
+        if joint in tied:
             raise Fault(f"closes {joint}, which a coupling ties")
         if joint in closed_by:
             raise Fault(f"closes {joint}, which cable {closed_by[joint]} closes too")
