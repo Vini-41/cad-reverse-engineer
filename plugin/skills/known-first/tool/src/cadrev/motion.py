@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from . import Fault, units
-from .build import JOINT_TYPES, Model, couplings, printed, range_ends
+from .build import JOINT_TYPES, Model, in_step, printed, range_ends
 from .project import Project
 
 # Steps from the as-built pose to the one a check names: each step starts from the last, so the
@@ -100,7 +100,7 @@ class Mechanism:
 
     def __init__(self, p: Project, model: Model):
         self.p, self.model = p, model
-        self.couplings = couplings(p, model)
+        self.in_step = in_step(p, model)
         self.meshes: dict[str, bytes] = {}
         # part -> how its mesh was coarsened to fit STL_FACES
         self.coarsened: dict[str, dict] = {}
@@ -133,7 +133,7 @@ class Mechanism:
         return self._size(self.model.quantity(joint))
 
     def _ratio(self, c) -> float:
-        """A coupling's ratio in the MJCF's units of each joint."""
+        """A pair in step's ratio in the MJCF's units of each joint."""
         return c.ratio * self._joint_size(c.driven) / self._joint_size(c.driver)
 
     def _as_built_loops(self) -> None:
@@ -220,12 +220,12 @@ class Mechanism:
         for inst in model.assembly:
             if inst not in moved_by:
                 body(world, inst, None)
-        if model.loops or self.couplings:
+        if model.loops or self.in_step:
             equality = ET.SubElement(root, "equality")
             for name, (a, b) in model.loops.items():
                 ET.SubElement(equality, "connect", name=name, site1=a, site2=b)
             taken = {*model.loops, *model.couplings}
-            for c in self.couplings:  # driven = ratio × driver
+            for c in self.in_step:  # driven = ratio × driver
                 name = c.name if c.kind == "coupling" else _unique(f"{c.name}_{c.driven}", taken)
                 polycoef = _num(0, self._ratio(c), 0, 0, 0)
                 ET.SubElement(
@@ -276,12 +276,12 @@ class Mechanism:
         changed = True
         while changed:  # each joint a coupling or cable ties to one of them moves with it
             changed = False
-            for c in self.couplings:
+            for c in self.in_step:
                 if c.driver in values and c.driven not in values:
                     values[c.driven], changed = c.ratio * values[c.driver], True
                 elif c.driven in values and c.driver not in values and c.ratio:
                     values[c.driver], changed = values[c.driven] / c.ratio, True
-        for c in self.couplings:
+        for c in self.in_step:
             if c.driver in values and c.driven in values:
                 if not math.isclose(values[c.driven], c.ratio * values[c.driver], abs_tol=1e-9):
                     raise Fault(
@@ -321,10 +321,10 @@ class Mechanism:
             for name, pair in model.loops.items()
         }
         jac1, jac2 = np.zeros((3, m.nv)), np.zeros((3, m.nv))
-        # Each coupling whose joints values leaves free to move: (it, driven, driver, ratio).
+        # Each pair in step whose joints values leaves free to move: (it, driven, driver, ratio).
         coupled = [
             (c, jid[c.driven], jid[c.driver], self._ratio(c))
-            for c in self.couplings
+            for c in self.in_step
             if not {c.driver, c.driven} <= values.keys()
         ]
         coupled_rows = np.zeros((len(coupled), m.nv))
@@ -333,7 +333,7 @@ class Mechanism:
             row[m.jnt_dofadr[driver]] -= ratio
 
         def slips() -> list[float]:
-            """How far each coupled joint stands from where its coupling puts it, in MJCF units."""
+            """How far each driven joint stands from where its driver puts it, in MJCF units."""
             return [
                 float(d.qpos[m.jnt_qposadr[driven]] - ratio * d.qpos[m.jnt_qposadr[driver]])
                 for _, driven, driver, ratio in coupled
@@ -373,8 +373,8 @@ class Mechanism:
                     "cannot close there, so checks at this pose are not evaluated",
                 )
                 reached = False
-        # The solve weighs a loop's gap and a coupling's slip together, so a loop can close while
-        # a coupling the loops do not allow slips.
+        # The solve weighs a loop's gap and a pair in step's slip together, so a loop can close
+        # while a coupling or cable the loops do not allow slips.
         for (c, *_), slip in zip(coupled, slips()) if reached else ():
             quantity = model.quantity(c.driven)
             off = slip / size[c.driven]  # in the project's unit
