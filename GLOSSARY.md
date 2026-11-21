@@ -125,7 +125,7 @@ A check that compares a built part whole with its released body in place, the pa
 _Avoid_: mesh comparison, ICP check
 
 **Drawing**:
-A part's sheet, written by every verification run: its front, top and right views and an isometric one, dimensioned by the checks that read that part alone, each dimension the value as built. An envelope no check compares is a reference dimension. The assembly has an isometric view and no drawing.
+A part's sheet, written by every verification run: its front, top and right views and an isometric one, dimensioned by the checks that read that part alone, each dimension the value as built. An envelope no check compares is a reference dimension. Under a plan, a made part's drawing also prints the material and the plan's one general tolerance. The assembly has an isometric view and no drawing.
 _Avoid_: render, sketch, blueprint
 
 **Verification run**:

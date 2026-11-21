@@ -43,7 +43,8 @@ def check(p: Project, model: Model) -> dict | None:
         if placed[part] and part not in make and part not in buy:
             p.error("plan-part", f"part {part}: the plan neither makes it nor buys it")
     driven = _steps(p, model, placed, steps)
-    return {
+    general = " ".join((plan.get("general_tolerance") or "").split())  # printed as one line
+    return ({"general_tolerance": general} if general else {}) | {
         "make": [
             {"part": part, "count": placed[part], "how": how}
             for part, how in make.items()

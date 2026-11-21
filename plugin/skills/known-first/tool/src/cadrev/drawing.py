@@ -3,7 +3,8 @@ reviewer first looks at it, and as the person putting it together does.
 
 A part's drawing is its front, top and right views in third-angle projection beside an isometric
 one, dimensioned by the part's own checks: each dimension is the value as built, so a reviewer
-verifies the part on one sheet. A step's view is the isometric view of what the plan's step
+verifies the part on one sheet. Under a plan, a made part's title line also prints the material
+and the plan's general tolerance. A step's view is the isometric view of what the plan's step
 places, in black, on what the steps before it placed, in grey. The drawings read the build and
 add no pass or fail.
 """
@@ -25,6 +26,8 @@ DPI = 200
 WIDTH, HEIGHT = 11.0, 7.5  # inches a sheet fits in, under its title
 TITLE = 0.75  # inches of title above the sheet
 NARROWEST = 6.5  # inches: the width its title's note needs
+NOTE = 7.5  # points: a title's note
+MARGIN = 0.02  # of a sheet's width, either side of its title
 # A sheet is laid out in steps of `u`, a fraction of the views' size: a dimension's text is
 # 0.8 u tall, and each further dimension on a side of a view sits one LEVEL further out.
 STEPS, LEVEL, GAP, TEXT = 46, 2.0, 3.5, 0.8
@@ -436,8 +439,20 @@ def _mark(sheet: _Sheet, views: dict[str, _View], marks: list) -> None:
         sheet.leader(centre, radius, middle, count + text, colour, wall)
 
 
-def _paint(sheet: _Sheet, title: str, note: str, path: Path) -> None:
-    """Write a sheet as a PNG, its marks scaled to fit under its title."""
+def _note_width(note: str) -> float:
+    """The inches a sheet needs for a title's note, with its margin on either side."""
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+
+    figure = Figure(dpi=DPI)
+    canvas = FigureCanvasAgg(figure)
+    text = figure.text(0, 0, note, fontsize=NOTE, parse_math=False)
+    return text.get_window_extent(canvas.get_renderer()).width / DPI / (1 - 2 * MARGIN)
+
+
+def _paint(sheet: _Sheet, title: str, note: str, path: Path, authored: bool = False) -> None:
+    """Write a sheet as a PNG, its marks scaled to fit under its title. An authored note holds
+    the plan author's text: it prints as written, and the sheet widens to hold it."""
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.collections import LineCollection
     from matplotlib.figure import Figure
@@ -446,7 +461,8 @@ def _paint(sheet: _Sheet, title: str, note: str, path: Path) -> None:
     x0, y0, x1, y1 = sheet.extent
     x0, y0, x1, y1 = x0 - 2 * u, y0 - 2 * u, x1 + 2 * u, y1 + 2 * u
     per_inch = max((x1 - x0) / WIDTH, (y1 - y0) / HEIGHT)
-    wide, high = max((x1 - x0) / per_inch, NARROWEST), (y1 - y0) / per_inch
+    wide = max((x1 - x0) / per_inch, NARROWEST, _note_width(note) if authored else 0.0)
+    high = (y1 - y0) / per_inch
     figure = Figure(figsize=(wide, high + TITLE), dpi=DPI, facecolor="white")
     FigureCanvasAgg(figure)
     ax = figure.add_axes((0, 0, 1, high / (high + TITLE)))
@@ -496,13 +512,35 @@ def _paint(sheet: _Sheet, title: str, note: str, path: Path) -> None:
             va="center",
             bbox={"facecolor": "white", "edgecolor": "none", "pad": 0.6, "alpha": 0.85},
         )
-    figure.text(0.02, 1 - 0.3 / (high + TITLE), title, fontsize=13, fontweight="bold", va="center")
-    figure.text(0.02, 1 - 0.58 / (high + TITLE), note, fontsize=7.5, color=REFERENCE, va="center")
+    figure.text(
+        MARGIN, 1 - 0.3 / (high + TITLE), title, fontsize=13, fontweight="bold", va="center"
+    )
+    figure.text(
+        MARGIN,
+        1 - 0.58 / (high + TITLE),
+        note,
+        fontsize=NOTE,
+        color=REFERENCE,
+        va="center",
+        parse_math=not authored,
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(path, dpi=DPI)
 
 
-def _part(p: Project, model: Model, part: str, results: dict[str, Result], path: Path) -> None:
+def _making(p: Project, planned: dict | None, part: str) -> list[str]:
+    """What a made part's title line says of how it is made: the material and the general
+    tolerance, each where stated; nothing for a part the plan does not make, or with no plan."""
+    if not planned or part not in {made["part"] for made in planned["make"]}:
+        return []
+    material = " ".join((p.meta.get("material") or "").split())
+    general = planned.get("general_tolerance")
+    return [item for item in (material, general and f"general tolerance {general}") if item]
+
+
+def _part(
+    p: Project, model: Model, part: str, results: dict[str, Result], making: list[str], path: Path
+) -> None:
     solid = model.parts[part]
     box = solid.bounding_box()
     diagonal = box.diagonal
@@ -556,11 +594,16 @@ def _part(p: Project, model: Model, part: str, results: dict[str, Result], path:
             label = (view.at[0] + view.box[0], view.at[1] + beside)
             sheet.text(*label, view.name.upper(), REFERENCE, ha="left", size=0.8)
     _mark(sheet, views, marks)
-    note = (
-        f"{p.meta.get('name', '')} · {p.units['length']} · third-angle projection · as built: "
-        "blue passes its check, red fails it, (grey) no check compares"
+    note = " · ".join(
+        [
+            str(p.meta.get("name", "")),
+            p.units["length"],
+            "third-angle projection",
+            *making,
+            "as built: blue passes its check, red fails it, (grey) no check compares",
+        ]
     )
-    _paint(sheet, part, note, path)
+    _paint(sheet, part, note, path, authored=bool(making))
 
 
 def _assembly(p: Project, model: Model, path: Path) -> None:
@@ -685,7 +728,10 @@ def render(
     for name, part in model.parts.items():
         # One that is no solid has its own finding, and nothing to draw.
         if part.is_valid and len(part.solids()) == 1 and part.edges():
-            draw = lambda path, name=name: _part(p, model, name, by_id, path)  # noqa: E731
+            making = _making(p, planned, name)
+            draw = lambda path, name=name, making=making: _part(  # noqa: E731
+                p, model, name, by_id, making, path
+            )
             sheets.append((out / "drawings" / f"{name}.png", draw))
     steps = planned["steps"] if planned else []
     fit = p.length_tol + ((holds or {}).get("clearance") or {}).get("value", 0.0)

@@ -126,9 +126,11 @@ FILES = {
     "params.yaml": {"params": (PARAM, dict), "parts": (PART, dict)},
     "checks.yaml": {"checks": (CHECK, list)},
     "gaps.yaml": {"gaps": (GAP, list)},
-    # The plan: how each part is made, in one operation or several in order; what is bought for
-    # a part, a screw or anything else; and the steps that assemble the instances.
+    # The plan: the one general tolerance its made parts are made to; how each part is made, in
+    # one operation or several in order; what is bought for a part, a screw or anything else;
+    # and the steps that assemble the instances.
     "plan.yaml": {
+        "general_tolerance": (str, None),
         "make": ((str, Items(str)), dict),
         "buy": (str, dict),
         "steps": (STEP, list),

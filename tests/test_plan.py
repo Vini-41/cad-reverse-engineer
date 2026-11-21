@@ -47,6 +47,16 @@ def test_plan_lists_what_is_made_and_each_step_counted_from_the_model(proj_dir):
     assert [md.index(mark) for mark in order] == sorted(md.index(mark) for mark in order)
 
 
+def test_plan_states_one_general_tolerance_and_its_guide_prints_it_once(proj_dir):
+    add(proj_dir, make=FLAT)
+    edit(proj_dir, "plan.yaml", lambda d: d.update(general_tolerance="±0.2 mm unless noted"))
+    run = check(proj_dir)
+    assert run.status == "VERIFIED" and run.rules == []
+    assert run.report["plan"]["general_tolerance"] == "±0.2 mm unless noted"
+    assert run.plan_md.count("±0.2 mm unless noted") == 1
+    assert run.plan_md.index("±0.2 mm") < run.plan_md.index("- **link**")
+
+
 def test_each_step_has_a_view_of_what_it_places_on_what_is_already_there(proj_dir):
     stack(proj_dir, 3)
     add(proj_dir, make=FLAT)
