@@ -251,17 +251,18 @@ A mechanism ([modeling.md](modeling.md#joints-and-loops)) can be checked moved. 
      evidence: S3-sweep, key: AC, pose: {input: S3-sweep.turn}}
   - {id: travel, kind: distance, instances: [frame_1, carriage_1], between: [frame_1.a, carriage_1.a],
      along: x, evidence: S2-screw, key: lead, from: {}, pose: {screw: 360}}    # one turn, in degrees
-  - {id: claw-stroke, kind: stroke, cable: claw, evidence: S1-servo, key: stroke, tol: 1.5}
+  - {id: claw-stroke, kind: stroke, cable: claw, pose: {servo: turn}, evidence: S1-servo, key: stroke,
+     tol: 1.5}
   - {id: perch, kind: stroke, cable: leg_cord, from: {shin: shin_max}, pose: {servo: turn},
      evidence: P3-eq1, key: draw}
 ```
 
 - **A pose value moves its joint from the assembly as built**: a revolute joint's in the project's angle unit, a slide's in its length unit. Build the assembly at the configuration the source measures from, so a stated value is the pose value itself.
 - **A number** is a pose fixed by definition, not a ledger value: the one turn a lead "per turn" is stated over, which no source gives a number for. It reads in its joint's unit and adds nothing to what the check rests on. A pose a source states ("turned 30° on") names its ledger value.
-- cadrev sets the joints the pose names, holds every other `actuated` joint as built, and moves the `passive` joints until every loop closes, on MuJoCo's model of the exported mechanism. A coupling moves its other joint with the one a pose sets, a cable its closed joints with its wheel, through any chain. The check is then evaluated on the model's own geometry, placed where MuJoCo puts each body. Name `instances` on a posed check: a part's own frame reads the same at every pose.
-- A pose the mechanism cannot reach is a finding, and its checks are not evaluated: a loop that stays open there, or a coupling or cable the loops do not allow (`[loop-open]`: links too short, past a toggle, or coupled against the ring), or a joint pushed outside its `range` (`[joint-range]`).
+- cadrev sets the joints the pose names, holds every other `actuated` joint as built, and moves the `passive` joints until every loop closes, on MuJoCo's model of the exported mechanism. A coupling moves its other joint with the one a pose sets, through any chain. The check is then evaluated on the model's own geometry, placed where MuJoCo puts each body. Name `instances` on a posed check: a part's own frame reads the same at every pose.
+- A pose the mechanism cannot reach is a finding, and its checks are not evaluated: a loop that stays open there, or a coupling the loops do not allow (`[loop-open]`: links too short, past a toggle, or coupled against the ring), or a joint pushed outside its `range` (`[joint-range]`).
 - **`from`** on a `distance`, `angle` or `stroke` check names a second pose, and the check compares the change between the two: a slide's travel per screw turn, a carrier's turn per sun turn. `from: {}` is as built.
-- **`stroke`** compares how far a cable shortens, as built to posed or between `from` and `pose`, with a printed length. Without `pose` it is posed at the cable's wheel at its full turn. A direction stated with no length is [`context`](#evidence-the-ledger).
+- **`stroke`** compares how far a cable shortens with a printed length: from as built, or from its `from` pose, to the `pose` it names. A direction stated with no length is [`context`](#evidence-the-ledger).
 
 ### Ranges and sweeps
 

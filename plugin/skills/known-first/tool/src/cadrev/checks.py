@@ -338,16 +338,12 @@ class Checks:
 
     def _given(self, c: dict) -> list[str]:
         """The params the model gives the check just evaluated: the range ends of a joint it names,
-        the ratio or lead of each coupling its poses move a joint through, and for each cable whose
-        wheel they move, the wheel's turn and closed values."""
+        and the ratio or lead of each coupling its poses move a joint through."""
         model = self.model
         joint = c.get("joint") or (c.get("sweep") or {}).get("joint") or ""
         given = list(model.joints.get(joint, {}).get("range", ()))
         moved = set().union(*(placed.moved for placed in self.read_at))
         given += (coupling_by(k)[1] for k in model.couplings.values() if k["driver"] in moved)
-        for cable in model.cables.values():
-            if cable.get("wheel") in moved:
-                given += (model.joints[cable["wheel"]]["range"][0], *cable["closes"].values())
         return list(dict.fromkeys(given))
 
     # Where a check is evaluated.
@@ -612,23 +608,20 @@ class Checks:
 
     def _stroke(self, c: dict, placed: Model) -> Iterator[Result]:
         """How much its cable shortens from as built, or from its from pose, to the pose it
-        names, or without one to its wheel's full turn."""
-        p, cid, name = self.p, c["id"], c["cable"]
-        cable, pose = self.model.cables.get(name), None
+        names."""
+        cid, name = c["id"], c["cable"]
+        cable = self.model.cables.get(name)
         if cable is None:
             raise Fault("" if self.model.dropped else f"{name} is not a cable")
         if not c.get("pose"):
-            if "wheel" not in cable:
-                raise Fault(f"cable {name} has no wheel, so name the pose its stroke is taken at")
-            turn = self.model.joints[cable["wheel"]]["range"][0]
-            placed, pose = self._posed(c, set_to={cable["wheel"]: (p.values[turn], turn)})
+            raise Fault(f"name the pose cable {name}'s stroke is taken at")
         start, start_pose = self._posed(c, "from")
         if start_pose is None and "from" in c:
             start_pose = {}
         shortening = start.path_length(cable["path"]) - placed.path_length(cable["path"])
         shown = f" shortening of {name}"
         result = self._compare(c, cid, compared_with(c), shortening, shown)
-        result.pose, result.from_pose = pose, start_pose
+        result.from_pose = start_pose
         yield result
 
     def _interference(self, c: dict, placed: Model) -> Iterator[Result]:

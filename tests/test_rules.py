@@ -25,7 +25,6 @@ from conftest import (
     SLIDE,
     SKILL,
     TEN_LONG,
-    WOUND,
     add,
     add_line,
     add_quote,
@@ -50,7 +49,6 @@ from conftest import (
 # The rules filed as warnings, which leave a project VERIFIED; a case of another rule that is one
 # says so in its key.
 WARNINGS = {
-    "cable-on-axis",
     "conflict-open",
     "gap-unused",
     "param-unused",
@@ -664,17 +662,6 @@ def _chain(motion: str, *then, **params):
     return lambda r, t: (open_chain(r, motion, **params), [step(r, t) for step in then])
 
 
-def _wound(cable: str = WOUND, *then, turn="{basis: source, from: S2.turn}", **params):
-    """The open chain with the crank's joint a wheel, its one-ended range the turn, winding a
-    cable that pulls the slider 20 mm in."""
-    pull = "{basis: proposed, value: -20, rationale: a full pull, gap: G1}"
-    return lambda r, t: (
-        remodel(r, INPUT_RANGE, '"range": ["turn"]'),
-        open_chain(r, cable, **({"turn": turn, "pull": pull} | params)),
-        [step(r, t) for step in then],
-    )
-
-
 PROPOSED = "{basis: proposed, value: %s, rationale: a choice, gap: G1}"
 STAND = "{id: far, kind: angle, instances: [rail_1, crank_1], evidence: S2, key: stand, "
 STAND += "between: [rail_1.top, rail_1.up, crank_1.down], pose: {input: %s}}"
@@ -717,17 +704,8 @@ MECH_FINDINGS = {
     ),
     "model-coupling: a ratio params.yaml lacks": _chain(FOLD),
     "model-coupling: a lead of 0": _chain(SCREW, lead=PROPOSED % 0),
-    "model-cable: a path datum that is none": _wound(WOUND.replace("slider_1.down", "slider_1.z")),
-    "model-cable: a wheel the model lacks": _wound(WOUND.replace('"input"', '"spool"')),
-    "model-cable: a wheel with a two-ended range": _chain(WOUND, pull=PROPOSED % -20),
-    "model-cable: a wheel whose turn is 0": _wound(turn=PROPOSED % 0),
-    "model-cable: a path starting on the wheel": _wound(WOUND.replace("rail_1.up", "crank_1.up")),
-    "model-cable: closing its own wheel": _wound(WOUND.replace('{"slide"', '{"input"')),
-    "model-cable: closing a joint the model lacks": _wound(WOUND.replace('{"slide"', '{"ankle"')),
-    "model-cable: closing a joint a coupling ties": _wound(
-        WOUND + "\n        " + SCREW, lead=PROPOSED % 8
-    ),
-    "model-cable: a closed param params.yaml lacks": _wound(WOUND.replace('"pull"', '"tug"')),
+    "model-coupling: a ratio of 0": _chain(FOLD, fold=PROPOSED % 0),
+    "model-cable": _chain(CORD.replace("slider_1.down", "slider_1.z")),
     "model-return: a joint type that is none": _model('"type": "slide"', '"type": "screw"'),
     "model-return: a drive that is none": _model('"drive": "actuated"', '"drive": "servo"'),
     "model-return: a joint key that is none": _model(KNEE, '"stiff": "rest", ' + KNEE),
@@ -742,9 +720,11 @@ MECH_FINDINGS = {
     "model-return: gears, the old name of couplings": _chain(
         FOLD.replace('"couplings"', '"gears"'), fold=PROPOSED % -2
     ),
-    "model-return: a cable path of one datum": _wound(WOUND.replace('"rail_1.up", ', "")),
-    "model-return: a wheel without closes": _wound(
-        WOUND.replace(', "closes": {"slide": "pull"}', "")
+    "model-return: a cable path of one datum": _chain(CORD.replace('"rail_1.up", ', "")),
+    # Format 2 removed a cable's closing law: the joints a cord closes are couplings.
+    "model-return: a cable's wheel": _chain(CORD.replace("]}", '], "wheel": "input"}')),
+    "model-return: a cable's closes": _chain(
+        CORD.replace("]}", '], "closes": {"slide": "pull"}}'), pull=PROPOSED % -20
     ),
     "model-return: a key build may not return": _model(LOOP, LOOP + '\n        "tendons": {},'),
     # Format 2 removed a joint's physics values, so each is an unknown key.
@@ -752,9 +732,6 @@ MECH_FINDINGS = {
     "model-return: a joint's stiffness": _model(KNEE, '"stiffness": "rest", ' + KNEE),
     "model-return: a joint's friction": _model(KNEE, '"friction": "rest", ' + KNEE),
     "model-return: a joint's spring rest": _model(KNEE, '"spring_rest": "rest", ' + KNEE),
-    "cable-on-axis": _wound(
-        WOUND.replace("slider_1.down", "coupler_1.up").replace('{"slide"', '{"knee"')
-    ),
     "part-mass: a placed part with no entry": lambda r, t: edit(
         r, "params.yaml", lambda d: d["parts"].pop("slider")
     ),
@@ -779,9 +756,6 @@ MECH_FINDINGS = {
         _checks("stand", pose={"input": "S2.turn", "knee": "S2.turn"}),
         fold=PROPOSED % -2,
     ),
-    "check-config: a pose closing a cable's joint to 0": _wound(
-        WOUND, _checks("stand", pose={"slide": "S1.L"}), pull=PROPOSED % 0
-    ),
     "check-config: ends that are not one per range param": _checks("swing", ends=["S3.low"]),
     "check-config: a range of a joint with none": _checks("swing", joint="knee"),
     "check-config: a range of a joint that is none": _checks("swing", joint="wrist"),
@@ -790,7 +764,7 @@ MECH_FINDINGS = {
         params={"steps": {"basis": "proposed", "value": 1, "rationale": "coarse"}},
         checks="{id: clear, kind: interference, sweep: {joint: input, steps: steps}}",
     ),
-    "check-config: a stroke with no wheel and no pose": lambda r, t: (
+    "check-config: a stroke with no pose": lambda r, t: (
         remodel(r, LOOP, LOOP + "\n        " + CORD),
         add(r, checks=DRAW + "key: reach}"),
     ),
@@ -996,13 +970,11 @@ MECH_DAMAGE = {
     "joint range that is None": _model(INPUT_RANGE, '"range": None'),
     "joint axis that is None": _model('"axis": ["crank_1.a", "crank_1.up"]', '"axis": None'),
     "loop named by a number": _model('"loops": {"closure":', '"loops": {1:'),
-    "cable path that is None": _wound(WOUND.replace('["rail_1.up", "slider_1.down"]', "None")),
-    "cable closes that is None": _wound(WOUND.replace('{"slide": "pull"}', "None")),
+    "cable path that is None": _chain(CORD.replace('["rail_1.up", "slider_1.down"]', "None")),
     "joint axis of numbers": _model('"axis": ["crank_1.a", "crank_1.up"]', '"axis": [0, 1]'),
     "loops that are a list": _model(LOOP, '"loops": [["coupler_1.down", "slider_1.up"]],'),
     "coupling ratio that is a number": _chain(FOLD.replace('"fold"}', "p.L}")),
-    "cable path of numbers": _wound(WOUND.replace('["rail_1.up", "slider_1.down"]', "[1, 2]")),
-    "cable closes that is a list": _wound(WOUND.replace('{"slide": "pull"}', '["slide"]')),
+    "cable path of numbers": _chain(CORD.replace('["rail_1.up", "slider_1.down"]', "[1, 2]")),
     "mass model that is a list": lambda r, t: edit(
         r, "params.yaml", lambda d: d.update(parts=["rail"])
     ),

@@ -77,7 +77,7 @@ How one instance moves relative to another: revolute (turning about an axis thro
 _Avoid_: pivot (for the joint itself; a pivot is its datum), prismatic, weld, DOF
 
 **Coupling**:
-Two joints tied so one moves in step with the other: of one type at a stated ratio (meshed gears, a belt), or a revolute joint and a slide at a stated lead (a lead screw, a rack and pinion). A planetary train with one member fixed is a chain of couplings: sun to carrier, and carrier to each planet.
+Two joints tied so one moves in step with the other: of one type at a stated ratio (meshed gears, a belt), or a revolute joint and a slide at a stated lead (a lead screw, a rack and pinion). A planetary train with one member fixed is a chain of couplings: sun to carrier, and carrier to each planet. A cord closing several joints is one coupling for each, on the joint that winds it, worked out from that joint's closed value and the winding joint's travel.
 _Avoid_: gear (for anything but a toothed wheel), transmission, mimic joint, screw joint
 
 **Lead**:
@@ -85,16 +85,8 @@ How far a coupling's slide moves per full turn of its revolute joint, a length; 
 _Avoid_: pitch (for a lead; a screw with several starts has a lead several times its thread pitch), ratio (for a lead)
 
 **Cable**:
-An inextensible cord laid through datums on several instances, whose length the posed assembly gives; one wound on a wheel joint drives the joints it closes, each moving in proportion to the wheel's turn toward its closed pose. A cable does not stretch: how far an elastic cord stretches is behaviour, which the kinematic model leaves out.
+An inextensible cord laid through datums on several instances: a path whose length the posed assembly gives, and a stroke check reads. The joints a cord closes are couplings on the joint that winds it. A cable does not stretch: how far an elastic cord stretches is behaviour, which the kinematic model leaves out.
 _Avoid_: tendon (for an inextensible cord)
-
-**Wheel**:
-The joint a cable is wound on and driven by: any joint that moves, actuated or passive, revolute or slide, whose one-ended range is its full turn (a slide's, its stroke). A servo's horn is one; so is a slide whose stroke pulls a cord. Each joint a cable closes is closed by that one cable alone.
-_Avoid_: spool (for the joint itself)
-
-**Closed pose**:
-The value of each joint a cable closes when its wheel has made its full turn; where no source states it, it is proposed, and a stated order of closing (one joint before another) is then not represented.
-_Avoid_: grasp pose, final pose
 
 **Loop**:
 A pair of datums on two instances that must coincide, closing a ring of joints such as a four-bar.
@@ -109,7 +101,7 @@ One comparison between the built geometry and a ledger value, or a value worked 
 _Avoid_: test, assertion
 
 **Reads**:
-What a check's evaluation read: the params the check names (its pose, its sweep's steps, a mass check's density), the params the model gives it (its joint's range ends, the ratio or lead of each coupling and the turn and closed values of each cable a pose moves a joint through) and the parts it weighs. What the check rests on is judged from them.
+What a check's evaluation read: the params the check names (its pose, its sweep's steps, a mass check's density), the params the model gives it (its joint's range ends, the ratio or lead of each coupling a pose moves a joint through) and the parts it weighs. What the check rests on is judged from them.
 _Avoid_: dependencies, inputs (of a check)
 
 **Checked param**:

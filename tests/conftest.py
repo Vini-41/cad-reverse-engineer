@@ -204,12 +204,11 @@ checks:
 }
 # What replaces LOOP in an open chain, where no loop ties the knee and the slide to the crank: a
 # coupling folding the coupler back twice as fast as the crank turns, which keeps its tip on the
-# rail as the loop does; a lead screw; and a cable wound on the crank's joint, pulling the slider
-# in.
+# rail as the loop does; a lead screw; and a cable from the crank pivot to the slider, the path a
+# stroke check reads.
 FOLD = '"couplings": {"fold": {"driver": "input", "driven": "knee", "ratio": "fold"}},'
 SCREW = '"couplings": {"screw": {"driver": "input", "driven": "slide", "lead": "lead"}},'
 CORD = '"cables": {"cord": {"path": ["rail_1.up", "slider_1.down"]}},'
-WOUND = CORD.replace("]}", '], "wheel": "input", "closes": {"slide": "pull"}}')
 
 
 def write(root: Path, name: str, data) -> None:
@@ -480,7 +479,7 @@ def mech_dir(tmp_path):
 
 
 def open_chain(root: Path, motion: str, **params: str) -> None:
-    """The slider-crank with its loop replaced by motion (FOLD, SCREW, WOUND...), which names the
+    """The slider-crank with its loop replaced by motion (FOLD, SCREW, CORD...), which names the
     params given as YAML."""
     remodel(root, LOOP, motion)
     add(root, params={name: yaml.safe_load(spec) for name, spec in params.items()})

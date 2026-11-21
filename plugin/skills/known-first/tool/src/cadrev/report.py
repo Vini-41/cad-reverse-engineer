@@ -122,11 +122,6 @@ def motion(p: Project, model: Model, coarsened: dict) -> dict:
         if "range" in j:
             (low, lo), (high, hi) = range_ends(p, j)
             joints[name]["range"] = {"from": [low, high], "value": list(printed(lo, hi))}
-    cables = {}
-    for name, c in model.cables.items():
-        cables[name] = {"path": list(c["path"])}
-        if "wheel" in c:
-            cables[name] |= {"wheel": c["wheel"], "closes": valued(c["closes"], c["closes"])}
     return {
         "joints": joints,
         "loops": {name: list(pair) for name, pair in model.loops.items()},
@@ -134,7 +129,7 @@ def motion(p: Project, model: Model, coarsened: dict) -> dict:
             name: {"driver": c["driver"], "driven": c["driven"]} | valued(c, COUPLING_BY)
             for name, c in model.couplings.items()
         },
-        "cables": cables,
+        "cables": {name: {"path": list(c["path"])} for name, c in model.cables.items()},
         "coarsened": coarsened,
         "dropped": model.dropped,
     }
@@ -184,19 +179,13 @@ def _motion_lines(moves: dict | None) -> list[str]:
 
 
 def _motion_section(moves: dict | None) -> list[str]:
-    """## Motion: each cable's path and what it closes, and each mesh exported coarser; nothing
-    for a model with neither."""
+    """## Motion: each cable's path, and each mesh exported coarser; nothing for a model with
+    neither."""
     if moves is None or moves["dropped"]:
         return []
     lines = []
     for name, c in moves["cables"].items():
-        line = f"- Cable `{name}` through {' → '.join(c['path'])}"
-        if "wheel" in c:
-            closes = ", ".join(
-                f"{j} to {v['value']:g} ({v['from']})" for j, v in c["closes"].items()
-            )
-            line += f", wound on {c['wheel']}; its full turn closes {closes}"
-        lines.append(line + ".")
+        lines.append(f"- Cable `{name}` through {' → '.join(c['path'])}.")
     for name, m in moves["coarsened"].items():
         lines.append(
             f"- Mesh `meshes/{name}.stl` exported coarser for MuJoCo's STL decoder: {m['faces']} "
