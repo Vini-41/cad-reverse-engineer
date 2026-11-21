@@ -348,7 +348,8 @@ buy:                     # each part that is bought, each screw by its thread pa
   glue:      "cyanoacrylate, a drop"
 steps:                   # the assembly sequence
   - {place: [body_1], note: "Deck down on the bench."}
-  - {place: [fan_1, plate_1], with: {lid_screw: 4}, note: "Label towards the plate. 2.5 mm hex key, snug."}
+  - {place: [fan_1], from: +z, note: "Label towards the plate."}
+  - {place: [plate_1], from: +z, with: {lid_screw: 4}, note: "2.5 mm hex key, snug."}
 ```
 
 - **`general_tolerance`** is the one general tolerance of the made parts, a line of text, which the guide prints once. A feature that needs tighter says so in its part's `make`.
@@ -356,7 +357,8 @@ steps:                   # the assembly sequence
 - **A `buy` entry may also name a thread param**, for what is ordered of it (a screw's head and material, a nut, a threaded insert), which the guide prints after its thread and length. Any other name is listed as written, uncounted: an adhesive, a wire.
 - **Every instance is placed by exactly one step**; an assembly of one instance needs no steps. A step may also place nothing: one that only drives screws, or only says what to do.
 - **Every instance is [held](#projectyaml)**, and one that floats is an error here: a plan says the object is put together.
-- **Each step that places an instance has a view**, `build/steps/<n>.png`: the isometric view of what it places, in black and named by part, on what the steps before it placed, in grey, taking in the part each goes onto. View each as you write its step: it shows a part placed onto nothing, or before the one it goes inside.
+- **Each step that places an instance has a view**, `build/steps/<n>.png`: the isometric view of what it places, in black and named by part, on what the steps before it placed, in grey, taking in the part each goes onto. It is taken from the isometric corner that shows the most of them, where they land and where they are drawn; report.json's step names that `corner` where it is not the default. View each as you write its step: it shows a part placed onto nothing, or before the one it goes inside.
+- **`from`** is the direction a step's instances come from, a signed axis of the assembly's frame (`+x`, `-z`). The view draws them all apart along it, clear of what is in their way, with a guideline to their place, so parts that come from opposite sides take a step each. A step with no `from` is drawn in place.
 - **`with`** counts what a step drives of a thread param: its screws, nuts or inserts. The plan totals them per thread param as the quantity to buy. Where the model has more holes threaded for a [screw](#threads) than the steps drive screws into, less the screws built as parts, a warning says so: an empty threaded hole may be meant.
 - cadrev holds the plan's bookkeeping, not its judgement. Whether a tool reaches a feature and a hand can do a step is its author's to settle before writing it.
 

@@ -188,7 +188,7 @@ How the object is made and put together, written once its design is accepted: ho
 _Avoid_: instructions, bill of materials (for the plan as a whole)
 
 **Step**:
-One act of the plan's assembly sequence: the instances it places, the screws it drives, and how. Its view shows what it places on what the steps before it placed.
+One act of the plan's assembly sequence: the instances it places, the direction they come from, the screws it drives, and how. Its view shows what it places on what the steps before it placed, drawn apart along that direction where the step names one.
 _Avoid_: operation (an operation makes a part; a step assembles)
 
 **Held**:

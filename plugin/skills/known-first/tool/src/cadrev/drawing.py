@@ -5,12 +5,13 @@ A part's drawing is its front, top and right views in third-angle projection bes
 one, dimensioned by the part's own checks: each dimension is the value as built, so a reviewer
 verifies the part on one sheet. Under a plan, a made part's title line also prints the material
 and the plan's general tolerance. A step's view is the isometric view of what the plan's step
-places, in black, on what the steps before it placed, in grey. The drawings read the build and
-add no pass or fail.
+places, in black, on what the steps before it placed, in grey, drawn apart with a guideline where
+the step names the direction it comes from. The drawings read the build and add no pass or fail.
 """
 
 from __future__ import annotations
 
+import importlib
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,6 +23,7 @@ from .project import AXES, Project
 
 INK, HIDDEN, CHECKED, FAILED, REFERENCE = "#1a1a1a", "#a0a0a0", "#1f5fa8", "#c62828", "#707070"
 PLACED = "#8c8c8c"  # what a step's view shows as already there
+GUIDE = "#c2570c"  # the line from where a step's instances are drawn to their place
 DPI = 200
 WIDTH, HEIGHT = 11.0, 7.5  # inches a sheet fits in, under its title
 TITLE = 0.75  # inches of title above the sheet
@@ -627,11 +629,113 @@ def _assembly(p: Project, model: Model, path: Path) -> None:
     _paint(sheet, str(p.meta.get("name", "assembly")), note, path)
 
 
-def _step(p: Project, model: Model, number: int, new: list, before: list, fit: float, path) -> None:
+def _way_in(own, along: int, sign: int, boxes: list) -> tuple[float, float, float]:
+    """An instance's box on its way in along an axis, in coordinates that grow toward where it
+    comes from: its leading end and its trailing end as it rests, and the top of what stands in
+    its path, or its leading end where nothing does."""
+    lead, trail = sorted(sign * c[along] for c in (tuple(own.min), tuple(own.max)))
+    tops = [
+        max(sign * c[along] for c in (tuple(other.min), tuple(other.max)))
+        for other in boxes
+        if all(
+            low < other_high and other_low < high
+            for i, (low, high, other_low, other_high) in enumerate(
+                zip(tuple(own.min), tuple(own.max), tuple(other.min), tuple(other.max))
+            )
+            if i != along
+        )
+    ]
+    return lead, trail, max(tops, default=lead)
+
+
+def _apart(direction: str | None, owns: list, boxes: list) -> Vec:
+    """How far a step's instances are drawn from their place along the direction they come from,
+    all by one distance: the furthest any needs to pass its own place and what stands in its
+    path, and half its own size more. Nothing with no direction."""
+    if direction is None:
+        return (0.0, 0.0, 0.0)
+    along, sign = AXES[direction[1]], 1 if direction[0] == "+" else -1
+
+    def travel(own) -> float:
+        lead, trail, top = _way_in(own, along, sign, boxes)
+        return max(trail, top) - lead + own.diagonal / 2
+
+    distance = max(travel(own) for own in owns)
+    return tuple(sign * distance * (i == along) for i in range(3))
+
+
+def _corners(up: str) -> dict[str, Frame]:
+    """The eight isometric views of an object standing on axis `up`, by the corner each looks
+    from (`+x-y+z`): the default first, then the others from above, then those from below."""
+    right, rise, toward = frames(up)["front"]
+    views = {}
+    for over in (1, -1):
+        for a, b in ((1, 1), (-1, 1), (-1, -1), (1, -1)):
+            corner = tuple(a * r + b * t + over * u for r, t, u in zip(right, toward, rise))
+            name = "".join(f"{'+' if c > 0 else '-'}{axis}" for axis, c in zip(AXES, corner))
+            views[name] = (_cross(rise, corner), rise, corner)
+    return views
+
+
+def _shown(shape, others, frame: Frame) -> float:
+    """The length of a shape's edges a view shows, with others, if any, in the way."""
+    # OCP's modules re-export a compiled module whose names pyright cannot see, so they are
+    # looked up by name.
+    ocp = {
+        module: importlib.import_module(f"OCP.{module}")
+        for module in ("BRepGProp", "BRepLib", "gp", "GProp", "HLRAlgo", "HLRBRep")
+    }
+    _, rise, toward = frame
+    camera = ocp["gp"].gp_Ax2(ocp["gp"].gp_Pnt(*toward), ocp["gp"].gp_Dir(*toward))
+    camera.SetYDirection(ocp["gp"].gp_Dir(*rise))
+    hidden = ocp["HLRBRep"].HLRBRep_Algo()
+    hidden.Add(shape.wrapped)
+    if others is not None:
+        hidden.Add(others.wrapped)
+    hidden.Projector(ocp["HLRAlgo"].HLRAlgo_Projector(camera))
+    hidden.Update()
+    hidden.Hide()
+    lines = ocp["HLRBRep"].HLRBRep_HLRToShape(hidden)
+    total = 0.0
+    for edges in (
+        lines.VCompound(shape.wrapped),
+        lines.Rg1LineVCompound(shape.wrapped),
+        lines.OutLineVCompound(shape.wrapped),
+    ):
+        if not edges.IsNull():
+            ocp["BRepLib"].BRepLib.BuildCurves3d_s(edges)
+            props = ocp["GProp"].GProp_GProps()
+            ocp["BRepGProp"].BRepGProp.LinearProperties_s(edges, props)
+            total += props.Mass()
+    return total
+
+
+def _best_corner(views: dict[str, Frame], shapes: list, others) -> str:
+    """The corner that shows the most edge of the shapes past what stands in their way: the
+    default where nothing hides them from it, else the first that shows the most, a later corner
+    taking over only by more than 1%, so that a symmetric part keeps the earlier view."""
+    default, frame = next(iter(views.items()))
+    if others is None or all(
+        _shown(shape, others, frame) >= 0.999 * _shown(shape, None, frame) for shape in shapes
+    ):
+        return default
+    best, most = default, -1.0
+    for name, frame in views.items():
+        shown = sum(_shown(shape, others, frame) for shape in shapes)
+        if shown > most * 1.01:
+            best, most = name, shown
+    return best
+
+
+def _step(
+    p: Project, model: Model, number: int, step: dict, new: list, before: list, fit: float, path
+) -> None:
     """A step's view: the instances it places, drawn whole in black and each part named, over
     those of the steps before it that lie near them, in grey where the new ones leave them
-    seen. fit is the gap across which one instance holds another, as held.check takes it."""
-    from build123d import Compound
+    seen. Where the step names the direction they come from, they are drawn apart along it with
+    a guideline to their place. fit is the gap across which one instance holds another, as
+    held.check takes it."""
+    from build123d import Compound, Location
 
     def placed(instances) -> list:
         return [model.parts[model.assembly[i][0]].moved(model.assembly[i][1]) for i in instances]
@@ -649,14 +753,24 @@ def _step(p: Project, model: Model, number: int, new: list, before: list, fit: f
         if all(a <= top + reach and b >= bottom - reach for a, b, bottom, top in spans):
             near.append(solid)
             boxes.append(other)
-    frame = frames(p.up)["isometric"]
+    direction = step.get("from")
+    shift = _apart(direction, [solid.bounding_box() for solid in solids.values()], boxes)
+    drawn = {inst: solid.moved(Location(shift)) for inst, solid in solids.items()}
+    # Judged on the instances in their place, so the view shows where they land, and where they
+    # are drawn. A compound takes its children from the last one, so each is built where it is
+    # used.
+    views = _corners(p.up)
+    shapes = [Compound(children=list(solids.values()))]
+    shapes += [Compound(children=list(drawn.values()))] * any(shift)
+    seen_from = _best_corner(views, shapes, Compound(children=near) if near else None)
+    frame = views[seen_from]
     _, rise, toward = frame
-    diagonal = Compound(children=[*near, *solids.values()]).bounding_box().diagonal
-    inked, _ = _projected(Compound(children=list(solids.values())), frame, diagonal)
+    diagonal = Compound(children=[*near, *drawn.values()]).bounding_box().diagonal
+    inked, _ = _projected(Compound(children=list(drawn.values())), frame, diagonal)
     xs = [x for line in inked for x, _ in line] or [0.0, 1.0]
     sheet = _Sheet((max(xs) - min(xs) or 1.0) / STEPS)
     if near:
-        seen, _ = _projected(Compound(children=[*near, *solids.values()]), frame, diagonal)
+        seen, _ = _projected(Compound(children=[*near, *drawn.values()]), frame, diagonal)
         for line in seen:
             sheet.line(line, PLACED, 0.5, cover=False)
     for line in inked:
@@ -668,11 +782,20 @@ def _step(p: Project, model: Model, number: int, new: list, before: list, fit: f
     norm = math.sqrt(_dot(across, across))
     across = tuple(c / norm for c in across)
     up = _cross(eye, across)
-    centres = {
-        inst: (_dot(tuple(c), across), _dot(tuple(c), up))
-        for inst, solid in solids.items()
-        for c in [solid.bounding_box().center()]
-    }
+
+    def on_page(point) -> tuple[float, float]:
+        return _dot(tuple(point), across), _dot(tuple(point), up)
+
+    centres = {inst: on_page(solid.bounding_box().center()) for inst, solid in drawn.items()}
+    if direction:  # from its leading face as drawn to where it enters what is there
+        along, sign = AXES[direction[1]], 1 if direction[0] == "+" else -1
+        for solid in solids.values():
+            own = solid.bounding_box()
+            lead, trail, top = _way_in(own, along, sign, boxes)
+            centre = tuple(own.center())
+            start = (*centre[:along], sign * lead + shift[along], *centre[along + 1 :])
+            end = (*centre[:along], sign * min(trail, max(lead, top)), *centre[along + 1 :])
+            sheet.arrow(on_page(end), on_page(start), GUIDE)
     x0, y0, x1, y1 = sheet.extent
     middle = ((x0 + x1) / 2, (y0 + y1) / 2)
     # The view takes in what each new instance goes onto, whole: the smallest instance already
@@ -694,7 +817,7 @@ def _step(p: Project, model: Model, number: int, new: list, before: list, fit: f
             host = min(hosts, key=lambda other: other.diagonal)
             ends = list(zip(tuple(host.min), tuple(host.max)))
             for corner in ((x, y, z) for x in ends[0] for y in ends[1] for z in ends[2]):
-                sheet.cover(_dot(corner, across), _dot(corner, up))
+                sheet.cover(*on_page(corner))
     x0, y0, x1, y1 = sheet.extent
     margin = 0.08 * max(x1 - x0, y1 - y0)
     sheet.cover(x0 - margin, y0 - margin)
@@ -710,7 +833,12 @@ def _step(p: Project, model: Model, number: int, new: list, before: list, fit: f
         count = f" ×{len(instances)}" * (len(instances) > 1)
         sheet.leader(at, 0.0, away, part + count, INK)
     note = f"{p.meta.get('name', '')} · black: what this step places · grey: already there"
+    note += " · orange: where it goes" * any(shift)
+    turned = seen_from != next(iter(views))
+    note += f" · seen from {seen_from}" * turned
     _paint(sheet, f"step {number}", note, path)
+    if turned:
+        step["corner"] = seen_from
 
 
 def render(
@@ -740,8 +868,8 @@ def render(
         # An instance the assembly lacks, or one placed twice, is the plan's finding.
         new = [i for i in dict.fromkeys(step["place"]) if i in model.assembly and i not in before]
         if any(model.parts[model.assembly[i][0]].edges() for i in new):
-            draw = lambda path, n=number, new=new, b=tuple(before): _step(  # noqa: E731
-                p, model, n, new, list(b), fit, path
+            draw = lambda path, n=number, s=step, new=new, b=tuple(before): _step(  # noqa: E731
+                p, model, n, s, new, list(b), fit, path
             )
             sheets.append((out / "steps" / f"{number:0{len(str(len(steps)))}d}.png", draw))
         before += new

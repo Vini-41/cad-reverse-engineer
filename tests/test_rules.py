@@ -353,6 +353,8 @@ LINK_FINDINGS = {
     "plan-step: an instance placed twice": _planned(steps="[{place: [link_1, link_1]}]"),
     "plan-step: an instance that is none": _planned(steps="[{place: [link_1, pin_1]}]"),
     "plan-step: a step that says nothing": _planned(steps="[{place: [link_1]}, {}]"),
+    "schema: a step from an axis with no sign": _planned(steps="[{place: [link_1], from: z}]"),
+    "schema: a step from what is no axis": _planned(steps="[{place: [link_1], from: +w}]"),
     "held: an instance of a plan apart from the rest": lambda r, t: (
         place(r, link_1="Location()", link_2="Location((0, 0, p.link_H + p.hole_d))"),
         _planned(steps="[{place: [link_1, link_2]}]")(r, t),

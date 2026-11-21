@@ -53,6 +53,7 @@ def check(p: Project, model: Model) -> dict | None:
         "buy": _bought(p, model, placed, buy, driven),
         "steps": [
             {"place": step.get("place", []), "with": step.get("with", {})}
+            | ({"from": step["from"]} if "from" in step else {})
             | ({"note": step["note"]} if step.get("note") else {})
             for step in steps
         ],

@@ -15,9 +15,10 @@ from conftest import (
     stack,
     threaded,
 )
-from test_drawing import inked
+from test_drawing import height, highest, inked, lowest
 
 FLAT = "link: [print it flat in PLA, ream both holes]"
+STEPS = "[{place: [link_1]}, {place: [link_2]}]"
 
 
 def test_plan_lists_what_is_made_and_each_step_counted_from_the_model(proj_dir):
@@ -73,6 +74,137 @@ def test_each_step_has_a_view_of_what_it_places_on_what_is_already_there(proj_di
     edit(proj_dir, "plan.yaml", lambda d: d["steps"].reverse())
     check(proj_dir)
     assert inked(proj_dir / "build" / "steps" / "3.png", "placed") > alone + 200
+
+
+def test_step_names_the_direction_its_instances_come_from(proj_dir):
+    stack(proj_dir, 2)
+    add(proj_dir, make=FLAT, steps="[{place: [link_1]}, {place: [link_2], from: +z}]")
+    run = check(proj_dir)
+    assert run.status == "VERIFIED" and run.rules == [], run.out
+    first, second = run.report["plan"]["steps"]
+    assert "from" not in first and second["from"] == "+z"
+
+
+def test_step_with_a_direction_is_drawn_apart_with_a_guideline_to_its_place(proj_dir):
+    stack(proj_dir, 2)
+    add(proj_dir, make=FLAT, steps=STEPS)
+    check(proj_dir)
+    view = proj_dir / "build" / "steps" / "2.png"
+    in_place = height(view, "black") - height(view, "placed")
+    assert inked(view, "guide") == 0
+    # From above, the second link hangs clear over the first, a line running down to its place.
+    edit(proj_dir, "plan.yaml", lambda d: d["steps"][1].update({"from": "+z"}))
+    run = check(proj_dir)
+    assert run.rules == [], run.out
+    assert height(view, "black") - height(view, "placed") > in_place + 0.1
+    assert inked(view, "guide") > 50
+    # From below, it is drawn under the first.
+    edit(proj_dir, "plan.yaml", lambda d: d["steps"][1].update({"from": "-z"}))
+    check(proj_dir)
+    assert height(view, "black") < height(view, "placed")
+    assert inked(view, "guide") > 50
+
+
+def _pins(proj_dir, tall: str, *xs: str) -> None:
+    """A link with a pin `tall` high, as model.py source, standing on it at each x."""
+    remodel(proj_dir, '{"link": link}', f'{{"link": link, "pin": Cylinder(p.hole_d / 2, {tall})}}')
+    pins = "".join(
+        f', "pin_{i}": ("pin", Location(({x}, 0, (p.link_H + {tall}) / 2)))'
+        for i, x in enumerate(xs, 1)
+    )
+    remodel(proj_dir, ASSEMBLY, ASSEMBLY.replace("},", pins + "},"))
+    add(proj_dir, make=FLAT, buy="pin: a dowel pin")
+
+
+def test_guideline_runs_down_to_what_the_part_lands_on(proj_dir):
+    _pins(proj_dir, "p.pitch", "0")
+    add(proj_dir, steps="[{place: [link_1]}, {place: [pin_1], from: +z}]")
+    run = check(proj_dir)
+    assert run.rules == [], run.out
+    view = proj_dir / "build" / "steps" / "2.png"
+    # From the pin's foot to the link it stands on: further than the pin is tall.
+    guideline = highest(view, "guide") - lowest(view, "guide")
+    assert guideline > highest(view, "black") - lowest(view, "black")
+
+
+def test_instances_far_apart_are_each_drawn_as_near_as_one_alone(proj_dir):
+    _pins(proj_dir, "p.hole_d", "-p.pitch / 2", "p.pitch / 2")
+    add(proj_dir, steps="[{place: [link_1, pin_2]}, {place: [pin_1], from: +z}]")
+    check(proj_dir)
+    view = proj_dir / "build" / "steps" / "2.png"
+    one = inked(view, "guide")
+    steps = [{"place": ["link_1"]}, {"place": ["pin_1", "pin_2"], "from": "+z"}]
+    edit(proj_dir, "plan.yaml", lambda d: d.update(steps=steps))
+    check(proj_dir)
+    assert inked(view, "guide") < 2.6 * one
+
+
+def test_view_shows_the_most_of_the_part_not_the_least_hidden_share(proj_dir):
+    # A plate whose top is drilled with blind holes, sitting in an open frame that stands proud
+    # of it: from above the frame hides a larger share, but of far more that is there to see.
+    board = (
+        "Box(p.pitch, p.pitch, p.link_H) - "
+        "Pos(0, 0, p.link_H / 2 / 2) * (GridLocations(p.pitch / 2, p.pitch / 2, 2, 2) "
+        "* Cylinder(p.hole_d, p.link_H / 2))"
+    )
+    frame = (
+        "Pos(0, 0, p.hole_d / 2) * (Box(p.pitch + p.link_W, p.pitch + p.link_W, p.link_H) "
+        "- Box(p.pitch, p.pitch, p.link_H + p.link_W))"
+    )
+    remodel(proj_dir, '{"link": link}', f'{{"link": {board}, "frame": {frame}}}')
+    remodel(proj_dir, ASSEMBLY, ASSEMBLY.replace("},", ', "frame_1": ("frame", Location())},'))
+    edit(
+        proj_dir,
+        "checks.yaml",
+        lambda d: d.update(checks=[c for c in d["checks"] if c["id"] == "clear"]),
+    )
+    add(proj_dir, make=FLAT, buy="frame: a frame")
+    add(proj_dir, steps="[{place: [frame_1]}, {place: [link_1]}]")
+    run = check(proj_dir)
+    assert "corner" not in run.report["plan"]["steps"][1], run.out
+
+
+def test_every_instance_a_step_places_is_drawn_in_black(proj_dir):
+    # A link either side of the first, so neither of the two hides the other.
+    sides = {"link_2": "Location((0, p.link_W, 0))", "link_3": "Location((0, -p.link_W, 0))"}
+    place(proj_dir, link_1="Location()", **sides)
+    add(proj_dir, make=FLAT, steps="[{place: [link_1, link_3]}, {place: [link_2], from: +z}]")
+    check(proj_dir)
+    view = proj_dir / "build" / "steps" / "2.png"
+    one = inked(view, "black")
+    steps = [{"place": ["link_1"]}, {"place": ["link_2", "link_3"], "from": "+z"}]
+    edit(proj_dir, "plan.yaml", lambda d: d.update(steps=steps))
+    check(proj_dir)
+    assert inked(view, "black") > 1.5 * one
+
+
+def test_view_of_a_part_that_goes_in_from_below_looks_at_where_it_lands(proj_dir):
+    # The second link under the first, coming up from below: drawn clear of the first, it would
+    # show from any corner, but its place shows only from beneath.
+    place(proj_dir, link_1="Location()", link_2="Location((0, 0, -p.link_H))")
+    add(proj_dir, make=FLAT, steps="[{place: [link_1]}, {place: [link_2], from: -z}]")
+    run = check(proj_dir)
+    assert run.rules == [], run.out
+    assert run.report["plan"]["steps"][1]["corner"].endswith("-z")
+
+
+def test_step_is_viewed_from_the_corner_that_shows_what_it_places(proj_dir):
+    # A wall against the link's -y face, between it and the corner a view takes by default.
+    wall = "Box(2 * p.pitch, p.hole_d, 2 * p.pitch)"
+    remodel(proj_dir, '{"link": link}', f'{{"link": link, "wall": {wall}}}')
+    at = "Location((0, -(p.link_W + p.hole_d) / 2, 0))"
+    remodel(proj_dir, ASSEMBLY, ASSEMBLY.replace("},", f', "wall_1": ("wall", {at})}},'))
+    add(proj_dir, make=FLAT, buy="wall: a plate", steps="[{place: [wall_1]}, {place: [link_1]}]")
+    run = check(proj_dir)
+    assert run.rules == [], run.out
+    first, behind = run.report["plan"]["steps"]
+    # Nothing stands before the wall, so it keeps the default; the link is seen from behind it.
+    assert "corner" not in first
+    assert "+y" in behind["corner"] and behind["corner"].endswith("+z")
+    # Placed in the other order, nothing hides either from the default corner.
+    edit(proj_dir, "plan.yaml", lambda d: d["steps"].reverse())
+    run = check(proj_dir)
+    assert not any("corner" in step for step in run.report["plan"]["steps"])
 
 
 def test_project_with_no_plan_reports_none(proj_dir):
@@ -163,7 +295,6 @@ def test_report_says_what_the_object_is_made_of_and_what_it_follows(proj_dir):
     assert "\n**Follows** the design:" in check(proj_dir).md
 
 
-STEPS = "[{place: [link_1]}, {place: [link_2]}]"
 # The second link a hole's width above the first: 3 mm of air between them.
 LIFTED = {"link_1": "Location()", "link_2": "Location((0, 0, p.link_H + p.hole_d))"}
 
