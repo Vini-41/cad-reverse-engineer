@@ -78,7 +78,7 @@ Geometry the authors released settles values no text states, and one shape check
 
 - **Read each body** with a short script of your own (`cadrev python <script>`) that loads a STEP or STL with build123d, or a cut file's contours in the sheet's frame. Take from it each value the part needs (a hole spacing, a bore, an envelope, a thickness) as its design value, `32.5` and not the file's `32.4999`, and the frame the file holds the body in: where its origin and axes lie, since the part is built there.
 - **An STL body** holds only flat triangles, whose corners lie on the true surface and whose faces cut inside a curve: read an arc by its corners, a bore's diameter as the circle through three corners on its rim.
-- **Each body** is compared or skipped: a [`shape` check](references/project-format.md#checksyaml) against the part model.py will build in the body's frame, or a skip with a reason for a body that is not part of the device (a fit tester, a part of another device). A part cut from several regions of a cut file takes a shape check per region, and model.py's [`sheets`](references/modeling.md#contract) places it on each.
+- **Each body** is compared or skipped: a [`shape` check](references/project-format.md#checksyaml) against the part model.py will build in the body's frame, or a skip with a reason for a body that is not part of the target (a fit tester, a variant it leaves out, a part of another device). A part cut from several regions of a cut file takes a shape check per region, and model.py's [`sheets`](references/modeling.md#contract) places it on each.
 
 Done when every body is named by a shape check or a skip, and every value the model will use from a body is read off it.
 
@@ -147,7 +147,7 @@ To carry on a known-first project, answer the foundational questions first, as s
 
 The complete model carries on, taking each waiting part and value through the stages above, as [Proposing](#proposing) says:
 
-- **Params.** What no source settles is `proposed`, naming the waiting part's gap or one of its own. A value stated only as a range is [derived inside it](references/project-format.md#stated-ranges-min-and-max), with its gap.
+- **Params.** What no source settles is `proposed`, naming the waiting part's gap or one of its own. A value stated only as a range is [derived inside it](references/project-format.md#stated-ranges-min-and-max), with its gap; a screw's length, being bought, is a proposed standard length inside it.
 - **Model.** Build and place every part the sources' parts tables list, a settled part whose place was left open among them.
 - **Checks.** Each stated value that waited takes its check. A stated total mass keeps its check where a density or a count it reads is proposed. Hold that value at its rationale rather than tuning it until the check passes: the report then shows the check rests on a proposed value, and the gap is what closes it. A proposed param changed to turn any check green names that check in its `rationale`, since the check then confirms the choice rather than a source.
 - **Motion.** Propose a range, a ratio or a pose no source states, with its gap, and declare the motion that needs it.
