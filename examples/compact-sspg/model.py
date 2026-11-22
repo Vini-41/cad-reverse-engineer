@@ -1,514 +1,382 @@
-"""COMPAct SSPG 7.2:1 gearbox: parametric model. Every dimension comes from p (params.yaml).
+"""Parametric model. Reads every dimension from p (params.yaml); holds no dimension literals."""
 
-Frames: each part's axis is z. The casing's output face is z = 0; the motor end is up.
-Angles (deg) of the bolt patterns follow the released bodies: the casing's lugs and output-end holes at 90 + k * 360 / n,
-the carriers' planet pins at 90 + k * 360 / n_planets, their extrusion bolts at -90 + k * 360 / n_planets.
-"""
-
-from math import acos, cos, floor, radians, sin, sqrt, tan
+from math import acos, asin, atan2, cos, degrees, pi, radians, sin, sqrt, tan
 
 from build123d import *  # noqa: F403
 
-UP = (Align.CENTER, Align.CENTER, Align.MIN)
+
+# ---- involute teeth ---------------------------------------------------------------------
+
+def _involute(rb, t, turn=0, flip=1):
+    """The point at roll angle t on the involute of the base circle rb that leaves it on +x,
+    mirrored about the line at `turn`/2 where flip is -1 (a tooth's other flank)."""
+    x, y = rb * (cos(t) + t * sin(t)), rb * (sin(t) - t * cos(t))
+    a = flip * atan2(y, x) + (turn if flip < 0 else 0)
+    r = sqrt(x * x + y * y)
+    return Vector(r * cos(a), r * sin(a))
 
 
-def inv(a):
-    return tan(a) - a
+def tooth_face(z, module, pressure_angle, r_in, r_out, points):
+    """The face a row of z involute teeth encloses, from the circle r_in out to the circle r_out.
+
+    An external gear's own section (r_in its root, r_out its tip), and the section of the space
+    an internal gear's teeth leave (r_in its tip, r_out its root). The first flank is the
+    involute that leaves the base circle on +x, as the released bodies hold it. Each flank is a
+    spline through `points` points of the involute, evenly spaced in roll angle, which it is
+    parametrised by, from the base circle (or r_in) out to r_out.
+    """
+    z, n = int(z), int(points)
+    rp = module * z / 2
+    rb = rp * cos(radians(pressure_angle))
+    roll = lambda r: sqrt(max((r / rb) ** 2 - 1, 0))  # noqa: E731
+    t_in, t_out = roll(max(r_in, rb)), roll(r_out)
+    ts = [t_in + (t_out - t_in) * i / (n - 1) for i in range(n)]
+    centre = pi / (2 * z) + tan(radians(pressure_angle)) - radians(pressure_angle)
+    pitch = 2 * pi / z
+
+    def flank(flip):
+        pts = [_involute(rb, t, 2 * centre, flip) for t in ts]
+        edges = [Edge.make_spline(pts, parameters=ts)]
+        foot = pts[0]
+        if r_in < rb:  # below the base circle the flank runs straight in along a radius
+            foot = pts[0] * (r_in / rb)
+            edges.insert(0, Edge.make_line(foot, pts[0]))
+        return edges, foot, pts[-1]
+
+    right, r_foot, r_tip = flank(1)
+    left, l_foot, l_tip = flank(-1)
+    a_foot, a_tip = atan2(r_foot.Y, r_foot.X), atan2(r_tip.Y, r_tip.X)
+    top = Edge.make_circle(r_out, start_angle=degrees(a_tip), end_angle=degrees(2 * centre - a_tip))
+    bottom = Edge.make_circle(r_in, start_angle=degrees(2 * centre - a_foot), end_angle=degrees(pitch + a_foot))
+    one = right + [top] + left[::-1] + [bottom]
+    edges = [e.rotate(Axis.Z, degrees(k * pitch)) for k in range(z) for e in one]
+    return Face(Wire(edges))
 
 
-def flank_psi(z, rb, alpha, r):
-    """Half the angular thickness of a zero-backlash tooth at radius r (rad); radial below the base circle."""
-    return radians(90 / z) + inv(radians(alpha)) - inv(acos(rb / max(r, rb)))
+def flank_datums(z, module, pressure_angle):
+    """Two points on opposite flanks at the pitch radius, half a turn apart, in the gear's plane."""
+    rp = module * int(z) / 2
+    a = _involute(rp * cos(radians(pressure_angle)), tan(radians(pressure_angle)))
+    return a, -a
 
 
-def involute_outline(z, m, alpha, ra, rf, phase):
-    """Closed outline of an external involute gear: z teeth of module m, pressure angle alpha (deg), tip radius ra,
-    root radius rf, tooth 0 centred at angle phase (deg). Flank vertices at the root (or base), the pitch, the tip and
-    halfway between; below the base circle the flank runs radially to the root."""
-    rp = m * z / 2
-    rb = rp * cos(radians(alpha))
-    r0 = max(rf, rb)
-    side = []
-    if rf < rb:
-        side.append((rf, flank_psi(z, rb, alpha, rb)))
-    for r in (r0, (r0 + rp) / 2, rp, (rp + ra) / 2, ra):
-        side.append((r, flank_psi(z, rb, alpha, r)))
-    pts = []
-    for k in range(int(z)):
-        th = radians(phase + k * 360 / z)
-        for r, ps in side:
-            pts.append((r * cos(th - ps), r * sin(th - ps)))
-        for r, ps in reversed(side):
-            pts.append((r * cos(th + ps), r * sin(th + ps)))
-    return pts
+def turned(points):
+    """The solid a closed polygon of (r, h) points sweeps about the z axis."""
+    return revolve(Plane.XZ * Polygon(*points, align=None), Axis.Z)
 
 
-def flank_point(z, m, alpha, r, k, phase, sense, h):
-    """Point at radius r on tooth k's flank (sense -1: clockwise flank, 1: counter-clockwise), at height h."""
-    rb = m * z / 2 * cos(radians(alpha))
-    th = radians(phase + k * 360 / z) + sense * flank_psi(z, rb, alpha, r)
-    return (r * cos(th), r * sin(th), h)
+def placed(datums, at):
+    """Datums worked out about a part's own axis, carried into its body's frame."""
+    return {name: tuple((at * Pos(*Vector(v))).position) for name, v in datums.items()}
 
 
-def prism(pts, h):
-    return extrude(Face(Wire.make_polygon([Vector(x, y, 0) for x, y in pts], close=True)), amount=h)
+# ---- the parts, each in its released body's frame -----------------------------------------
+
+def planet(p):
+    at = Pos(p.planet_axis_x, p.planet_axis_y)
+    body = extrude(tooth_face(p.z_planet, p.module, p.pressure_angle, p.planet_root_d / 2, p.planet_tip_d / 2, p.flank_points), p.planet_width)
+    body -= Cylinder(p.planet_bore_d / 2, p.planet_width, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    seat = Cylinder(p.planet_seat_d / 2, p.planet_seat_depth, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    body -= seat
+    body -= Pos(0, 0, p.planet_width - p.planet_seat_depth) * seat
+    a, b = flank_datums(p.z_planet, p.module, p.pressure_angle)
+    mid = Vector(0, 0, p.planet_width / 2)
+    datums = {
+        "planet.flank_a": a + mid,
+        "planet.flank_b": b + mid,
+        "planet.axis": mid,
+        "planet.axis_end": Vector(0, 0, p.planet_width - p.planet_seat_depth / 2),
+    }
+    return at * body, placed(datums, at), {}
 
 
-def polar(r, deg, h):
-    return (r * cos(radians(deg)), r * sin(radians(deg)), h)
+def sun(p):
+    at = Pos(p.sun_axis_x, p.sun_axis_y)
+    h_teeth = p.sun_journal_len + p.sun_shoulder_len
+    h_flange = h_teeth + p.sun_teeth_len
+    h_top = h_flange + p.sun_flange_t
+    bore, journal, shoulder = p.sun_bore_d / 2, p.sun_journal_d / 2, p.sun_shoulder_d / 2
+    core = shoulder + p.sun_shoulder_chamfer
+    body = turned([
+        (bore, 0), (journal - p.sun_journal_chamfer, 0), (journal, p.sun_journal_chamfer),
+        (journal, p.sun_journal_len), (shoulder, p.sun_journal_len),
+        (shoulder, h_teeth - p.sun_shoulder_chamfer), (core, h_teeth), (core, h_flange),
+        (p.sun_flange_d / 2, h_flange), (p.sun_flange_d / 2, h_top),
+        (p.sun_pocket_d / 2, h_top), (p.sun_pocket_d / 2, h_top - p.sun_pocket_depth),
+        (bore, h_top - p.sun_pocket_depth),
+    ])
+    teeth = extrude(tooth_face(p.z_sun, p.module, p.pressure_angle, p.sun_root_d / 2, p.sun_tip_d / 2, p.flank_points), p.sun_teeth_len)
+    body += Pos(0, 0, h_teeth) * (teeth - Cylinder(core, p.sun_teeth_len, align=(Align.CENTER, Align.CENTER, Align.MIN)))
+    mounts = PolarLocations(p.sun_mount_circle_r, int(p.sun_n_mounts))
+    body -= mounts * (Pos(0, 0, h_flange) * Cylinder(p.sun_mount_d / 2, p.sun_flange_t, align=(Align.CENTER, Align.CENTER, Align.MIN)))
+    body -= mounts * (Pos(0, 0, h_flange) * Cone(p.sun_csk_d / 2, p.sun_mount_d / 2, p.sun_csk_depth, align=(Align.CENTER, Align.CENTER, Align.MIN)))
+    a, b = flank_datums(p.z_sun, p.module, p.pressure_angle)
+    mid = Vector(0, 0, h_teeth + p.sun_teeth_len / 2)
+    datums = {
+        "sun.flank_a": a + mid,
+        "sun.flank_b": b + mid,
+        "sun.axis": Vector(0, 0, p.sun_journal_len / 2),
+        "sun.axis_end": mid,
+    }
+    threads = {"sun.axis": "sun_bolt"}
+    return at * body, placed(datums, at), threads
 
 
-def at(r, deg, h):
-    return Pos(*polar(r, deg, h))
+def rod(radius, length):
+    """A cylinder standing on the plane z = 0 about the z axis."""
+    return Cylinder(radius, length, align=(Align.CENTER, Align.CENTER, Align.MIN))
 
 
-def revolve_rz(pts):
-    """Solid of revolution about z of a closed (r, z) polygon."""
-    face = Face(Wire.make_polygon([Vector(r, z, 0) for r, z in pts], close=True))
-    return revolve(Plane.XZ * face, Axis.Z)
+def nut_pocket(p, across_flats, depth, turn):
+    """A hexagonal pocket standing on z = 0, a corner on +x turned by `turn` degrees."""
+    return extrude(RegularPolygon(across_flats / 2, int(p.hex_sides), major_radius=False, rotation=turn), depth)
 
 
-def frac(x):
-    return x - floor(x)
+def carrier(p):
+    at = Pos(p.car_axis_x, p.car_axis_y, p.car_z0)
+    n = int(p.n_planets)
+    inner = p.car_journal_len + p.car_flange_t  # the plate's inner face
+    stand = p.car_len - inner  # how far the posts and extrusions stand off it
+    bore, journal, flange, seat = p.car_bore_d / 2, p.car_journal_d / 2, p.car_flange_d / 2, p.car_seat_d / 2
+    body = turned([
+        (bore, 0), (journal - p.car_journal_chamfer, 0), (journal, p.car_journal_chamfer),
+        (journal, p.car_journal_len), (flange, p.car_journal_len), (flange, inner),
+        (seat + p.car_seat_chamfer, inner), (seat, inner - p.car_seat_chamfer),
+        (seat, inner - p.car_seat_depth), (bore, inner - p.car_seat_depth),
+    ])
+    posts = PolarLocations(p.car_post_circle_r, n, start_angle=90)
+    between = PolarLocations(p.car_ext_circle_r, n, start_angle=90 + 180 / n)
+    outs = PolarLocations(p.car_out_circle_r, int(p.car_n_out))
+    lobes = Circle(p.car_lobe_outer_d / 2) - Circle(p.car_lobe_inner_d / 2) - posts * Circle(p.car_lobe_clear_r)
+    lobes = fillet(lobes.vertices(), p.car_lobe_fillet)
+    boss = rod(p.car_boss_d / 2, p.car_boss_h)
+    boss = fillet(boss.edges().sort_by(Axis.Z)[-1], p.car_boss_round)
+    body += Pos(0, 0, inner) * (extrude(lobes, stand) + posts * (boss + rod(p.car_post_d / 2, stand)))
+    body -= posts * (rod(p.car_head_d / 2, p.car_head_depth) + rod(p.car_shaft_hole_d / 2, p.car_len))
+    body -= between * (rod(p.car_ext_head_d / 2, p.car_ext_head_depth) + rod(p.car_ext_hole_d / 2, p.car_len))
+    pocket = Pos(0, 0, p.car_out_hole_len) * nut_pocket(p, p.car_out_nut_af, inner - p.car_out_hole_len, 180 / p.hex_sides)
+    body -= outs * (rod(p.car_out_hole_d / 2, inner) + pocket)
+    datums = {
+        "carrier.axis": Vector(0, 0, (inner - p.car_seat_depth) / 2),
+        "carrier.axis_seat": Vector(0, 0, inner - p.car_seat_depth / 2),
+        "carrier.mark": Vector(0, journal, p.car_journal_len / 2),
+    }
+    threads = {}
+    for name, where, height, thread in (("shaft_hole", posts, inner + stand / 2, "shaft_bolt"),
+                                        ("ext_hole", between, inner + stand / 2, "ext_bolt"),
+                                        ("out_hole", outs, p.car_out_hole_len / 2, "out_thread")):
+        for i, loc in enumerate(where):
+            datums[f"carrier.{name}_{i + 1}"] = loc.position + Vector(0, 0, height)
+            threads[f"carrier.{name}_{i + 1}"] = thread
+    return at * body, placed(datums, at), threads
 
 
-def junction_fillet(face, centres, small_r, big_r, radius):
-    """Round the corners where small circles (at centres) meet a circle of radius big_r about the origin."""
-    vs = []
-    for v in face.vertices():
-        on_big = abs(sqrt(v.X * v.X + v.Y * v.Y) - big_r) < small_r / big_r
-        on_small = min(abs(sqrt((v.X - cx) ** 2 + (v.Y - cy) ** 2) - small_r) for cx, cy in centres) < small_r / big_r
-        if on_big and on_small:
-            vs.append(v)
-    return fillet(vs, radius)
+def sec_boss(p, rounded):
+    """One boss of the secondary carrier with its fillet, about its own axis, end face on z = 0;
+    the plate's axis lies at -x. The fillet is the surface a ball of its radius leaves, rolling
+    on the boss and the plate's face, and on the rim's edge where the rim cuts that face short.
+    """
+    height, ball, boss_r, rim = p.sec_boss_h, p.sec_boss_fillet, p.sec_boss_d / 2, p.sec_od / 2
+    track = boss_r + ball  # the ball's centre stays this far from the boss's axis
+    plate_axis = Pos(-p.sec_post_circle_r, 0, 0)
+    tall = 2 * (height + ball)
+    # where the ball's centre runs while it rolls on the rim's edge
+    off_rim = Pos(0, 0, height) * Torus(rim, ball) - rod(rim, tall) - Pos(0, 0, height) * rod(2 * rim, tall)
+    crossing = (plate_axis * off_rim) & rod(track, tall)
+    spine = [e for e in crossing.edges() if e.geom_type == GeomType.BSPLINE and e.center().X > 0
+             and abs(sqrt(e.center().X ** 2 + e.center().Y ** 2) - track) < ball / 2][0]
+    reach = degrees(acos((rim ** 2 - p.sec_post_circle_r ** 2 - track ** 2) / (2 * p.sec_post_circle_r * track)))
+    start = spine @ 0
+    inward = Vector(-start.X, -start.Y, 0).normalized()
+    across = Plane(origin=start, x_dir=inward, z_dir=inward.cross(Vector(0, 0, 1)))
+    guide = spine.transform_geometry(Matrix([[0.5, 0, 0, 0], [0, 0.5, 0, 0], [0, 0, 1, 0]]))
+    small = p.sec_boss_round
+    worn = sweep(Plane(origin=start, z_dir=spine % 0) * Circle(ball + small), path=spine)
+    swept = sweep(across * (Circle(ball) + Rectangle(ball, tall, align=(Align.MIN, Align.MAX))), path=spine, binormal=guide)
+    sector = revolve(Rot(0, 0, -reach) * (Plane.XZ * Rectangle(track, height, align=(Align.MIN, Align.MIN))), Axis.Z, 2 * reach)
+    section = make_face([Polyline((track, height), (0, height), (0, 0), (boss_r, 0)), CenterArc((track, 0), ball, 180, -90)])
+    boss = (sector - swept) + revolve(Rot(0, 0, reach) * (Plane.XZ * section), Axis.Z, 360 - 2 * reach)
+    if not rounded:
+        return boss
+    # the round: the boss's end, worn back by the round's radius and grown out again by it. Up
+    # to the height the round leaves the fillet at, the end is the worn floor carried down to
+    # the end face with the round's ball swept along its edge. That height is exact off the
+    # rim; over it, it is read at the fillet ball's own direction about the boss, which sits
+    # within 0.001 of where the two surfaces touch.
+    core = Pos(0, 0, small) * rod(track, tall) - Torus(track, ball + small) - worn
+    floor = core.faces().sort_by(Axis.Z)[0]
+    edge = floor.outer_wire().edges()[0]
+    ring = sweep(Plane(origin=edge @ 0, z_dir=edge % 0) * Circle(small), path=floor.outer_wire())
+    share = small / (ball + small)
+    touch = ball * share  # the height the round leaves the fillet at, off the rim
+    lifted = spine.transform_geometry(Matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, share, touch]]))  # and over the rim
+    lifted_in = spine.transform_geometry(Matrix([[0.5, 0, 0, 0], [0, 0.5, 0, 0], [0, 0, share, touch]]))
+    low = rod(2 * track, touch) + extrude(Face.make_surface_from_curves(lifted, lifted_in), tall, dir=(0, 0, -1))
+    return (boss & low & (extrude(floor, small, dir=(0, 0, -1)) + ring)) + (boss - low)
+
+
+def sec_carrier(p):
+    at = Pos(p.sec_axis_x, p.sec_axis_y, p.sec_z0)
+    n = int(p.n_planets)
+    height = p.sec_boss_h
+    posts = PolarLocations(p.sec_post_circle_r, n, start_angle=90)
+    between = PolarLocations(p.sec_ext_circle_r, n, start_angle=90 + 180 / n)
+    body = Pos(0, 0, height) * (rod(p.sec_od / 2, p.sec_t) - rod(p.sec_id / 2, p.sec_t))
+    plain = sec_boss(p, False)
+    for i, where in enumerate(posts):
+        body += where * (sec_boss(p, True) if i == 0 else plain)
+    body &= rod(p.sec_od / 2, height + p.sec_t)
+    far = height + p.sec_t - p.sec_nut_depth
+    socket = rod(p.sec_socket_d / 2, p.sec_socket_depth) + Cone(
+        p.sec_socket_d / 2 + p.sec_socket_chamfer, p.sec_socket_d / 2, p.sec_socket_chamfer, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    body -= posts * (socket + rod(p.sec_shaft_hole_d / 2, height + p.sec_t)
+                     + Pos(0, 0, far) * nut_pocket(p, p.sec_shaft_nut_af, p.sec_nut_depth, 180 / p.hex_sides))
+    body -= between * (Pos(0, 0, height) * rod(p.sec_ext_hole_d / 2, p.sec_t) + Pos(0, 0, far) * nut_pocket(p, p.sec_ext_nut_af, p.sec_nut_depth, 0))
+    datums, threads = {}, {}
+    for name, where, thread in (("shaft_hole", posts, "shaft_bolt"), ("ext_hole", between, "ext_bolt")):
+        for i, loc in enumerate(where):
+            datums[f"sec_carrier.{name}_{i + 1}"] = loc.position + Vector(0, 0, (height + far) / 2)
+            threads[f"sec_carrier.{name}_{i + 1}"] = thread
+    return at * body, placed(datums, at), threads
+
+
+def casing(p):
+    at = Pos(p.cas_axis_x, p.cas_axis_y)
+    body_r, waist, seat, shoulder = p.cas_body_d / 2, p.cas_waist_d / 2, p.cas_seat_d / 2, p.cas_shoulder_d / 2
+    floor_r, mouth = p.cas_well_floor_d / 2, p.cas_mouth_d / 2
+    well = floor_r + p.cas_well_fillet
+    ring_top = p.cas_ring_z + p.cas_ring_width
+    well_top = ring_top + p.cas_well_len
+    pocket_floor = well_top + p.cas_mouth_len
+    reach = p.cas_ear_circle_r + p.cas_ear_r  # the ears' tips
+    flare_c = waist + p.cas_flare_r
+    flare_turn = degrees(asin(sqrt(p.cas_flare_r ** 2 - (flare_c - reach) ** 2) / p.cas_flare_r))
+    flare = CenterArc((flare_c, p.cas_flare_z), p.cas_flare_r, 180, -flare_turn)
+    fillet_arc = CenterArc((floor_r, ring_top + p.cas_well_fillet), p.cas_well_fillet, 270, 90)
+    outline = [
+        Polyline((seat + p.cas_seat_chamfer, 0), (body_r, 0), (body_r, p.cas_body_len),
+                 (waist, p.cas_body_len + p.cas_neck_len), (waist, p.cas_flare_z)),
+        flare,
+        Polyline(flare @ 1, (reach, p.cas_len), (mouth, p.cas_len), (mouth, pocket_floor),
+                 (well, well_top), (well, ring_top + p.cas_well_fillet)),
+        fillet_arc,
+        Polyline(fillet_arc @ 0, (shoulder, ring_top), (shoulder, p.cas_seat_depth), (seat, p.cas_seat_depth),
+                 (seat, p.cas_seat_chamfer), (seat + p.cas_seat_chamfer, 0)),
+    ]
+    body = revolve(Plane.XZ * make_face(outline), Axis.Z)
+    ears = PolarLocations(p.cas_ear_circle_r, int(p.cas_n_ears), start_angle=180 / p.cas_n_ears)
+    flange = Circle(p.cas_flange_d / 2) + ears * Circle(p.cas_ear_r)
+    flange = fillet(flange.vertices(), p.cas_ear_fillet)
+    body &= extrude(flange, p.cas_len)
+    spaces = tooth_face(p.z_ring, p.module, p.pressure_angle, p.cas_ring_tip_d / 2, p.cas_ring_root_d / 2, p.flank_points)
+    body -= Pos(0, 0, p.cas_ring_z) * extrude(spaces, p.cas_ring_width)
+    pocket = Circle(p.cas_pocket_d / 2) + PolarLocations(p.cas_pocket_d / 2, int(p.cas_n_notches)) * Circle(p.cas_notch_r)
+    pocket = fillet(pocket.vertices(), p.cas_notch_fillet)
+    body -= Pos(0, 0, pocket_floor) * extrude(pocket, p.cas_len - pocket_floor)
+    body -= ears * (rod(p.cas_ear_hole_d / 2, p.cas_len) + rod(p.cas_ear_cbore_d / 2, p.cas_len - p.cas_ear_hole_len))
+    rets = PolarLocations(p.cas_ret_circle_r, int(p.cas_n_ret), start_angle=180 / p.cas_n_ret)
+    slot = RegularPolygon(p.cas_slot_af / 2, int(p.hex_sides), major_radius=False, rotation=180 / p.hex_sides)
+    slot += Rectangle(body_r, p.cas_slot_af / cos(pi / p.hex_sides), align=(Align.MIN, Align.CENTER))
+    body -= rets * (rod(p.cas_ret_hole_d / 2, p.cas_ret_hole_depth) + Pos(0, 0, p.cas_slot_z) * extrude(slot, p.cas_slot_w))
+    a, b = flank_datums(p.z_ring, p.module, p.pressure_angle)
+    mid = Vector(0, 0, p.cas_ring_z + p.cas_ring_width / 2)
+    girth = Vector(0, 0, (p.cas_body_len + p.cas_neck_len + p.cas_flare_z) / 2)  # mid-height of the waist
+    datums = {
+        "gearbox_casing.flank_a": a + mid,
+        "gearbox_casing.flank_b": b + mid,
+        "gearbox_casing.pitch": a + girth,
+        "gearbox_casing.waist": a * (waist / a.length) + girth,
+        "gearbox_casing.axis": Vector(0, 0, p.cas_seat_depth / 2),
+        "gearbox_casing.mark": Vector(seat, 0, p.cas_seat_depth / 2),
+    }
+    threads = {}
+    for i, loc in enumerate(rets):
+        datums[f"gearbox_casing.ret_hole_{i + 1}"] = loc.position + Vector(0, 0, p.cas_slot_z / 2)
+        threads[f"gearbox_casing.ret_hole_{i + 1}"] = "ret_screw"
+    return at * body, placed(datums, at), threads
+
+
+def retainer(p):
+    """Bearing retainer ring, in its file's frame: axis along y."""
+    at = Plane.ZX * Pos(p.ret_axis_z, p.ret_axis_x)
+    holes = PolarLocations(p.ret_hole_circle_r, int(p.ret_n_holes))
+    ring = Circle(p.ret_od / 2) - Circle(p.ret_id / 2) - holes * Circle(p.ret_hole_d / 2)
+    datums, threads = {}, {}
+    for i, loc in enumerate(holes):
+        datums[f"bearing_retainer.hole_{i + 1}"] = loc.position + Vector(0, 0, p.ret_t / 2)
+        threads[f"bearing_retainer.hole_{i + 1}"] = "ret_screw"
+    return extrude(at * ring, p.ret_t), placed(datums, at), threads
+
+
+def bearing(bore, outer, width):
+    """A purchased bearing as its envelope: a plain ring about z, standing on z = 0."""
+    return rod(outer / 2, width) - rod(bore / 2, width)
+
+
+def tooth_centre(z, pressure_angle):
+    """The angle of a tooth's centre line as tooth_face draws it, in radians."""
+    return pi / (2 * int(z)) + tan(radians(pressure_angle)) - radians(pressure_angle)
 
 
 def build(p):
-    parts, datums, assembly = {}, {}, {}
-    m, a = p.module, p.pressure_angle
-    n_pl = int(p.n_planets)
-    cd = p.centre_dist
+    parts, datums, threads = {}, {}, {}
+    makers = (("sun", sun), ("planet", planet), ("carrier", carrier), ("sec_carrier", sec_carrier),
+              ("gearbox_casing", casing), ("bearing_retainer", retainer))
+    for name, make in makers:
+        parts[name], d, t = make(p)
+        datums.update(d)
+        threads.update(t)
+    parts["output_bearing"] = bearing(p.out_brg_bore, p.out_brg_od, p.out_brg_w)
+    parts["sun_bearing"] = bearing(p.sun_brg_bore, p.sun_brg_od, p.sun_brg_w)
+    parts["planet_bearing"] = bearing(p.planet_brg_bore, p.planet_brg_od, p.planet_brg_w)
 
-    def D(part, feat, xyz):
-        datums[f"{part}.{feat}"] = tuple(xyz)
-
-    # ================================================================ planet: faces at z = 0 and planet_w
-    zp = p.z_planet
-    rp_p = m * zp / 2
-    ra_p = rp_p + p.addendum_coef * m
-    rf_p = rp_p - p.dedendum_coef * m
-    planet = prism(involute_outline(zp, m, a, ra_p, rf_p, p.planet_phase), p.planet_w)
-    planet -= Cylinder(p.planet_bore / 2, p.planet_w, align=UP)
-    planet -= Cylinder(p.planet_cb_d / 2, p.planet_cb_h, align=UP)
-    planet -= Pos(0, 0, p.planet_w - p.planet_cb_h) * Cylinder(p.planet_cb_d / 2, p.planet_cb_h, align=UP)
-    parts["planet_gear"] = planet
-    P = "planet_gear"
-    half_p = (zp - 1) / 2
-    D(P, "axis", (0, 0, p.planet_w / 2))
-    D(P, "axis_seat", (0, 0, p.planet_cb_h / 2))
-    D(P, "flank_a", polar(rp_p, p.planet_phase - 90 / zp, p.planet_w / 2))
-    D(P, "flank_b", polar(rp_p, p.planet_phase + 180 - 90 / zp, p.planet_w / 2))
-    D(P, "tip0", flank_point(zp, m, a, ra_p, 0, p.planet_phase, -1, 0))
-    D(P, "tip0_top", flank_point(zp, m, a, ra_p, 0, p.planet_phase, -1, p.planet_w))
-    D(P, "tip_h", flank_point(zp, m, a, ra_p, half_p, p.planet_phase, -1, 0))
-    D(P, "bore_a", (p.planet_bore / 2, 0, p.planet_cb_h))
-    D(P, "bore_b", (-p.planet_bore / 2, 0, p.planet_cb_h))
-    D(P, "cb_a", (p.planet_cb_d / 2, 0, 0))
-    D(P, "cb_b", (-p.planet_cb_d / 2, 0, 0))
-    D(P, "cb_floor", (p.planet_cb_d / 2, 0, p.planet_cb_h))
-
-    # ================================================================ sun: shaft end at z = 0
-    zs = p.z_sun
-    rp_s = m * zs / 2
-    ra_s = rp_s + p.addendum_coef * m
-    rf_s = rp_s - p.dedendum_coef * m
-    s_step0 = p.sun_shaft_l
-    s_step1 = s_step0 + p.sun_step_h
-    s_g0 = s_step1 + p.sun_hub_ch
-    s_g1 = s_g0 + p.sun_face
-    s_top = s_g1 + p.sun_fl_t
-    sun = revolve_rz([(0, 0), (p.sun_tip_d / 2, 0), (p.sun_shaft_d / 2, p.sun_cham), (p.sun_shaft_d / 2, s_step0),
-                      (p.sun_step_d / 2, s_step0), (p.sun_step_d / 2, s_step1), (p.sun_hub_d / 2, s_g0), (0, s_g0)])
-    sun += Pos(0, 0, s_g0) * prism(involute_outline(zs, m, a, ra_s, rf_s, p.sun_phase), p.sun_face)
-    sun += Pos(0, 0, s_g1) * Cylinder(p.sun_fl_d / 2, p.sun_fl_t, align=UP)
-    sun -= Cylinder(p.sun_bore_d / 2, s_top, align=UP)
-    sun -= Pos(0, 0, s_top - p.sun_cb_h) * Cylinder(p.sun_cb_d / 2, p.sun_cb_h, align=UP)
-    n_sh = int(p.sun_n_holes)
-    for k in range(n_sh):
-        ang = k * 360 / n_sh
-        sun -= at(p.sun_pcd / 2, ang, s_g1) * Cylinder(p.sun_hole / 2, p.sun_fl_t, align=UP)
-        sun -= at(p.sun_pcd / 2, ang, s_g1) * Cone(p.sun_csk / 2, p.sun_hole / 2, p.sun_csk_h, align=UP)
-    parts["sun_gear"] = sun
-    S = "sun_gear"
-    hr = p.sun_pcd / 2
-    D(S, "axis_lo", (0, 0, s_step0 / 2))
-    D(S, "axis_hi", (0, 0, s_g0))
-    D(S, "flank_a", polar(rp_s, p.sun_phase - 90 / zs, (s_g0 + s_g1) / 2))
-    D(S, "flank_b", polar(rp_s, p.sun_phase + 180 - 90 / zs, (s_g0 + s_g1) / 2))
-    D(S, "gt0", flank_point(zs, m, a, ra_s, 0, p.sun_phase, -1, s_g0))
-    D(S, "gt1", flank_point(zs, m, a, ra_s, 0, p.sun_phase, -1, s_g1))
-    D(S, "tip_h", flank_point(zs, m, a, ra_s, (zs - 1) / 2, p.sun_phase, -1, s_g0))
-    D(S, "tip_bot", (p.sun_tip_d / 2, 0, 0))
-    D(S, "fl_top", (p.sun_fl_d / 2, 0, s_top))
-    D(S, "bd0", (p.sun_bore_d / 2, 0, s_top - p.sun_cb_h))
-    D(S, "cb0", (p.sun_cb_d / 2, 0, s_top - p.sun_cb_h))
-    D(S, "cb1", (p.sun_cb_d / 2, 0, s_top))
-    D(S, "cb_b", (-p.sun_cb_d / 2, 0, s_top))
-    D(S, "td0", (p.sun_bore_d / 2, 0, 0))
-    D(S, "ch1", (p.sun_shaft_d / 2, 0, p.sun_cham))
-    D(S, "sd0", (p.sun_shaft_d / 2, 0, s_step0))
-    D(S, "sh1", (p.sun_step_d / 2, 0, s_step0))
-    D(S, "st1", (p.sun_step_d / 2, 0, s_step1))
-    D(S, "step_b", (-p.sun_step_d / 2, 0, s_step1))
-    D(S, "hub_a", (p.sun_hub_d / 2, 0, s_g0))
-    D(S, "hub_b", (-p.sun_hub_d / 2, 0, s_g0))
-    D(S, "ft0", (p.sun_fl_d / 2, 0, s_g1))
-    D(S, "h90", (p.sun_hole / 2, hr, s_top))
-    D(S, "h90_b", (-p.sun_hole / 2, hr, s_top))
-    D(S, "h270", (p.sun_hole / 2, -hr, s_top))
-    D(S, "h0", (hr + p.sun_hole / 2, 0, s_top))
-    D(S, "csk_a", (p.sun_csk / 2, hr, s_g1))
-    D(S, "csk_b", (-p.sun_csk / 2, hr, s_g1))
-    D(S, "ck1", (p.sun_hole / 2, hr, s_g1 + p.sun_csk_h))
-
-    # ================================================================ primary carrier: output face at z = 0
-    c_top = p.car_disc_h + p.car_fl_t
-    pin_ang = [90 + k * 360 / n_pl for k in range(n_pl)]
-    bolt_ang = [-90 + k * 360 / n_pl for k in range(n_pl)]
-    car = revolve_rz([(0, 0), (p.car_disc_d / 2 - p.car_cham, 0), (p.car_disc_d / 2, p.car_cham), (p.car_disc_d / 2, p.car_disc_h),
-                      (p.car_fl_d / 2, p.car_disc_h), (p.car_fl_d / 2, c_top), (0, c_top)])
-    ext = Circle(p.car_disc_d / 2) - Circle(p.ext_in_r)
-    for ang in pin_ang:
-        ext -= Pos(*polar(cd, ang, 0)[:2]) * Circle(p.ext_clear_r)
-    ext = fillet(ext.vertices(), p.ext_fillet)
-    car += Pos(0, 0, c_top) * extrude(ext, amount=p.car_h - c_top)
-    col_top = c_top + p.car_col_h
-    for ang in pin_ang:
-        collar = Pos(0, 0, c_top) * Cylinder(p.car_col / 2, p.car_col_h, align=UP)
-        collar = fillet(collar.edges().group_by(Axis.Z)[-1], p.car_col_f)
-        car += at(cd, ang, 0) * collar
-        car += at(cd, ang, col_top) * Cylinder(p.car_pin / 2, p.car_h - col_top, align=UP)
-        car -= at(cd, ang, 0) * Cylinder(p.car_pinb / 2, p.car_h, align=UP)
-        car -= at(cd, ang, 0) * Cylinder(p.car_pinb / 2 + p.car_pock_dr, p.car_pock_h, align=UP)
-    for ang in bolt_ang:
-        car -= at(p.car_bolt_r, ang, 0) * Cylinder(p.car_bolt / 2, p.car_h, align=UP)
-        car -= at(p.car_bolt_r, ang, 0) * Cylinder(p.car_bolt / 2 + p.car_bcb_dr, p.car_bcb_h, align=UP)
-    car -= Cylinder(p.car_b1 / 2, p.car_b1_h, align=UP)
-    car -= Pos(0, 0, p.car_b1_h) * Cylinder(p.car_b2 / 2, p.car_b2_h, align=UP)
-    car -= Pos(0, 0, p.car_b1_h + p.car_b2_h) * Cone(p.car_b2 / 2, p.car_b2c / 2, c_top - p.car_b1_h - p.car_b2_h, align=UP)
-    n_nut = int(p.car_n_nuts)
-    rn = p.car_nut_d / 2
-    for k in range(n_nut):
-        ang = k * 360 / n_nut
-        car -= at(rn, ang, 0) * Cylinder(p.car_nut / 2, c_top, align=UP)
-        car -= at(rn, ang, c_top - p.car_hex_h) * extrude(RegularPolygon(p.car_hex / 2, int(p.hex_sides), rotation=90), amount=p.car_hex_h)
-    parts["primary_carrier"] = car
-    C = "primary_carrier"
-    pin = (0, cd)
-    rb_ = p.car_bolt_r
-    pock_r = p.car_pinb / 2 + p.car_pock_dr
-    bcb_r = p.car_bolt / 2 + p.car_bcb_dr
-    b30 = polar(rb_, -90 + 360 / n_pl, p.car_h)
-    nut_ang = [k * 360 / n_nut for k in range(n_nut)]
-    n60 = polar(rn, nut_ang[1], 0)
-    n120 = polar(rn, nut_ang[2], 0)
-    D(C, "axis_lo", (0, 0, p.car_b1_h / 2))
-    D(C, "axis_hi", (0, 0, p.car_b1_h + p.car_b2_h / 2))
-    D(C, "bot", (p.car_disc_d / 2 - p.car_cham, 0, 0))
-    D(C, "pintop", (p.car_pin / 2, cd, p.car_h))
-    D(C, "pin_b", (-p.car_pin / 2, cd, p.car_h))
-    D(C, "disc_a", (p.car_disc_d / 2, 0, p.car_cham))
-    D(C, "disc_b", (-p.car_disc_d / 2, 0, p.car_cham))
-    D(C, "fd0", (p.car_disc_d / 2, 0, p.car_disc_h))
-    D(C, "ft0", (p.car_fl_d / 2, 0, p.car_disc_h))
-    D(C, "ft1", (p.car_fl_d / 2, 0, c_top))
-    D(C, "b1_a", (p.car_b1 / 2, 0, 0))
-    D(C, "b1_b", (-p.car_b1 / 2, 0, 0))
-    D(C, "b2_a", (p.car_b2 / 2, 0, p.car_b1_h))
-    D(C, "b2_b", (-p.car_b2 / 2, 0, p.car_b1_h))
-    D(C, "b2z1", (p.car_b2 / 2, 0, p.car_b1_h + p.car_b2_h))
-    D(C, "b2c_a", (p.car_b2c / 2, 0, c_top))
-    D(C, "b2c_b", (-p.car_b2c / 2, 0, c_top))
-    D(C, "b2c_s", (0, -p.car_b2c / 2, c_top))
-    D(C, "etip", (0, -p.ext_in_r, c_top))
-    D(C, "pk0", (-pock_r, cd, p.car_pock_h))
-    D(C, "pk1", (-p.car_pinb / 2, cd, p.car_pock_h))
-    D(C, "pkd0", (-pock_r, cd, 0))
-    D(C, "pinb_a", (p.car_pinb / 2, cd, p.car_h))
-    D(C, "pinb_b", (-p.car_pinb / 2, cd, p.car_h))
-    D(C, "col_a", (p.car_col / 2, cd, c_top))
-    D(C, "col_b", (-p.car_col / 2, cd, c_top))
-    D(C, "co1", (p.car_pin / 2, cd, col_top))
-    D(C, "cf0", (p.car_col / 2, cd, col_top - p.car_col_f))
-    D(C, "bolt_a", (p.car_bolt / 2, -rb_, p.car_h))
-    D(C, "bolt_b", (-p.car_bolt / 2, -rb_, p.car_h))
-    D(C, "bc0", (-bcb_r, -rb_, p.car_bcb_h))
-    D(C, "bc1", (-p.car_bolt / 2, -rb_, p.car_bcb_h))
-    D(C, "bcd0", (-bcb_r, -rb_, 0))
-    D(C, "bR1", (b30[0] + p.car_bolt / 2, b30[1], p.car_h))
-    D(C, "nR0", (rn + p.car_nut / 2, 0, 0))
-    D(C, "nut_b", (rn - p.car_nut / 2, 0, 0))
-    D(C, "nR1", (-rn + p.car_nut / 2, 0, 0))
-    D(C, "n60", (n60[0] + p.car_nut / 2, n60[1], 0))
-    D(C, "n120", (n120[0] + p.car_nut / 2, n120[1], 0))
-    D(C, "hx0", (rn, p.car_hex / 2, c_top))
-    D(C, "hx1", (rn, -p.car_hex / 2, c_top))
-    D(C, "hxd0", (rn, p.car_hex / 2, c_top - p.car_hex_h))
-    hx30 = polar(p.car_hex / 2, 90 - 360 / p.hex_sides, c_top)
-    hx150 = polar(p.car_hex / 2, 90 + 360 / p.hex_sides, c_top)
-    D(C, "hx30", (rn + hx30[0], hx30[1], c_top))
-    D(C, "hx150", (rn + hx150[0], hx150[1], c_top))
-    mid = (c_top + p.car_h) / 2
-    D(C, "pin_axis", (0, cd, mid))
-    D(C, "pin_axis_lo", (0, cd, p.cas_b1_h + p.cas_lip_h / 2))
-    D(C, "ext_side", (polar(p.ext_clear_r, -90 + 180 / n_pl, 0)[0], cd + polar(p.ext_clear_r, -90 + 180 / n_pl, 0)[1], mid))
-
-    # ================================================================ secondary carrier: boss faces at z = 0
-    s_pl0 = p.sec_boss_h
-    s_pl1 = s_pl0 + p.sec_t
-    boss_top_r = p.sec_pin / 2 + p.sec_boss_dr
-    sec = Pos(0, 0, s_pl0) * (Cylinder(p.sec_od / 2, p.sec_t, align=UP) - Cylinder(p.sec_id / 2, p.sec_t, align=UP))
-    boss = revolve_rz([(p.sec_boss_id / 2 + p.sec_boss_ch, 0), (p.sec_boss_bot_r, 0), (boss_top_r, s_pl0),
-                       (p.sec_boss_id / 2, s_pl0), (p.sec_boss_id / 2, p.sec_boss_ch)])
-    for ang in pin_ang:
-        sec += (at(cd, ang, 0) * boss) & Cylinder(p.sec_od / 2, s_pl0, align=UP)
-        sec -= at(cd, ang, 0) * Cylinder(p.sec_pin / 2, s_pl1, align=UP)
-        sec -= at(cd, ang, s_pl1 - p.sec_hex_h) * extrude(RegularPolygon(p.sec_phex / 2, int(p.hex_sides)), amount=p.sec_hex_h)
-    for ang in bolt_ang:
-        sec -= at(p.sec_bolt_r, ang, 0) * Cylinder(p.sec_bolt / 2, s_pl1, align=UP)
-        sec -= at(p.sec_bolt_r, ang, s_pl1 - p.sec_hex_h) * extrude(RegularPolygon(p.sec_bhex / 2, int(p.hex_sides), rotation=90), amount=p.sec_hex_h)
-    parts["secondary_carrier"] = sec
-    K = "secondary_carrier"
-    sb = p.sec_bolt_r
-    k30 = polar(sb, -90 + 360 / n_pl, s_pl0)
-    pin2 = polar(cd, pin_ang[-1], s_pl1)
-    D(K, "od_a", (p.sec_od / 2, 0, s_pl1))
-    D(K, "od_b", (-p.sec_od / 2, 0, s_pl1))
-    D(K, "id_a", (p.sec_id / 2, 0, s_pl1))
-    D(K, "id_b", (-p.sec_id / 2, 0, s_pl1))
-    D(K, "t0", (p.sec_od / 2, 0, s_pl0))
-    D(K, "bh0", (p.sec_boss_id / 2 + p.sec_boss_ch, cd, 0))
-    D(K, "bh1", (p.sec_boss_id / 2, cd, s_pl0))
-    D(K, "bid_b", (-p.sec_boss_id / 2, cd, s_pl0))
-    D(K, "bc0", (p.sec_boss_id / 2, cd, p.sec_boss_ch))
-    D(K, "bt0", (0, cd - p.sec_pin / 2, s_pl0))
-    D(K, "bt1", (0, cd - boss_top_r, s_pl0))
-    D(K, "pin_a", (p.sec_pin / 2, cd, s_pl0))
-    D(K, "pin_b", (-p.sec_pin / 2, cd, s_pl0))
-    D(K, "ph0", (p.sec_phex / 2, cd, s_pl1))
-    D(K, "ph1", (-p.sec_phex / 2, cd, s_pl1))
-    D(K, "hd0", (p.sec_phex / 2, cd, s_pl1 - p.sec_hex_h))
-    D(K, "ph2", (pin2[0] + p.sec_phex / 2, pin2[1], s_pl1))
-    D(K, "bolt_a", (p.sec_bolt / 2, -sb, s_pl0))
-    D(K, "bolt_b", (-p.sec_bolt / 2, -sb, s_pl0))
-    D(K, "bx0", (0, -sb + p.sec_bhex / 2, s_pl1))
-    D(K, "bx1", (0, -sb - p.sec_bhex / 2, s_pl1))
-    D(K, "bR1", (k30[0] + p.sec_bolt / 2, k30[1], s_pl0))
-
-    # ================================================================ casing: output face at z = 0
-    h = p.cas_h
-    b0_r = p.cas_b0 / 2
-    od_r = b0_r + p.cas_od_dr
-    b1_r = b0_r - p.cas_b1_dr
-    lip_r = b1_r - p.cas_lip_dr
-    zr0 = p.cas_b1_h + p.cas_lip_h
-    zr1 = zr0 + p.cas_ring_w
-    zr = p.z_ring
-    rp_r = m * zr / 2
-    neck_r = rp_r + p.drw
-    z_n1 = zr0 + p.cas_neck0
-    z_n2 = z_n1 + p.cas_neck1
-    body_r = p.cas_body / 2
-    z_fe = h - p.cas_fl
-    dr_f = body_r - neck_r
-    flare_r = (dr_f * dr_f + (z_fe - z_n2) ** 2) / (2 * dr_f)
-    lug_r_c = p.cas_lug_d / 2
-    lug_rad = p.cas_lugt / 2 - lug_r_c
-    n_lug = int(p.cas_n_lugs)
-    lug_ang = [90 + k * 360 / n_lug for k in range(n_lug)]
-    outline = Circle(body_r)
-    for ang in lug_ang:
-        outline += Pos(*polar(lug_r_c, ang, 0)[:2]) * Circle(lug_rad)
-    outline = junction_fillet(outline, [polar(lug_r_c, ang, 0)[:2] for ang in lug_ang], lug_rad, body_r, p.lug_fillet)
-    cas = extrude(outline, amount=h)
-    env_r = neck_r + flare_r
-    cas &= revolve_rz([(0, 0), (od_r, 0), (od_r, zr0), (neck_r, z_n1), (neck_r, z_n2), (env_r, z_n2), (env_r, h), (0, h)])
-    cas -= Pos(0, 0, z_n2) * Torus(env_r, flare_r)
-    # bore, lip, ring, upper bore
-    cas -= revolve_rz([(0, 0), (b0_r, 0), (b1_r, p.cas_bch), (b1_r, p.cas_b1_h), (lip_r, p.cas_b1_h), (lip_r, zr0), (0, zr0)])
-    rr_tip = rp_r - p.addendum_coef * m
-    rr_root = rp_r + p.dedendum_coef * m
-    cas -= Pos(0, 0, zr0) * prism(involute_outline(zr, m, a, rr_root, rr_tip, p.ring_phase), p.cas_ring_w)
-    sh43_r = p.cas_sh43 / 2
-    sh45_r = p.cas_sh45 / 2
-    z_sb = zr1 + p.cas_shf
-    z_sc = z_sb + p.cas_shb
-    z_sh = z_sc + p.cas_shc
-    upper = Plane.XZ * Face(Wire([
-        Line((0, zr1), (sh43_r - p.cas_shf, zr1)),
-        CenterArc((sh43_r - p.cas_shf, z_sb), p.cas_shf, 270, 90),
-        Line((sh43_r, z_sb), (sh43_r, z_sc)),
-        Line((sh43_r, z_sc), (sh45_r, z_sh)),
-        Line((sh45_r, z_sh), (0, z_sh)),
-        Line((0, z_sh), (0, zr1)),
-    ]))
-    cas -= revolve(upper, Axis.Z)
-    # motor-end pocket with lobes
-    n_lobe = int(p.cas_n_lobes)
-    pk_r = p.cas_pk / 2
-    lobe_r = p.cas_lobe / 2 - pk_r
-    lobe_ang = [k * 360 / n_lobe for k in range(n_lobe)]
-    lobe_c = [polar(pk_r, x, 0)[:2] for x in lobe_ang]
-    pocket = Circle(pk_r)
-    for c in lobe_c:
-        pocket += Pos(*c) * Circle(lobe_r)
-    pocket = junction_fillet(pocket, lobe_c, lobe_r, pk_r, p.lobe_fillet)
-    cas -= Pos(0, 0, h - p.cas_pk_h) * extrude(pocket, amount=p.cas_pk_h)
-    # lug holes and counterbores from below
-    z_lcb = h - p.cas_lcbz
-    for ang in lug_ang:
-        cas -= at(lug_r_c, ang, 0) * Cylinder(p.cas_lugh / 2, h, align=UP)
-        cas -= at(lug_r_c, ang, 0) * Cylinder(p.cas_lcb / 2, z_lcb, align=UP)
-    # output-end bolt holes and radial nut slots
-    n_h = int(p.cas_n_holes)
-    hR = p.cas_hole_d / 2
-    slot_l = od_r - hR + p.cas_nut
-    for k in range(n_h):
-        ang = 90 + k * 360 / n_h
-        cas -= at(hR, ang, 0) * Cylinder(p.cas_hole / 2, p.cas_hole_h, align=UP)
-        nut = RegularPolygon(p.cas_nut / 2, int(p.hex_sides), rotation=90) + Rectangle(slot_l, p.cas_nut, align=(Align.MIN, Align.CENTER))
-        cas -= at(hR, ang, p.cas_nut_z) * Rot(0, 0, ang) * extrude(nut, amount=p.cas_nut_t)
-    parts["casing"] = cas
-    G = "casing"
-    rph = p.ring_phase
-    D(G, "axis_lo", (0, 0, p.cas_bch))
-    D(G, "h0", (od_r, 0, 0))
-    D(G, "h1", (body_r, 0, h))
-    D(G, "bc0", (b0_r, 0, 0))
-    D(G, "b0_b", (-b0_r, 0, 0))
-    D(G, "bc1", (b1_r, 0, p.cas_bch))
-    D(G, "bd1", (b1_r, 0, p.cas_b1_h))
-    D(G, "lh0", (lip_r, 0, p.cas_b1_h))
-    D(G, "lh1", (lip_r, 0, zr0))
-    D(G, "rw0", flank_point(zr, m, a, rr_tip, 0, rph, 1, zr0))
-    D(G, "rw1", flank_point(zr, m, a, rr_tip, 0, rph, 1, zr1))
-    D(G, "rw_h", flank_point(zr, m, a, rr_tip, (zr - 1) / 2, rph, 1, zr0))
-    D(G, "rp_a", polar(rp_r, rph - 90 / zr, (zr0 + zr1) / 2))
-    D(G, "rp_b", polar(rp_r, rph + 180 - 90 / zr, (zr0 + zr1) / 2))
-    D(G, "nk0", (od_r, 0, zr0))
-    D(G, "nk1", (neck_r, 0, z_n1))
-    D(G, "nk2", (neck_r, 0, z_n2))
-    D(G, "nk2_b", (-neck_r, 0, z_n2))
-    D(G, "fe0", (body_r, 0, z_fe))
-    D(G, "body_b", (-body_r, 0, h))
-    D(G, "pk_a", polar(pk_r, 180 / n_lobe, h))
-    D(G, "pk_b", polar(pk_r, 180 + 180 / n_lobe, h))
-    D(G, "pd0", polar(pk_r, 180 / n_lobe, h - p.cas_pk_h))
-    D(G, "lb0", (pk_r + lobe_r, 0, h))
-    D(G, "lb180", (-pk_r - lobe_r, 0, h))
-    D(G, "lb20", polar(pk_r + lobe_r, 360 / n_lobe, h))
-    D(G, "lb40", polar(pk_r + lobe_r, lobe_ang[2], h))
-    D(G, "sh45_a", (sh45_r, 0, z_sh))
-    D(G, "sh45_b", (-sh45_r, 0, z_sh))
-    D(G, "sc0", (sh43_r, 0, z_sc))
-    D(G, "sh43_b", (-sh43_r, 0, z_sc))
-    D(G, "sb0", (sh43_r, 0, z_sb))
-    D(G, "sf0", (sh43_r - p.cas_shf, 0, zr1))
-    D(G, "lt90", (0, lug_r_c + lug_rad, h))
-    D(G, "lt270", (0, -lug_r_c - lug_rad, h))
-    l30 = polar(lug_r_c, lug_ang[-1], h)
-    lm30 = polar(lug_r_c, lug_ang[-2], h)
-    D(G, "lR90", (p.cas_lugh / 2, lug_r_c, h))
-    D(G, "lugh_b", (-p.cas_lugh / 2, lug_r_c, h))
-    D(G, "lR270", (p.cas_lugh / 2, -lug_r_c, h))
-    D(G, "l30", (l30[0] + p.cas_lugh / 2, l30[1], h))
-    D(G, "lm30", (lm30[0] + p.cas_lugh / 2, lm30[1], h))
-    D(G, "lz0", (p.cas_lcb / 2, lug_r_c, z_lcb))
-    D(G, "lcb_b", (-p.cas_lcb / 2, lug_r_c, z_lcb))
-    hole_ang = [90 + k * 360 / n_h for k in range(n_h)]
-    h30 = polar(hR, hole_ang[-1], 0)
-    hm30 = polar(hR, hole_ang[-2], 0)
-    D(G, "hd0", (p.cas_hole / 2, hR, 0))
-    D(G, "hole_b", (-p.cas_hole / 2, hR, 0))
-    D(G, "hd1", (p.cas_hole / 2, hR, p.cas_hole_h))
-    D(G, "hR270", (p.cas_hole / 2, -hR, 0))
-    D(G, "h30", (h30[0] + p.cas_hole / 2, h30[1], 0))
-    D(G, "hm30", (hm30[0] + p.cas_hole / 2, hm30[1], 0))
-    D(G, "nt0", (-p.cas_nut / 2, hR, p.cas_nut_z))
-    D(G, "nt1", (p.cas_nut / 2, hR, p.cas_nut_z))
-    D(G, "nt2", (p.cas_nut / 2, hR, p.cas_nut_z + p.cas_nut_t))
-    z_ang = p.cas_b1_h + p.cas_lip_h / 2
-    D(G, "ang_axis", (0, 0, z_ang))
-    D(G, "ang_ref", (lip_r, 0, z_ang))
-
-    # ================================================================ bearing retainer: casing side at z = 0
-    n_r = int(p.ret_n_holes)
-    ret = Cylinder(p.ret_od / 2, p.ret_t, align=UP) - Cylinder(p.ret_id / 2, p.ret_t, align=UP)
-    for k in range(n_r):
-        ret -= at(p.ret_hole_d / 2, 90 + k * 360 / n_r, 0) * Cylinder(p.ret_hole / 2, p.ret_t, align=UP)
-    parts["retainer"] = ret
-    R = "retainer"
-    rh = p.ret_hole_d / 2
-    ret_ang = [90 + k * 360 / n_r for k in range(n_r)]
-    r30 = polar(rh, ret_ang[-1], 0)
-    rm30 = polar(rh, ret_ang[-2], 0)
-    D(R, "od_a", (p.ret_od / 2, 0, 0))
-    D(R, "od_b", (-p.ret_od / 2, 0, 0))
-    D(R, "od_t", (p.ret_od / 2, 0, p.ret_t))
-    D(R, "id_a", (p.ret_id / 2, 0, 0))
-    D(R, "id_b", (-p.ret_id / 2, 0, 0))
-    D(R, "hR0", (p.ret_hole / 2, rh, 0))
-    D(R, "hole_b", (-p.ret_hole / 2, rh, 0))
-    D(R, "hR1", (p.ret_hole / 2, -rh, 0))
-    D(R, "h30", (r30[0] + p.ret_hole / 2, r30[1], 0))
-    D(R, "hm30", (rm30[0] + p.ret_hole / 2, rm30[1], 0))
-    D(R, "s_od", (0, p.ret_od / 2, p.ret_t))
-
-    # ================================================================ assembly, as built: sun at 0, carrier pins at 90 + k * 360 / n
-    # Mesh phases (fractions of a tooth pitch, 0 = tooth centre): each planet's tooth sits in the ring's tooth space where
-    # they touch, and the sun's tooth sits in the planet's tooth space; planet k's turn psi and the sun's turn sigma follow.
-    # Each part is built where its released file holds it, with its datums; an instance of it is
-    # placed where the assembly puts the part, through the inverse of that frame.
-    files = {
-        "planet_gear": Location((p.planet_file_x, p.planet_file_y, 0), (0, 0, 1), p.planet_file_turn),
-        "sun_gear": Location((p.sun_file_x, p.sun_file_y, 0)),
-        "primary_carrier": Location((p.car_file_x, p.car_file_y, p.car_file_z)),
-        "secondary_carrier": Location((p.sec_file_x, p.sec_file_y, p.sec_file_z)),
-        "casing": Location((p.cas_file_x, p.cas_file_y, 0)),
-        "retainer": Location((p.ret_file_x, 0, p.ret_file_z), (1, 0, 0), -90),
+    # The assembly stands on the casing's axis, z = 0 at the casing's output end, as built:
+    # the carrier as its file holds it, each planet and the sun turned into mesh with the ring.
+    n = int(p.n_planets)
+    ring_pitch, planet_pitch = 2 * pi / p.z_ring, 2 * pi / p.z_planet
+    ring_space = tooth_centre(p.z_ring, p.pressure_angle)  # tooth_face draws the ring's spaces
+    assembly = {
+        "gearbox_casing_1": ("gearbox_casing", Pos(-p.cas_axis_x, -p.cas_axis_y, 0)),
+        "bearing_retainer_1": ("bearing_retainer", Pos(0, 0, p.ret_z) * Rot(0, 0, p.ret_turn)
+                               * Pos(-p.ret_axis_z, -p.ret_axis_x, 0) * Plane.ZX.location.inverse()),
+        "carrier_1": ("carrier", Pos(-p.car_axis_x, -p.car_axis_y, p.carrier_z - p.car_z0)),
+        "sec_carrier_1": ("sec_carrier", Pos(-p.sec_axis_x, -p.sec_axis_y, p.sec_z - p.sec_z0)),
+        "output_bearing_1": ("output_bearing", Pos(0, 0, p.cas_seat_depth - p.out_brg_w)),
+        "sun_bearing_1": ("sun_bearing", Pos(0, 0, p.carrier_z + p.car_journal_len + p.car_flange_t - p.sun_brg_w)),
     }
-    for name, frame in files.items():
-        parts[name] = parts[name].moved(frame)
-        for key in [k for k in datums if k.startswith(f"{name}.")]:
-            datums[key] = tuple((frame * Location(datums[key])).position)
-
-    def place(name, where):
-        return (name, where * files[name].inverse())
-
-    assembly["casing_1"] = place("casing", Location((0, 0, 0)))
-    assembly["retainer_1"] = place("retainer", Location((0, 0, -p.ret_t)))
-    assembly["carrier_1"] = place("primary_carrier", Location((0, 0, 0)))
-    assembly["sec_1"] = place("secondary_carrier", Location((0, 0, p.sec_z)))
-    sigma = 0
-    for k, ang in enumerate(pin_ang):
-        g_r = frac((ang - rph) * zr / 360)
-        psi = ang - p.planet_phase - g_r * 360 / zp
-        if k == 0:
-            g_p = frac((ang + 180 - psi - p.planet_phase) * zp / 360)
-            f_s = frac(-g_p - 0.5)
-            sigma = ang - p.sun_phase - f_s * 360 / zs
-        x, y, _ = polar(cd, ang, 0)
-        assembly[f"planet_{k + 1}"] = place("planet_gear", Location((x, y, p.planet_z), (0, 0, psi)))
-    assembly["sun_1"] = place("sun_gear", Location((0, 0, p.sun_z), (0, 0, sigma)))
-
     joints = {
-        "sun": {"type": "revolute", "parent": "casing_1", "child": "sun_1", "axis": ["sun_1.axis_lo", "sun_1.axis_hi"], "drive": "actuated"},
-        "carrier": {"type": "revolute", "parent": "casing_1", "child": "carrier_1", "axis": ["carrier_1.axis_lo", "carrier_1.axis_hi"], "drive": "passive"},
-        "sec": {"type": "fixed", "parent": "carrier_1", "child": "sec_1"},
+        "carrier": {"type": "revolute", "parent": "gearbox_casing_1", "child": "carrier_1",
+                    "axis": ["carrier_1.axis", "carrier_1.axis_seat"], "drive": "passive"},
+        "sun": {"type": "revolute", "parent": "gearbox_casing_1", "child": "sun_1",
+                "axis": ["sun_1.axis", "sun_1.axis_end"], "drive": "actuated"},
+        "sec_carrier": {"type": "fixed", "parent": "carrier_1", "child": "sec_carrier_1"},
+        "retainer": {"type": "fixed", "parent": "gearbox_casing_1", "child": "bearing_retainer_1"},
+        "output_bearing": {"type": "fixed", "parent": "gearbox_casing_1", "child": "output_bearing_1"},
+        "sun_bearing": {"type": "fixed", "parent": "carrier_1", "child": "sun_bearing_1"},
     }
     couplings = {"sun_carrier": {"driver": "sun", "driven": "carrier", "ratio": "carrier_ratio"}}
-    for k in range(n_pl):
-        joints[f"planet_{k + 1}"] = {"type": "revolute", "parent": "carrier_1", "child": f"planet_{k + 1}",
-                                     "axis": [f"planet_{k + 1}.axis_seat", f"planet_{k + 1}.axis"], "drive": "passive"}
-        couplings[f"carrier_planet_{k + 1}"] = {"driver": "carrier", "driven": f"planet_{k + 1}", "ratio": "planet_ratio"}
-    return {"parts": parts, "datums": datums, "assembly": assembly, "joints": joints, "couplings": couplings}
+    sun_turn = 0
+    for i in range(n):
+        at = radians(90) + i * 2 * pi / n  # the post's direction about the axis
+        # the ring's space nearest this direction leads it by `lead`: the planet's tooth follows
+        # it there, and the sun's tooth meets the planet's space on the line of centres
+        lead = (ring_space - at + ring_pitch / 2) % ring_pitch - ring_pitch / 2
+        turn = at + lead * p.z_ring / p.z_planet - tooth_centre(p.z_planet, p.pressure_angle)
+        if i == 0:
+            inner = (planet_pitch / 2 - pi) % planet_pitch - planet_pitch / 2  # its tooth nearest the sun, off that line
+            sun_turn = (at - (lead * p.z_ring / p.z_planet + inner) * p.z_planet / p.z_sun + pi / p.z_sun
+                        - tooth_centre(p.z_sun, p.pressure_angle))
+        name = f"planet_{i + 1}"
+        assembly[name] = ("planet", Pos(p.car_post_circle_r * cos(at), p.car_post_circle_r * sin(at), p.planet_z)
+                          * Rot(0, 0, degrees(turn)) * Pos(-p.planet_axis_x, -p.planet_axis_y, 0))
+        joints[name] = {"type": "revolute", "parent": "carrier_1", "child": name,
+                        "axis": [f"{name}.axis", f"{name}.axis_end"], "drive": "passive"}
+        couplings[f"carrier_{name}"] = {"driver": "carrier", "driven": name, "ratio": "planet_ratio"}
+        # a bearing flush in each of the planet's seats, the near one on the post's boss
+        seats = [p.planet_z + k * (p.planet_width - p.planet_brg_w) / (int(p.planet_brgs) - 1) for k in range(int(p.planet_brgs))]
+        for k, z in enumerate(seats):
+            brg = f"planet_bearing_{i * int(p.planet_brgs) + k + 1}"
+            assembly[brg] = ("planet_bearing", Pos(p.car_post_circle_r * cos(at), p.car_post_circle_r * sin(at), z))
+            joints[brg] = {"type": "fixed", "parent": name, "child": brg}
+    assembly["sun_1"] = ("sun", Pos(0, 0, p.sun_z) * Rot(0, 0, degrees(sun_turn)) * Pos(-p.sun_axis_x, -p.sun_axis_y, 0))
+    return {"parts": parts, "datums": datums, "assembly": assembly, "threads": threads, "joints": joints, "couplings": couplings}

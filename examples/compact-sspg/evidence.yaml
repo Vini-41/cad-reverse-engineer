@@ -1,110 +1,342 @@
+# Every number the sources state about the object. Each item is a verbatim quote or a pinned
+# figure crop with its reading.
 evidence:
-  # ---- the train (Table I) and its ratio
-  - id: T1
+  # ---- the train -------------------------------------------------------------------------
+  - id: T1-sspg
     source: paper
     page: 7
-    locator: "Table I, SSPG (MN8014) row, Stage-1 [Ns1, Np1, Nr1, m1, np1]"
-    quote: "Stage-1:[25,65,155,0.5,3]"
-    values: {z_sun: 25, z_planet: 65, z_ring: 155, module: 0.5, n_planets: 3}
-  - id: T1-order
+    locator: "Table I, row SSPG (MN8014); columns are Gear Ratio, then Stage-1 [Ns, Np, Nr, m, np]: sun teeth, planet teeth, ring teeth, module, number of planets"
+    quote: "SSPG (MN8014) 7.2:1 Stage-1: [25, 65, 155, 0.5, 3]"
+    values: {ratio: 7.2, z_sun: 25, z_planet: 65, z_ring: 155, module: 0.5, n_planets: 3}
+
+  - id: T1-columns
     source: paper
     page: 7
-    locator: "Table I, column header"
-    quote: "[N si , Npi , Nri , mi, npi ]"
+    locator: Table I, header
+    quote: "Actuator (Motor) Gear Ratio Optimal Parameters"
     scope: context
-    reason: "names the order of Table I's entries: sun, planet and ring teeth, module, planet count (read into T1)"
-  - id: R1
+    reason: "the table's header: it names the columns T1-sspg is read by and states no value"
+
+  - id: T1-notes
+    source: paper
+    page: 7
+    locator: Table I, note 1
+    quote: "Zero values indicate non-existent gears/parameters in that stage."
+    scope: context
+    reason: "why the SSPG row's Stage-2 is all zeros: the gearbox has one stage"
+
+  - id: S2A-members
     source: paper
     page: 2
-    locator: "Sec. I, contributions, item 3"
+    locator: Section II-A
+    quote: "has the ring gear fixed, the sun gear driven by the motor, and the carrier providing the output"
+    scope: context
+    reason: "which member is fixed, which is the input and which the output; it states no number"
+
+  - id: F2-members
+    source: paper
+    page: 2
+    locator: Fig. 2 caption
+    quote: "SSPG: Sun (S) input, Ring (R) fixed, Carrier (C) output."
+    scope: context
+    reason: "restates S2A-members"
+
+  - id: Eq1-ratio
+    source: paper
+    page: 2
+    locator: Eq. (1) and the sentence after it
+    quote: "where GSSPG is the gear reduction ratio, ωc is the angular velocity of the carrier (output) shaft, ωs is the angular velocity of the sun gear (input) shaft"
+    scope: context
+    reason: "defines the ratio of T1-sspg as sun speed over carrier speed, G = (Ns + Nr) / Ns by Eq. (1); it states no number"
+
+  - id: Eq12-geometry
+    source: paper
+    page: 3
+    locator: Section III-B, constraint II
+    quote: "These constraints enforce dimensional compatibility between the sun, planet, and ring gears within each stage."
+    scope: context
+    reason: "introduces Eq. (12), Nr = Ns + 2 Np for the SSPG, which the counts of T1-sspg satisfy; it states no number"
+
+  # ---- the ratio, restated ---------------------------------------------------------------
+  - id: C3-ratio
+    source: paper
+    page: 2
+    locator: Contributions, item 3
     quote: "an SSPG (MN8014 motor, 7.2:1)"
     values: {ratio: 7.2}
-  - id: R1-fig3
+    scope: context
+    reason: "restates T1-sspg"
+
+  - id: F3-ratio
     source: paper
     page: 4
-    locator: "Fig. 3 caption"
-    quote: "(a)SSPG:7.2:1, Motor:"
+    locator: Fig. 3 caption
+    quote: "(a) SSPG: 7.2:1, Motor: T-motor MN8014"
     values: {ratio: 7.2}
     scope: context
-    reason: "restates R1"
-  - id: R1-fig4
+    reason: "restates T1-sspg"
+
+  - id: V2-ratio
+    source: paper
+    page: 7
+    locator: Section V-B-2
+    quote: "The no-load backlash of SSPG (7.2:1)"
+    values: {ratio: 7.2}
+    scope: context
+    reason: "restates T1-sspg"
+
+  - id: V3-ratio
+    source: paper
+    page: 7
+    locator: Section V-B-3
+    quote: "measured for SSPG (7.2:1)"
+    values: {ratio: 7.2}
+    scope: context
+    reason: "restates T1-sspg"
+
+  - id: fig4a-label
     source: paper
     page: 5
-    locator: "Fig. 4(a) label"
+    locator: Fig. 4(a), label under the photograph of the assembled SSPG actuator
     image: figures/crops/fig4a-label.png
-    image_sha256: 81703addd8653c360dfdb3058f3071f06ec1406c1551ba1265d66bac72c6662e
+    image_sha256: 5501e2d6bafdeccdf272768fe26c19eac274fce01886139baf2746ad441b01f3
     reading: "(a) SSPG (MN8014, 7.2:1)"
     values: {ratio: 7.2}
     scope: context
-    reason: "restates R1"
-    confirmed_by: Vini Rezanejad
-  - id: TRAIN
+    reason: "restates T1-sspg"
+
+  - id: fig7a-title
     source: paper
-    page: 2
-    locator: "Sec. II-A"
-    quote: "has the ring gear fixed, the sun gear driven by the motor, and the carrier providing the output"
+    page: 6
+    locator: Fig. 7(a), title of the efficiency plot
+    image: figures/crops/fig7a-title.png
+    image_sha256: bdf2ba376f81b8beb027e02e92abf224e3f3a84a7e5c992791b0ab034323d28a
+    reading: "(a) SSPG MN8014 (7.2:1)"
+    values: {ratio: 7.2}
     scope: context
-    reason: "the train's fixed member (ring), input (sun) and output (carrier): the joints and couplings in model.py"
-  - id: TRAIN-fig2
+    reason: "restates T1-sspg"
+
+  - id: fig9-legend
     source: paper
-    page: 2
-    locator: "Fig. 2 caption, SSPG"
-    quote: "SSPG:Sun (S) input, Ring (R) fixed, Carrier (C) output."
+    page: 7
+    locator: Fig. 9, legend
+    image: figures/crops/fig9-legend.png
+    image_sha256: 6747dbfcf87a1e48b2a0f5d593ec20079a2a2c46b5ad654e800f04f71f64a628
+    reading: "SSPG (7.2:1)"
+    values: {ratio: 7.2}
     scope: context
-    reason: "restates TRAIN"
-  - id: EQ1
+    reason: "restates T1-sspg"
+
+  - id: B-ratio
+    source: brief
+    page: 1
+    locator: the request
+    quote: "the COMPAct 7.2:1 single-stage planetary gearbox"
+    values: {ratio: 7.2}
+    scope: context
+    reason: "restates T1-sspg"
+
+  - id: B-members
+    source: brief
+    page: 1
+    locator: the request
+    quote: "with its motion: the sun, the planets, the ring inside the gearbox casing, and the carrier"
+    scope: context
+    reason: "what the user asks to see built and moving; it states no number"
+
+  # ---- the casing and the carrier --------------------------------------------------------
+  - id: C5-ring-width
     source: paper
-    page: 2
-    locator: "Eq. (1)"
-    quote: "the carrier (output) shaft"
+    page: 4
+    locator: Section III-B, constraint V
+    quote: "δrw is the radial width of the ring gear (taken as 5 mm in this work)"
+    values: {delta_rw: 5}
+
+  - id: C4-extrusion
+    source: paper
+    page: 4
+    locator: Section III-B, constraint IV
+    quote: "Rce = 4 mm is the carrier extrusion radius"
+    values: {R_ce: 4}
     scope: context
-    reason: "Eq. (1), G = (Ns1 + Nr1) / Ns1 = omega_s / omega_c, is the carrier_ratio param's formula (its text extracts garbled, so this locates it)"
-  - id: GEOM
+    reason: "the radius the interference constraint of Eq. (14) and the mass model give the extrusion as a cylinder; the released carrier's extrusions are lobes, read off its body"
+
+  - id: C4-clearance
+    source: paper
+    page: 4
+    locator: Section III-B, constraint IV
+    quote: "δce = 1 mm is the minimum clearance"
+    values: {delta_ce: 1}
+    scope: context
+    reason: "a lower bound the optimisation holds between a planet and the carrier extrusion, not a dimension; the released carrier's lobes stand 1 mm off the planets' tip circle"
+
+  - id: C4-extrusion-place
+    source: paper
+    page: 4
+    locator: Section III-B, constraint IV
+    quote: "The carrier extrusion connects the front (primary) and rear (secondary) carriers and lies between adjacent planet gears."
+    scope: context
+    reason: "names the carrier's two plates and what joins them; it states no number"
+
+  - id: A1-subassemblies
+    source: paper
+    page: 4
+    locator: Section IV-1
+    quote: "comprising a motor subassembly (motor, casing, driver) and a gearbox subassembly (gears and carriers, varying by type)"
+    scope: context
+    reason: "the split the target follows: the gearbox subassembly is built, the motor subassembly is not; it states no number"
+
+  - id: A1-sun-bolt
+    source: paper
+    page: 4
+    locator: Section IV-1
+    quote: "the sun gear shaft is reinforced with a central bolt"
+    scope: context
+    reason: "names a purchased part, the sun's central bolt, without its size"
+
+  - id: E-hardware
     source: paper
     page: 3
-    locator: "Sec. III-B, constraint II, Eq. (12)"
-    quote: "SSPG/DSPG:N ri =N si + 2Npi"
+    locator: Section II-E
+    quote: "Bearings, nuts, and bolts are selected from standard datasheets for accessibility and ease of assembly."
     scope: context
-    reason: "the ring's tooth count from the sun's and planet's, which T1 meets (155 = 25 + 2 x 65); the pitch and centre-distance checks confirm it on the model"
-  # ---- design constants the released carrier and ring realise
-  - id: DCE
-    source: paper
-    page: 4
-    locator: "Sec. III-B, constraint IV"
-    quote: "δ ce = 1mm is the minimum clearance to avoid interference"
-    values: {dce: 1}
-  - id: RCE
-    source: paper
-    page: 4
-    locator: "Sec. III-B, constraint IV"
-    quote: "R ce = 4mm is the carrier extrusion radius"
-    values: {rce: 4}
-    scope: context
-    reason: "the optimiser's model of each carrier extrusion as a 4 mm-radius rod; the released carrier's extrusions are lobes bounded by the planets' clearance circles, as the released carrier the model is compared with gives them, and no 4 mm radius of an extrusion is built"
-  - id: DRW
-    source: paper
-    page: 4
-    locator: "Sec. III-B, constraint V"
-    quote: "δ rw is the radial width of the ring gear (taken as 5mm in this work)"
-    values: {drw: 5}
+    reason: "the purchased parts are standard ones, which the paper does not name or size"
 
+  # ---- how it was made -------------------------------------------------------------------
+  - id: H-print
+    source: paper
+    page: 6
+    locator: Section V-B
+    quote: "fabricated using identical printing settings with 100% infill density on a Bambu Lab X1C printer"
+    values: {infill: 100}
+    scope: context
+    reason: "how the parts were made: FDM printed solid; it informs the material and a mass model, and is no dimension"
+
+  - id: H-material
+    source: paper
+    page: 7
+    locator: Section V-B-3
+    quote: "versus PLA in our prototypes"
+    scope: context
+    reason: "the material of the printed parts; it states no number"
+
+  # ---- the motor, which the target leaves out --------------------------------------------
+  - id: H-motor
+    source: paper
+    page: 6
+    locator: Section V-B
+    quote: "MN8014 motor (87.8 mm OD)"
+    values: {motor_od: 87.8}
+    scope: not-modeled
+    reason: "the motor belongs to the motor subassembly, which the target leaves out"
+
+  # ---- measured behaviour the kinematic model leaves out ---------------------------------
+  - id: T2-stiffness
+    source: paper
+    page: 7
+    locator: "Table II, row SSPG; columns Forward, Backward, Mean (K)"
+    quote: "SSPG (7.2:1) 238.4 247.0 242.7 [Nm/rad]"
+    values: {K_forward: 238.4, K_backward: 247.0, K_mean: 242.7}
+    scope: not-modeled
+    reason: "the transmission's measured stiffness: a spring the kinematic model leaves out"
+
+  - id: V2-backlash
+    source: paper
+    page: 7
+    locator: Section V-B-2
+    quote: "βSSPG = 0.010 rad (0.59◦"
+    values: {backlash: 0.010, backlash_deg: 0.59}
+    scope: not-modeled
+    reason: "the measured no-load backlash, in radians and again in degrees: play the kinematic model leaves out"
+
+  - id: F8-backlash
+    source: paper
+    page: 7
+    locator: Fig. 8 caption
+    quote: "blue) shows a lower backlash of 0.010 rad (0.59◦"
+    values: {backlash: 0.010, backlash_deg: 0.59}
+    scope: context
+    reason: "restates V2-backlash"
+
+  - id: A-backlash
+    source: paper
+    page: 1
+    locator: Abstract
+    quote: "a no-load backlash of 0.59◦"
+    values: {backlash_deg: 0.59}
+    scope: context
+    reason: "restates V2-backlash"
+
+  - id: A-stiffness
+    source: paper
+    page: 1
+    locator: Abstract
+    quote: "transmission stiffness of 242.7 Nm/rad"
+    values: {K_mean: 242.7}
+    scope: context
+    reason: "restates T2-stiffness"
+
+  - id: V3-stiffness
+    source: paper
+    page: 7
+    locator: Section V-B-3
+    quote: "were 242.7 Nm/rad for SSPG"
+    values: {K_mean: 242.7}
+    scope: context
+    reason: "restates T2-stiffness"
+
+  - id: A-efficiency
+    source: paper
+    page: 1
+    locator: Abstract
+    quote: "achieves a mechanical efficiency of 60–80%"
+    values: {eta_min: 60, eta_max: 80}
+    scope: context
+    reason: "restates V1-efficiency"
+
+  - id: V1-efficiency-predicted
+    source: paper
+    page: 6
+    locator: Section V-B-1
+    quote: "predicted efficiencies of 96% for SSPG"
+    values: {eta_predicted: 96}
+    scope: not-modeled
+    reason: "the efficiency the optimisation's model predicts for this gearbox: friction the kinematic model leaves out"
+
+  - id: V1-efficiency
+    source: paper
+    page: 7
+    locator: Section V-B-1
+    quote: "60– 80% for SSPG"
+    values: {eta_min: 60, eta_max: 80}
+    scope: not-modeled
+    reason: "the measured mechanical efficiency: friction the kinematic model leaves out"
+
+# Stated quantities that are not about the object (test conditions, results, other designs).
 skipped:
-  - {source: paper, page: 1, from: "Experimental", to: "201.6 Nm/rad", reason: "abstract's measured results (efficiency, backlash, stiffness)"}
-  - {source: paper, page: 4, quote: "we usem min = 0.5mm, mmax = 1.2mm", reason: "the optimiser's module bounds, not the built design's module (T1)"}
-  - {source: paper, page: 4, quote: "CPG and WPG in under five seconds", reason: "optimiser run time"}
-  - {source: paper, page: 5, from: "The RMS error for SSPG", to: "respectively.", reason: "mass-model validation results"}
-  - {source: paper, page: 5, from: "with RMS errors of 0.01 kg", to: "0.028 kg (WPG)", reason: "mass-model validation results (Fig. 5 caption)"}
-  - {source: paper, page: 6, from: "uses an MN8014 motor", to: "motor (72 mm OD)", reason: "the motors, outside the gearbox target"}
-  - {source: paper, page: 6, quote: "with 100% infill", reason: "print settings"}
-  - {source: paper, page: 6, quote: "predicted efficiencies of 96% for SSPG and 93.8% for CPG", reason: "the optimiser's predicted efficiencies"}
-  - {source: paper, page: 6, from: "Tests were performed", to: "steady-state data", reason: "efficiency test settings"}
-  - {source: paper, page: 7, from: "exhibits a backlash of", to: "0.010 rad (0.59◦", reason: "backlash test results (Fig. 8 caption)"}
-  - {source: paper, page: 7, from: "The measured values were", to: "as shown in Fig. 8.", reason: "backlash test results"}
-  - {source: paper, page: 7, quote: "reported 1468 Nm/rad and Humanoid Lite [26] 319 Nm/rad", reason: "other works' stiffness"}
-  - {source: paper, page: 7, from: "the mechanical efficiency was lower", to: "about 60% for CPG", reason: "efficiency test results"}
-  - {source: paper, page: 7, quote: "ramping from 0 to ±20 Nm and back", reason: "stiffness test settings"}
-  - {source: paper, page: 7, from: "stiffness values (Table II) were", to: "201.6 Nm/rad for CPG", reason: "stiffness test results"}
-  - {source: carrier, body: carrier, reason: "the earlier release of the primary carrier; sspg_carrier_updated.STL (same envelope, nut traps 0.5 mm deeper) supersedes it and is the one built"}
-  - {source: motor_casing, body: motor_casing, reason: "the motor subassembly's casing, outside the gearbox target"}
+  - {source: paper, page: 1, quote: "while the CPG actuator demonstrates 60% efficiency, 2.6 ◦ backlash, and a stiffness of 201.6 Nm/rad", reason: "the CPG actuator, another design"}
+  - {source: paper, page: 4, quote: "we use mmin = 0.5 mm, mmax = 1.2 mm, and Nmin = 18 to avoid undercutting", reason: "bounds of the optimisation's search, not dimensions of the gearbox it chose"}
+  - {source: paper, page: 4, quote: "SSPG solves in a fraction of a second, CPG and WPG in under five seconds", reason: "the solver's run time"}
+  - {source: paper, page: 5, quote: "is 0.01 kg, 0.005 kg, 0.024 kg, and 0.028 kg, respectively", reason: "errors of the mass model over every gear ratio searched, a result of the optimisation study"}
+  - {source: paper, page: 5, quote: "with RMS errors of 0.01 kg (SSPG), 0.005 kg (CPG), 0.024 kg (DSPG), and 0.028 kg (WPG)", reason: "errors of the mass model over every gear ratio searched, a result of the optimisation study"}
+  - {source: paper, page: 6, quote: "MAD M6C12 motor (72 mm OD)", reason: "the CPG actuator's motor, another design"}
+  - {source: paper, page: 6, quote: "torques up to 18 Nm", reason: "a test condition of the efficiency test"}
+  - {source: paper, page: 6, quote: "held for 10s", reason: "a test condition of the efficiency test"}
+  - {source: paper, page: 6, quote: "93.8% for CPG", reason: "the CPG actuator, another design"}
+  - {source: paper, page: 7, quote: "exhibits a backlash of 0.046 rad (2.6 ◦", reason: "the CPG actuator, another design"}
+  - {source: paper, page: 7, quote: "about 60% for CPG", reason: "the CPG actuator, another design"}
+  - {source: paper, page: 7, quote: "βCPG = 0.046 rad (2.6 ◦", reason: "the CPG actuator, another design"}
+  - {source: paper, page: 7, quote: "ramping from 0 to ±20 Nm and back", reason: "a test condition of the stiffness test"}
+  - {source: paper, page: 7, quote: "201.6 Nm/rad for CPG", reason: "the CPG actuator, another design"}
+  - {source: paper, page: 7, quote: "reported 1468 Nm/rad and Humanoid Lite [26] 319 Nm/rad", reason: "other groups' actuators, cited for comparison"}
+  - {source: paper, page: 7, from: "CPG (M6C12) 14:1", to: "Stage-2: [0, 33, 144, 0.5, 6]", reason: "Table I's rows for the CPG, DSPG and WPG designs, other gearboxes"}
+  - {source: paper, page: 7, quote: "CPG (14:1) 211.0 192.2 201.6 [Nm/rad]", reason: "Table II's row for the CPG actuator, another design"}
+  - {source: carrier, body: "carrier", reason: "the earlier carrier release, a variant the target leaves out: the updated carrier, which the photographed actuator of Fig. 4(a) matches, is built"}
+  - {source: motor_casing, body: "motor_casing", reason: "the motor casing, part of the motor subassembly, which the target leaves out"}
 
-conflicts: []
+# Places where sources disagree, and how the reconstruction resolves each.
+conflicts:
+  - id: K-extrusion-holes
+    evidence: []
+    summary: "Two released bodies disagree: the updated carrier's three extrusion bolt holes stand 23.5 from the axis, the secondary carrier's 24.25, so the plates do not line up on these bolts by 0.75."
+    resolution: "Each part is built as its own released body holds it, so each shape check passes and the model shows the mismatch; gap G-extrusion-hole-circle asks the authors which circle is right."
