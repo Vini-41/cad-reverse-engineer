@@ -12,6 +12,7 @@
 - **A drawing prints its material and general tolerance.** plan.yaml takes one `general_tolerance`, a line of text, which the guide prints once. Each made part's drawing then prints it and the project's `material` in its title line. A bought part's drawing does not, a project with no plan draws as before, and no drawing prints a scale.
 - **A format-1 project is refused**, with one finding naming cadrev 0.2.0 as the version that reads it. Each removed key is an unknown key, a `[schema]` error, or `[model-return]` for a joint's. Set `format: 2` once a project names none of them.
 - **One skill builds.** `known-first` and `complete-model` are now `build-model`, which states every stage itself. It always takes the settled parts first. Known first is where it stops, recorded as `known_first` in project.yaml as before, and the complete model carries on and proposes the rest. A component or a board is built in its footprint's frame.
+- **`noob` comes first.** A new skill reads the sources into the ledger before anything is built. It tells you what they state part by part, what they leave open and what cadrev does not cover, shows every figure crop beside its reading, asks the three foundational questions and known first or the complete model, saves your words as the brief, and names the line to run next in a fresh context. `build-model` now starts at the params, on a project `noob` prepared, and names `noob` on any other.
 
 ## v0.2.0
 

@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="#try-it">Try it</a> ·
-  <a href="#two-skills">Two skills</a> ·
+  <a href="#three-skills">Three skills</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#examples">Examples</a> ·
   <a href="#install">Install</a>
@@ -22,7 +22,7 @@
   <sub>The COMPAct 7.2:1 gearbox in <a href="examples/compact-sspg"><code>examples/compact-sspg</code></a>, rebuilt from the paper's tooth counts and held to the authors' STL meshes. Secondary carrier hidden.</sub>
 </p>
 
-cad-reverse-engineer is two skills for coding agents, with their CLI, `cadrev`. Give the agent the documents a device was published in, and it builds:
+cad-reverse-engineer is three skills for coding agents, with their CLI, `cadrev`. Give the agent the documents a device was published in, and it builds:
 
 - **CAD you can open and change.** One STEP file per part and one for the assembly, for SolidWorks, Fusion, Onshape or FreeCAD. Behind them is a parametric [build123d](https://github.com/gumyr/build123d) model: every dimension is a named value in `params.yaml`, so you change a number and rebuild.
 - **A mechanism that moves.** Joints, gear ratios and lead screws export to MuJoCo, and stated motion is checked on the model: one turn of this gearbox's sun moves its carrier 50°, as its 7.2:1 ratio says.
@@ -75,14 +75,15 @@ Below that come the parts, each with its drawing above the checks that read it, 
   <sub><code>build/drawings/body.png</code>: each dimension is a check, printed at the value the body was built to.</sub>
 </p>
 
-## Two skills
+## Three skills
 
-One builds the model, and the other works out how to make it.
+One reads the documents, one builds the model, and one works out how to make it.
 
-- **`build-model`** builds and checks the parts whose every dimension the documents settle, first. For the whole object it asks three things: metric or US, the material, and whether to follow the design or the function. Then it proposes what the documents leave open, each value beside its question and each chosen to be made: a thread from the ISO metric or Unified table, a screw in a length you can buy, one screw size before two. Ask for **known first** and it stops at the settled parts: every other part waits, with the question that would settle it, and nothing is guessed.
+- **`noob`** comes first, for every object. It tells you what the documents state part by part, what they leave open and what cadrev does not cover. You confirm what it read off the figures and answer three questions: metric or US, the material, and whether to follow the design or the function. Then you choose known first or the complete model, with the count of parts each would build.
+- **`build-model`** starts from that project, in a fresh context, and builds and checks the parts whose every dimension the documents settle, first. For the complete model it then proposes what the documents leave open, each value beside its question and each chosen to be made: a thread from the ISO metric or Unified table, a screw in a length you can buy, one screw size before two. Under **known first** it stops at the settled parts: every other part waits, with the question that would settle it, and nothing is guessed.
 - **`ask-machinist`** reviews the model as the person who has to make it, part by part, thumbs up or thumbs down. Then it writes the plan: how each part is made, what to buy, and the assembly sequence.
 
-*"Reverse-engineer the gripper in this paper"* gets you the complete model, and *"with nothing guessed"* gets you known first.
+*"Reverse-engineer the gripper in this paper"* starts with `noob`, and *"with nothing guessed"* chooses known first.
 
 ## How it works
 
@@ -160,7 +161,7 @@ network_access = true
 npx skills add Vini-41/cad-reverse-engineer --skill '*'
 ```
 
-Install both: `ask-machinist` uses the CLI that `build-model` holds.
+Install all three: `noob` and `ask-machinist` use the CLI that `build-model` holds.
 
 </details>
 
@@ -180,9 +181,9 @@ cadrev check my-project                    # every rule and check; writes build/
 
 </details>
 
-Then give the agent your documents and ask, as [Two skills](#two-skills) says.
+Then give the agent your documents and ask, as [Three skills](#three-skills) says.
 
-The CLI runs on your machine and needs [uv](https://docs.astral.sh/uv/), with Python 3.12 to 3.14, which uv can install. The plugin ships from [`plugin/`](plugin): the two skills, the CLI's source and lockfile, and nothing else of this repo.
+The CLI runs on your machine and needs [uv](https://docs.astral.sh/uv/), with Python 3.12 to 3.14, which uv can install. The plugin ships from [`plugin/`](plugin): the three skills, the CLI's source and lockfile, and nothing else of this repo.
 
 ## Development
 

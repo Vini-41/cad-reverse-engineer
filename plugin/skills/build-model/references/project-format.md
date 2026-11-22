@@ -10,6 +10,7 @@ checks.yaml     the geometry compared with the ledger
 gaps.yaml       what the sources leave open
 plan.yaml       optional: how the object is made and put together
 model.py        the build123d model (modeling.md)
+read_bodies.py  where geometry is released: prints what each body settles, and its frame
 sources/        registered source files, pinned by sha256
 figures/        the pages and images `cadrev figures` writes; figures/crops/ holds the pinned evidence crops
 build/          STEP files, isometric.png, drawings/, report.md, report.json; model.mjcf and meshes/ for a mechanism; plan.md and steps/ for a plan
@@ -43,7 +44,7 @@ sources:                 # written by `cadrev source`; keep it the last key
 - `tolerance` is the model's, how closely it realises a value, and not what a shop works to: that is the [plan](#planyaml)'s to say. `tolerance.angle` is in degrees whatever `units.angle` says.
 - **Every instance is held**: it touches another instance, or sits within `clearance` of one, so the assembly is one object. `clearance` names the length param of the loosest fit, the largest gap the model leaves between two parts that hold each other: a pin centred in its running hole, a tongue between its fork's cheeks. Without it, parts touch, which two do within `tolerance.length`, the slack a named clearance gets too. An instance further than that from every other floats, and so does a group whose instances hold only each other: a `[held]` warning, and an error under a [plan](#planyaml). Build what holds it (a spring's hooks, a seat), or move it onto what does. The warning stands where the `target` leaves out what holds it, a bearing or a second unit. A known-first project with no plan is not held to this: what holds a part may wait.
 - `units.length` is the user's answer to metric or US: `mm` or `in`. A proposed thread comes from its table, ISO metric for a metric unit and Unified for `in`. A STEP file holds the object at its true size in either.
-- `material` and `follows` are the complete model's other two answers: what its made parts are made of and how, and whether a feature that is hard to make that way is built as the sources show it (`design`) or replaced by one that does the same job (`function`). The report prints both.
+- `material` and `follows` are the user's other two answers: what its made parts are made of and how, and whether a feature that is hard to make that way is built as the sources show it (`design`) or replaced by one that does the same job (`function`). The report prints both.
 - `cadrev source` with an id already registered refreshes that entry: its file, hash and whatever the command states. That is how a source is restored into a clone or replaced by a new download.
 - **Text sources** are quote-checked and swept: PDF, DOCX, TXT, MD, HTML (read as its rendered text). Save a web datasheet as HTML or TXT to quote it. Video and image files anchor image evidence only.
 - **The brief** (`kind: brief`) is what the user specified, in their own words, saved as a `.txt` or `.md` file. It is quoted, swept and held to conflicts like any other text source, and what [rests on](#paramsyaml) it is counted apart.
@@ -102,12 +103,12 @@ evidence:
     image_sha256: …              # printed by `cadrev crop`
     reading: "48mm; 30mm; 12mm"  # the label text exactly as printed in the image
     values: {L: 48, W: 30, H: 12}
-    confirmed_by: <reviewer>     # written by the human who checked the crop
+    confirmed_by: <reviewer>     # the name of the human who checked the crop
 ```
 
 - **A quote** is matched against the text `cadrev text` prints, ignoring case, whitespace, line-break hyphenation, dash variants and `×`/`x`; everything else is verbatim. Each value must appear as a number in the quote, matched whole: "37 mm" is not found in "137 mm".
 - **How numbers read.** A decimal comma is one number (`3,5 mm` is 3.5) and so is a fraction before a unit (`1 1/2 in` is 1.5); both ends of a range are values; a number labelling a figure, table, equation or section is not one. A cardinal from zero to ninety-nine in words is a number ("Eight tension springs" states 8, written `n: 8` or `n: eight`). A comma before exactly three digits (`1,250`) reads two ways, so take that value from where it is printed in another form.
-- **Image evidence** covers numbers that exist only in pixels: figure labels, drawing dimensions, video frames. The crop is hashed so the reviewed image cannot change under its reading. Until a named human writes `confirmed_by`, the reading holds the project at VERIFIED PENDING REVIEW. The image a `measured` param scales off is image evidence too and needs no `values`: its `reading` transcribes any label and names the reference it is scaled against.
+- **Image evidence** covers numbers that exist only in pixels: figure labels, drawing dimensions, video frames. The crop is hashed so the reviewed image cannot change under its reading. Until `confirmed_by` names the human who checked it, the reading holds the project at VERIFIED PENDING REVIEW. The image a `measured` param scales off is image evidence too and needs no `values`: its `reading` transcribes any label and names the reference it is scaled against.
 - **`scope`** sets a statement aside, with a `reason`:
   - `not-modeled`: a real statement about something the reconstruction does not build: what lies outside the device (a test rig, the electronics), a part the target's configuration leaves out, a part whose motion cadrev's joint types cannot model (a flexure), a feature that a project following the function replaces with one easier to make, a value the [brief](#projectyaml) overrides, or behaviour the kinematic model leaves out (a spring's stiffness, a damping, a friction). It keeps its `values`, so the report shows what was left unbuilt.
   - `context`: a statement that informs interpretation but is not a dimension of a modelled feature. A restatement is context: a value stated in several places is ledgered at each, the statement a param or check reads stays in scope (a quote rather than a figure reading where both exist), and each other one says `restates <id>`. Statements whose values differ are a conflict, not a restatement. A direction of change stated with no length (the cable lengthens between two poses) is context too, its reason saying so: no check compares a direction.

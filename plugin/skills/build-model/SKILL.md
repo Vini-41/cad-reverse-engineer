@@ -1,13 +1,13 @@
 ---
 name: build-model
-description: Reverse-engineer one published object, from a single part up to a mechanism, as parametric CAD (build123d, STEP, MuJoCo) from its paper, patent, supplement or datasheet. What the sources state is quoted and checked on the built model. It builds the settled parts first, then proposes the rest to be made, from standard sizes for the user's units and material; asked for known first, or for nothing guessed, it stops at the settled parts and lists what waits as questions. Use when asked to rebuild or reverse-engineer a part, gripper or mechanism as CAD, or to complete a known-first project.
+description: Build the parametric CAD (build123d, STEP, MuJoCo) of a published object from a project the noob skill prepared, every stated value checked on the built model. It builds the settled parts first, then proposes the rest to be made, from standard sizes for the user's units and material; a known-first project stops at the settled parts and lists what waits as questions. Use on a project noob prepared, or to complete a known-first project. A new object starts with noob.
 license: MIT
 compatibility: Runs its CLI locally through uv on Python 3.12-3.14; the first run downloads build123d, OCC and MuJoCo from PyPI, so it needs network access then.
 ---
 
 # Build the model
 
-Rebuild a published object from its sources, as CAD a reviewer can audit number by number. Three files carry the audit, and `cadrev check` holds them to each other:
+Build a published object from its project, as CAD a reviewer can audit number by number. Three files carry the audit, and `cadrev check` holds them to each other:
 
 - **The ledger** (`evidence.yaml`): every number the sources state about the object, each a verbatim quote or a hashed figure crop. Geometry the authors released is compared whole with the part built from it.
 - **The params** (`params.yaml`): every number the model uses, each with its **basis**: `source`, `derived`, `measured` or `proposed`.
@@ -30,73 +30,40 @@ The CLI is the `cadrev` script beside this file, and needs [`uv`](https://docs.a
 
 `cadrev` below stands for that path. The first run installs build123d and MuJoCo (about a minute).
 
-- `cadrev check <dir>` runs every rule, builds the model, evaluates the checks and writes `build/`: the STEP files, an isometric view, a drawing of each part and the report. `cadrev check <dir> --no-build` runs every rule that needs no build in seconds, for the stages before there is a model. Each finding names its rule in brackets and says what is wrong and where.
+- `cadrev check <dir>` runs every rule, builds the model, evaluates the checks and writes `build/`: the STEP files, an isometric view, a drawing of each part and the report. `cadrev check <dir> --no-build` runs every rule that needs no build in seconds. Each finding names its rule in brackets and says what is wrong and where.
 - Read [`references/project-format.md`](references/project-format.md) before writing project YAML and [`references/modeling.md`](references/modeling.md) before writing model.py. They give the formats; the findings give the rules as you meet them.
 - `cadrev python <script>` runs a script of your own on the CLI's Python, with build123d, numpy and matplotlib. One that writes project YAML (checks repeated per instance) lives in the project directory, and the file it writes names it in a comment, so the project alone shows how it was written.
 
+## The project
+
+This skill builds a project the [noob](../noob/SKILL.md) skill prepared. Such a project registers a brief (`kind: brief`), and `cadrev check <dir> --no-build` reports no `[coverage]` finding. On anything else, say that noob has not prepared it, name noob as the skill to run first, and stop.
+
+The project carries what noob read, so start from its files:
+
+- **project.yaml**: the target and the user's answers: `units`, `material`, `follows`, and `known_first` where the build stops at the settled parts. The target is decided, so build the version it names, and take any evidence for another to the hand-over as a question.
+- **The ledger**, the **shape checks** in checks.yaml, and **the brief**, the user's own words.
+- **gaps.yaml**: a part whose dimension a gap asks for waits. Every other part the ledger or a shape check names is settled, and a gap asking only where it sits leaves it so.
+- **`read_bodies.py`**, where the authors released geometry: run it with `cadrev python` for each body's values and frame.
+
 ## The work
 
-Take the stages in order: each builds on what the ones before settled. A stage is done when its own criterion holds and `cadrev check` reports nothing about what the stage wrote. A known-first project the user asks to complete starts at stage 9.
+Take the stages in order: each builds on what the ones before settled. A stage is done when its own criterion holds and `cadrev check` reports nothing about what the stage wrote. A known-first project the user asks to complete starts at stage 5.
 
-### 1. Scope
-
-- **The target**: the object, its version and its configuration. Papers often show earlier iterations beside the reported one; the target names the one the ledger describes. A target narrows the object, not its parts: a file holding many parts is that many parts to build.
-- **Known first or the complete model.** Known first where the request names it, or asks for only what the sources settle, with nothing guessed. Any other request is the complete model.
-- **The length unit**, for known first: `mm` or `in`, the one the sources print their dimensions in unless the user asked for the other.
-- **The foundational questions**, for the complete model, shape every value proposed, so they are answered before anything is proposed:
-  - **Metric or US**: the project's length unit, `mm` or `in`. Every proposed value is in it, and every proposed thread and screw length comes from its table, ISO metric or Unified. Answered from the sources, it is the system they print their dimensions in.
-  - **The material**: what the parts are made of and how (`PLA, FDM printed`; `6061 aluminium, milled`), or none yet. It decides what a proposed wall, clearance and fit can be; with none, propose the shape alone. Answered from the sources, it is the one they state for the object.
-  - **Design or function**: whether the object is built as its sources show it, or to do what it does. Design keeps every part and feature as shown. Function replaces a feature that is hard to make in the material with one that does the same job. Answered without the user, design.
-
-Where the sources show several versions and the request names none, ask which, with where the project directory goes. Ask each foundational question the request leaves open in that same message. Where they said to build now, or no one answers, choose the version, answer each question from the sources, and name those answers at the hand-over.
-
-Run `cadrev init <dir>` and write the answers in [project.yaml](references/project-format.md#projectyaml): `target`, `units`, and `known_first: true` for known first, or `material` and `follows` for the complete model.
-
-Done when project.yaml holds them.
-
-### 2. Sources
-
-Register with `cadrev source` the paper, its supplement (where the tables usually are), any video or drawing, and the datasheet of every purchased part the paper names. Geometry the authors released is `--kind geometry`: a STEP, an STL, or a laser-cut SVG sheet. What the user specified about the object is its [brief](references/project-format.md#projectyaml), `--kind brief`.
-
-Done when every document the reconstruction will cite is registered.
-
-### 3. Ledger
-
-Read every page with `cadrev text <dir> <source>`, and view every image `cadrev figures <dir> <source>` writes: each page of a PDF whole, which shows its vector drawings and tables as printed, and each image embedded in it at full resolution. Ledger each statement about the object:
-
-- Copy each quote from `cadrev text` output, the text the matcher sees.
-- A number printed only inside a figure is image evidence. Crop its label with `cadrev crop <dir> <image> LEFT TOP RIGHT BOTTOM --name <name>`, which prints the `image` and `image_sha256` the item takes. The box is in pixels of the file you crop, whose size `cadrev figures` prints, so scale it from the size you viewed the image at. View the crop, and write the `reading` exactly as printed. A scale bar is evidence only where a measured param is scaled against it.
-- The coverage sweep lists numbers printed with a unit. A count printed without one (a table cell, `3 planets`) and a ratio (`7.2:1`) are yours to find: ledger each one a param or a check will use.
-- Stated ranges of motion are ledgered too; the motion stage reads them. A stated spring, damper or friction is [`not-modeled`](references/project-format.md#evidence-the-ledger).
-- A value stated in several places is ledgered at each, one in scope and the rest restatements. A disagreement between sources is a conflict. A stated quantity about something else (a test object, a load, a rig, a result) is skipped with a reason.
-
-Done when every figure has been viewed and its labels ledgered, and `cadrev check <dir> --no-build` reports nothing about the evidence or its coverage but values not yet used, which the later stages use.
-
-### 4. Released geometry
-
-Geometry the authors released settles values no text states, and one shape check holds the part to all of them at once. A project with none goes to stage 5.
-
-- **Read each body** with a short script of your own (`cadrev python <script>`) that loads a STEP or STL with build123d, or a cut file's contours in the sheet's frame. Take from it each value the part needs (a hole spacing, a bore, an envelope, a thickness) as its design value, `32.5` and not the file's `32.4999`, and the frame the file holds the body in: where its origin and axes lie, since the part is built there.
-- **An STL body** holds only flat triangles, whose corners lie on the true surface and whose faces cut inside a curve: read an arc by its corners, a bore's diameter as the circle through three corners on its rim.
-- **Each body** is compared or skipped: a [`shape` check](references/project-format.md#checksyaml) against the part model.py will build in the body's frame, or a skip with a reason for a body that is not part of the target (a fit tester, a variant it leaves out, a part of another device). A part cut from several regions of a cut file takes a shape check per region, and model.py's [`sheets`](references/modeling.md#contract) places it on each.
-
-Done when every body is named by a shape check or a skip, and every value the model will use from a body is read off it.
-
-### 5. Params
+### 1. Params
 
 Write params.yaml for the settled parts. Each dimension takes the strongest basis available: `source` (a quote, a reading or a released body), then `derived`, then `measured`.
 
 - A value a released body settles cites the body, `from: <body>` with its `value`, and is checked once the body's shape check passes. So is each number of the frame the part is built in, or of a cut part's place on its sheet.
 - A tooth count is a `source` param, and a gear ratio a `derived` param written from the counts, so the ratio traces to the table.
 - A screw or a thread the sources state is a [thread param](references/project-format.md#threads): its designation from the ISO metric or the Unified table, which supplies its diameter, its pitch, its tap drill and its clearance hole. A stated screw length is the length param it names.
-- **A part waits** where the sources leave one of its dimensions open. It takes no params yet, and a gap in gaps.yaml whose question names the part ("What diameter are the finger link's pins?"), so the hand-over can group what waits by part. A stated value of a waiting part waits with it.
-- Joint ranges and poses wait for stage 8.
+- **A part waits** where the sources leave one of its dimensions open. It takes no params yet, and its gap in gaps.yaml names the part, so the hand-over can group what waits by part. A dimension you find open that no gap asks about takes a gap of its own. A stated value of a waiting part waits with it.
+- Joint ranges and poses wait for stage 4.
 
-In a complete model, `cadrev check` reports what waits as `[evidence-unused]` and `[gap-unused]`, and a settled part held only by a waiting one as `[held]`, until stage 9 builds it. Through stage 8 those findings are expected.
+In a complete model, `cadrev check` reports what waits as `[evidence-unused]` and `[gap-unused]`, and a settled part held only by a waiting one as `[held]`, until stage 5 builds it. Through stage 4 those findings are expected.
 
 Done when every feature of every settled part has a param, and every waiting part has its gap.
 
-### 6. Model, tracer part first
+### 2. Model, tracer part first
 
 Take one settled part all the way through before modelling any other, as a tracer bullet: a part with a stated envelope or pitch, or with a released body. Model it alone, give it its checks, and run `cadrev check <dir>` until the report shows them green. It proves the path from ledger to report while a mistake costs one part.
 
@@ -104,9 +71,9 @@ Then build the rest of the settled parts per [`references/modeling.md`](referenc
 
 A settled part whose place the sources leave open is built in its own frame and placed by no instance, with a gap asking where it sits. Where no part is settled, model.py builds nothing.
 
-Done when every settled part is built and `cadrev check <dir>` reports nothing about the model. Red checks on the other parts are stage 7's.
+Done when every settled part is built and `cadrev check <dir>` reports nothing about the model. Red checks on the other parts are stage 3's.
 
-### 7. Checks
+### 3. Checks
 
 Add a check for every stated value the geometry should realise: `bbox` for an envelope, `distance` for a pitch or spacing, `angle`, `diameter` for a bore or a `Ø` callout, `count` for a stated number of instances or of threaded holes, `mass` for a stated mass, and `interference` across the assembly. Where a source states the numbers a value is worked out from (a pitch diameter from a module and a tooth count), the check compares with [`expect`](references/project-format.md#worked-values-expect). Where a source states a MIN and a MAX, or one of them, the check compares with that [stated range](references/project-format.md#stated-ranges-min-and-max) as printed.
 
@@ -115,15 +82,15 @@ View each part's drawing in `build/drawings/` as its checks turn green. It shows
 A check that is red is information. Turn it green by changing the model. The evidence changes only to correct a transcription.
 
 - **A tolerance is what the evidence allows**: an STL's facet sag, a value printed "approximately" or with a ±. Set each `tol` from its evidence and name that evidence in the check's `interpretation`.
-- **A check that passes only past that marks a disagreement.** Between the model and a source, revisit the choice behind it: another released variant may match. Between two sources (a stated mass against a released body's volume), record the conflict, check the source you build from, and keep the other statement as `context` naming the conflict.
+- **A check that passes only past that marks a disagreement.** Between the model and a source, revisit the modelling choice behind it. Between two sources (a stated mass against a released body's volume), record the conflict, check the source you build from, and keep the other statement as `context` naming the conflict.
 - **A stated mass waits** where its check would weigh a waiting part, or read a density or a count no source states.
 - **A range with no nominal leaves the value open**, so the part that needs it waits.
 
-Done when every check is green and the only findings left concern what waits and the motion values stage 8 reads.
+Done when every check is green and the only findings left concern what waits and the motion values stage 4 reads.
 
-### 8. Motion, tracer loop first
+### 4. Motion, tracer loop first
 
-A static object has no joints and goes to stage 9. Otherwise declare joints and loops per [modeling.md](references/modeling.md#joints-and-loops), and poses, ranges and sweeps per [project-format.md](references/project-format.md#poses), among built instances alone.
+A static object has no joints and goes to stage 5. Otherwise declare joints and loops per [modeling.md](references/modeling.md#joints-and-loops), and poses, ranges and sweeps per [project-format.md](references/project-format.md#poses), among built instances alone.
 
 Take a tracer loop first: one closed loop with a value stated at a joint angle (a four-bar's output at a stated input), its joints, and a check posed at that angle, until MuJoCo loads `build/model.mjcf` and the check is green. Without such a value, take a loop whose joint has a stated range and its `range` check. A mechanism with no ring (a gearbox, a lead screw) takes its first coupling the same way.
 
@@ -139,11 +106,11 @@ Where a stated pose or range end leaves a loop open or pushes a joint out of ran
 
 Done when every stated range that does not wait has its `range` check, the report says **Kinematic** where a joint is declared, and the only findings left concern what waits.
 
-### 9. Propose what waits
+### 5. Propose what waits
 
-To carry on a known-first project, answer the foundational questions first, as stage 1 says, and remove `known_first`.
+To carry on a known-first project, remove `known_first`: project.yaml already holds its answers.
 
-**A project holding `known_first: true` stops here.** It is done when the status is VERIFIED or VERIFIED PENDING REVIEW, and goes to stage 10.
+**A project holding `known_first: true` stops here.** It is done when the status is VERIFIED or VERIFIED PENDING REVIEW, and goes to stage 6.
 
 The complete model carries on, taking each waiting part and value through the stages above, as [Proposing](#proposing) says:
 
@@ -154,14 +121,18 @@ The complete model carries on, taking each waiting part and value through the st
 
 The complete model is done when every part is built and placed, and the status is VERIFIED or VERIFIED PENDING REVIEW.
 
-### 10. Hand over
+### 6. Hand over
 
-Report from `build/report.md` of a full run, and show the user `build/isometric.png` and where the part drawings are: an engineer looks at the object before its tables. Give the status in the report's words. Then: the headline counts, the open conflicts, the gaps grouped by `ask` (the `authors` group is a ready list of questions for the corresponding author), each answer you gave in the user's place, and the figure readings awaiting confirmation. The user, or a reviewer they name, checks each crop and writes their own name in `confirmed_by`: a reading is confirmed by a person who looked.
+Report from `build/report.md` of a full run, and show the user `build/isometric.png` and where the part drawings are: an engineer looks at the object before its tables. Give the status in the report's words. Then: the headline counts, the open conflicts, the gaps grouped by `ask` (the `authors` group is a ready list of questions for the corresponding author), each answer given in the user's place, and the figure readings still awaiting confirmation, each crop beside its reading. A reading is confirmed by a person who looked: on the user's word in the conversation, write their name in `confirmed_by`.
 
-- **Known first** adds what waits, from the report's Waiting section and grouped by part. The project and the STEP files in `build/` are the user's to build on, or this skill proposes what waits from stage 9.
+- **Known first** adds what waits, from the report's Waiting section and grouped by part. The project and the STEP files in `build/` are the user's to build on, or this skill proposes what waits from stage 5.
 - **The complete model** adds the params resting on proposed values, each feature built other than the sources show it, with what it replaces, and each instance the report says floats, with what would hold it. Call the project exact only where the report prints **Exact**.
 
-Then offer the next step. Once the user accepts the design, the [ask-machinist](../ask-machinist/SKILL.md) skill reviews it as the person who has to make it, and writes its fabrication and assembly plan. Where the request already asks for that plan, carry on with it once the status is VERIFIED or VERIFIED PENDING REVIEW.
+End on the next step. Once the user accepts the design, the [ask-machinist](../ask-machinist/SKILL.md) skill reviews it as the person who has to make it, and writes its fabrication and assembly plan:
+
+> Clear the context, then run: `Use the ask-machinist skill on <dir>`
+
+Where the request already asks for that plan, or no one answers, carry on with it in this context once the status is VERIFIED or VERIFIED PENDING REVIEW.
 
 ## Proposing
 
