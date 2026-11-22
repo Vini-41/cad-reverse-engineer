@@ -111,7 +111,7 @@ VERIFIED means every number is accounted for and the geometry matches every chec
 
 <table>
 <tr>
-<td width="230"><a href="examples/centrifuge"><img src="docs/images/centrifuge.webp" alt="A round printed centrifuge body with an amber rotor holding two PCR strips"></a></td>
+<td width="230"><a href="examples/centrifuge"><img src="docs/images/centrifuge.webp" alt="A round printed centrifuge body, its lid off, with an amber six-tube rotor on the fan's hub"></a></td>
 <td><b><a href="examples/centrifuge">Benchtop centrifuge</a></b><br><sub>Poór, <a href="https://doi.org/10.1016/j.ohx.2022.e00328"><i>HardwareX</i> 2022</a></sub><br><br>Printed parts with their switch and fan cut-outs, rebuilt from the authors' STEP files, with a plan to make it. 95 of its 133 parameters rest on sources, and the other 38 on proposed values, each traced to the question that would settle it. It runs in about 25 seconds.</td>
 </tr>
 <tr>

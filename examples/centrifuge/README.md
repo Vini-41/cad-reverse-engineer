@@ -26,4 +26,4 @@ The run earns no warnings and ended at VERIFIED PENDING REVIEW. A named reviewer
 
 The paper and the twelve STEP files are committed, so a fresh clone needs no download. The STL the authors publish beside each STEP file holds the same body and is not registered.
 
-The paper is CC BY 4.0. Mendeley Data lists the design files as CC BY 4.0, and the paper's own table lists them as CC BY-SA 4.0. The crops are reproduced from Figs. 3, 8 and 10 of the article, credit Viktor Soma Poór 2022.
+The paper is CC BY 4.0, and so are the design files, as their Mendeley Data record states. The crops are reproduced from Figs. 3, 8 and 10 of the article under CC BY 4.0, credit Viktor Soma Poór 2022.
