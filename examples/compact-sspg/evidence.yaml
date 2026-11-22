@@ -101,6 +101,7 @@ evidence:
     image: figures/crops/fig4a-label.png
     image_sha256: 5501e2d6bafdeccdf272768fe26c19eac274fce01886139baf2746ad441b01f3
     reading: "(a) SSPG (MN8014, 7.2:1)"
+    confirmed_by: Vini Rezanejad
     values: {ratio: 7.2}
     scope: context
     reason: "restates T1-sspg"
@@ -112,6 +113,7 @@ evidence:
     image: figures/crops/fig7a-title.png
     image_sha256: bdf2ba376f81b8beb027e02e92abf224e3f3a84a7e5c992791b0ab034323d28a
     reading: "(a) SSPG MN8014 (7.2:1)"
+    confirmed_by: Vini Rezanejad
     values: {ratio: 7.2}
     scope: context
     reason: "restates T1-sspg"
@@ -123,6 +125,7 @@ evidence:
     image: figures/crops/fig9-legend.png
     image_sha256: 6747dbfcf87a1e48b2a0f5d593ec20079a2a2c46b5ad654e800f04f71f64a628
     reading: "SSPG (7.2:1)"
+    confirmed_by: Vini Rezanejad
     values: {ratio: 7.2}
     scope: context
     reason: "restates T1-sspg"
