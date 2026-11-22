@@ -8,7 +8,7 @@ The 7×7 mm QFN-56 package of the RP2040 microcontroller, from Raspberry Pi Ltd,
 scripts/cadrev check examples/rp2040-qfn56
 ```
 
-Expected status: `VERIFIED: 0 errors, 0 warnings, 139/139 checks pass`
+Expected status: `VERIFIED: 0 errors, 0 warnings, 138/138 checks pass`
 
 It takes about 5 seconds. Then open `build/assembly.step` in a CAD program and read `build/report.md`.
 
