@@ -48,24 +48,27 @@ evaluating checks.yaml
 wrote build/parts/body.step
 ...
 wrote build/assembly.step
-wrote build/drawings/: 6 part drawings
+wrote build/drawings/: 10 part drawings
 wrote build/isometric.png
+wrote build/steps/: 8 step views
+slowest check: body-shape 4.2 s
+wrote build/plan.md
 
-VERIFIED: 0 errors, 1 warning, 15/15 checks pass. Report: build/report.md
+VERIFIED PENDING REVIEW: 0 errors, 0 warnings, 27/27 checks pass. Report: build/report.md
 ```
 
-The first run downloads build123d, OCC and MuJoCo (about a minute); the check itself takes about 15 seconds. Open `examples/centrifuge/build/assembly.step` in your CAD program, then read `build/report.md` beside it. It opens:
+The first run downloads build123d, OCC and MuJoCo (about a minute); the check itself takes about 25 seconds. Open `examples/centrifuge/build/assembly.step` in your CAD program, then read `build/report.md` beside it. It opens:
 
-> **VERIFIED**: 0 errors, 1 warning. 15/15 geometry checks pass.\
-> Of 93 parameters, 87 rest on sources, 0 on measured values and 6 on proposed values.
+> **VERIFIED PENDING REVIEW**: 0 errors, 0 warnings. 27/27 geometry checks pass.\
+> Of 133 parameters, 95 rest on sources, 0 on measured values and 38 on proposed values.
 
-The warning names what nothing holds: the fan's motor is not built, so its hub and the rotor on it stand 2 mm clear of the plate. After its sources, the report lists what they leave open:
+It stays PENDING REVIEW until a named person confirms its seven figure readings against their crops. After its sources, the report lists what they leave open, eleven questions in all, among them:
 
 | gap | question | close by | params |
 |---|---|---|---|
-| G-fan | What are the 80 mm fan's thickness, blade-bore diameter and screw-hole layout (AKYGA AW-8A-BK datasheet)? | datasheet | fan_t, fan_bore_d, fan_rot |
-| G-seat | Is the fan's hub flush with its frame's top face, so that the rotor's hub ledge sits level with the deck underside? | measure | fan_top_y, rotor_seat_y |
-| G-pla | What does the PLA used for the rotor weigh per cm³ as printed? | measure | pla_density |
+| G-rotor-place | Where does the rotor sit along the axis: how far below the fan's mounting face is the top of the fan's hub, which the rotor's seat face rests on? | measure | hub_recess |
+| G-fit | What gap does a printed opening need around a bought part pushed into it (the DC socket in its 8.5 mm hole, the lid switch along its 12 mm pocket), for the part to go in and stay? | test | fit_gap, coupon_step, coupon_margin |
+| G-pla-density | What is the density of the PLA filament (Filanora Filacorn PLA BIO HI)? | datasheet | pla_density |
 
 Below that come the parts, each with its drawing above the checks that read it, and then every parameter and quote as a table row you can audit against the paper.
 
@@ -109,7 +112,7 @@ VERIFIED means every number is accounted for and the geometry matches every chec
 <table>
 <tr>
 <td width="230"><a href="examples/centrifuge"><img src="docs/images/centrifuge.webp" alt="A round printed centrifuge body with an amber rotor holding two PCR strips"></a></td>
-<td><b><a href="examples/centrifuge">Benchtop centrifuge</a></b><br><sub>Poór, <a href="https://doi.org/10.1016/j.ohx.2022.e00328"><i>HardwareX</i> 2022</a></sub><br><br>Printed parts with their switch and fan cut-outs, rebuilt from the authors' STEP files. 86 of its 92 parameters rest on sources; the other six wait on the fan's datasheet and the print density. The quickest to run: 15 seconds.</td>
+<td><b><a href="examples/centrifuge">Benchtop centrifuge</a></b><br><sub>Poór, <a href="https://doi.org/10.1016/j.ohx.2022.e00328"><i>HardwareX</i> 2022</a></sub><br><br>Printed parts with their switch and fan cut-outs, rebuilt from the authors' STEP files, with a plan to make it. 95 of its 133 parameters rest on sources, and the other 38 on proposed values, each traced to the question that would settle it. It runs in about 25 seconds.</td>
 </tr>
 <tr>
 <td><a href="examples/compact-sspg"><img src="docs/images/compact-sspg.webp" alt="A planetary gearbox with an amber sun gear and three blue planet gears"></a></td>

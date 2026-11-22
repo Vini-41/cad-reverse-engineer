@@ -1,15 +1,56 @@
-# Written by gen_ledger.py: edit that script, not this file.
+# Geometry checks. Expected values come from evidence.yaml, never from params.yaml.
 checks:
-  - {"id": "body-envelope", "kind": "bbox", "part": "body", "evidence": "fig8-body-dims", "axes": {"W": "x", "L": "z", "H": "y"}, "interpretation": "Cura's X x Y x Z read as the body's X x Z x Y"}
-  - {"id": "hub-bore", "kind": "diameter", "at": "rotor.hub_bore", "evidence": "P3-pcr325", "key": "hub_d"}
-  - {"id": "tab-pitch", "kind": "angle", "between": ["rotor.tab_e1", "rotor.axis_low", "rotor.tab1_e1"], "expect": "360 / P3-pcr325.blades", "interpretation": "one tab per blade: adjacent tabs one blade pitch apart"}
-  - {"id": "fan-w-x", "kind": "bbox", "part": "fan_frame", "evidence": "P3-fan", "axes": {"w": "x"}}
-  - {"id": "fan-w-z", "kind": "bbox", "part": "fan_frame", "evidence": "P3-fan", "axes": {"w": "z"}}
-  - {"id": "screw-d", "kind": "diameter", "at": "screw.wall", "evidence": "P4-screws", "key": "d"}
-  - {"id": "screw-l", "kind": "bbox", "part": "screw", "evidence": "P4-screws", "axes": {"L": "y"}}
-  - {"id": "screw-count", "kind": "count", "part": "screw", "evidence": "P4-screws", "key": "n"}
-  - {"id": "rotor-mass", "kind": "mass", "parts": ["rotor"], "density": "pla_density", "evidence": "P11-mass", "key": "m", "tol_rel": 0.05, "interpretation": "'the rotor' read as the modelled PCR-strip rotor, printed solid; the paper does not say which rotor weighs 16 g"}
-  - {"id": "clear", "kind": "interference"}
-  - {"id": "body-shape", "kind": "shape", "part": "body", "body": "body_step"}
-  - {"id": "plate-shape", "kind": "shape", "part": "plate", "body": "plate_step"}
-  - {"id": "rotor-shape", "kind": "shape", "part": "rotor", "body": "rotor_pcr325_step"}
+  # Each released body the target builds, compared whole with the part built in its frame.
+  - {id: body-shape, kind: shape, part: body, body: body}
+  - {id: bottom-plate-shape, kind: shape, part: bottom_plate, body: bottom_plate}
+  - {id: rotor-shape, kind: shape, part: rotor, body: rotor}
+
+  # ---- the body
+  - {id: body-envelope, kind: bbox, part: body, evidence: fig8-body-size, axes: {X: x, Y: z, Z: y},
+     interpretation: "Cura lists the body as it prints, deck down: its X and Y across the deck, its Z along the axis"}
+  - {id: body-mass, kind: mass, instances: [body_1], density: pla_density, evidence: fig8-body-print, key: m, tol_rel: 0.0042,
+     interpretation: "Cura prints its estimate to the gram: half a gram in 121 g. Sliced at 100 % infill (conflict K-body-infill), so the solid body is weighed"}
+
+  # ---- the centrifuge as a whole, lid on
+  - {id: overall-width, kind: distance, instances: [body_1], between: [body_1.wall_x_min, body_1.wall_x_max], along: x,
+     expect: "T2-dims.W * 10", interpretation: "Table 2's cell is in cm, by its header; W across the body"}
+  - {id: overall-length, kind: distance, instances: [body_1], between: [body_1.wall_z_min, body_1.wall_z_max], along: z,
+     expect: "T2-dims.L * 10", interpretation: "Table 2's cell is in cm, by its header; L across the body, square to W"}
+  - {id: overall-height, kind: distance, instances: [bottom_plate_1, lid_1], between: [bottom_plate_1.foot_bottom, lid_1.top], along: y,
+     expect: "T2-dims.H * 10", interpretation: "Table 2's cell is in cm, by its header; H from the feet to the lid's top. The lid's height is derived to close it (param lid_h)"}
+
+  # ---- the rotor
+  - {id: one-rotor, kind: count, part: rotor, evidence: BR-rotor, key: rotors}
+  - {id: tube-holes, kind: angle, between: [rotor.tube_1, rotor.axis, rotor.tube_2], along: y,
+     expect: "360 / P1-rotors.tubes", interpretation: "six tubes, evenly about the axis: neighbouring holes a sixth of a turn apart"}
+  - {id: rotor-bore, kind: diameter, at: rotor.bore_wall, evidence: D-rotor, key: hub_d,
+     interpretation: "the rotor's bore is the hub's diameter: it presses on"}
+
+  # ---- the fan
+  - {id: fan-hub, kind: diameter, at: fan.hub_wall, evidence: D-rotor, key: hub_d}
+  - {id: fan-size-a, kind: distance, between: [fan.side_a, fan.side_b], evidence: B-fan, key: size,
+     interpretation: "the frame's side, between two opposite faces"}
+  - {id: fan-size-b, kind: distance, between: [fan.side_c, fan.side_d], evidence: B-fan, key: size,
+     interpretation: "the frame's side, between the other two faces"}
+  - {id: fan-blades, kind: angle, between: [fan.blade_1, fan.axis, fan.blade_2], along: y,
+     expect: "360 / B-fan.blades", interpretation: "7 blades, evenly about the hub: neighbouring tips a seventh of a turn apart"}
+
+  # ---- the lid
+  - {id: lid-diameter, kind: distance, between: [lid.rim_a, lid.rim_b], evidence: P4-lid, key: d,
+     interpretation: "the diameter of the lid's rim, outside; its side tapers, so no cylinder holds it"}
+
+  # ---- the switches and the socket
+  - {id: lid-switch-size, kind: bbox, part: lid_switch, evidence: B-lid-switch, axes: {a: x, b: y},
+     interpretation: "6 across the pocket's 6 mm, 9 standing in it (conflict K-lid-switch-axes)"}
+  - {id: main-switch-height, kind: distance, between: [main_switch.bottom, main_switch.top], along: y, evidence: B-main-switch, key: L}
+  - {id: main-switch-width, kind: distance, between: [main_switch.side_b, main_switch.side_a], along: z, evidence: B-main-switch, key: W}
+  - {id: dc-socket-bore, kind: diameter, at: dc_socket.bore_wall, evidence: B-dc-socket, key: d_barrel}
+  - {id: dc-socket-pin, kind: diameter, at: dc_socket.pin_wall, evidence: B-dc-socket, key: d_pin}
+
+  # ---- the bottom plate's screws
+  - {id: plate-screws, kind: count, thread: plate_screw, evidence: B-screws, key: n}
+  - {id: plate-screw-length, kind: distance, between: [plate_screw.head_face, plate_screw.tip], along: y,
+     min: B-screws.len_min, max: B-screws.len_max}
+
+  # ---- nothing overlaps
+  - {id: clear, kind: interference}

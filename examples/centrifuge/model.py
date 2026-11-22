@@ -1,420 +1,469 @@
-"""Parametric model of the Poór 2022 mini benchtop centrifuge (static, lid off).
+"""Parametric model. Reads every dimension from p (params.yaml); holds no dimension literals.
 
-Every part is built Y-up. The body's frame is the released body's: top face at y = 0,
-axis on Y. The plate's top face is its y = 0; the rotor's skirt bottom is its y = 0.
-Reads every dimension from p (params.yaml); holds no dimension literals.
+The frame is the released bodies': +y up along the axis, the deck's top face at y = 0.
+An angle about the axis is in the x-z plane, from +x towards +z.
 """
 
 import math
 
 from build123d import *  # noqa: F403
 
-C = (Align.CENTER, Align.CENTER, Align.MIN)
-
 
 # ---------------------------------------------------------------- helpers
-def cyl_y(r, y0, y1, x=0, z=0):
-    """Solid cylinder on an axis parallel to Y, from y0 up to y1."""
-    return Pos(x, y0, z) * Rot(-90, 0, 0) * Cylinder(r, y1 - y0, align=C)
 
 
-def plane_y(y):
-    """Plane at height y, normal +Y; local (u, v) lands on (x, z) = (u, -v)."""
-    return Plane(origin=(0, y, 0), x_dir=(1, 0, 0), z_dir=(0, 1, 0))
+def polar(radius, angle, y=0):
+    """The point at a distance from the y axis, at an angle from +x towards +z."""
+    a = math.radians(angle)
+    return (radius * math.cos(a), y, radius * math.sin(a))
 
 
-def prism_y(pts_xz, y0, y1):
-    """Prism of a polygon given in (x, z), from y0 up to y1."""
-    return extrude(plane_y(y0) * Polygon(*[(x, -z) for x, z in pts_xz], align=None), amount=y1 - y0, dir=(0, 1, 0))
+def ycyl(radius, y_low, y_high):
+    """A cylinder about the y axis between two heights."""
+    return Pos(0, (y_low + y_high) / 2, 0) * Rot(90, 0, 0) * Cylinder(radius, y_high - y_low)
 
 
-def prism_x(pts_yz, x0, x1):
-    """Prism of a polygon given in (y, z), from x0 to x1 along X."""
-    pl = Plane(origin=(x0, 0, 0), x_dir=(0, 1, 0), z_dir=(1, 0, 0))
-    return extrude(pl * Polygon(*pts_yz, align=None), amount=x1 - x0, dir=(1, 0, 0))
+def ring(count, first_angle):
+    """The angles of a pattern turned in equal steps about the axis."""
+    return [first_angle + i * 360 / count for i in range(int(count))]
 
 
-def prism_z(pts_xy, z0, z1):
-    """Prism of a polygon given in (x, y), from z0 to z1 along Z."""
-    return extrude(Plane.XY.offset(z0) * Polygon(*pts_xy, align=None), amount=z1 - z0, dir=(0, 0, 1))
+def level(y):
+    """The x-z plane at a height: a sketch on it has x along +x and y along +z, and extrudes down."""
+    return Plane.XZ.offset(-y)
 
 
-def revolve_y(pts_ry):
-    """Solid of revolution about Y of a polygon given in (r, y)."""
-    return revolve(Plane.XY * Polygon(*pts_ry, align=None), axis=Axis.Y)
+def prism(points, y_low, y_high):
+    """A polygon of (x, z) corners, extruded between two heights."""
+    turn = sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(points, points[1:] + points[:1]))
+    if turn < 0:
+        points = points[::-1]
+    return extrude(level(y_high) * Polygon(*points, align=None), amount=y_high - y_low)
 
 
-def polar(r, deg):
-    """(x, z) of radius r at angle deg, measured from +X toward +Z."""
-    return (r * math.cos(math.radians(deg)), r * math.sin(math.radians(deg)))
+def turned(*edges):
+    """A profile of (radius, y) edges, turned a full turn about the y axis."""
+    profile = edges[0]
+    for edge in edges[1:]:
+        profile += edge
+    return revolve(make_face(profile), Axis.Y)
 
 
-def unit(ax, az):
-    n = math.hypot(ax, az)
-    return (ax / n, az / n)
+def arc(centre, radius, toward_a, toward_b):
+    """The arc about a centre from the direction toward_a to toward_b, the short way round."""
+    def at(direction):
+        n = math.hypot(*direction)
+        return (centre[0] + radius * direction[0] / n, centre[1] + radius * direction[1] / n)
+
+    na, nb = math.hypot(*toward_a), math.hypot(*toward_b)
+    mid = (toward_a[0] / na + toward_b[0] / nb, toward_a[1] / na + toward_b[1] / nb)
+    return at(toward_a), ThreePointArc(at(toward_a), at(mid), at(toward_b)), at(toward_b)
 
 
-def at(xz, y):
-    return (xz[0], y, xz[1])
+def along(direction, distance, across=0, y=0):
+    """The point a distance from the axis along a direction, and an offset across it (towards direction + 90)."""
+    ex, _, ez = polar(1, direction)
+    ax, _, az = polar(1, direction + 90)
+    return (ex * distance + ax * across, y, ez * distance + az * across)
 
 
-# ---------------------------------------------------------------- body
-def build_body(p, d):
-    R = p.body_d / 2
-    H = p.body_h
-    Ri = p.body_bore_d / 2
-    T = p.deck_t
-    wall = R - Ri
+def facing(direction, point):
+    """A frame at a point with its x axis level, pointing out along a direction about the y axis."""
+    return Location(point, (0, -direction, 0))
 
-    body = cyl_y(R, -H, 0) - cyl_y(Ri, -H - 1, -T) - cyl_y(p.hub_hole_d / 2, -H, 1)
 
-    # lid groove: straight inner and outer walls, rounded floor
-    gi, go = p.groove_di / 2, p.groove_do / 2
-    f_in = p.groove_depth - p.groove_in_wall
-    f_out = p.groove_depth - p.groove_out_wall
-    with BuildSketch(Plane.XY) as groove_sk:
-        with BuildLine():
-            Line((gi, 1), (gi, -p.groove_in_wall))
-            CenterArc((gi + f_in, -p.groove_in_wall), f_in, 180, 90)
-            Line((gi + f_in, -p.groove_depth), (go - f_out, -p.groove_depth))
-            CenterArc((go - f_out, -p.groove_out_wall), f_out, 270, 90)
-            Line((go, -p.groove_out_wall), (go, 1))
-            Line((go, 1), (gi, 1))
-        make_face()
-    body -= revolve(groove_sk.sketch, axis=Axis.Y)
+# ---------------------------------------------------------------- the printed parts
 
-    # spin-direction arrows: recessed band plus head, two point-symmetric copies
-    a_in, a_out = p.arrow_d_in / 2, p.arrow_d_out / 2
-    a_mid = (a_in + a_out) / 2
-    band = cyl_y(a_out, -p.arrow_depth, 1) - cyl_y(a_in, -p.arrow_depth - 1, 2)
-    band &= prism_y([(-a_out - 1, 0), (-p.arrow_base_x, 0), (-p.arrow_base_x, a_out + 1), (-a_out - 1, a_out + 1)],
-                    -p.arrow_depth, 1)
-    head = prism_y([(-p.arrow_base_x, p.arrow_z0), (-p.arrow_base_x, p.arrow_z1), (p.arrow_tip_x, a_mid)],
-                   -p.arrow_depth, 1)
-    arrow = band + head
+
+def build_body(p, datums, threads):
+    rim_y = -p.b_h
+    deck_y = -p.b_deck_t
+    body = ycyl(p.b_r_out, rim_y, 0) - ycyl(p.b_r_in, rim_y, deck_y) - ycyl(p.b_centre_r, deck_y, 0)
+
+    for i, a in enumerate(ring(p.b_fan_hole_n, p.b_fan_hole_a), 1):
+        x, _, z = polar(p.b_fan_hole_R, a)
+        body -= Pos(x, 0, z) * ycyl(p.b_fan_hole_r, deck_y, 0)
+        datums[f"body.fan_hole_{i}"] = (x, deck_y / 2, z)
+
+    # the lid groove: its profile, carried above the deck so the cut is clean
+    over = p.g_in_round
+    in_c = (p.g_in_c, -p.g_in_drop)
+    out_c = (p.g_out_c, -p.g_out_drop)
+    in_a, in_arc, in_b = arc(in_c, p.g_in_round, (-1, 0), (0, -1))
+    out_a, out_arc, out_b = arc(out_c, p.g_out_round, (0, -1), (1, 0))
+    body -= turned(
+        Polyline((p.g_out_r, over), (p.g_in_r, over), in_a),
+        in_arc,
+        Line(in_b, out_a),
+        out_arc,
+        Polyline(out_b, (p.g_out_r, over)),
+    )
+
+    # the spin arrows: arrow 1 from the +x axis round towards -z, arrow 2 the same turned half a turn
+    reach = 2 * p.a_r_out
+    band = ycyl(p.a_r_out, -p.a_depth, p.a_depth) - ycyl(p.a_r_in, -p.a_depth, p.a_depth)
+    shaft = band & (Pos(p.a_base_x + reach / 2, 0, -reach / 2) * Box(reach, reach, reach))
+    head = prism(
+        [(p.a_base_x, -p.a_head_z_out), (p.a_base_x, -p.a_head_z_in), (-p.a_base_x, -p.a_tip_z)],
+        -p.a_depth,
+        p.a_depth,
+    )
+    arrow = shaft + head
     body -= arrow
     body -= Rot(0, 180, 0) * arrow
 
-    # fan screw holes through the deck, on the axes
-    fr = p.fan_hole_pcd / 2
-    for x, z in [(fr, 0), (-fr, 0), (0, fr), (0, -fr)]:
-        body -= cyl_y(p.fan_hole_d / 2, -T - 1, 1, x, z)
+    # the screw posts: a round post joined to the wall by two flat sides, its top cut by a cone
+    slope = math.tan(math.radians(p.post_cone))
+    flat_r = (p.post_flat_y - p.post_apex_y) * slope
+    below = turned(
+        Polyline(
+            (0, rim_y),
+            (p.b_r_out, rim_y),
+            (p.b_r_out, p.post_apex_y + p.b_r_out / slope),
+            (flat_r, p.post_flat_y),
+            (0, p.post_flat_y),
+            (0, rim_y),
+        )
+    )
+    wall_mid = (p.b_r_in + p.b_r_out) / 2
+    spread = 2 * math.degrees(math.asin(p.post_r / (2 * p.post_R)))
+    for i, a in enumerate(ring(p.post_n, p.post_a), 1):
+        cx, _, cz = polar(p.post_R, a)
+        sides = []
+        for sign in (1, -1):
+            ax, _, az = polar(p.post_R, a + sign * spread)
+            tx, tz = cz - az, ax - cx  # square to the post's radius at this point
+            if tx * ax + tz * az < 0:
+                tx, tz = -tx, -tz
+            n = math.hypot(tx, tz)
+            tx, tz = tx / n, tz / n
+            b = ax * tx + az * tz
+            t = -b + math.sqrt(b * b - (ax * ax + az * az - wall_mid * wall_mid))
+            sides.append(((ax, az), (ax + t * tx, az + t * tz)))
+        (a1, w1), (a2, w2) = sides
+        post = Pos(cx, 0, cz) * ycyl(p.post_r, rim_y, deck_y) + prism([a1, w1, w2, a2], rim_y, deck_y)
+        body += post & below
+        body -= Pos(cx, 0, cz) * ycyl(p.post_hole_r, rim_y, p.post_hole_y)
+        datums[f"body.post_hole_{i}"] = (cx, (rim_y + p.post_hole_y) / 2, cz)
 
-    # screw bosses: a cylinder joined to the wall by two webs, each tangent to the boss and
-    # aimed at the opposite boss's axis; topped by a cone at boss_cone_angle and a flat
-    n = int(p.screw_n)
-    Rb, rb = p.boss_pcd / 2, p.boss_d / 2
-    beta = math.degrees(math.asin(rb / (2 * Rb)))
-    cut_r1 = Ri - (p.boss_flat - p.boss_cone_drop) * math.tan(math.radians(p.boss_cone_angle))
-    top_cut = revolve_y([(0, -p.boss_flat), (cut_r1, -p.boss_flat), (Ri, -p.boss_cone_drop), (Ri, -T), (0, -T)])
-    rho = (R + Ri) / 2
-    yb = -(H + p.boss_flat) / 2
-    for k in range(n):
-        th = p.boss_angle + k * 360 / n
-        bx, bz = polar(Rb, th)
-        ux, uz = polar(1, th)
-        ear = cyl_y(rb, -H, -T, bx, bz)
-        web = []
-        for sgn in (1, -1):
-            wx, wz = polar(1, th + sgn * beta)
-            reach = 2 * Rb * math.cos(math.radians(beta))
-            tx, tz = -bx + reach * wx, -bz + reach * wz           # tangent point, seen from the opposite boss
-            b = tx * wx + tz * wz
-            t = -b + math.sqrt(b * b - (tx * tx + tz * tz) + rho * rho)
-            web.append(((tx, tz), (tx + t * wx, tz + t * wz)))
-        (t1, w1), (t2, w2) = web
-        ear += prism_y([t1, w1, w2, t2], -H, -T)
-        ear -= top_cut
-        ear -= cyl_y(p.boss_hole_d / 2, -H - 1, -H + p.boss_hole_depth, bx, bz)
-        body += ear
-        if k == 0:
-            d["body.boss1"] = (bx, yb, bz)
-            d["body.boss_wall"] = (bx - rb * ux, yb, bz - rb * uz)
-            hr = p.boss_hole_d / 2
-            d["body.boss_hole_wall"] = (bx + hr * ux, -H + p.boss_hole_depth / 2, bz + hr * uz)
-            d["body.boss_hole_top"] = (bx, -H + p.boss_hole_depth, bz)
-            d["body.cone_wall"] = (Ri * ux, -p.boss_cone_drop, Ri * uz)
-            d["body.cone_up"] = (Ri * ux, -(p.boss_cone_drop + T) / 2, Ri * uz)
-            d["body.cone_b"] = ((Ri - wall) * ux,
-                                -p.boss_cone_drop - wall / math.tan(math.radians(p.boss_cone_angle)), (Ri - wall) * uz)
-            d["body.boss_flat"] = ((Rb - rb) * ux, -p.boss_flat, (Rb - rb) * uz)
-        if k == n // 2:
-            d["body.boss3"] = (bx, yb, bz)
+    # the lid switch pocket, up through the deck into the groove
+    pocket_at = along(p.pk_dir, p.pk_near + p.pk_len / 2, p.pk_side + p.pk_w / 2, deck_y / 2)
+    body -= facing(p.pk_dir, pocket_at) * Box(p.pk_len, p.b_deck_t, p.pk_w)
 
-    # main (rocker) switch cut-out through the wall: one side face through P1 (outer) and P2 (inner)
-    p1 = (-p.rocker_p1x, p.rocker_p1z)
-    p2 = (-p.rocker_p2x, p.rocker_p2z)
-    dx, dz = unit(p2[0] - p1[0], p2[1] - p1[1])
-    nx, nz = -dz, dx
-    W = p.rocker_w
-    a = (p1[0] - wall * dx, p1[1] - wall * dz)
-    b = (p1[0] + 2 * wall * dx, p1[1] + 2 * wall * dz)
-    body -= prism_y([a, b, (b[0] + W * nx, b[1] + W * nz), (a[0] + W * nx, a[1] + W * nz)],
-                    -p.rocker_top - p.rocker_h, -p.rocker_top)
-    yr = -p.rocker_top - p.rocker_h / 2
-    d["body.rocker_p1"] = at(p1, yr)
-    d["body.rocker_p2"] = at(p2, yr)
-    d["body.rocker_p2w"] = at((p2[0] + W * nx, p2[1] + W * nz), yr)
-    cx, cz = (p1[0] + p2[0]) / 2 + W / 2 * nx, (p1[1] + p2[1]) / 2 + W / 2 * nz
-    d["body.rocker_top"] = (cx, -p.rocker_top, cz)
-    d["body.rocker_bottom"] = (cx, -p.rocker_top - p.rocker_h, cz)
-    d["body.axis_mid"] = (0, yr, 0)
+    # the main switch cut-out and the DC socket hole, through the wall
+    through = 2 * (p.b_r_out - p.b_r_in)
+    cut_at = along(p.ms_dir, wall_mid, p.ms_side + p.ms_cut_w / 2, p.ms_top_y - p.ms_cut_h / 2)
+    body -= facing(p.ms_dir, cut_at) * Box(through, p.ms_cut_h, p.ms_cut_w)
+    hole_at = along(p.dc_dir, wall_mid, p.dc_off, p.dc_y)
+    body -= facing(p.dc_dir, hole_at) * Rot(0, 90, 0) * Cylinder(p.dc_hole_r, through)
 
-    # DC socket hole: axis through Q2 (inner) and Q1 (outer)
-    q1 = (-p.dc_q1x, -p.dc_y, -p.dc_q1z)
-    q2 = (-p.dc_q2x, -p.dc_y, -p.dc_q2z)
-    ax, az = unit(q1[0] - q2[0], q1[2] - q2[2])
-    start = (q2[0] - wall * ax, -p.dc_y, q2[2] - wall * az)
-    span = math.hypot(q1[0] - q2[0], q1[2] - q2[2]) + 2 * wall
-    body -= Location(Plane(origin=start, z_dir=(ax, 0, az))) * Cylinder(p.dc_d / 2, span, align=C)
-    d["body.dc_q1"] = q1
-    d["body.dc_q2"] = q2
-    d["body.dc_wall"] = (q1[0], -p.dc_y + p.dc_d / 2, q1[2])
-
-    # lid-switch slot: rectangle C1-C2 (short side) by C1-C3 (long side), deck underside up into the groove
-    c1 = (p.slot_c1x, p.slot_c1z)
-    c2 = (p.slot_c2x, p.slot_c2z)
-    sx, sz = unit(c2[0] - c1[0], c2[1] - c1[1])
-    ex, ez = sz, -sx
-    L = p.slot_len
-    c3 = (c1[0] + L * ex, c1[1] + L * ez)
-    c4 = (c2[0] + L * ex, c2[1] + L * ez)
-    body -= prism_y([c1, c2, c4, c3], -T - 1, 1)
-    d["body.slot_c1"] = at(c1, -T)
-    d["body.slot_c2"] = at(c2, -T)
-    d["body.slot_c3"] = at(c3, -T)
-
-    # datums
-    d["body.top"] = (-(R + go) / 2, 0, 0)
-    d["body.bottom"] = (-(R + Ri) / 2, -H, 0)
-    d["body.deck_under"] = (-(Ri + p.hub_hole_d / 2) / 2, -T, 0)
-    d["body.bore_wall"] = (-Ri, -(H + T) / 2, 0)
-    d["body.hole_wall"] = (-p.hub_hole_d / 2, -T / 2, 0)
-    d["body.axis_top"] = (0, -T / 2, 0)
-    d["body.groove_in"] = (-gi, -p.groove_in_wall / 2, 0)
-    d["body.groove_out"] = (-go, -p.groove_out_wall / 2, 0)
-    d["body.groove_in_edge"] = (-gi, -p.groove_in_wall, 0)
-    d["body.groove_out_edge"] = (-go, -p.groove_out_wall, 0)
-    d["body.groove_floor"] = (-(gi + f_in + go - f_out) / 2, -p.groove_depth, 0)
-    d["body.arrow_floor"] = (-a_mid / 2, -p.arrow_depth, math.sqrt(a_mid ** 2 - (a_mid / 2) ** 2))
-    d["body.arrow_in"] = (-a_in / 2, -p.arrow_depth / 2, math.sqrt(a_in ** 2 - (a_in / 2) ** 2))
-    d["body.arrow_out"] = (-a_out / 2, -p.arrow_depth / 2, math.sqrt(a_out ** 2 - (a_out / 2) ** 2))
-    d["body.arrow_tip"] = (p.arrow_tip_x, -p.arrow_depth / 2, a_mid)
-    d["body.arrow_base"] = (-p.arrow_base_x, -p.arrow_depth / 2,
-                            (p.arrow_z0 + math.sqrt(a_in ** 2 - p.arrow_base_x ** 2)) / 2)
-    d["body.arrow_z0"] = (-p.arrow_base_x, -p.arrow_depth / 2, p.arrow_z0)
-    d["body.arrow_z1"] = (-p.arrow_base_x, -p.arrow_depth / 2, p.arrow_z1)
-    d["body.fan_hole_p"] = (fr, -T / 2, 0)
-    d["body.fan_hole_n"] = (-fr, -T / 2, 0)
-    d["body.fan_hole_wall"] = (-fr + p.fan_hole_d / 2, -T / 2, 0)
-    d["body.axis_low"] = (0, yb, 0)
-    d["body.wall0"] = (Ri, yb, 0)
+    for name, a in (("x_max", 0), ("z_max", 90), ("x_min", 180), ("z_min", 270)):
+        datums[f"body.wall_{name}"] = polar(p.b_r_out, a, rim_y / 2)
     return body
 
 
-# ---------------------------------------------------------------- bottom plate
-def build_plate(p, d):
-    Rp = p.plate_d / 2
-    t = p.plate_t
-    n = int(p.screw_n)
-    plate = cyl_y(Rp, -t, 0)
-    Rf = p.foot_pcd / 2
-    Rb = p.boss_pcd / 2
-    for k in range(n):
-        plate += cyl_y(p.foot_d / 2, -t - p.foot_h, -t, *polar(Rf, p.foot_angle + k * 360 / n))
-        plate -= cyl_y(p.plate_hole_d / 2, -t - 1, 1, *polar(Rb, p.boss_angle + k * 360 / n))
-    f = polar(Rf, p.foot_angle)
-    g = polar(Rf, p.foot_angle + 180)
-    h = polar(Rb, p.boss_angle)
-    hu = polar(p.plate_hole_d / 2, p.boss_angle)
-    yf = -t - p.foot_h / 2
-    d["plate.rim"] = (-Rp, -t / 2, 0)
-    d["plate.top"] = (-(Rp + Rf) / 2, 0, 0)
-    d["plate.bottom"] = (-(Rp + Rf) / 2, -t, 0)
-    d["plate.foot_p"] = at(f, yf)
-    d["plate.foot_n"] = at(g, yf)
-    d["plate.foot_wall"] = (f[0] + p.foot_d / 2, yf, f[1])
-    d["plate.foot_bottom"] = at(f, -t - p.foot_h)
-    d["plate.foot_end"] = at(f, -t)
-    d["plate.ref0"] = (Rf, -t, 0)
-    d["plate.centre_bottom"] = (0, -t, 0)
-    d["plate.hole_wall"] = (h[0] + hu[0], -t / 2, h[1] + hu[1])
-    d["plate.hole"] = at(h, -t / 2)
+def build_bottom_plate(p, datums, threads):
+    top = p.bp_top_y
+    under = top - p.bp_t
+    plate = ycyl(p.bp_r, under, top)
+    for i, a in enumerate(ring(p.bp_hole_n, p.bp_hole_a), 1):
+        x, _, z = polar(p.bp_hole_R, a)
+        plate -= Pos(x, 0, z) * ycyl(p.bp_hole_r, under, top)
+        datums[f"bottom_plate.hole_{i}"] = (x, (under + top) / 2, z)
+    for a in ring(p.bp_hole_n, p.bp_foot_a):
+        x, _, z = polar(p.bp_foot_R, a)
+        plate += Pos(x, 0, z) * ycyl(p.bp_foot_r, under - p.bp_foot_h, under)
+    x, _, z = polar(p.bp_foot_R, p.bp_foot_a)
+    datums["bottom_plate.foot_bottom"] = (x, under - p.bp_foot_h, z)
     return plate
 
 
-# ---------------------------------------------------------------- rotor (PCR strip, 32.5 mm hub)
-def build_rotor(p, d):
-    ri = p.hub_d / 2
-    w = p.rotor_wall
-    ro = ri + w
-    s = p.rotor_slope
-    ts = math.tan(math.radians(s))
-    st, sb = p.skirt_top_y, p.slab_bot_y
-    st_top = sb + w                        # slab top face
-    ct_r = p.cone_top_d / 2
+def build_rotor(p, datums, threads):
+    half = math.radians(p.r_bowl_half)
+    kb, sb, cb = math.tan(half), math.sin(half), math.cos(half)
+    r0 = p.r_bowl_r0
+    m = (p.r_skirt_r - r0) / p.r_cone_drop  # the outer cone widens by m per unit down
+    hyp = math.hypot(1, m)
+    out0 = r0 + p.r_bowl_wall / cb  # the bowl's outside cone at y = 0
+    cav0 = r0 - p.r_shell_wall * hyp  # the cavity cone at y = 0
 
-    # hub: skirt plus outer cone up to the slab
-    hub = revolve_y([(0, 0), (ro, 0), (ro, st), (ct_r, sb), (0, sb)])
+    y_rim = p.r_bowl_slope * cb
+    apex = (0, -r0 / kb)
+    rim_in = (r0 + y_rim * kb, y_rim)
+    rim_out = (out0 + y_rim * kb, y_rim)
 
-    # cavity: skirt bore, hub ledge, flare at the slope, cone parallel to the outside (wall w), tip at the slope
-    k = (ro - ct_r) / (sb - st)            # outer cone: r = ro - k (y - st)
-    g = math.sqrt(1 + k * k)
-    ledge_r = p.ledge_d / 2
-    cav_y = (ro - w * g + k * st - ledge_r + p.ledge_y / ts) / (1 / ts + k)
-    cav_r = ledge_r + (cav_y - p.ledge_y) / ts
-    kink_r = ro - k * (p.kink_y - st) - w * g
-    apex_y = p.kink_y + kink_r * ts
-    cavity = revolve_y([(0, -1), (ri, -1), (ri, p.ledge_y), (ledge_r, p.ledge_y), (cav_r, cav_y),
-                        (kink_r, p.kink_y), (0, apex_y)])
+    # where the outer cone and the bowl's outside would meet, and the chamfer across it
+    y_meet = -(out0 - r0) / (kb + m)
+    meet = (r0 - y_meet * m, y_meet)
+    cham_high = (meet[0] + p.r_chamfer * sb, meet[1] + p.r_chamfer * cb)
+    cham_low = (meet[0] + p.r_chamfer * m / hyp, meet[1] - p.r_chamfer / hyp)
 
-    # slab between the two holders, its ends mitred at half the bend
-    zt = p.bend_span / 2
-    zb = zt + w * math.tan(math.radians(s / 2))
-    sw = p.slab_w / 2
-    slab = prism_x([(sb, -zb), (sb, zb), (st_top, zt), (st_top, -zt)], -sw, sw)
+    foot = (p.r_skirt_r, -p.r_cone_drop)
+    seat_out = (p.r_skirt_r, p.r_seat_y)
+    seat_in = (p.r_seat_r, p.r_seat_y)
+    kl = math.tan(math.radians(p.r_lip_half))
+    y_lip = (cav0 - p.r_seat_r + p.r_seat_y * kl) / (kl + m)
+    lip_top = (p.r_seat_r + (y_lip - p.r_seat_y) * kl, y_lip)
 
-    # hipped roof over the hub, rising at the slope to the ridge
-    hr = p.top_y - st_top
-    rl, rw = p.ridge_l / 2, p.ridge_w / 2
-    roof = loft([plane_y(st_top) * Rectangle(2 * (rl + hr / ts), 2 * (rw + hr / ts)),
-                 plane_y(p.top_y) * Rectangle(2 * rl, 2 * rw)])
+    # the round between the cavity cone and the bowl's underside
+    y_round = (cav0 - p.r_round * hyp - out0 - p.r_round / cb) / (kb + m)
+    round_c = (out0 + y_round * kb + p.r_round / cb, y_round)
+    round_a, round_arc, round_b = arc(round_c, p.r_round, (1, m), (-cb, sb))
 
-    # strip holder (+z side): plate rising at the slope from the mitre, cut level at top_y
-    L = p.holder_l / 2
-    c = p.holder_chamfer
-    z_top_t = zt + (p.top_y - st_top) / ts
-    z_top_b = zb + (p.top_y - sb) / ts
-    holder = prism_x([(st_top, zt), (sb, zb), (p.top_y, z_top_b), (p.top_y, z_top_t)], -L, L)
-    # top corners: chamfer c by c in the front view
-    top_wedge = prism_z([(L - c, p.top_y), (L + 1, p.top_y - c - 1), (L + 1, p.top_y + 1), (L - c, p.top_y + 1)],
-                        -2 * L, 2 * L)
-    # bottom corners: equal chamfer c between the end face and the mitre plane
-    ey, ez = unit(sb - st_top, zb - zt)            # along the mitre line, in (y, z)
-    oy, oz = (sb + st_top) / 2 - L * ey, (zb + zt) / 2 - L * ez
-    mit_pl = Plane(origin=(0, oy, oz), x_dir=(1, 0, 0), z_dir=(0, ey, ez))   # local v: into the holder
-    mit_wedge = extrude(mit_pl * Polygon((L - c, 0), (L + 1, c + 1), (L + 1, -1), align=None), amount=2 * L,
-                        dir=(0, ey, ez))
-    for wedge in (top_wedge, mit_wedge):
-        holder -= wedge
-        holder -= mirror(wedge, about=Plane.YZ)
-    # tube holes, perpendicular to the holder plate
-    ny, nz = math.cos(math.radians(s)), -math.sin(math.radians(s))     # top-surface normal (up, inward)
-    pitch = p.hole_pitch
-    n_side = round((p.hole_x_out - p.hole_x_in) / pitch) + 1
-    y_c = p.top_y - p.hole_drop
-    z_c = zt + (y_c - st_top) / ts
-    for i in range(n_side):
-        for sx in (1, -1):
-            org = (sx * (p.hole_x_in + i * pitch), y_c + w / 2 * ny, z_c + w / 2 * nz)
-            holder -= Location(Plane(origin=org, z_dir=(0, -ny, -nz))) * Cylinder(p.hole_d / 2, 2 * w, align=C)
-    holders = holder + mirror(holder, about=Plane.XY)
+    # the round under the bowl's point, tangent to the bowl's underside
+    tip_c = (p.r_tip_c, (p.r_tip_c + p.r_tip_round * cb - out0) / kb + p.r_tip_round * sb)
+    tip_a, tip_arc, tip_b = arc(tip_c, p.r_tip_round, (cb, -sb), (0, -1))
 
-    rotor = hub + slab + roof + holders
-    rotor -= cavity
+    rotor = turned(
+        Polyline(apex, rim_in, rim_out, cham_high, cham_low, foot, seat_out, seat_in, lip_top, round_a),
+        round_arc,
+        Line(round_b, tip_a),
+        tip_arc,
+        Polyline(tip_b, (0, tip_b[1]), apex),
+    )
 
-    # notches between the tabs that key onto the fan blades
-    nt = int(p.n_tabs)
-    pitch_t = 360 / p.n_tabs
-    phi0 = -math.degrees(math.asin(p.tab_edge_z / ro))      # upper edge of tab 0
-    ta = p.tab_angle
-    for j in range(nt):
-        a1 = phi0 + j * pitch_t
-        a2 = phi0 - ta + (j + 1) * pitch_t
-        rotor -= prism_y([(0, 0), polar(2 * ro, a1), polar(2 * ro, (a1 + a2) / 2), polar(2 * ro, a2)],
-                         -1, p.notch_h)
+    # the prongs: sectors of the skirt's ring, each between two planes through the axis
+    band = ycyl(p.r_skirt_r, p.r_prong_y, p.r_seat_y) - ycyl(p.r_bore_r, p.r_prong_y, p.r_seat_y)
+    width = math.degrees(math.asin(p.r_prong_w / p.r_skirt_r))
+    reach = 2 * p.r_skirt_r
+    for a in ring(p.r_prong_n, p.r_prong_a):
+        x1, _, z1 = polar(reach, a - width)
+        x2, _, z2 = polar(reach, a)
+        rotor += band & prism([(0, 0), (x1, z1), (x2, z2)], p.r_prong_y, p.r_seat_y)
 
-    # datums
-    r_mid = (ri + ro) / 2
-    yt = p.notch_h / 2
-    d["rotor.tab_bottom"] = at(polar(r_mid, phi0 - ta / 2), 0)
-    d["rotor.notch_roof"] = at(polar(r_mid, phi0 - (pitch_t + ta) / 2), p.notch_h)
-    d["rotor.ledge"] = ((ledge_r + ri) / 2, p.ledge_y, 0)
-    d["rotor.skirt_top"] = (ro, st, 0)
-    d["rotor.ledge_p"] = (ledge_r, p.ledge_y, 0)
-    d["rotor.ledge_n"] = (-ledge_r, p.ledge_y, 0)
-    d["rotor.cone_top_p"] = (ct_r, sb, 0)
-    d["rotor.cone_top_n"] = (-ct_r, sb, 0)
-    d["rotor.kink"] = (kink_r, p.kink_y, 0)
-    d["rotor.slab_bot"] = (0, sb, zt)
-    d["rotor.bend_p"] = (0, st_top, zt)
-    d["rotor.bend_n"] = (0, st_top, -zt)
-    d["rotor.slab_top_mid"] = (0, st_top, (zt + rw + hr / ts) / 2)
-    d["rotor.holder_top_edge"] = (0, p.top_y, z_top_t)
-    d["rotor.ridge"] = (0, p.top_y, 0)
-    d["rotor.ridge_xp"] = (rl, p.top_y, 0)
-    d["rotor.ridge_xn"] = (-rl, p.top_y, 0)
-    d["rotor.ridge_zp"] = (0, p.top_y, rw)
-    d["rotor.ridge_zn"] = (0, p.top_y, -rw)
-    d["rotor.slab_side_p"] = (sw, sb + w / 2, zt)
-    d["rotor.slab_side_n"] = (-sw, sb + w / 2, zt)
-    y_e = p.top_y - c
-    z_e = zt + (y_e - st_top) / ts
-    d["rotor.end_p"] = (L, y_e, z_e)
-    d["rotor.end_n"] = (-L, y_e, z_e)
-    d["rotor.cut_corner"] = (L - c, p.top_y, z_top_t)
-    y_m, z_m = y_c - w / 2 * ny, z_c - w / 2 * nz
-    d["rotor.hole_in_p"] = (p.hole_x_in, y_m, z_m)
-    d["rotor.hole_in_n"] = (-p.hole_x_in, y_m, z_m)
-    d["rotor.hole_2_p"] = (p.hole_x_in + pitch, y_m, z_m)
-    d["rotor.hole_out_p"] = (p.hole_x_out, y_m, z_m)
-    d["rotor.hole_out_n"] = (-p.hole_x_out, y_m, z_m)
-    d["rotor.hole_wall"] = (p.hole_x_in + p.hole_d / 2, y_m, z_m)
-    d["rotor.hole_top"] = (p.hole_x_in, y_c, z_c)
-    d["rotor.axis_low"] = (0, yt, 0)
-    d["rotor.tab_e1"] = at(polar(r_mid, phi0), yt)
-    d["rotor.tab_e2"] = at(polar(r_mid, phi0 - ta), yt)
-    d["rotor.tab1_e1"] = at(polar(r_mid, phi0 + pitch_t), yt)
-    d["rotor.tab_corner"] = at(polar(ro, phi0), 0)
-    d["rotor.hub_bore"] = at(polar(ri, phi0 - ta / 2), yt)
+    # the tube holes: square to the bowl's wall, through it
+    tilt = math.radians(p.r_hole_tilt)
+    rw, yw = r0 + p.r_hole_slope * sb, p.r_hole_slope * cb
+    for i, a in enumerate(ring(p.r_hole_n, p.r_hole_a), 1):
+        hx, _, hz = polar(1, a)
+        down = (math.sin(tilt) * hx, -math.cos(tilt), math.sin(tilt) * hz)
+        at = (rw * hx, yw, rw * hz)
+        rotor -= Plane(origin=at, z_dir=down) * Cylinder(p.r_hole_r, 2 * p.r_hole_r)
+        datums[f"rotor.tube_{i}"] = tuple(c + d * p.r_bowl_wall / 2 for c, d in zip(at, down))
+
+    datums["rotor.axis"] = (0, (p.r_seat_y - p.r_cone_drop) / 2, 0)
+    datums["rotor.seat"] = ((p.r_seat_r + p.r_bore_r) / 2, p.r_seat_y, 0)
+    datums["rotor.bore_wall"] = polar(p.r_bore_r, p.r_prong_a - width / 2, (p.r_prong_y + p.r_seat_y) / 2)
     return rotor
 
 
-# ---------------------------------------------------------------- purchased parts
-def build_fan(p, d):
-    frame = Box(p.fan_w, p.fan_t, p.fan_w, align=(Align.CENTER, Align.MAX, Align.CENTER))
-    frame -= cyl_y(p.fan_bore_d / 2, -p.fan_t - 1, 1)
-    hub = cyl_y(p.hub_d / 2, -p.fan_t, 0)
-    return frame, hub
+# ---------------------------------------------------------------- the bought parts, as envelopes
 
 
-def build_screw(p, d):
-    d["screw.wall"] = (p.screw_d / 2, p.screw_l / 2, 0)
-    return cyl_y(p.screw_d / 2, 0, p.screw_l)
+def build_fan(p, datums, threads):
+    """Its own frame: the face that meets the deck at y = 0, the hub's axis on y, its corners on the x and z axes."""
+    back_y = -p.fan_t
+    corner = p.fan_size / math.sqrt(2)
+    corners = [polar(corner, a) for a in ring(p.b_fan_hole_n, p.b_fan_hole_a)]
+    outline = fillet(Polygon(*[(x, z) for x, _, z in corners], align=None).vertices(), p.fan_corner_r)
+    outline -= Circle(p.fan_bore_d / 2)
+    flange_y = -p.fan_flange_t / 2
+    for i, a in enumerate(ring(p.fan_screw_n, p.b_fan_hole_a), 1):
+        x, _, z = polar(p.fan_mount_R, a)
+        outline -= Pos(x, z) * Circle(p.fan_mount_d / 2)
+        datums[f"fan.mount_{i}"] = (x, flange_y, z)
+    # open corners: a flange at each face, and between them a round duct, so a screw's head
+    # sits on the deck-side flange and its driver comes through the other flange's hole (Fig. 9)
+    flange = extrude(level(0) * outline, amount=p.fan_flange_t)
+    duct_low, duct_high = back_y + p.fan_flange_t, -p.fan_flange_t
+    duct = ycyl(p.fan_size / 2, duct_low, duct_high) - ycyl(p.fan_bore_d / 2, duct_low, duct_high)
+    fan = flange + Pos(0, duct_low, 0) * flange + duct
+
+    # the struts across the back, and the motor and hub as one cylinder standing on them
+    strut_y = back_y + p.fan_strut_t
+    bar = Pos(0, (back_y + strut_y) / 2, 0) * Box(p.fan_bore_d + 2 * p.fan_strut_w, p.fan_strut_t, p.fan_strut_w)
+    hub_y = -p.hub_recess
+    fan += bar + Rot(0, 90, 0) * bar + ycyl(p.fan_hub_d / 2, back_y, hub_y)
+
+    # the blades: flat plates pitched about their radial axis, trimmed to the tip circle
+    pitch = math.radians(p.fan_blade_pitch)
+    tall = p.fan_blade_chord * math.sin(pitch) + p.fan_blade_t * math.cos(pitch)
+    mid_y = (strut_y + hub_y) / 2
+    tip_r = p.fan_tip_d / 2
+    reach = tip_r + p.fan_blade_chord
+    plate = Pos(reach / 2, mid_y, 0) * Rot(p.fan_blade_pitch, 0, 0) * Box(reach, p.fan_blade_t, p.fan_blade_chord)
+    plate &= ycyl(tip_r, strut_y, hub_y)
+    for i, a in enumerate(ring(p.fan_blades, p.fan_blade_a), 1):
+        fan += Rot(0, -a, 0) * plate
+        datums[f"fan.blade_{i}"] = polar(tip_r, a, mid_y)
+
+    datums["fan.axis"] = (0, back_y / 2, 0)
+    datums["fan.hub_wall"] = (p.fan_hub_d / 2, (hub_y + mid_y + tall / 2) / 2, 0)
+    datums["fan.hub_top"] = (0, hub_y, 0)
+    datums["fan.side_a"] = (corner / 2, flange_y, corner / 2)
+    datums["fan.side_b"] = (-corner / 2, flange_y, -corner / 2)
+    datums["fan.side_c"] = (-corner / 2, flange_y, corner / 2)
+    datums["fan.side_d"] = (corner / 2, flange_y, -corner / 2)
+    return fan
 
 
-def in_file(part, d, name, y):
-    """part and its datums moved y along Y: into the frame its released file holds it in."""
-    for key in [k for k in d if k.startswith(f"{name}.")]:
-        x0, y0, z0 = d[key]
-        d[key] = (x0, y0 + y, z0)
-    return part.moved(Location((0, y, 0)))
+def rounded_corner(corner, toward_a, toward_b, radius):
+    """The round of a radius in the corner between two points, as arc() gives it."""
+    ua = (toward_a[0] - corner[0], toward_a[1] - corner[1])
+    ub = (toward_b[0] - corner[0], toward_b[1] - corner[1])
+    na, nb = math.hypot(*ua), math.hypot(*ub)
+    ua, ub = (ua[0] / na, ua[1] / na), (ub[0] / nb, ub[1] / nb)
+    half = math.acos(ua[0] * ub[0] + ua[1] * ub[1]) / 2
+    bis = (ua[0] + ub[0], ua[1] + ub[1])
+    nbis = math.hypot(*bis)
+    reach = radius / math.sin(half)
+    centre = (corner[0] + bis[0] / nbis * reach, corner[1] + bis[1] / nbis * reach)
+    run = radius / math.tan(half)
+    ta = (corner[0] + ua[0] * run, corner[1] + ua[1] * run)
+    tb = (corner[0] + ub[0] * run, corner[1] + ub[1] * run)
+    return arc(centre, radius, (ta[0] - centre[0], ta[1] - centre[1]), (tb[0] - centre[0], tb[1] - centre[1]))
+
+
+def build_lid(p, datums, threads):
+    """Its own frame: the rim it stands on at y = 0, its axis on y, its closed top at y = lid_h."""
+    rim_r, top_r, wall = p.lid_d / 2, p.lid_top_d / 2, p.lid_wall
+    out_a, out_arc, out_b = rounded_corner((top_r, p.lid_h), (rim_r, 0), (0, p.lid_h), p.lid_corner_r)
+    in_a, in_arc, in_b = rounded_corner(
+        (top_r - wall, p.lid_h - wall), (0, p.lid_h - wall), (rim_r - wall, 0), p.lid_corner_r - wall
+    )
+    lid = turned(
+        Polyline((rim_r - wall, 0), (rim_r, 0), out_a),
+        out_arc,
+        Polyline(out_b, (0, p.lid_h), (0, p.lid_h - wall), in_a),
+        in_arc,
+        Polyline(in_b, (rim_r - wall, 0)),
+    )
+    datums["lid.rim_a"] = (rim_r, 0, 0)
+    datums["lid.rim_b"] = (-rim_r, 0, 0)
+    datums["lid.top"] = (0, p.lid_h, 0)
+    return lid
+
+
+def build_lid_switch(p, datums, threads):
+    """Its own frame: its top face at y = 0, x across its thickness, z along its length."""
+    datums["lid_switch.top"] = (0, 0, 0)
+    return Pos(0, -p.ls_h / 2, 0) * Box(p.ls_t, p.ls_h, p.ls_l)
+
+
+def build_main_switch(p, datums, threads):
+    """Its own frame: the back of its bezel, which meets the wall, at x = 0; +x out of the wall, y up."""
+    body = Pos(-p.msw_depth / 2, 0, 0) * Box(p.msw_depth, p.msw_L, p.msw_W)
+    bezel = Pos(p.msw_bezel_t / 2, 0, 0) * Box(p.msw_bezel_t, p.msw_bezel_h, p.msw_bezel_w)
+    datums["main_switch.top"] = (-p.msw_depth / 2, p.msw_L / 2, 0)
+    datums["main_switch.bottom"] = (-p.msw_depth / 2, -p.msw_L / 2, 0)
+    datums["main_switch.side_a"] = (-p.msw_depth / 2, 0, p.msw_W / 2)
+    datums["main_switch.side_b"] = (-p.msw_depth / 2, 0, -p.msw_W / 2)
+    return body + bezel
+
+
+def build_dc_socket(p, datums, threads):
+    """Its own frame: the back of its flange, which meets the wall, at x = 0; its axis on x, +x out of the wall."""
+    def xcyl(diameter, x_low, x_high):
+        return Pos((x_low + x_high) / 2, 0, 0) * Rot(0, 90, 0) * Cylinder(diameter / 2, x_high - x_low)
+
+    front = p.dcs_flange_t
+    floor = front - p.dcs_bore_depth
+    socket = xcyl(p.dcs_body_d, -p.dcs_len, 0) + xcyl(p.dcs_flange_d, 0, front)
+    socket -= xcyl(p.dcs_bore_d, floor, front)
+    socket += xcyl(p.dcs_pin_d, floor, front)
+    datums["dc_socket.bore_wall"] = ((floor + front) / 2, p.dcs_bore_d / 2, 0)
+    datums["dc_socket.pin_wall"] = ((floor + front) / 2, p.dcs_pin_d / 2, 0)
+    return socket
+
+
+def build_plate_screw(p, datums, threads):
+    """Its own frame: the flat face of its countersunk head at y = 0, its shank up along +y to its tip."""
+    head_h = (p.plate_screw_head_d - p.plate_screw) / 2  # a 90 degree head: as deep as it is wide
+    head = Pos(0, head_h / 2, 0) * Rot(-90, 0, 0) * Cone(p.plate_screw_head_d / 2, p.plate_screw / 2, head_h)
+    screw = head + ycyl(p.plate_screw / 2, head_h, p.plate_screw_len)
+    datums["plate_screw.head_face"] = (0, 0, 0)
+    datums["plate_screw.tip"] = (0, p.plate_screw_len, 0)
+    datums["plate_screw.shank"] = (0, (head_h + p.plate_screw_len) / 2, 0)
+    threads["plate_screw.shank"] = "plate_screw"
+    return screw
+
+
+# ---------------------------------------------------------------- made beside the object
+
+
+def build_fit_coupon(p, datums, threads):
+    """A slice of the body, printed and tried before it: the deck with the wall standing on it.
+
+    Its own frame: the deck's top at y = 0, as the body's, x along its length, the wall's outside at z = 0.
+    The wall holds the main switch's cut-out and the DC socket's hole at the fit's gap and a step
+    either side; the deck holds the lid switch's pocket and a bottom plate screw's hole.
+    """
+    m = p.coupon_margin
+    wall_t = p.b_r_out - p.b_r_in
+    deck_y, rim_y = -p.b_deck_t, -p.b_h
+    hole_d = 2 * p.dc_hole_r
+    steps = (-p.coupon_step, 0, p.coupon_step)
+    length = m + p.ms_cut_w + m + sum(hole_d + 2 * s + m for s in steps)
+    width = wall_t + m + p.pk_len + m
+
+    def block(x_low, x_high, y_low, y_high, z_low, z_high):
+        centre = ((x_low + x_high) / 2, (y_low + y_high) / 2, (z_low + z_high) / 2)
+        return Pos(*centre) * Box(x_high - x_low, y_high - y_low, z_high - z_low)
+
+    coupon = block(0, length, deck_y, 0, 0, width) + block(0, length, rim_y, deck_y, 0, wall_t)
+
+    # through the wall: the main switch's cut-out, then the DC socket's hole three times
+    coupon -= block(m, m + p.ms_cut_w, p.ms_top_y - p.ms_cut_h, p.ms_top_y, 0, wall_t)
+    x = m + p.ms_cut_w + m
+    for i, s in enumerate(steps, 1):
+        d = hole_d + 2 * s
+        coupon -= Pos(x + d / 2, p.dc_y, wall_t / 2) * Cylinder(d / 2, wall_t)
+        datums[f"fit_coupon.socket_hole_{i}"] = (x + d / 2, p.dc_y + d / 2, wall_t / 2)
+        x += d + m
+
+    # through the deck: the lid switch's pocket and a screw post's hole
+    z_mid = wall_t + m + p.pk_len / 2
+    coupon -= block(m, m + p.pk_w, deck_y, 0, z_mid - p.pk_len / 2, z_mid + p.pk_len / 2)
+    screw_x = m + p.pk_w + m + p.post_hole_r
+    coupon -= Pos(screw_x, 0, z_mid) * ycyl(p.post_hole_r, deck_y, 0)
+    datums["fit_coupon.screw_hole"] = (screw_x, deck_y / 2, z_mid)
+    return coupon
+
+
+# ---------------------------------------------------------------- the model
 
 
 def build(p):
-    d = {}
-    body = build_body(p, d)
-    # Each released part is built in its file's frame: the plate's file holds it where the
-    # assembly places it, under the body; the rotor's, its skirt rotor_file_y below the origin.
-    plate = in_file(build_plate(p, d), d, "plate", -p.body_h)
-    rotor = in_file(build_rotor(p, d), d, "rotor", -p.rotor_file_y)
-    fan_frame, fan_hub = build_fan(p, d)
-    screw = build_screw(p, d)
+    parts = {}
+    datums = {}
+    threads = {}
+    assembly = {}
 
-    assembly = {
-        "body_1": ("body", Location((0, 0, 0))),
-        "plate_1": ("plate", Location((0, 0, 0))),
-        "fan_frame_1": ("fan_frame", Location((0, p.fan_top_y, 0), (0, p.fan_rot, 0))),
-        "fan_hub_1": ("fan_hub", Location((0, p.fan_top_y, 0))),
-        "rotor_1": ("rotor", Location((0, p.rotor_seat_y + p.rotor_file_y, 0))),
-    }
-    n = int(p.screw_n)
-    for k in range(n):
-        x, z = polar(p.boss_pcd / 2, p.boss_angle + k * 360 / n)
-        assembly[f"screw_{k + 1}"] = ("screw", Location((x, -p.body_h - p.plate_t, z)))
-    return {
-        "parts": {"body": body, "plate": plate, "rotor": rotor, "fan_frame": fan_frame, "fan_hub": fan_hub,
-                  "screw": screw},
-        "datums": d,
-        "assembly": assembly,
-    }
+    parts["body"] = build_body(p, datums, threads)
+    parts["bottom_plate"] = build_bottom_plate(p, datums, threads)
+    parts["rotor"] = build_rotor(p, datums, threads)
+    parts["fan"] = build_fan(p, datums, threads)
+    parts["lid"] = build_lid(p, datums, threads)
+    parts["lid_switch"] = build_lid_switch(p, datums, threads)
+    parts["main_switch"] = build_main_switch(p, datums, threads)
+    parts["dc_socket"] = build_dc_socket(p, datums, threads)
+    parts["plate_screw"] = build_plate_screw(p, datums, threads)
+    # the fit coupon is made beside the object: no instance places it
+    parts["fit_coupon"] = build_fit_coupon(p, datums, threads)
+
+    deck_y = -p.b_deck_t
+    assembly["body_1"] = ("body", Location((0, 0, 0)))
+    assembly["bottom_plate_1"] = ("bottom_plate", Location((0, 0, 0)))
+    # the fan under the deck, its hub up through the centre hole; the rotor's seat on the hub's top
+    assembly["fan_1"] = ("fan", Location((0, deck_y, 0)))
+    assembly["rotor_1"] = ("rotor", Location((0, p.rotor_y, 0)))
+    # the lid's rim in the groove, on the inner round
+    assembly["lid_1"] = ("lid", Location((0, p.lid_seat_y, 0)))
+    # the lid switch in its pocket, the main switch and the DC socket through the wall
+    pocket_at = along(p.pk_dir, p.pk_near + p.pk_len / 2, p.pk_side + p.pk_w / 2, p.ls_top_y)
+    assembly["lid_switch_1"] = ("lid_switch", facing(p.pk_dir, pocket_at))
+    cut_at = along(p.ms_dir, p.b_r_out, p.ms_side + p.ms_cut_w / 2, p.ms_top_y - p.ms_cut_h / 2)
+    assembly["main_switch_1"] = ("main_switch", facing(p.ms_dir, cut_at))
+    hole_at = along(p.dc_dir, p.b_r_out, p.dc_off, p.dc_y)
+    assembly["dc_socket_1"] = ("dc_socket", facing(p.dc_dir, hole_at))
+    # the screws up through the plate into the posts, each head's cone on its hole's edge
+    under_y = p.bp_top_y - p.bp_t
+    head_y = under_y - (p.plate_screw_head_d / 2 - p.bp_hole_r)
+    for i, a in enumerate(ring(p.bp_hole_n, p.bp_hole_a), 1):
+        assembly[f"plate_screw_{i}"] = ("plate_screw", Location(polar(p.bp_hole_R, a, head_y)))
+
+    for i in range(1, int(p.bp_hole_n) + 1):
+        threads[f"body.post_hole_{i}"] = "plate_screw"
+        threads[f"bottom_plate.hole_{i}"] = "plate_screw"
+
+    return {"parts": parts, "datums": datums, "assembly": assembly, "threads": threads}

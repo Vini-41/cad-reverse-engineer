@@ -1,5 +1,48 @@
-# Written by gen_ledger.py: edit that script, not this file.
+# What the sources leave undefined, and how to close each gap (ask: authors | measure | datasheet | test).
 gaps:
-  - {"id": "G-fan", "question": "What are the 80 mm fan's thickness, blade-bore diameter and screw-hole layout (AKYGA AW-8A-BK datasheet)?", "ask": "datasheet"}
-  - {"id": "G-seat", "question": "Is the fan's hub flush with its frame's top face, so that the rotor's hub ledge sits level with the deck underside?", "ask": "measure"}
-  - {"id": "G-pla", "question": "What does the PLA used for the rotor weigh per cm³ as printed?", "ask": "measure"}
+  # The rotor is settled by its released body; where it sits is not.
+  - id: G-rotor-place
+    question: "Where does the rotor sit along the axis: how far below the fan's mounting face is the top of the fan's hub, which the rotor's seat face rests on?"
+    ask: measure
+
+  # The fan: 80 mm, 12 V, 7 blades, a 32.5 mm hub; the body's deck gives its four mounting holes.
+  - id: G-fan-frame
+    question: "What are the fan's frame thickness, corner form, and mounting-hole spacing and diameter (AKYGA AW-8A-BK, 80 mm)?"
+    ask: datasheet
+  - id: G-fan-hub
+    question: "How tall is the fan's hub, and what are its seven blades' tip diameter and form?"
+    ask: measure
+  - id: G-fan-screws
+    question: "What thread and length are the screws provided with the fan, and how many of them fasten it to the body's deck?"
+    ask: datasheet
+
+  # The lid: a 0.5 l round food container, 116 mm in diameter.
+  - id: G-lid
+    question: "What are the lid's height, wall thickness, taper and corner radius (Curver 0.5 l round food container), and is its 116 mm diameter the rim's outside?"
+    ask: measure
+
+  # The switches and the socket: each a purchased part with one stated size.
+  - id: G-lid-switch
+    question: "Which two of the lid switch's dimensions are the stated 6 and 9 mm, and what are its body's third dimension, its lever's length and angle and its terminals (hinge lever micro switch; the body's pocket is 6 by 12 mm)?"
+    ask: datasheet
+  - id: G-main-switch
+    question: "What are the main switch's bezel, body depth, rocker and terminals (rocker switch for a 19 by 12.5 mm cut-out; the body's cut-out is 19 by 13 mm)?"
+    ask: datasheet
+  - id: G-dc-socket
+    question: "What are the DC socket's body diameter, length, flange and terminals (5.5 by 2.1 mm socket; the body's hole is 8.5 mm)?"
+    ask: datasheet
+
+  # The bottom plate's screws: M3, four of them, 10 to 12 mm long.
+  - id: G-plate-screw-length
+    question: "Which length are the four M3 bottom plate screws, within the stated 10 to 12 mm, and what head do they have?"
+    ask: authors
+
+  # Fits: a bought part pushed into a printed opening.
+  - id: G-fit
+    question: "What gap does a printed opening need around a bought part pushed into it (the DC socket in its 8.5 mm hole, the lid switch along its 12 mm pocket), for the part to go in and stay?"
+    ask: test
+
+  # Mass: the rotor's 16 g and the sliced body's 121 g are stated, the filament's density is not.
+  - id: G-pla-density
+    question: "What is the density of the PLA filament (Filanora Filacorn PLA BIO HI)?"
+    ask: datasheet

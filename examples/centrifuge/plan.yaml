@@ -1,0 +1,41 @@
+# How the centrifuge is made and put together. cadrev check holds it to the built model and writes build/plan.md.
+general_tolerance: "±0.3 mm unless noted"
+make:
+  fit_coupon:
+    - "FDM print in PLA, its deck face on the bed and its wall standing, as the body prints: 0.4 mm nozzle, 0.6 mm line, 3 perimeters, 0.2 mm layers, no supports"
+    - "Leave every opening as printed: the coupon shows what the printer makes of them"
+  body:
+    - "FDM print in PLA, deck face on the bed (upside down, Fig. 5), no supports: 0.4 mm nozzle, 0.6 mm line, 3 perimeters, 0.2 mm layers, 10 % infill, with the horizontal expansion the coupon passed"
+    - "The DC socket's Ø8.5 hole, the main switch's 19 × 13 cut-out and the lid switch's 6 × 12 pocket hold bought parts by their fit, tighter than the general tolerance: each is what passed on the coupon"
+    - "The four Ø3.2 post holes stay as printed, no drill and no tap: the M3 screws cut their own thread in them, as tried on the coupon"
+    - "Break the bed-side flare on the deck's edge and in the lid groove with a deburring blade, so the lid's rim seats"
+  bottom_plate:
+    - "FDM print in PLA, flat face on the bed and feet up, no supports, 100 % infill: 1 mm is five 0.2 mm layers"
+    - "Clear the four Ø3.5 holes with a 3.5 mm drill by hand where they print tight"
+  rotor:
+    - "First print the authors' Rotor - 32,5 mm - fit tester, the file released beside the rotor, and press it on the fan's hub by hand (Fig. 6): snug, no rattle. Too tight, a negative horizontal expansion; too loose, a positive one; print it again"
+    - "FDM print in PLA, the bowl's rim on the bed (upside down, Fig. 5), no supports, 100 % infill, random z seam, with the horizontal expansion the fit tester passed"
+    - "The Ø32.5 bore inside the seven prongs carries the rotor on the hub, tighter than the general tolerance: it is the fit the tester passed, not a measured size"
+    - "Break the bed-side edge of the bowl's rim and clear the strings from the six Ø11.14 tube holes"
+buy:
+  fan: "AKYGA AW-8A-BK, 80 mm 12 V case fan, 7 blades, 32.5 mm hub, with its four self-tapping screws"
+  lid: "Curver 0.5 l round transparent food container, 116 mm across its rim; plastic, never glass"
+  lid_switch: "hinge lever micro switch, 6 × 9 mm"
+  main_switch: "snap-in rocker switch for a 19 × 12.5 mm (0.75 × 0.5 in) cut-out"
+  dc_socket: "5.5 × 2.1 mm DC panel socket, push-in ribbed barrel"
+  plate_screw: "M3 × 10 hexagon socket countersunk head screw, ISO 10642, A2 stainless"
+  glue: "E6000 or cyanoacrylate, a few drops"
+  wire: "the fan's own 30 cm cable, cut down, with solder and heat shrink tube"
+  power_supply: "12 V, 1 A DC supply with a 5.5 × 2.1 mm plug, centre positive"
+steps:
+  - {note: "Before the body is printed, try the coupon: the DC socket in each of its three holes, the main switch in its cut-out, the lid switch in its pocket, and an M3 screw in its Ø3.2 hole. The socket should push in by hand and stay when a plug is pulled out; the screw should cut a thread and hold. Print the body with the horizontal expansion that gives that."}
+  - {place: [body_1], note: "Deck down on the bench, rim up."}
+  - {place: [fan_1], from: -y, note: "Hub through the centre hole, label up, cable towards the DC socket's hole. A fan screw through each deck-side flange into the deck's Ø4 hole, the screwdriver through the other flange's hole (Fig. 9). Snug: the screws cut into PLA."}
+  - {place: [lid_switch_1], from: -y, note: "Into its pocket, lever towards the groove, top level with the groove's floor. A drop of glue on its sides: the lid pushes it this way out."}
+  - {place: [main_switch_1], from: +z, note: "From outside, square to the wall, pushed in until its tabs snap behind the 2 mm wall."}
+  - {place: [dc_socket_1], from: -z, note: "From outside, square to the wall, pushed in to its flange. Glue it if the coupon's hole let it pull out."}
+  - {note: "Cut the fan's cable down and solder as Fig. 10: socket + to the main switch, on to the lid switch, on to the fan's 12 V wire; socket − to the fan's ground. Heat shrink on every joint, wires clear of the blades."}
+  - {place: [rotor_1], from: +y, note: "Turn the body over onto its rim. Press the rotor on the hub by hand, a prong between each two blades, until its seat is down on the hub all round."}
+  - {note: "Test before closing: stand the lid in its groove, plug in, switch on, rotor empty. Runs smooth: lift the rotor, a drop of glue on the hub, press it back. It shakes: reseat the rotor and try again."}
+  - {place: [bottom_plate_1, plate_screw_1, plate_screw_2, plate_screw_3, plate_screw_4], from: -y, note: "Lid and plug off, body deck down. Plate on the rim, holes over the posts, wires inside. 2 mm hex key, just snug: the heads bear on the holes' edges and the threads are PLA."}
+  - {place: [lid_1], from: +y, note: "Back on its feet. The lid's rim into the groove; pressing it down closes the lid switch."}
