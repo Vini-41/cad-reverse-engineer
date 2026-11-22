@@ -1,0 +1,19 @@
+# Reconstruction project. File formats: references/project-format.md in the build-model skill.
+format: 2   # version of these file formats; set by cadrev init
+name: rp2040-qfn56
+target: "The RP2040 microcontroller's QFN-56 7×7 mm package with the reduced ePad, as Figure 167 of the RP2040 datasheet (build 4c5ccacb2c2f) draws it: the moulded body, its 56 leads and the exposed centre pad, as supplied and standing on its seating plane"
+units: {length: mm, angle: deg, mass: g}
+follows: design
+tolerance: {length: 0.001}   # how closely the model realises a source value; no shop works to it
+# Register sources with `cadrev source`; it copies the file and pins its sha256. Keep this key last.
+sources:
+- id: datasheet
+  kind: datasheet
+  path: sources/rp2040-datasheet.pdf
+  sha256: a4c31537d6052d2b83a12c0d550b1e0a172ca12a342d3dee40d8d03416028b4d
+  citation: 'Raspberry Pi Ltd, RP2040 Datasheet: A microcontroller by Raspberry Pi, Release 13, build 4c5ccacb2c2f, build date 19/11/2026 (CC BY-ND 4.0)'
+- id: brief
+  kind: brief
+  path: sources/brief.md
+  sha256: 090e0928466f5721b84b7bb20cec958d90814d26bc915f35d81417d5ba49655f
+  citation: The user's brief

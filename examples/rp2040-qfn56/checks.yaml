@@ -1,0 +1,177 @@
+# Geometry checks. Expected values come from evidence.yaml, never from params.yaml.
+# Written by write_checks.py (cadrev python write_checks.py): edit that, not this file.
+checks:
+  # ---- the lead, in its own frame: outer end at X = 0, running inward along +X -----------------------
+  - {id: lead-L, kind: distance, between: [lead.outer, lead.tip], along: x,
+     evidence: F167-L, key: nom, interpretation: "L on the seating plane, from the lead's outer end to the crown of its rounded inner end"}
+  - {id: lead-L-range, kind: distance, between: [lead.outer, lead.tip], along: x,
+     min: F167-L.min, max: F167-L.max}
+  - {id: lead-b, kind: distance, between: [lead.side_a, lead.side_b], along: y,
+     evidence: F167-b, key: nom, interpretation: "b across the lead on the seating plane, the wide side of its trapezoid"}
+  - {id: lead-b-range, kind: distance, between: [lead.side_a, lead.side_b], along: y,
+     min: F167-b.min, max: F167-b.max}
+  - {id: lead-A3, kind: distance, between: [lead.bottom, lead.top], along: z,
+     evidence: F167-A3, key: ref, interpretation: "A3 is a reference dimension, compared like a nominal: the lead frame's thickness, seating plane to the lead's top face"}
+  - {id: lead-R-min, kind: distance, between: [lead.round_centre, lead.tip],
+     min: F167-R.min, interpretation: "R from the centre of the rounded inner end to its crown, on the seating plane; only a MIN is stated. The two datums do not show the end is round: lead-end-round does"}
+  - {id: lead-end-round, kind: diameter, at: lead.tip, expect: "F167-b.nom",
+     interpretation: "the cylindrical face at the lead's inner end is as wide as the lead: a full half-round, so R is b / 2, as the bottom view draws it"}
+
+  # ---- the 56 leads --------------------------------------------------------------------------------------
+  - {id: lead-count, kind: count, part: lead, evidence: T632-caption, key: leads}
+  # leads 1 to 14
+  - {id: row-1-14, kind: distance, instances: [lead_1, lead_14], between: [lead_1.outer, lead_14.outer], along: y,
+     expect: "F167-e.bsc * (F167-pins.per_side - 1)", interpretation: "14 leads to the row: 13 pitches from lead 1 to lead 14"}
+  - {id: pitch-1-2, kind: distance, instances: [lead_1, lead_2], between: [lead_1.outer, lead_2.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-2-3, kind: distance, instances: [lead_2, lead_3], between: [lead_2.outer, lead_3.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-3-4, kind: distance, instances: [lead_3, lead_4], between: [lead_3.outer, lead_4.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-4-5, kind: distance, instances: [lead_4, lead_5], between: [lead_4.outer, lead_5.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-5-6, kind: distance, instances: [lead_5, lead_6], between: [lead_5.outer, lead_6.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-6-7, kind: distance, instances: [lead_6, lead_7], between: [lead_6.outer, lead_7.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-7-8, kind: distance, instances: [lead_7, lead_8], between: [lead_7.outer, lead_8.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-8-9, kind: distance, instances: [lead_8, lead_9], between: [lead_8.outer, lead_9.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-9-10, kind: distance, instances: [lead_9, lead_10], between: [lead_9.outer, lead_10.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-10-11, kind: distance, instances: [lead_10, lead_11], between: [lead_10.outer, lead_11.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-11-12, kind: distance, instances: [lead_11, lead_12], between: [lead_11.outer, lead_12.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-12-13, kind: distance, instances: [lead_12, lead_13], between: [lead_12.outer, lead_13.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-13-14, kind: distance, instances: [lead_13, lead_14], between: [lead_13.outer, lead_14.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: reach-1, kind: distance, instances: [body_1, lead_1], between: [body_1.x_min, lead_1.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-2, kind: distance, instances: [body_1, lead_2], between: [body_1.x_min, lead_2.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-3, kind: distance, instances: [body_1, lead_3], between: [body_1.x_min, lead_3.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-4, kind: distance, instances: [body_1, lead_4], between: [body_1.x_min, lead_4.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-5, kind: distance, instances: [body_1, lead_5], between: [body_1.x_min, lead_5.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-6, kind: distance, instances: [body_1, lead_6], between: [body_1.x_min, lead_6.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-7, kind: distance, instances: [body_1, lead_7], between: [body_1.x_min, lead_7.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-8, kind: distance, instances: [body_1, lead_8], between: [body_1.x_min, lead_8.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-9, kind: distance, instances: [body_1, lead_9], between: [body_1.x_min, lead_9.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-10, kind: distance, instances: [body_1, lead_10], between: [body_1.x_min, lead_10.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-11, kind: distance, instances: [body_1, lead_11], between: [body_1.x_min, lead_11.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-12, kind: distance, instances: [body_1, lead_12], between: [body_1.x_min, lead_12.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-13, kind: distance, instances: [body_1, lead_13], between: [body_1.x_min, lead_13.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-14, kind: distance, instances: [body_1, lead_14], between: [body_1.x_min, lead_14.tip], along: x, evidence: F167-L, key: nom}
+  # leads 15 to 28
+  - {id: row-15-28, kind: distance, instances: [lead_15, lead_28], between: [lead_15.outer, lead_28.outer], along: x,
+     expect: "F167-e.bsc * (F167-pins.per_side - 1)", interpretation: "14 leads to the row: 13 pitches from lead 15 to lead 28"}
+  - {id: pitch-15-16, kind: distance, instances: [lead_15, lead_16], between: [lead_15.outer, lead_16.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-16-17, kind: distance, instances: [lead_16, lead_17], between: [lead_16.outer, lead_17.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-17-18, kind: distance, instances: [lead_17, lead_18], between: [lead_17.outer, lead_18.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-18-19, kind: distance, instances: [lead_18, lead_19], between: [lead_18.outer, lead_19.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-19-20, kind: distance, instances: [lead_19, lead_20], between: [lead_19.outer, lead_20.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-20-21, kind: distance, instances: [lead_20, lead_21], between: [lead_20.outer, lead_21.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-21-22, kind: distance, instances: [lead_21, lead_22], between: [lead_21.outer, lead_22.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-22-23, kind: distance, instances: [lead_22, lead_23], between: [lead_22.outer, lead_23.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-23-24, kind: distance, instances: [lead_23, lead_24], between: [lead_23.outer, lead_24.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-24-25, kind: distance, instances: [lead_24, lead_25], between: [lead_24.outer, lead_25.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-25-26, kind: distance, instances: [lead_25, lead_26], between: [lead_25.outer, lead_26.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-26-27, kind: distance, instances: [lead_26, lead_27], between: [lead_26.outer, lead_27.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-27-28, kind: distance, instances: [lead_27, lead_28], between: [lead_27.outer, lead_28.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: reach-15, kind: distance, instances: [body_1, lead_15], between: [body_1.y_min, lead_15.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-16, kind: distance, instances: [body_1, lead_16], between: [body_1.y_min, lead_16.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-17, kind: distance, instances: [body_1, lead_17], between: [body_1.y_min, lead_17.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-18, kind: distance, instances: [body_1, lead_18], between: [body_1.y_min, lead_18.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-19, kind: distance, instances: [body_1, lead_19], between: [body_1.y_min, lead_19.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-20, kind: distance, instances: [body_1, lead_20], between: [body_1.y_min, lead_20.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-21, kind: distance, instances: [body_1, lead_21], between: [body_1.y_min, lead_21.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-22, kind: distance, instances: [body_1, lead_22], between: [body_1.y_min, lead_22.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-23, kind: distance, instances: [body_1, lead_23], between: [body_1.y_min, lead_23.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-24, kind: distance, instances: [body_1, lead_24], between: [body_1.y_min, lead_24.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-25, kind: distance, instances: [body_1, lead_25], between: [body_1.y_min, lead_25.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-26, kind: distance, instances: [body_1, lead_26], between: [body_1.y_min, lead_26.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-27, kind: distance, instances: [body_1, lead_27], between: [body_1.y_min, lead_27.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-28, kind: distance, instances: [body_1, lead_28], between: [body_1.y_min, lead_28.tip], along: y, evidence: F167-L, key: nom}
+  # leads 29 to 42
+  - {id: row-29-42, kind: distance, instances: [lead_29, lead_42], between: [lead_29.outer, lead_42.outer], along: y,
+     expect: "F167-e.bsc * (F167-pins.per_side - 1)", interpretation: "14 leads to the row: 13 pitches from lead 29 to lead 42"}
+  - {id: pitch-29-30, kind: distance, instances: [lead_29, lead_30], between: [lead_29.outer, lead_30.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-30-31, kind: distance, instances: [lead_30, lead_31], between: [lead_30.outer, lead_31.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-31-32, kind: distance, instances: [lead_31, lead_32], between: [lead_31.outer, lead_32.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-32-33, kind: distance, instances: [lead_32, lead_33], between: [lead_32.outer, lead_33.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-33-34, kind: distance, instances: [lead_33, lead_34], between: [lead_33.outer, lead_34.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-34-35, kind: distance, instances: [lead_34, lead_35], between: [lead_34.outer, lead_35.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-35-36, kind: distance, instances: [lead_35, lead_36], between: [lead_35.outer, lead_36.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-36-37, kind: distance, instances: [lead_36, lead_37], between: [lead_36.outer, lead_37.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-37-38, kind: distance, instances: [lead_37, lead_38], between: [lead_37.outer, lead_38.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-38-39, kind: distance, instances: [lead_38, lead_39], between: [lead_38.outer, lead_39.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-39-40, kind: distance, instances: [lead_39, lead_40], between: [lead_39.outer, lead_40.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-40-41, kind: distance, instances: [lead_40, lead_41], between: [lead_40.outer, lead_41.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: pitch-41-42, kind: distance, instances: [lead_41, lead_42], between: [lead_41.outer, lead_42.outer], along: y, evidence: F167-e, key: bsc}
+  - {id: reach-29, kind: distance, instances: [body_1, lead_29], between: [body_1.x_max, lead_29.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-30, kind: distance, instances: [body_1, lead_30], between: [body_1.x_max, lead_30.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-31, kind: distance, instances: [body_1, lead_31], between: [body_1.x_max, lead_31.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-32, kind: distance, instances: [body_1, lead_32], between: [body_1.x_max, lead_32.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-33, kind: distance, instances: [body_1, lead_33], between: [body_1.x_max, lead_33.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-34, kind: distance, instances: [body_1, lead_34], between: [body_1.x_max, lead_34.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-35, kind: distance, instances: [body_1, lead_35], between: [body_1.x_max, lead_35.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-36, kind: distance, instances: [body_1, lead_36], between: [body_1.x_max, lead_36.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-37, kind: distance, instances: [body_1, lead_37], between: [body_1.x_max, lead_37.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-38, kind: distance, instances: [body_1, lead_38], between: [body_1.x_max, lead_38.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-39, kind: distance, instances: [body_1, lead_39], between: [body_1.x_max, lead_39.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-40, kind: distance, instances: [body_1, lead_40], between: [body_1.x_max, lead_40.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-41, kind: distance, instances: [body_1, lead_41], between: [body_1.x_max, lead_41.tip], along: x, evidence: F167-L, key: nom}
+  - {id: reach-42, kind: distance, instances: [body_1, lead_42], between: [body_1.x_max, lead_42.tip], along: x, evidence: F167-L, key: nom}
+  # leads 43 to 56
+  - {id: row-43-56, kind: distance, instances: [lead_43, lead_56], between: [lead_43.outer, lead_56.outer], along: x,
+     expect: "F167-e.bsc * (F167-pins.per_side - 1)", interpretation: "14 leads to the row: 13 pitches from lead 43 to lead 56"}
+  - {id: pitch-43-44, kind: distance, instances: [lead_43, lead_44], between: [lead_43.outer, lead_44.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-44-45, kind: distance, instances: [lead_44, lead_45], between: [lead_44.outer, lead_45.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-45-46, kind: distance, instances: [lead_45, lead_46], between: [lead_45.outer, lead_46.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-46-47, kind: distance, instances: [lead_46, lead_47], between: [lead_46.outer, lead_47.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-47-48, kind: distance, instances: [lead_47, lead_48], between: [lead_47.outer, lead_48.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-48-49, kind: distance, instances: [lead_48, lead_49], between: [lead_48.outer, lead_49.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-49-50, kind: distance, instances: [lead_49, lead_50], between: [lead_49.outer, lead_50.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-50-51, kind: distance, instances: [lead_50, lead_51], between: [lead_50.outer, lead_51.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-51-52, kind: distance, instances: [lead_51, lead_52], between: [lead_51.outer, lead_52.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-52-53, kind: distance, instances: [lead_52, lead_53], between: [lead_52.outer, lead_53.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-53-54, kind: distance, instances: [lead_53, lead_54], between: [lead_53.outer, lead_54.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-54-55, kind: distance, instances: [lead_54, lead_55], between: [lead_54.outer, lead_55.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: pitch-55-56, kind: distance, instances: [lead_55, lead_56], between: [lead_55.outer, lead_56.outer], along: x, evidence: F167-e, key: bsc}
+  - {id: reach-43, kind: distance, instances: [body_1, lead_43], between: [body_1.y_max, lead_43.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-44, kind: distance, instances: [body_1, lead_44], between: [body_1.y_max, lead_44.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-45, kind: distance, instances: [body_1, lead_45], between: [body_1.y_max, lead_45.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-46, kind: distance, instances: [body_1, lead_46], between: [body_1.y_max, lead_46.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-47, kind: distance, instances: [body_1, lead_47], between: [body_1.y_max, lead_47.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-48, kind: distance, instances: [body_1, lead_48], between: [body_1.y_max, lead_48.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-49, kind: distance, instances: [body_1, lead_49], between: [body_1.y_max, lead_49.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-50, kind: distance, instances: [body_1, lead_50], between: [body_1.y_max, lead_50.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-51, kind: distance, instances: [body_1, lead_51], between: [body_1.y_max, lead_51.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-52, kind: distance, instances: [body_1, lead_52], between: [body_1.y_max, lead_52.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-53, kind: distance, instances: [body_1, lead_53], between: [body_1.y_max, lead_53.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-54, kind: distance, instances: [body_1, lead_54], between: [body_1.y_max, lead_54.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-55, kind: distance, instances: [body_1, lead_55], between: [body_1.y_max, lead_55.tip], along: y, evidence: F167-L, key: nom}
+  - {id: reach-56, kind: distance, instances: [body_1, lead_56], between: [body_1.y_max, lead_56.tip], along: y, evidence: F167-L, key: nom}
+  # ---- the body ------------------------------------------------------------------------------------------
+  - {id: body-size, kind: bbox, part: body, evidence: P13-size, axes: {D: x, E: y},
+     interpretation: "D and E are basic dimensions (7 BSC in Figure 167), compared like nominals: D along X, E along Y"}
+  - {id: height-A-max, kind: distance, instances: [lead_1, body_1], between: [lead_1.bottom, body_1.top], along: z,
+     max: F167-A.max, interpretation: "A from the seating plane, the leads' undersides, to the body's top face; only a MAX is stated"}
+  - {id: mould-A2, kind: distance, instances: [lead_1, body_1], between: [lead_1.top, body_1.top], along: z,
+     evidence: F167-A2, key: nom, interpretation: "A2 from the top of the lead frame to the body's top face"}
+  - {id: mould-A2-max, kind: distance, instances: [lead_1, body_1], between: [lead_1.top, body_1.top], along: z,
+     max: F167-A2.max}
+  - {id: standoff-A1, kind: distance, instances: [lead_1, body_1], between: [lead_1.bottom, body_1.underside], along: z,
+     min: F167-A1.min, max: F167-A1.max, interpretation: "A1 from the seating plane to the body's underside; a MIN and a MAX are stated, no nominal"}
+  - {id: dot-size, kind: diameter, at: body.dot_x_min, evidence: T633-dot, key: size}
+  - {id: dot-X, kind: distance, between: [body.x_min, body.dot_x_min], along: x,
+     evidence: T633-dot, key: X, interpretation: "Coord. X from the package's left side, its -X face, to the left side of the dot"}
+  - {id: dot-Y, kind: distance, between: [body.y_min, body.dot_y_min], along: y,
+     evidence: T633-dot, key: Y, interpretation: "Coord. Y from the package's bottom side seen from above, its -Y face, to the lower side of the dot"}
+
+  # ---- the centre pad ------------------------------------------------------------------------------------
+  - {id: pad-D2, kind: distance, between: [pad.x_min, pad.x_max], along: x, evidence: F167-D2, key: nom}
+  - {id: pad-D2-range, kind: distance, between: [pad.x_min, pad.x_max], along: x,
+     min: F167-D2.min, max: F167-D2.max}
+  - {id: pad-E2, kind: distance, between: [pad.y_min, pad.y_max], along: y, evidence: F167-E2, key: nom}
+  - {id: pad-E2-range, kind: distance, between: [pad.y_min, pad.y_max], along: y,
+     min: F167-E2.min, max: F167-E2.max}
+  - {id: notch-R, kind: diameter, at: pad.notch_wall, expect: "2 * F167-notch.R"}
+  - {id: notch-offset, kind: distance, between: [pad.notch_axis, pad.y_max], along: y,
+     evidence: F167-notch, key: offset, interpretation: "from the notch's centre to the pad's edge facing leads 43 to 56"}
+  - {id: pad-gap-leads-1-14, kind: distance, instances: [lead_14, pad_1], between: [lead_14.tip, pad_1.x_min], along: x,
+     evidence: F167-gap, key: gap, interpretation: "the 1.550 the bottom view prints from lead 14's inner end to the pad"}
+  - {id: pad-gap-leads-15-28, kind: distance, instances: [lead_24, pad_1], between: [lead_24.tip, pad_1.y_min], along: y,
+     evidence: F167-gap, key: gap, interpretation: "the 1.550 the bottom view prints from the inner ends of leads 15 to 28 to the pad"}
+  - {id: pad-gap-leads-43-56, kind: distance, instances: [lead_43, pad_1], between: [lead_43.tip, pad_1.y_max], along: y,
+     evidence: F167-gap, key: gap, interpretation: "the 1.550 the bottom view prints from lead 43's inner end to the pad: the one the pad is not placed by"}
+
+  # ---- the assembly --------------------------------------------------------------------------------------
+  - {id: clear, kind: interference}

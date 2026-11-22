@@ -1,0 +1,60 @@
+# The only place numbers enter the model. basis: source | derived | measured | proposed.
+#
+# The frame is the footprint's (F168-lands): the origin at the package's centre, where the land
+# pattern's centrelines cross; Z = 0 the board's surface, which is the seating plane (datum C of
+# Figure 167's side view), the package standing on it along +Z; seen from above, as Figure 3 and
+# Figure 167's top view show it, X runs left to right and Y bottom to top, so pin 1 is at -X +Y: lead 1
+# the first down the -X edge, then counter-clockwise, 15 to 28 along -Y, 29 to 42 up +X, 43 to 56 along +Y.
+params:
+  # ---- the moulded body ------------------------------------------------------------------------------
+  body_D:   {basis: source, from: P13-size.D, interpretation: "the body's size along X: D runs left to right across Figure 167's top view"}
+  body_E:   {basis: source, from: P13-size.E, interpretation: "the body's size along Y: E runs top to bottom across Figure 167's top view"}
+  mould_A2: {basis: source, from: F167-A2.nom, interpretation: "from the body's top face down to the top of the lead frame, as the side view draws A2"}
+  frame_A3: {basis: source, from: F167-A3.ref, interpretation: "the lead frame's thickness: from the seating plane up to the leads' top faces, as the side view draws A3"}
+  body_top: {basis: derived, expr: mould_A2 + frame_A3, value: 0.853, interpretation: "the top face's height above the seating plane: the side view draws A as A2 + A3, and the table gives A only a MAX, which 0.853 is under"}
+  A1_min:   {basis: source, from: F167-A1.min}
+  A1_max:   {basis: source, from: F167-A1.max}
+  standoff_drawn: {basis: measured, from: F167-side-scale, value: 0.035, gap: G-standoff,
+                   method: "measure_fig167.py: the seating plane line to the body's underside line in the vector side view, between line middles, scaled against e = 0.400 over the 14 lead ends (17.025 points per mm)",
+                   uncertainty: "±0.001 mm as drawn; the drawing shows every dimensioned value at its nominal within 0.0002 mm, but dimensions A1 only as a range"}
+  standoff: {basis: derived, expr: "min(max(standoff_drawn, A1_min), A1_max)", value: 0.035, gap: G-standoff,
+             interpretation: "the body's underside above the seating plane (A1), built as the side view draws it and held inside the stated MIN and MAX; no nominal stated"}
+  dot_X:    {basis: source, from: T633-dot.X}
+  dot_Y:    {basis: source, from: T633-dot.Y}
+  dot_size: {basis: source, from: T633-dot.size, interpretation: "the pin 1 dot's diameter: Table 633 gives it a height and a width of 0.5 each, and Figure 169 draws a round dot"}
+  dot_x:    {basis: derived, expr: dot_X + dot_size / 2 - body_D / 2, value: -2.75, gap: G-dot-origin,
+             interpretation: "the dot's centre in X: Coord. X read as the left side of the dot's 0.5 box, from the body's -X face, as Table 633's text lines read (X their left end, which puts each line's two ends 0.555 from the body's sides)"}
+  dot_y:    {basis: derived, expr: dot_Y + dot_size / 2 - body_E / 2, value: 2.75, gap: G-dot-origin,
+             interpretation: "the dot's centre in Y: Coord. Y read as the lower side of the dot's 0.5 box, from the body's -Y face, as Table 633's lines read (Y their foot, each 0.2 above the line below); the dot then sits 0.5 from both faces of the pin 1 corner"}
+  dot_depth: {basis: proposed, value: 0.02, gap: G-dot-depth,
+              rationale: "a laser mark in mould compound is some tens of micrometres deep; 0.02 mm is such a depth, deep enough for the STEP file to show pin 1 and shallow enough to leave the body's height alone"}
+
+  # ---- the leads ---------------------------------------------------------------------------------------
+  n_leads:        {basis: source, from: T632-caption.leads}
+  leads_per_side: {basis: source, from: F167-pins.per_side, interpretation: "the bottom view numbers each row's ends 1 and 14, 15 and 28, 29 and 42, 43 and 56"}
+  lead_rows:      {basis: derived, expr: n_leads / leads_per_side, value: 4, interpretation: "one row on each of the body's four sides"}
+  lead_pitch:     {basis: source, from: F167-e.bsc, interpretation: "between neighbouring leads' centrelines, along their side of the body"}
+  lead_b:         {basis: source, from: F167-b.nom, interpretation: "a lead's width on the seating plane, where the bottom view dimensions b"}
+  lead_L:         {basis: source, from: F167-L.nom, interpretation: "a lead's length on the seating plane, from the body's side face inward"}
+  lead_R_min:     {basis: source, from: F167-R.min}
+  lead_R:         {basis: derived, expr: "max(lead_R_min, lead_b / 2)", value: 0.09, gap: G-lead-radius,
+                   interpretation: "the radius of a lead's inner end: a full half-round, b / 2, as the bottom view draws it, and never under the stated MIN; no nominal and no MAX stated"}
+  lead_top_w:     {basis: measured, from: F167-side-scale, value: 0.100, gap: G-lead-section,
+                   method: "measure_fig167.py: the narrow side of the trapezoid the vector side view draws for each lead's end, between line middles, the mean of the 14, scaled against e = 0.400 (17.025 points per mm)",
+                   uncertainty: "±0.001 mm as drawn; the drawing shows every dimensioned value at its nominal within 0.0002 mm, the trapezoid's wide side at b = 0.180 among them"}
+  lead_row_end:   {basis: derived, expr: lead_pitch * (leads_per_side - 1) / 2, value: 2.6, gap: G-lead-rows,
+                   interpretation: "from a side's centreline to the centreline of the first and the last lead of its row: each row centred on its side, as Figure 167 draws it and as the lands of Figure 168 are (F168-lands)"}
+
+  # ---- the exposed centre pad ---------------------------------------------------------------------------
+  pad_D2:       {basis: source, from: F167-D2.nom, interpretation: "the pad's size along X"}
+  pad_E2:       {basis: source, from: F167-E2.nom, interpretation: "the pad's size along Y"}
+  pad_gap:      {basis: source, from: F167-gap.gap, interpretation: "from the leads' inner ends to the pad's edge; the pad is placed by the two the bottom view prints beside leads 1 to 14 and 15 to 28, and the third, beside leads 43 to 56, is checked"}
+  pad_x:        {basis: derived, expr: -body_D / 2 + lead_L + pad_gap + pad_D2 / 2, value: 0, interpretation: "the pad's centre in X, from the -X face"}
+  pad_y:        {basis: derived, expr: -body_E / 2 + lead_L + pad_gap + pad_E2 / 2, value: 0, interpretation: "the pad's centre in Y, from the -Y face"}
+  pad_t:        {basis: derived, expr: frame_A3, value: 0.203, gap: G-pad-thickness,
+                 interpretation: "the pad taken as cut from the lead frame the leads are cut from: A3 thick, its underside on the seating plane with theirs"}
+  notch_R:      {basis: source, from: F167-notch.R}
+  notch_offset: {basis: source, from: F167-notch.offset, interpretation: "from the notch's centre to the pad's edge facing leads 43 to 56, the +Y edge; the notch is in the edge facing leads 1 to 14, the -X edge, so it points at pin 1"}
+  notch_out:    {basis: measured, from: F167-notch-scale, value: 0.100, gap: G-notch-centre,
+                 method: "measure_fig167.py: the circle through the notch's arc in the vector bottom view, its centre's distance outside the middle of the pad's edge line, scaled against e = 0.400 (17.025 points per mm)",
+                 uncertainty: "±0.001 mm as drawn; the same arc measures R 0.2000 and its centre 0.4500 from the pad's edge, the two values the view dimensions"}
