@@ -193,6 +193,7 @@ evidence:
     image: figures/crops/fig8-body-size.png
     image_sha256: 6835acb6822466263f5230b5aa813fb86cbebb3497295bfc8ba80a4fcde6d0ba
     reading: "Centrifuge body.stl; AG_Centrifuge body; 130.0 x 130.0 x 34.0 mm"
+    confirmed_by: Vini Rezanejad
     values: {X: 130.0, Y: 130.0, Z: 34.0}
 
   - id: fig8-body-print
@@ -202,6 +203,7 @@ evidence:
     image: figures/crops/fig8-body-print.png
     image_sha256: ebb31018e9ec7679761095567ce4ff4fe4c7819a6ad3deb4b780334db34c53da
     reading: "15 hours 20 minutes; 121g · 40.63m"
+    confirmed_by: Vini Rezanejad
     values: {m: 121}
 
   - id: fig8-profile
@@ -211,6 +213,7 @@ evidence:
     image: figures/crops/fig8-profile.png
     image_sha256: dae85f199a4e17ad1f11d9f9df3d3ad0d93d53a20a0406909bf8d1ed9165840f
     reading: "Generic PLA; 0.4mm Nozzle; Standard Quality - 0.2mm; 100%; Off; Off"
+    confirmed_by: Vini Rezanejad
     values: {nozzle: 0.4, layer: 0.2, infill: 100}
     scope: context
     reason: "the profile fig8-body-print's 121 g was sliced at: 100 % infill, so 121 g is the solid body's mass; the nozzle restates P6-print"
@@ -259,6 +262,7 @@ evidence:
     image: figures/crops/fig8-arrows-size.png
     image_sha256: ddf97bb15443886924bfed174a3063e5ab1e210267151d3c813fe3c9d9707392
     reading: "Arrows.stl; AG_Arrows; 78.3 x 80.4 x 0.2 mm"
+    confirmed_by: Vini Rezanejad
     values: {X: 78.3, Y: 80.4, Z: 0.2}
     scope: not-modeled
     reason: "the optional Arrows inlay, which the target leaves out: the body is printed as one object"
@@ -270,6 +274,7 @@ evidence:
     image: figures/crops/fig8-arrows-print.png
     image_sha256: 7699f6dcf358b21e9c9f3602a420a37afb991922e14b78f51c2da6a8d3c3bf85
     reading: "1 minute; 0g · 0.02m"
+    confirmed_by: Vini Rezanejad
     values: {filament: 0.02}
     scope: not-modeled
     reason: "the optional Arrows inlay, which the target leaves out"
@@ -395,6 +400,7 @@ evidence:
     image: figures/crops/fig3-fan-label.png
     image_sha256: 69832a33e50b066a1ad7c8b95ff4b24cc43060365cd54281a15e1bfb8cfe7145
     reading: "12 V PC fan"
+    confirmed_by: Vini Rezanejad
     values: {V: 12}
     scope: not-modeled
     reason: "the fan's supply voltage: electronics, which the reconstruction does not build"
@@ -406,6 +412,7 @@ evidence:
     image: figures/crops/fig10-circuit-labels.png
     image_sha256: 1c94ed259396ca567eb1cc8679b6f3740d2b96a578874c029eb74924672cc7f3
     reading: "Lid switch; 12 V computer fan; Gnd(-); 12 V(+); Main switch; 12 V(+); Gnd(-); DC connector 9-12 V"
+    confirmed_by: Vini Rezanejad
     values: {fan_V: 12, dc_min: 9, dc_max: 12}
     scope: not-modeled
     reason: "the circuit's voltages: electronics and wiring, which the reconstruction does not build"

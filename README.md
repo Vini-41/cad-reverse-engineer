@@ -54,15 +54,15 @@ wrote build/steps/: 8 step views
 slowest check: body-shape 4.2 s
 wrote build/plan.md
 
-VERIFIED PENDING REVIEW: 0 errors, 0 warnings, 27/27 checks pass. Report: build/report.md
+VERIFIED: 0 errors, 0 warnings, 27/27 checks pass. Report: build/report.md
 ```
 
 The first run downloads build123d, OCC and MuJoCo (about a minute); the check itself takes about 25 seconds. Open `examples/centrifuge/build/assembly.step` in your CAD program, then read `build/report.md` beside it. It opens:
 
-> **VERIFIED PENDING REVIEW**: 0 errors, 0 warnings. 27/27 geometry checks pass.\
+> **VERIFIED**: 0 errors, 0 warnings. 27/27 geometry checks pass.\
 > Of 133 parameters, 95 rest on sources, 0 on measured values and 38 on proposed values.
 
-It stays PENDING REVIEW until a named person confirms its seven figure readings against their crops. After its sources, the report lists what they leave open, eleven questions in all, among them:
+After its sources, the report lists what they leave open, eleven questions in all, among them:
 
 | gap | question | close by | params |
 |---|---|---|---|
