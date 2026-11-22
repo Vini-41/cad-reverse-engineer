@@ -1,0 +1,54 @@
+# What the sources leave undefined, and how to close each gap (ask: authors | measure | datasheet | test).
+#
+# The parts, and what the datasheet gives for each (all in Figure 167 unless said). Each is built, and
+# a gap below is the question whose answer would replace the value built in its place.
+#
+#   body        the moulded body, one. 7 × 7 (D, E, BSC; P13-size). Its top face is A2 + A3 above the
+#               seating plane as the side view draws them (0.650 + 0.203 REF), under A's MAX of 0.900.
+#               Its underside stands A1 above the seating plane, built as drawn, 0.035 (G-standoff).
+#               Its pin 1 dot is Table 633's (T633-dot; G-dot-origin, G-dot-depth).
+#   lead        56 (T632-caption), 14 a side (F167-pins), at pitch e 0.400 BSC, each row centred on its
+#               side (G-lead-rows). Each b 0.180 wide, L 0.400 long from the body's side face inward,
+#               A3 0.203 REF thick, its inner end a full half-round (G-lead-radius) and its section the
+#               trapezoid the side view draws, 0.100 wide at the top (G-lead-section).
+#   centre pad  the exposed pad, one, terminal 57 (T642-gnd). D2 × E2 3.100 × 3.100, 1.550 from the
+#               leads' inner ends on three sides (F167-gap), A3 thick like the leads (G-pad-thickness),
+#               with a notch R0.20 in its edge facing leads 1 to 14, 0.450 from its edge facing leads
+#               43 to 56 (F167-notch). The notch's centre is drawn 0.100 outside the pad's edge, not on
+#               it, so the notch is 0.100 deep (G-notch-centre).
+#
+# Left out, each with its reason in evidence.yaml: the lead frame's tie-bar ends on the body's side
+# faces (F167-tiebar), the marking artwork (T633-logo, T633-line*), the tin plating (P585-plating) and
+# the geometric tolerances (F167-tol).
+gaps:
+  - id: G-standoff
+    question: "How far does the moulded body's underside stand above the seating plane (A1)? Figure 167 gives 0.000 MIN and 0.050 MAX, with no nominal."
+    ask: measure
+
+  - id: G-dot-origin
+    question: "What on the body's pin 1 dot do Table 633's Coord. X 0.5 and Coord. Y 6 locate: its centre, or a corner of its 0.5 × 0.5 box?"
+    ask: authors
+
+  - id: G-dot-depth
+    question: "How deep is the body's pin 1 dot, the laser mark Table 633 gives as 0.5 × 0.5?"
+    ask: measure
+
+  - id: G-lead-radius
+    question: "What radius rounds the inner end of each lead (R)? Figure 167 gives only its MIN, 0.065, and draws the end as a full half-round."
+    ask: measure
+
+  - id: G-lead-section
+    question: "What is each lead's cross-section? The side view of Figure 167 draws a lead's end on the body's side face as a trapezoid, wider at the seating plane, and dimensions only its height, A3."
+    ask: measure
+
+  - id: G-lead-rows
+    question: "Where does each row of 14 leads sit along its edge of the body? Figure 167 gives the pitch e and draws each row symmetric about the body's centreline, with no dimension from an edge or a datum."
+    ask: authors
+
+  - id: G-pad-thickness
+    question: "How thick is the exposed centre pad, and does its underside lie on the seating plane with the leads' undersides? No view of Figure 167 shows the pad in section."
+    ask: measure
+
+  - id: G-notch-centre
+    question: "How far outside the centre pad's edge is the centre of its R0.20 notch? Figure 167 dimensions the notch's radius and its 0.450 from the next edge, and draws its centre 0.100 outside the edge, so the notch is 0.100 deep, with no dimension."
+    ask: authors

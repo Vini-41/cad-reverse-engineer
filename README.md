@@ -122,6 +122,10 @@ VERIFIED means every number is accounted for and the geometry matches every chec
 <td><a href="examples/cell-stretcher"><img src="docs/images/cell-stretcher.webp" alt="A motion stage of laser-cut plates: two stepper motors turn two amber lead screws that move a grey carriage"></a></td>
 <td><b><a href="examples/cell-stretcher">Cell stretcher</a></b><br><sub>Kah et al., <a href="https://doi.org/10.1016/j.ohx.2020.e00162"><i>HardwareX</i> 2021</a></sub><br><br>A stepper-driven stage of laser-cut acrylic. Both lead screws are checked at the stated 8 mm per turn. The paper prints no plate dimensions, so they are read off the authors' cut sheets, and the 75 cut regions it builds and both printed parts are held to the released files.</td>
 </tr>
+<tr>
+<td><a href="examples/rp2040-qfn56"><img src="docs/images/rp2040-qfn56.webp" alt="A square black chip package seen from above with its pin 1 dot, and from below with 56 amber leads around a notched amber centre pad"></a></td>
+<td><b><a href="examples/rp2040-qfn56">RP2040 QFN-56</a></b><br><sub>Raspberry Pi, <a href="https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf">datasheet</a></sub><br><br>A chip package from its datasheet's drawing, built in its footprint's frame so the STEP drops into an ECAD library. Each dimension the table states as a MIN and MAX is compared as a range.</td>
+</tr>
 </table>
 
 A fresh agent built each one from the skill and its sources alone; the [benchmark](docs/benchmark.md) compares how Anthropic's and OpenAI's frontier models do at that. Every example's sources are committed, so each runs from a fresh clone, and `scripts/check` holds it to the status its README states.
@@ -196,4 +200,4 @@ To report a problem, open an issue with the command you ran, the finding it prin
 
 ## License
 
-The code is under the MIT license. Each example's sources and figure crops keep the license and credit its README names: CC BY 4.0 for the articles and their files, MIT for COMPAct's STL.
+The code is under the MIT license. Each example's sources and figure crops keep the license and credit its README names: CC BY 4.0 for the articles and their files, MIT for COMPAct's STL, CC BY-ND 4.0 for the RP2040 datasheet.
