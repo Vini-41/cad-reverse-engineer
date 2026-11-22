@@ -8,7 +8,7 @@ The single-stage planetary gearbox of the 7.2:1 SSPG actuator from Singh, Kapa, 
 scripts/cadrev check examples/compact-sspg
 ```
 
-Expected status: `VERIFIED PENDING REVIEW: 0 errors, 1 warning, 17/17 checks pass`
+Expected status: `VERIFIED: 0 errors, 1 warning, 17/17 checks pass`
 
 It takes about 75 seconds. Then open `build/assembly.step` in a CAD program and read `build/report.md`. The mechanism is in `build/model.mjcf`, for MuJoCo.
 
@@ -24,7 +24,7 @@ A gear train whose authors released only meshes, taken through `noob` and `build
 - **A conflict is recorded.** The carrier's extrusion bolt holes stand 23.5 mm from the axis and the secondary carrier's 24.25 mm. Each part is built as its own mesh holds it, and a gap asks the authors which is right. No parameter can name that gap, so it is the project's one warning.
 - **What the sources leave open is proposed.** The bearings, the bolts, the tooth flank's point count and the PLA's density are 24 proposed parameters of the 171, and six more, where the parts sit along the axis, are derived from them. So 30 rest on proposed values, under 15 of the 16 gaps.
 
-Three figure readings restate the 7.2:1 and await a named reviewer: `fig4a-label.png`, `fig7a-title.png` and `fig9-legend.png` in `figures/crops/`. Once each carries `confirmed_by` in `evidence.yaml`, the project is VERIFIED.
+The run ended at VERIFIED PENDING REVIEW. A named reviewer then checked its three figure readings, each restating the 7.2:1, against their crops in `figures/crops/`, recorded as `confirmed_by` in `evidence.yaml`, which makes it VERIFIED.
 
 ## Sources
 
