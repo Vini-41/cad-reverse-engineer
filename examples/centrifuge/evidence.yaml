@@ -1,55 +1,479 @@
-# Written by gen_ledger.py: edit that script, not this file.
+# Every number the sources state about the object. Each item is a verbatim quote or a pinned
+# figure crop with its reading.
 evidence:
-  - {"id": "P3-pcr325", "source": "paper", "page": 3, "locator": "Design files table, PCR strip 32.5 mm rotor", "quote": "Rotor – PCR strip – 32.5 mm Centrifuge rotor of PCR strips for 7 bladed fans with 32.5 mm hub diameter.", "values": {"hub_d": 32.5, "blades": 7}}
-  - {"id": "P3-fan", "source": "paper", "page": 3, "locator": "Bill of materials, PC fan", "quote": "PC fan 80 mm, 12 V computer fan with 7 blades", "values": {"w": 80}}
-  - {"id": "P4-screws", "source": "paper", "page": 4, "locator": "Bill of materials, bottom plate screws", "quote": "M3 * 10–12 mm metric screws 4", "values": {"d": 3, "L": 10, "n": 4}}
-  - {"id": "P11-mass", "source": "paper", "page": 11, "locator": "7.3 Safety notes", "quote": "low weight of the rotor (16 g)", "values": {"m": 16}}
-  - {"id": "P3-lid-switch", "source": "paper", "page": 3, "locator": "Bill of materials, lid switch", "quote": "Hinge lever micro switch 6*9 mm", "values": {"w": 6, "l": 9}, "scope": "not-modeled", "reason": "electronics: the lid micro switch is not built; the body's slot for it, 6 x 12 mm to leave its lever room, is (slot_*)"}
-  - {"id": "P3-main-switch", "source": "paper", "page": 3, "locator": "Bill of materials, main switch", "quote": "Rocker switch 19*12.5 mm", "values": {"h": 19, "w": 12.5}, "scope": "not-modeled", "reason": "electronics: the rocker switch is not built; the body's cut-out for it, 19 x 13 mm to clear it, is (rocker_*)"}
-  - {"id": "P4-psu", "source": "paper", "page": 4, "locator": "Bill of materials, power supply", "quote": "12 V, 1 A DC power supply, 5.5 mm * 2.1 mm connector", "values": {"od": 5.5, "id": 2.1}, "scope": "not-modeled", "reason": "electronics outside the device: the mains power supply"}
-  - {"id": "P4-dc", "source": "paper", "page": 4, "locator": "Bill of materials, DC socket", "quote": "DC socket 5.5 mm * 2.1 mm DC socket", "values": {"od": 5.5, "id": 2.1}, "scope": "not-modeled", "reason": "electronics: the DC socket is not built; the body's hole for it is (dc_*)"}
-  - {"id": "P4-lid", "source": "paper", "page": 4, "locator": "Bill of materials note, lid", "quote": "Its diameter is 116 mm", "values": {"d": 116}, "scope": "not-modeled", "reason": "the lid is a purchased food container resting in the body's groove; the target is the lid-off configuration"}
-  - {"id": "P1-fan", "source": "paper", "page": 1, "locator": "Abstract", "quote": "cheap off-the-shelf components (80 mm computer fan", "values": {"w": 80}, "scope": "context", "reason": "restates P3-fan"}
-  - {"id": "P4-fan-upcycle", "source": "paper", "page": 4, "locator": "Bill of materials note", "quote": "80 mm fans can be found in computer cases", "values": {"w": 80}, "scope": "context", "reason": "restates P3-fan"}
-  - {"id": "P7-hub-sizes", "source": "paper", "page": 7, "locator": "5.1.1 Printing the centrifuge rotor", "quote": "the two common sizes are 32.5 mm and 36.6 mm", "values": {"d325": 32.5, "d366": 36.6}, "scope": "context", "reason": "restates P3-pcr325 for the 32.5 mm hub; 36.6 mm is the variant not modelled"}
-  - {"id": "P3-pcr366-row", "source": "paper", "page": 3, "locator": "Design files table, PCR strip 36.6 mm rotor", "quote": "Rotor – PCR strip – 36.6 mm Centrifuge rotor of PCR strips for 7 bladed fans with 32.5 mm hub diameter.", "values": {"name_d": 36.6, "hub_d": 32.5}, "scope": "context", "reason": "the 36.6 mm PCR-strip rotor, a variant not modelled; see conflict K1"}
-  - {"id": "P7-rotor-infill", "source": "paper", "page": 7, "locator": "5.1.1 Printing the centrifuge rotor", "quote": "the rotor was printed with 100 %", "values": {"infill": 100}, "scope": "context", "reason": "solid rotor: supports weighing it at the full PLA density in chk-rotor-mass"}
-  - {"id": "P9-pcr-radius", "source": "paper", "page": 9, "locator": "7.1 Testing operation and reliability", "quote": "The rotational radius of the innermost tubes of the PCR strip is also 4.4 cm.", "values": {"r": 4.4}, "scope": "context", "reason": "radius of the tube tips, which depends on the PCR tubes' length; the tubes are not part of the device"}
-  - {"id": "P10-dims", "source": "paper", "page": 10, "locator": "Table 2, DIY column, Dimensions W*L*H (cm)", "quote": "13*13*10", "values": {"W": 13, "L": 13, "H": 10}, "scope": "context", "reason": "in cm, a unit printed only in the row header: W and L restate fig8-body-dims (130 mm); H includes the lid, not modelled"}
-  - {"id": "P9-m3", "source": "paper", "page": 9, "locator": "5.2 Assembling the centrifuge", "quote": "Attach the bottom plate with M3 screws", "scope": "context", "reason": "restates P4-screws"}
-  - {"id": "P2-strip", "source": "paper", "page": 2, "locator": "1. Hardware in context", "quote": "eight small, 200 ll tubes are connected", "values": {"n": "eight"}, "scope": "context", "reason": "a PCR strip of eight tubes: the holder's eight holes are the released rotor's (hole_*)"}
-  - {"id": "fig8-body-dims", "source": "paper", "page": 8, "locator": "Fig. 8 right, Cura object list, AG_Centrifuge body", "image": "figures/crops/fig8-body-dims.png", "image_sha256": "7be75cac317dfd20852bd2cd466b86a29bac33f28a1e158ffbf22de3f835ae2d", "reading": "130.0 x 130.0 x 34.0 mm", "values": {"W": 130.0, "L": 130.0, "H": 34.0}, "confirmed_by": "Vini Rezanejad"}
+  # ---- the user's brief
+  - id: BR-rotor
+    source: brief
+    page: 1
+    locator: The request
+    quote: "with one rotor variant of your choosing"
+    values: {rotors: one}
+
+  # ---- the rotor and what it holds
+  - id: P1-rotors
+    source: paper
+    page: 1
+    locator: Abstract
+    quote: "one can hold up to six tubes (1.5/2 ml, or 500 ll and 200 ll tubes with adapters) or two PCR strips"
+    values: {tubes: six}
+
+  - id: P2-six
+    source: paper
+    page: 2
+    locator: Section 2, main features
+    quote: "It is able to spin six tubes or two PCR strips simultaneously."
+    values: {tubes: six}
+    scope: context
+    reason: "restates P1-rotors"
+
+  - id: P2-fig1
+    source: paper
+    page: 2
+    locator: Fig. 1 caption
+    quote: "Illustration of the assembled mini centrifuge with a six-tube rotor and lid (left), six tubes rotor (middle) and with a PCR strip rotor (right). The six tube rotor holds plastic tubes of the most common sizes: 1.5/2 ml, 500 ll and 200 ll with the appropriate adapter."
+    values: {tubes: six}
+    scope: context
+    reason: "restates P1-rotors"
+
+  - id: T2-capacity
+    source: paper
+    page: 10
+    locator: Table 2, DIY column, Max. load capacity
+    quote: "6*1.5 ml tube 2 PCR strips"
+    values: {tubes: 6}
+    scope: context
+    reason: "restates P1-rotors"
+
+  - id: D-rotor
+    source: paper
+    page: 3
+    locator: Design files table, descriptions, Rotor - 32.5 mm
+    quote: "Rotor – 32.5 mm Centrifuge rotor for 7 bladed fans with 32.5 mm hub diameter."
+    values: {hub_d: 32.5}
+
+  - id: P7-hub-sizes
+    source: paper
+    page: 7
+    locator: Section 5.1.1
+    quote: "Measure the fan hub diameter (the two common sizes are 32.5 mm and 36.6 mm) and choose the rotor file accordingly."
+    values: {a: 32.5, b: 36.6}
+    scope: context
+    reason: "the two hub sizes the rotor files are released for; restates D-rotor for the 32.5 mm one built"
+
+  - id: P7-rotor-infill
+    source: paper
+    page: 7
+    locator: Section 5.1.1
+    quote: "the rotor was printed with 100 % infill and random z seams"
+    values: {infill: 100}
+    scope: context
+    reason: "the rotor is printed solid, so its stated mass is comparable with its solid volume times the PLA's density"
+
+  - id: P11-rotor-mass
+    source: paper
+    page: 11
+    locator: Section 7.3
+    quote: "due to the low weight of the rotor (16 g)"
+    values: {m: 16}
+    scope: context
+    reason: "conflict K-rotor-mass: the released Rotor - 32.5 mm, which the rotor is built from and shape-checked against, weighs 13.15 g solid at 1.24 g/cm3; no check compares the 16 g"
+
+  - id: P9-radius
+    source: paper
+    page: 9
+    locator: Section 7.1
+    quote: "The maximum rotational radius of the six tube rotor is 4.4 cm, using 1.5 ml tubes."
+    values: {r: 4.4}
+    scope: not-modeled
+    reason: "the radius of the tip of a loaded 1.5 ml tube; the target is unloaded and no tube is built"
+
+  - id: T2-radius
+    source: paper
+    page: 10
+    locator: Table 2, Max. radius (cm), DIY is the last cell
+    quote: "Max. radius (cm) (with1.5 ml tubes) 7.72 5.2 4.4 4.4"
+    values: {r: 4.4}
+    scope: context
+    reason: "restates P9-radius; the other cells are the commercial centrifuges"
+
+  # ---- the rotor variants, fit testers and adapters the target leaves out
+  - id: D-rotor-pcr-325
+    source: paper
+    page: 3
+    locator: Design files table, descriptions
+    quote: "Rotor – PCR strip – 32.5 mm Centrifuge rotor of PCR strips for 7 bladed fans with 32.5 mm hub diameter."
+    values: {hub_d: 32.5}
+    scope: not-modeled
+    reason: "the PCR strip rotor, a variant the target leaves out"
+
+  - id: D-fit-325
+    source: paper
+    page: 3
+    locator: Design files table, descriptions
+    quote: "Rotor – 32.5 mm -fit tester The bottom part of the rotor to test the fit and tightness with the fan hub."
+    values: {hub_d: 32.5}
+    scope: not-modeled
+    reason: "a fit tester, printed beside the object and not part of it"
+
+  - id: D-rotor-366
+    source: paper
+    page: 3
+    locator: Design files table, descriptions
+    quote: "Rotor – 36.6 mm Centrifuge rotor for 7 bladed fans with 36.6 mm hub diameter."
+    values: {hub_d: 36.6}
+    scope: not-modeled
+    reason: "the rotor for a 36.6 mm hub, a variant the target leaves out"
+
+  - id: D-rotor-pcr-366
+    source: paper
+    page: 3
+    locator: Design files table, descriptions
+    quote: "Rotor – PCR strip – 36.6 mm Centrifuge rotor of PCR strips for 7 bladed fans with 32.5 mm hub diameter."
+    values: {name_d: 36.6, hub_d: 32.5}
+    scope: not-modeled
+    reason: "the PCR strip rotor for a 36.6 mm hub, a variant the target leaves out; its description prints 32.5 mm against its own file name"
+
+  - id: D-fit-366
+    source: paper
+    page: 3
+    locator: Design files table, descriptions
+    quote: "Rotor 36.6 mm – fit tester The bottom part of the rotor to test the fit and tightness with the fan hub."
+    values: {hub_d: 36.6}
+    scope: not-modeled
+    reason: "a fit tester, printed beside the object and not part of it"
+
+  - id: D-adapters
+    source: paper
+    page: 3
+    locator: Design files table, descriptions
+    quote: "0.5 ml tube adapter Adapter for 0.5 ml (500 ll) tubes. 0.2 ml tube adapter Adapter for 0.2 ml (200 ll) tubes."
+    values: {a: 0.5, b: 0.2}
+    scope: not-modeled
+    reason: "tube adapters go in with the tubes; the target is the unloaded centrifuge"
+
+  - id: P9-radius-pcr
+    source: paper
+    page: 9
+    locator: Section 7.1
+    quote: "The rotational radius of the innermost tubes of the PCR strip is also 4.4 cm."
+    values: {r: 4.4}
+    scope: not-modeled
+    reason: "the PCR strip rotor, a variant the target leaves out"
+
+  # ---- the printed parts as a set
+  - id: P1-design
+    source: paper
+    page: 1
+    locator: Abstract
+    quote: "The design consists of only three printed parts (optimized to be printed without supports) and cheap off-the-shelf components (80 mm computer fan, switches, food container and power supply)."
+    values: {printed: three, fan: 80}
+    scope: context
+    reason: "names the three printed parts the target builds (body, bottom plate, rotor); the fan size restates B-fan"
+
+  - id: P2-three
+    source: paper
+    page: 2
+    locator: Section 2, main features
+    quote: "Simple design with only three printed parts and generic, affordable off the shelf components."
+    values: {printed: three}
+    scope: context
+    reason: "restates P1-design"
+
+  - id: T2-dims
+    source: paper
+    page: 10
+    locator: Table 2, DIY column (last cell), row Dimensions W*L*H (cm)
+    quote: "13*13*10"
+    values: {W: 13, L: 13, H: 10}
+
+  - id: fig8-body-size
+    source: paper
+    page: 8
+    locator: Fig. 8, right panel, Cura object list
+    image: figures/crops/fig8-body-size.png
+    image_sha256: 6835acb6822466263f5230b5aa813fb86cbebb3497295bfc8ba80a4fcde6d0ba
+    reading: "Centrifuge body.stl; AG_Centrifuge body; 130.0 x 130.0 x 34.0 mm"
+    values: {X: 130.0, Y: 130.0, Z: 34.0}
+
+  - id: fig8-body-print
+    source: paper
+    page: 8
+    locator: Fig. 8, right panel, Cura print estimate
+    image: figures/crops/fig8-body-print.png
+    image_sha256: ebb31018e9ec7679761095567ce4ff4fe4c7819a6ad3deb4b780334db34c53da
+    reading: "15 hours 20 minutes; 121g · 40.63m"
+    values: {m: 121}
+
+  - id: fig8-profile
+    source: paper
+    page: 8
+    locator: Fig. 8, right panel, Cura profile bar
+    image: figures/crops/fig8-profile.png
+    image_sha256: dae85f199a4e17ad1f11d9f9df3d3ad0d93d53a20a0406909bf8d1ed9165840f
+    reading: "Generic PLA; 0.4mm Nozzle; Standard Quality - 0.2mm; 100%; Off; Off"
+    values: {nozzle: 0.4, layer: 0.2, infill: 100}
+    scope: context
+    reason: "the profile fig8-body-print's 121 g was sliced at: 100 % infill, so 121 g is the solid body's mass; the nozzle restates P6-print"
+
+  - id: P7-body-infill
+    source: paper
+    page: 7
+    locator: Section 5.1.2
+    quote: "The body of the centrifuge was printed with 10% infill."
+    values: {infill: 10}
+    scope: context
+    reason: "the body as printed is not solid, so its printed mass is not its volume times density; no source states that mass"
+
+  - id: P6-print
+    source: paper
+    page: 6
+    locator: Section 5.1
+    quote: "Nozzle diameter: 0.4 mm, line width 0.6 mm, 3 wall perimeters."
+    values: {nozzle: 0.4, line: 0.6, walls: 3}
+    scope: context
+    reason: "print settings: how the parts are made, not a dimension of a modelled feature"
+
+  - id: B-pla
+    source: paper
+    page: 4
+    locator: Bill of materials, PLA filament row
+    quote: "100 g 2 €"
+    values: {m: 100}
+    scope: context
+    reason: "the filament to buy, an approximate total for parts of which the body is printed at 10 % infill; not the mass of a modelled part"
+
+  # ---- the Arrows inlay and the compatibility body, left out
+  - id: P7-arrows-print
+    source: paper
+    page: 7
+    locator: Section 5.1.2
+    quote: "centered on the build plate with 0.2 mm layer height, 0.3 mm z hop, without brim, skirt or raft"
+    values: {layer: 0.2, zhop: 0.3}
+    scope: not-modeled
+    reason: "print settings of the optional Arrows inlay, which the target leaves out"
+
+  - id: fig8-arrows-size
+    source: paper
+    page: 8
+    locator: Fig. 8, left panel, Cura object list
+    image: figures/crops/fig8-arrows-size.png
+    image_sha256: ddf97bb15443886924bfed174a3063e5ab1e210267151d3c813fe3c9d9707392
+    reading: "Arrows.stl; AG_Arrows; 78.3 x 80.4 x 0.2 mm"
+    values: {X: 78.3, Y: 80.4, Z: 0.2}
+    scope: not-modeled
+    reason: "the optional Arrows inlay, which the target leaves out: the body is printed as one object"
+
+  - id: fig8-arrows-print
+    source: paper
+    page: 8
+    locator: Fig. 8, left panel, Cura print estimate
+    image: figures/crops/fig8-arrows-print.png
+    image_sha256: 7699f6dcf358b21e9c9f3602a420a37afb991922e14b78f51c2da6a8d3c3bf85
+    reading: "1 minute; 0g · 0.02m"
+    values: {filament: 0.02}
+    scope: not-modeled
+    reason: "the optional Arrows inlay, which the target leaves out"
+
+  - id: P4-compat
+    source: paper
+    page: 4
+    locator: Section 4, below the bill of materials
+    quote: "which allows using containers with 105 mm of minimum and 127 mm of maximum diameter"
+    values: {d_min: 105, d_max: 127}
+    scope: not-modeled
+    reason: "the Centrifuge body - compatibility, a variant the target leaves out"
+
+  - id: P6-compat
+    source: paper
+    page: 6
+    locator: Fig. 4 caption
+    quote: "accommodate lids with 105 mm of minimum and 127 mm of maximum diameter"
+    values: {d_min: 105, d_max: 127}
+    scope: not-modeled
+    reason: "the Centrifuge body - compatibility, a variant the target leaves out; restates P4-compat"
+
+  # ---- the purchased parts
+  - id: P4-lid
+    source: paper
+    page: 4
+    locator: Section 4, below the bill of materials
+    quote: "Its diameter is 116 mm which is common for round containers with a volume of approximately 0.5 L."
+    values: {d: 116}
+
+  - id: B-fan
+    source: paper
+    page: 3
+    locator: Bill of materials, PC fan row
+    quote: "80 mm, 12 V computer fan with 7 blades"
+    values: {size: 80, blades: 7}
+
+  - id: P4-fans
+    source: paper
+    page: 4
+    locator: Section 4
+    quote: "80 mm fans can be found in computer cases"
+    values: {size: 80}
+    scope: context
+    reason: "restates B-fan"
+
+  - id: B-lid-switch
+    source: paper
+    page: 3
+    locator: Bill of materials, Lid switch row
+    quote: "Hinge lever micro switch 6*9 mm"
+    values: {a: 6, b: 9}
+
+  - id: B-main-switch
+    source: paper
+    page: 3
+    locator: Bill of materials, Main switch row
+    quote: "Rocker switch 19*12.5 mm"
+    values: {L: 19, W: 12.5}
+
+  - id: B-main-switch-in
+    source: paper
+    page: 3
+    locator: Bill of materials, Main switch row
+    quote: "(0.7500*0.500)"
+    values: {L: 0.75, W: 0.5}
+    scope: context
+    reason: "restates B-main-switch in inches, 0.75 in by 0.5 in: the PDF's text prints each inch mark as 00"
+
+  - id: B-dc-socket
+    source: paper
+    page: 4
+    locator: Bill of materials, DC socket row
+    quote: "DC socket 5.5 mm * 2.1 mm DC socket"
+    values: {d_barrel: 5.5, d_pin: 2.1}
+
+  - id: B-screws
+    source: paper
+    page: 4
+    locator: Bill of materials, Bottom plate screws row
+    quote: "Bottom plate screws M3 * 10–12 mm metric screws 4"
+    values: {len_min: 10, len_max: 12, n: 4}
+
+  - id: B-screws-link
+    source: paper
+    page: 4
+    locator: Bill of materials, Bottom plate screws row, source of materials
+    quote: "Countersunk-Hexagonal-Stainless-"
+    scope: context
+    reason: "the link's own words for the screws that were bought: countersunk, with a hexagon socket; it states no number, and the head proposed for the screws follows it"
+
+  - id: P9-screws
+    source: paper
+    page: 9
+    locator: Section 5.2
+    quote: "Attach the bottom plate with M3 screws."
+    scope: context
+    reason: "restates B-screws' thread"
+
+  # ---- electronics and behaviour, which the static model leaves out
+  - id: B-power-supply
+    source: paper
+    page: 4
+    locator: Bill of materials, Power supply row
+    quote: "12 V, 1 A DC power supply, 5.5 mm * 2.1 mm connector"
+    values: {d_barrel: 5.5, d_pin: 2.1}
+    scope: not-modeled
+    reason: "the power supply is outside the device and the target leaves it out"
+
+  - id: P8-cables
+    source: paper
+    page: 8
+    locator: Section 5.2
+    quote: "Computer fans are usually provided with 30 cm long cables"
+    values: {L: 30}
+    scope: not-modeled
+    reason: "wiring, which the reconstruction does not build"
+
+  - id: fig3-fan-label
+    source: paper
+    page: 5
+    locator: Fig. 3, fan label
+    image: figures/crops/fig3-fan-label.png
+    image_sha256: 69832a33e50b066a1ad7c8b95ff4b24cc43060365cd54281a15e1bfb8cfe7145
+    reading: "12 V PC fan"
+    values: {V: 12}
+    scope: not-modeled
+    reason: "the fan's supply voltage: electronics, which the reconstruction does not build"
+
+  - id: fig10-circuit
+    source: paper
+    page: 8
+    locator: Fig. 10, all labels
+    image: figures/crops/fig10-circuit-labels.png
+    image_sha256: 1c94ed259396ca567eb1cc8679b6f3740d2b96a578874c029eb74924672cc7f3
+    reading: "Lid switch; 12 V computer fan; Gnd(-); 12 V(+); Main switch; 12 V(+); Gnd(-); DC connector 9-12 V"
+    values: {fan_V: 12, dc_min: 9, dc_max: 12}
+    scope: not-modeled
+    reason: "the circuit's voltages: electronics and wiring, which the reconstruction does not build"
+
+  - id: P9-nominal-speed
+    source: paper
+    page: 9
+    locator: Section 7.1
+    quote: "The nominal speed of the fan used is 2000 RPM."
+    values: {rpm: 2000}
+    scope: not-modeled
+    reason: "behaviour: the project is static, the rotor fixed on the hub"
+
+  - id: P9-speed
+    source: paper
+    page: 9
+    locator: Section 7.1
+    quote: "When the rotor was loaded with two empty adapters (to make counting easier), the measured speed was 2160 RPM, under the load of two 1.5 ml tubes containing 1000 l liquid, the maximum decreased only to 2100 RPM."
+    values: {rpm_adapters: 2160, rpm_tubes: 2100}
+    scope: not-modeled
+    reason: "behaviour: the project is static, the rotor fixed on the hub"
+
+  - id: P9-rcf
+    source: paper
+    page: 9
+    locator: Section 7.1
+    quote: "The maximum RCF is 230 G."
+    values: {rcf: 230}
+    scope: not-modeled
+    reason: "behaviour: a relative centrifugal force worked out from the speed and the loaded radius, not a mass"
+
+# Stated quantities that are not about the object (test conditions, results, other designs).
 skipped:
-  - {"source": "body_compat_step", "reason": "not part of the device built: the broader-lid-compatibility body, a variant for other lids (target: standard body)", "body": "body_compat_step"}
-  - {"source": "arrows_step", "body": "arrows_step#1", "reason": "not part of the device: an optional coloured arrow inlay, printed separately (§5.1.2); the body's arrow recess is modelled"}
-  - {"source": "arrows_step", "body": "arrows_step#2", "reason": "not part of the device: an optional coloured arrow inlay, printed separately (§5.1.2); the body's arrow recess is modelled"}
-  - {"source": "rotor325_step", "reason": "six-tube rotor, a variant not modelled (target: PCR-strip rotor)", "body": "rotor325_step"}
-  - {"source": "rotor366_step", "reason": "six-tube rotor for 36.6 mm hubs, a variant not modelled", "body": "rotor366_step"}
-  - {"source": "rotor_pcr366_step", "reason": "PCR-strip rotor for 36.6 mm hubs, a variant not modelled", "body": "rotor_pcr366_step"}
-  - {"source": "fit325_step", "reason": "a fit tester for the 32.5 mm hub, not part of the device", "body": "fit325_step"}
-  - {"source": "fit366_step", "reason": "a fit tester for the 36.6 mm hub, not part of the device", "body": "fit366_step"}
-  - {"source": "adapter05_step", "reason": "0.5 ml tube adapter, an accessory for the six-tube rotor not modelled", "body": "adapter05_step"}
-  - {"source": "adapter02_step", "reason": "0.2 ml tube adapter, an accessory for the six-tube rotor not modelled", "body": "adapter02_step"}
-  - {"source": "paper", "page": 1, "quote": "one can hold up to six tubes (1.5/2 ml, or 500 ll and 200 ll tubes with adapters)", "reason": "tube sizes the rotors hold: loads, not the device"}
-  - {"source": "paper", "page": 2, "quote": "1.5/2 ml, 500 ll and 200 ll with the appropriate adapter", "reason": "tube sizes the six-tube rotor holds: loads, not the device"}
-  - {"source": "paper", "page": 3, "from": "Centrifuge body STL and STEP", "to": "0.2 ml tube adapter STL and STEP", "reason": "design-file list: file names and licences"}
-  - {"source": "paper", "page": 3, "quote": "Rotor – 32.5 mm Centrifuge rotor for 7 bladed fans with 32.5 mm hub diameter.", "reason": "the six-tube rotor, a variant not modelled"}
-  - {"source": "paper", "page": 3, "from": "Rotor – 32.5 mm -ﬁt tester", "to": "Rotor – 36.6 mm Centrifuge rotor for 7 bladed fans with 36.6 mm hub diameter.", "reason": "the fit tester and the 36.6 mm six-tube rotor, not modelled"}
-  - {"source": "paper", "page": 3, "from": "Rotor 36.6 mm – ﬁt tester The bottom part", "to": "Adapter for 0.2 ml (200 ll) tubes.", "reason": "fit tester and tube adapters, not part of the modelled device"}
-  - {"source": "paper", "page": 4, "quote": "for 3D printing 100 g", "reason": "filament bought for all printed parts; not a mass of the built device"}
-  - {"source": "paper", "page": 4, "quote": "allows using containers with 105 mm of minimum and 127 mm of maximum diameter", "reason": "the broader-compatibility body, a variant not modelled"}
-  - {"source": "paper", "page": 4, "quote": "Cook&Lock round container 400 ml", "reason": "an alternative lid, not modelled"}
-  - {"source": "paper", "page": 5, "quote": "build plate size at least 13*13 cm", "reason": "printer requirement"}
-  - {"source": "paper", "page": 6, "quote": "0.4 mm, line width 0.6 mm, 3 wall perimeters", "reason": "print settings"}
-  - {"source": "paper", "page": 6, "quote": "accommodate lids with 105 mm of minimum and 127 mm of maximum diameter", "reason": "the broader-compatibility body, a variant not modelled"}
-  - {"source": "paper", "page": 7, "quote": "The body of the centrifuge was printed with 10%", "reason": "body print infill; the body's mass is not checked"}
-  - {"source": "paper", "page": 7, "quote": "0.2 mm layer height, 0.3 mm z hop", "reason": "print settings for the optional arrow inlay"}
-  - {"source": "paper", "page": 8, "quote": "30 cm long cables", "reason": "wiring"}
-  - {"source": "paper", "page": 9, "from": "The nominal speed of the fan used is 2000 RPM", "to": "six tube rotor is 4.4 cm, using 1.5 ml tubes.", "reason": "speed measurements and the six-tube rotor's radius: results and another variant"}
-  - {"source": "paper", "page": 9, "from": "While the intended use case", "to": "then were centrifuged for 30 s.", "reason": "stress and efficacy tests"}
-  - {"source": "paper", "page": 10, "from": "results, all centrifuges were set to 230 g", "to": "Price (EUR) 3500* 500 n.a.** 20", "reason": "comparison with commercial centrifuges: test results and other devices"}
-  - {"source": "paper", "page": 11, "from": "After the lid switch is opened it takes 4.2 s", "to": "the time stop extends to 5.8 s", "reason": "stopping-time test"}
-  - {"source": "paper", "page": 11, "from": "Fig. 12. The DIY mini centrifuge", "to": "1 ml/1.5 ml tubes PCR strip Average", "reason": "efficacy and noise tests"}
-  - {"source": "paper", "page": 3, "quote": "(0.7500*0.500)", "reason": "the rocker switch's size in inches, printed unitless: it restates P3-main-switch's 19*12.5 mm; electronics, not built"}
+  - {source: paper, page: 3, from: "Design file name File type Open source license", to: "Design file Description", reason: "the list of the released files' names and licence; what each file is is ledgered from the descriptions below it"}
+  - {source: paper, page: 4, from: "Table 1 Alternative plastic containers", to: "Ruccola Twist (BranQ).", reason: "alternative lids that were tested to fit, not the lid built"}
+  - {source: paper, page: 5, quote: "build plate size at least 13*13 cm", reason: "a requirement on the printer, not a dimension of the object"}
+  - {source: paper, page: 9, quote: "it captures footage at 960 fps for 0.5 s", reason: "how the speed was measured"}
+  - {source: paper, page: 9, from: "While the intended use case", to: "both the samples and the motor.", reason: "the stress test: its duration, load and temperatures"}
+  - {source: paper, page: 9, from: "To test the efficacy", to: "then were centrifuged for 30 s.", reason: "the efficacy test's samples and duration"}
+  - {source: paper, page: 10, from: "results, all centrifuges were set to 230 g", to: "background noise (38 dB).", reason: "the comparison with three commercial centrifuges and the noise measurement: test settings and results"}
+  - {source: paper, page: 10, quote: "24*1.5 ml tubes 12*1.5 ml tube 2 PCR strips 6*1.5 ml tubes", reason: "the commercial centrifuges' capacities"}
+  - {source: paper, page: 10, quote: "24*31*22 18.5*24*12 13*15*12", reason: "the commercial centrifuges' dimensions"}
+  - {source: paper, page: 11, from: "After the lid switch is opened", to: "(average of 10 measurements.", reason: "stopping times: test results"}
+  - {source: paper, page: 11, from: "Fig. 12. The DIY mini centrifuge", to: "DIY 2160 44 45 44 45 45 44.6", reason: "the efficacy figure's samples and the noise table: test results"}
+  - {source: body_compat, body: "body_compat", reason: "the body for lids of 105 to 127 mm, a variant the target leaves out"}
+  - {source: arrows, body: "arrows#1", reason: "the optional colour inlay of one spin arrow: the target's body is printed as one object, its arrows left as 0.2 mm recesses"}
+  - {source: arrows, body: "arrows#2", reason: "the optional colour inlay of the other spin arrow, left out with the first"}
+  - {source: rotor_pcr_325, body: "rotor_pcr_325", reason: "the PCR strip rotor, a variant the target leaves out"}
+  - {source: rotor_325_fit, body: "rotor_325_fit", reason: "a fit tester"}
+  - {source: rotor_366, body: "rotor_366", reason: "the rotor for a 36.6 mm hub, a variant the target leaves out"}
+  - {source: rotor_pcr_366, body: "rotor_pcr_366", reason: "the PCR strip rotor for a 36.6 mm hub, a variant the target leaves out"}
+  - {source: rotor_366_fit, body: "rotor_366_fit", reason: "a fit tester"}
+  - {source: adapter_05, body: "adapter_05", reason: "a tube adapter, which goes in with a tube; the target is unloaded"}
+  - {source: adapter_02, body: "adapter_02", reason: "a tube adapter, which goes in with a tube; the target is unloaded"}
+
+# Places where sources disagree, and how the reconstruction resolves each.
 conflicts:
-  - {"id": "K1", "evidence": ["P3-pcr366-row", "P7-hub-sizes"], "summary": "The design-file table describes the 36.6 mm PCR-strip rotor as for fans 'with 32.5 mm hub diameter'; its name and §5.1.1 give 36.6 mm.", "resolution": "A copy error in the 36.6 mm row, which concerns the variant not modelled. The modelled 32.5 mm PCR-strip rotor's own row (P3-pcr325) gives 32.5 mm, as does its released body, which the rotor's shape check compares with the rotor built from it."}
+  - id: K-body-infill
+    evidence: [P7-body-infill, fig8-profile]
+    summary: The text says the body was printed with 10% infill; Fig. 8's Cura window slices it at 100% infill.
+    resolution: Fig. 8 shows the print orientation, sliced at the profile's 100 %, so its 121 g is the solid body's mass (the released body is 97.79 cm³, and 121 g over it is 1.237 g/cm³, a PLA's density) and is compared with the solid model. The body as printed at 10 % infill is lighter, and no source states that mass.
+
+  - id: K-rotor-mass
+    evidence: [P11-rotor-mass, fig8-body-print]
+    summary: The rotor is stated at 16 g and printed solid. The released Rotor - 32.5 mm is 10.60 cm³, which at the 1.237 g/cm³ Fig. 8 implies for the body weighs 13.1 g, 18 % under. The released Rotor - PCR strip - 32.5 mm (12.92 cm³) weighs 16.0 g at it.
+    resolution: The rotor is built from the released Rotor - 32.5 mm, the target's, and its shape check holds it to that body. A mass check of it against the 16 g, at the half gram the statement is printed to, fails (13.15 g at 1.24 g/cm³, 2.85 g under), so the 16 g is kept as context and no check compares it. Whether the 16 g is the PCR strip rotor's, which it matches, is a question for the author.
+
+  - id: K-lid-switch-axes
+    evidence: [B-lid-switch]
+    summary: The bill of materials gives the lid switch two sizes, 6*9 mm, without saying which of its dimensions they are. The body's pocket for it is 6 by 12 mm in plan. Either the 9 mm is the switch's height, standing in the pocket, with its length along the pocket's 12 mm unstated; or the 9 mm is its length, loose in the pocket's 12 mm, with its height unstated.
+    resolution: Built with the 6 mm across the pocket's 6 mm and the 9 mm as the height, and the length along the pocket's 12 mm derived from the pocket. Gap G-lid-switch asks which two dimensions the 6 and 9 mm are.

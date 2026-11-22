@@ -1,95 +1,169 @@
-# Written by gen_ledger.py: edit that script, not this file.
+# The only place numbers enter the model. basis: source | derived | measured | proposed.
+# Lengths in mm, angles in degrees. An angle about the axis is in the x-z plane, from +x towards +z.
 params:
-  body_bore_d: {"basis": "source", "from": "body_step", "value": 126, "interpretation": "inner wall bore, as the released body gives it"}
-  deck_t: {"basis": "source", "from": "body_step", "value": 7, "interpretation": "top deck thickness (along y), as the released body gives it"}
-  hub_hole_d: {"basis": "source", "from": "body_step", "value": 44, "interpretation": "central hole through the deck, as the released body gives it"}
-  groove_di: {"basis": "source", "from": "body_step", "value": 107, "interpretation": "lid groove, inner wall, as the released body gives it"}
-  groove_do: {"basis": "source", "from": "body_step", "value": 123, "interpretation": "lid groove, outer wall, as the released body gives it"}
-  groove_depth: {"basis": "source", "from": "body_step", "value": 5, "interpretation": "lid groove depth to its flat floor (along y), as the released body gives it"}
-  groove_in_wall: {"basis": "source", "from": "body_step", "value": 1.0, "interpretation": "lid groove, straight part of the inner wall (along y), as the released body gives it"}
-  groove_out_wall: {"basis": "source", "from": "body_step", "value": 1.1, "interpretation": "lid groove, straight part of the outer wall (along y), as the released body gives it"}
-  arrow_depth: {"basis": "source", "from": "body_step", "value": 0.2, "interpretation": "spin-direction arrow recess depth (along y), as the released body gives it"}
-  arrow_d_in: {"basis": "source", "from": "body_step", "value": 74.266494, "interpretation": "arrow band, inner edge, as the released body gives it"}
-  arrow_d_out: {"basis": "source", "from": "body_step", "value": 78.266494, "interpretation": "arrow band, outer edge, as the released body gives it"}
-  arrow_tip_x: {"basis": "source", "from": "body_step", "value": 2, "interpretation": "arrow head tip, past the axis plane (along x), as the released body gives it"}
-  arrow_base_x: {"basis": "source", "from": "body_step", "value": 2, "interpretation": "arrow head base, before the axis plane (along x), as the released body gives it"}
-  arrow_z0: {"basis": "source", "from": "body_step", "value": 36.0, "interpretation": "arrow head base, inner corner (along z), as the released body gives it"}
-  arrow_z1: {"basis": "source", "from": "body_step", "value": 40.2, "interpretation": "arrow head base, outer corner (along z), as the released body gives it"}
-  fan_hole_d: {"basis": "source", "from": "body_step", "value": 4, "interpretation": "fan screw holes in the deck, as the released body gives it"}
-  fan_hole_pcd: {"basis": "source", "from": "body_step", "value": 100.8, "interpretation": "fan screw holes, opposite pair, as the released body gives it"}
-  boss_pcd: {"basis": "source", "from": "body_step", "value": 116, "interpretation": "screw bosses, opposite pair, as the released body gives it"}
-  boss_angle: {"basis": "source", "from": "body_step", "value": 21.756866, "interpretation": "screw boss angle from +X, as the released body gives it"}
-  boss_d: {"basis": "source", "from": "body_step", "value": 10, "interpretation": "screw boss, as the released body gives it"}
-  boss_hole_d: {"basis": "source", "from": "body_step", "value": 3.2, "interpretation": "screw boss tapping hole, as the released body gives it"}
-  boss_hole_depth: {"basis": "source", "from": "body_step", "value": 15, "interpretation": "screw boss hole depth (along y), as the released body gives it"}
-  boss_cone_drop: {"basis": "source", "from": "body_step", "value": 8.6, "interpretation": "boss top cone meets the wall (along y), as the released body gives it"}
-  boss_cone_open: {"basis": "source", "from": "body_step", "value": 135, "interpretation": "boss top cone against the wall, as the released body gives it"}
-  boss_flat: {"basis": "source", "from": "body_step", "value": 18.5, "interpretation": "boss top flat (along y), as the released body gives it"}
-  rocker_p1x: {"basis": "source", "from": "body_step", "value": 50.25184, "interpretation": "main-switch cut-out, outer corner P1 (along x), as the released body gives it"}
-  rocker_p1z: {"basis": "source", "from": "body_step", "value": 41.228055, "interpretation": "main-switch cut-out, outer corner P1 (along z), as the released body gives it"}
-  rocker_p2x: {"basis": "source", "from": "body_step", "value": 48.830544, "interpretation": "main-switch cut-out, inner corner P2 (along x), as the released body gives it"}
-  rocker_p2z: {"basis": "source", "from": "body_step", "value": 39.806758, "interpretation": "main-switch cut-out, inner corner P2 (along z), as the released body gives it"}
-  rocker_w: {"basis": "source", "from": "body_step", "value": 13.0, "interpretation": "main-switch cut-out width, as the released body gives it"}
-  rocker_top: {"basis": "source", "from": "body_step", "value": 7.395837, "interpretation": "main-switch cut-out, top below the deck top (along y), as the released body gives it"}
-  rocker_h: {"basis": "source", "from": "body_step", "value": 19.0, "interpretation": "main-switch cut-out height (along y), as the released body gives it"}
-  dc_q1x: {"basis": "source", "from": "body_step", "value": 45.042935, "interpretation": "DC socket hole axis, point Q1 (along x), as the released body gives it"}
-  dc_q1z: {"basis": "source", "from": "body_step", "value": 46.17384, "interpretation": "DC socket hole axis, point Q1 (along z), as the released body gives it"}
-  dc_q2x: {"basis": "source", "from": "body_step", "value": 44.335828, "interpretation": "DC socket hole axis, point Q2 (along x), as the released body gives it"}
-  dc_q2z: {"basis": "source", "from": "body_step", "value": 45.466733, "interpretation": "DC socket hole axis, point Q2 (along z), as the released body gives it"}
-  dc_y: {"basis": "source", "from": "body_step", "value": 15.53615, "interpretation": "DC socket hole axis below the top (along y), as the released body gives it"}
-  dc_d: {"basis": "source", "from": "body_step", "value": 8.5, "interpretation": "DC socket hole, as the released body gives it"}
-  slot_c1x: {"basis": "source", "from": "body_step", "value": 37.550742, "interpretation": "lid-switch slot, corner C1 (along x), as the released body gives it"}
-  slot_c1z: {"basis": "source", "from": "body_step", "value": 39.804363, "interpretation": "lid-switch slot, corner C1 (along z), as the released body gives it"}
-  slot_c2x: {"basis": "source", "from": "body_step", "value": 42.147008, "interpretation": "lid-switch slot, corner C2 (along x), as the released body gives it"}
-  slot_c2z: {"basis": "source", "from": "body_step", "value": 43.661088, "interpretation": "lid-switch slot, corner C2 (along z), as the released body gives it"}
-  slot_len: {"basis": "source", "from": "body_step", "value": 12.0, "interpretation": "lid-switch slot length, as the released body gives it"}
-  plate_d: {"basis": "source", "from": "plate_step", "value": 130, "interpretation": "bottom plate rim, as the released body gives it"}
-  plate_t: {"basis": "source", "from": "plate_step", "value": 1, "interpretation": "bottom plate thickness (along y), as the released body gives it"}
-  foot_d: {"basis": "source", "from": "plate_step", "value": 10, "interpretation": "foot, as the released body gives it"}
-  foot_h: {"basis": "source", "from": "plate_step", "value": 3, "interpretation": "foot height (along y), as the released body gives it"}
-  foot_pcd: {"basis": "source", "from": "plate_step", "value": 116, "interpretation": "feet, opposite pair, as the released body gives it"}
-  foot_angle: {"basis": "source", "from": "plate_step", "value": 34.369022, "interpretation": "foot angle from +X, as the released body gives it"}
-  plate_hole_d: {"basis": "source", "from": "plate_step", "value": 3.5, "interpretation": "screw clearance hole, as the released body gives it"}
-  rotor_wall: {"basis": "source", "from": "rotor_pcr325_step", "value": 2, "interpretation": "slab thickness (along y), as the released body gives it"}
-  notch_h: {"basis": "source", "from": "rotor_pcr325_step", "value": 5, "interpretation": "notch height between tabs (along y), as the released body gives it"}
-  ledge_y: {"basis": "source", "from": "rotor_pcr325_step", "value": 5.055472, "interpretation": "hub ledge above the skirt bottom (along y), as the released body gives it"}
-  skirt_top_y: {"basis": "source", "from": "rotor_pcr325_step", "value": 5.288, "interpretation": "outer skirt height (along y), as the released body gives it"}
-  ledge_d: {"basis": "source", "from": "rotor_pcr325_step", "value": 24.5, "interpretation": "hub ledge inner edge, as the released body gives it"}
-  cone_top_d: {"basis": "source", "from": "rotor_pcr325_step", "value": 25.327142, "interpretation": "outer cone meets the slab, as the released body gives it"}
-  kink_y: {"basis": "source", "from": "rotor_pcr325_step", "value": 24.988, "interpretation": "cavity cone to tip kink (along y), as the released body gives it"}
-  slab_bot_y: {"basis": "source", "from": "rotor_pcr325_step", "value": 28.988, "interpretation": "slab underside (along y), as the released body gives it"}
-  top_y: {"basis": "source", "from": "rotor_pcr325_step", "value": 38.988, "interpretation": "overall height to the ridge (along y), as the released body gives it"}
-  slab_w: {"basis": "source", "from": "rotor_pcr325_step", "value": 29.1, "interpretation": "slab width, as the released body gives it"}
-  holder_l: {"basis": "source", "from": "rotor_pcr325_step", "value": 73.1, "interpretation": "strip holder length, as the released body gives it"}
-  holder_chamfer: {"basis": "source", "from": "rotor_pcr325_step", "value": 3, "interpretation": "strip holder end chamfer (along x), as the released body gives it"}
-  bend_span: {"basis": "source", "from": "rotor_pcr325_step", "value": 54, "interpretation": "slab length between the bends, as the released body gives it"}
-  rotor_bend_open: {"basis": "source", "from": "rotor_pcr325_step", "value": 135, "interpretation": "holder against the slab, as the released body gives it"}
-  ridge_l: {"basis": "source", "from": "rotor_pcr325_step", "value": 13.1, "interpretation": "roof ridge length, as the released body gives it"}
-  ridge_w: {"basis": "source", "from": "rotor_pcr325_step", "value": 2, "interpretation": "roof ridge width, as the released body gives it"}
-  hole_d: {"basis": "source", "from": "rotor_pcr325_step", "value": 6.6, "interpretation": "tube hole, as the released body gives it"}
-  hole_in_span: {"basis": "source", "from": "rotor_pcr325_step", "value": 9.0, "interpretation": "innermost tube holes, axis to axis, as the released body gives it"}
-  hole_out_span: {"basis": "source", "from": "rotor_pcr325_step", "value": 63.02, "interpretation": "outermost tube holes, axis to axis, as the released body gives it"}
-  hole_pitch: {"basis": "source", "from": "rotor_pcr325_step", "value": 9.003333, "interpretation": "tube hole pitch, as the released body gives it"}
-  hole_drop: {"basis": "source", "from": "rotor_pcr325_step", "value": 3.878679, "interpretation": "tube hole centre on the holder face, below the top (along y), as the released body gives it"}
-  tab_angle: {"basis": "source", "from": "rotor_pcr325_step", "value": 15.746991, "interpretation": "hub tab angular width, as the released body gives it"}
-  tab_edge_z: {"basis": "source", "from": "rotor_pcr325_step", "value": 2.963611, "interpretation": "hub tab 0 edge, outer corner offset from the XY plane (along z), as the released body gives it"}
-  rotor_file_y: {"basis": "source", "from": "rotor_pcr325_step", "value": 40.288, "interpretation": "rotor's skirt bottom below its file's origin, where the file places it, as the released body gives it"}
-  body_d: {"basis": "source", "from": "fig8-body-dims.W", "interpretation": "body outer diameter: Cura's X extent of the body"}
-  body_h: {"basis": "source", "from": "fig8-body-dims.H", "interpretation": "body height, deck top to wall bottom: Cura's Z extent of the body as printed upside down"}
-  boss_cone_angle: {"basis": "derived", "expr": "180 - boss_cone_open", "interpretation": "boss top cone from the vertical wall"}
-  rotor_slope: {"basis": "derived", "expr": "180 - rotor_bend_open", "interpretation": "rise of the strip holders above the slab; read also for the roof hips and the cavity's flare and tip, which the shape check confirms share it"}
-  hole_x_in: {"basis": "derived", "expr": "hole_in_span / 2", "interpretation": "innermost holes symmetric about the rotor's YZ plane"}
-  hole_x_out: {"basis": "derived", "expr": "hole_out_span / 2", "interpretation": "outermost holes symmetric about the rotor's YZ plane"}
-  hub_d: {"basis": "source", "from": "P3-pcr325.hub_d", "interpretation": "rotor skirt bore = fan hub outer diameter (snug press fit, §5.1.1)"}
-  n_tabs: {"basis": "source", "from": "P3-pcr325.blades", "interpretation": "one hub tab per fan blade gap: seven tabs on the rotor skirt"}
-  fan_w: {"basis": "source", "from": "P3-fan.w", "interpretation": "fan frame side, square"}
-  screw_d: {"basis": "source", "from": "P4-screws.d", "interpretation": "M3 nominal diameter; shank only, no head or thread"}
-  screw_l: {"basis": "source", "from": "P4-screws.L", "interpretation": "the stated range's shorter end, 10 mm"}
-  screw_n: {"basis": "source", "from": "P4-screws.n", "interpretation": "four screws, one per body boss; the plate's four feet follow the same count"}
-  screw_fit: {"basis": "derived", "expr": "(boss_hole_d - screw_d) / 2", "interpretation": "the gap around each screw's shank in its boss, whose hole the released body draws over the screw's diameter: the thread that holds it there is not modelled"}
-  fan_t: {"basis": "proposed", "value": 25, "rationale": "the common 80 x 80 x 25 mm case fan; the paper gives no thickness", "gap": "G-fan"}
-  fan_bore_d: {"basis": "proposed", "value": 76, "rationale": "blade bore of a typical 80 mm fan frame", "gap": "G-fan"}
-  fan_rot: {"basis": "proposed", "value": 45, "rationale": "fan frame turned so its corner screw holes meet the deck's four holes on the axes", "gap": "G-fan"}
-  fan_top_y: {"basis": "derived", "expr": "-deck_t", "gap": "G-seat", "interpretation": "fan screwed up against the deck underside (Fig. 9)"}
-  rotor_seat_y: {"basis": "derived", "expr": "fan_top_y - ledge_y", "gap": "G-seat", "interpretation": "rotor pressed on until its hub ledge sits on the fan hub, whose top is flush with the fan frame's"}
-  pla_density: {"basis": "proposed", "value": 0.00124, "rationale": "typical PLA density, 1.24 g/cm³, for a rotor printed at 100 % infill (P7-rotor-infill)", "gap": "G-pla"}
+  # ---- the bottom plate, built in the body's frame (read_bodies.py: BOTTOM PLATE)
+  bp_top_y:     {basis: source, from: bottom_plate, value: -34, interpretation: "the plate's top face, which lies on the body's rim"}
+  bp_r:         {basis: source, from: bottom_plate, value: 65, interpretation: "the disc's radius"}
+  bp_t:         {basis: source, from: bottom_plate, value: 1, interpretation: "the disc's thickness, y -35 to -34"}
+  bp_hole_n:    {basis: source, from: bottom_plate, value: 4, interpretation: "screw holes, each the one before turned 360/4 about the axis"}
+  bp_hole_r:    {basis: source, from: bottom_plate, value: 1.75, interpretation: "screw hole radius, through the disc"}
+  bp_hole_R:    {basis: source, from: bottom_plate, value: 58, interpretation: "screw hole centres' distance from the axis"}
+  bp_hole_a:    {basis: source, from: bottom_plate, value: -158.2431, interpretation: "angle of the first screw hole, (x, z) = (-53.8684, -21.4988)"}
+  bp_foot_r:    {basis: source, from: bottom_plate, value: 5, interpretation: "foot radius"}
+  bp_foot_h:    {basis: source, from: bottom_plate, value: 3, interpretation: "foot height, y -38 to -35"}
+  bp_foot_R:    {basis: source, from: bottom_plate, value: 58, interpretation: "foot centres' distance from the axis"}
+  bp_foot_a:    {basis: source, from: bottom_plate, value: -145.6310, interpretation: "angle of the first foot, (x, z) = (-47.8743, -32.7422)"}
+  # ---- the centrifuge body, whose frame is the assembly's (read_bodies.py: BODY)
+  b_r_out:      {basis: source, from: body, value: 65, interpretation: "the wall's outside radius"}
+  b_r_in:       {basis: source, from: body, value: 63, interpretation: "the wall's inside radius, below the deck"}
+  b_h:          {basis: source, from: body, value: 34, interpretation: "the body's height: the deck's top at y = 0, the open rim at y = -34"}
+  b_deck_t:     {basis: source, from: body, value: 7, interpretation: "the deck's thickness: its underside at y = -7"}
+  b_centre_r:   {basis: source, from: body, value: 22, interpretation: "the centre hole's radius, through the deck"}
+  b_fan_hole_n: {basis: source, from: body, value: 4, interpretation: "fan holes, on +x, +z, -x and -z"}
+  b_fan_hole_r: {basis: source, from: body, value: 2, interpretation: "fan hole radius, through the deck"}
+  b_fan_hole_R: {basis: source, from: body, value: 50.4, interpretation: "fan hole centres' distance from the axis"}
+  b_fan_hole_a: {basis: source, from: body, value: 0, interpretation: "angle of the first fan hole, on +x"}
+  # the lid groove, turned about the axis
+  g_in_r:       {basis: source, from: body, value: 53.5, interpretation: "the groove's inner wall"}
+  g_in_drop:    {basis: source, from: body, value: 1, interpretation: "the inner wall runs from the deck's top down to y = -1, the height of the inner round's centre"}
+  g_in_round:   {basis: source, from: body, value: 4, interpretation: "the inner round's radius"}
+  g_in_c:       {basis: source, from: body, value: 57.5, interpretation: "the inner round's centre, its distance from the axis; the floor starts here"}
+  g_out_round:  {basis: source, from: body, value: 3.9, interpretation: "the outer round's radius"}
+  g_out_c:      {basis: source, from: body, value: 57.6, interpretation: "the outer round's centre, its distance from the axis; the floor ends here"}
+  g_out_drop:   {basis: source, from: body, value: 1.1, interpretation: "the outer wall runs from the deck's top down to y = -1.1, the height of the outer round's centre"}
+  g_out_r:      {basis: source, from: body, value: 61.5, interpretation: "the groove's outer wall"}
+  # the two spin arrows, recesses in the deck's top
+  a_depth:      {basis: source, from: body, value: 0.2, interpretation: "the arrows' depth: their floor at y = -0.2"}
+  a_r_in:       {basis: source, from: body, value: 37.1332, interpretation: "arrow shaft, the band's inner radius"}
+  a_r_out:      {basis: source, from: body, value: 39.1332, interpretation: "arrow shaft, the band's outer radius"}
+  a_base_x:     {basis: source, from: body, value: 2, interpretation: "arrow 1's shaft runs from the +x axis round towards -z to the line x = 2, the head's base; the head's tip is at x = -2"}
+  a_head_z_out: {basis: source, from: body, value: 40.2, interpretation: "arrow 1's head, its base's outer corner at z = -40.2"}
+  a_head_z_in:  {basis: source, from: body, value: 36, interpretation: "arrow 1's head, its base's inner corner at z = -36"}
+  a_tip_z:      {basis: source, from: body, value: 38.1332, interpretation: "arrow 1's head, its tip at z = -38.1332"}
+  # the four screw posts for the bottom plate
+  post_n:       {basis: source, from: body, value: 4, interpretation: "screw posts, each the one before turned 360/4 about the axis"}
+  post_r:       {basis: source, from: body, value: 5, interpretation: "post radius"}
+  post_R:       {basis: source, from: body, value: 58, interpretation: "post centres' distance from the axis; each post's two flat sides leave its circle where that is 58 from the axis too"}
+  post_a:       {basis: source, from: body, value: -68.2431, interpretation: "angle of post 1, (x, z) = (21.4988, -53.8684)"}
+  post_hole_r:  {basis: source, from: body, value: 1.6, interpretation: "screw hole radius, on the post's centre"}
+  post_hole_y:  {basis: source, from: body, value: -19, interpretation: "the screw hole's blind end; it opens at the rim, y = -34"}
+  post_cone:    {basis: source, from: body, value: 45, interpretation: "half-angle of the cone about the body's axis that cuts the posts' tops"}
+  post_apex_y:  {basis: source, from: body, value: -71.6, interpretation: "that cone's apex: a post's top is at y = radius - 71.6"}
+  post_flat_y:  {basis: source, from: body, value: -18.5, interpretation: "a post's top is flat here, inside radius 53.1"}
+  # the lid switch pocket, through the deck into the groove's floor
+  pk_dir:       {basis: source, from: body, value: 40, interpretation: "the direction the pocket lies along, an angle about the axis"}
+  pk_near:      {basis: source, from: body, value: 54.3513, interpretation: "the pocket's near face, its distance from the axis along that direction"}
+  pk_len:       {basis: source, from: body, value: 6, interpretation: "the pocket's size along that direction"}
+  pk_side:      {basis: source, from: body, value: -5.6452, interpretation: "the pocket's first side face, its offset across that direction"}
+  pk_w:         {basis: source, from: body, value: 12, interpretation: "the pocket's size across that direction"}
+  # the main switch cut-out, through the wall
+  ms_dir:       {basis: source, from: body, value: 135, interpretation: "the direction the cut-out runs out through the wall"}
+  ms_top_y:     {basis: source, from: body, value: -7.3958, interpretation: "the cut-out's top face"}
+  ms_cut_h:     {basis: source, from: body, value: 19, interpretation: "the cut-out's height, down to y = -26.3958"}
+  ms_side:      {basis: source, from: body, value: -6.6192, interpretation: "the cut-out's first side face, its offset across the direction it runs out along: 6.6192 along (0.70711, 0, 0.70711)"}
+  ms_cut_w:     {basis: source, from: body, value: 13, interpretation: "the cut-out's width, between two parallel planes"}
+  # the DC socket hole, through the wall
+  dc_dir:       {basis: source, from: body, value: 225, interpretation: "the direction the hole's axis points out along"}
+  dc_y:         {basis: source, from: body, value: -15.5361, interpretation: "the height of the hole's level axis"}
+  dc_hole_r:    {basis: source, from: body, value: 4.25, interpretation: "the hole's radius"}
+  dc_off:       {basis: source, from: body, value: 0.7997, interpretation: "how far the hole's axis passes from the body's axis, across its direction: through (x, z) = (0.5655, -0.5655)"}
+
+  # ---- the rotor, built in its own frame (read_bodies.py: ROTOR)
+  r_bowl_r0:    {basis: source, from: rotor, value: 10, interpretation: "the frame's origin: the bowl's inside cone, and the outer cone carried on, both have radius 10 at y = 0"}
+  r_bowl_half:  {basis: source, from: rotor, value: 45, interpretation: "half-angle of the bowl's inside, outside and underside cones"}
+  r_bowl_slope: {basis: source, from: rotor, value: 18, interpretation: "the rim is 18 up the bowl's inside slope from (radius, y) = (10, 0)"}
+  r_bowl_wall:  {basis: source, from: rotor, value: 2, interpretation: "the bowl's wall, measured square to it"}
+  r_skirt_r:    {basis: source, from: rotor, value: 18.25, interpretation: "the skirt's and the prongs' outside radius, the foot of the outer cone"}
+  r_cone_drop:  {basis: source, from: rotor, value: 35, interpretation: "the foot of the outer cone is 35 below the origin"}
+  r_shell_wall: {basis: source, from: rotor, value: 2, interpretation: "the cavity cone is parallel to the outer cone and 2 inside it, measured square to both"}
+  r_chamfer:    {basis: source, from: rotor, value: 1.5, interpretation: "the chamfer's ends are 1.5 from where the outer cone and the bowl's outside would meet"}
+  r_bore_r:     {basis: source, from: rotor, value: 16.25, interpretation: "the bore that takes the fan's hub: the prongs' inner faces"}
+  r_seat_r:     {basis: source, from: rotor, value: 12.25, interpretation: "the seat face's inner radius, where the lip starts"}
+  r_seat_y:     {basis: source, from: rotor, value: -35.2325, interpretation: "the seat face, which rests on the hub's top; the faces between the prongs, 0.0005 lower in the file, are built in its plane"}
+  r_lip_half:   {basis: source, from: rotor, value: 45, interpretation: "half-angle of the lip, from the seat up to the cavity cone"}
+  r_round:      {basis: source, from: rotor, value: 0.5, interpretation: "the round between the cavity cone and the bowl's underside"}
+  r_tip_round:  {basis: source, from: rotor, value: 3.5, interpretation: "the round under the bowl's point"}
+  r_tip_c:      {basis: source, from: rotor, value: 0.4244, interpretation: "the tip round's centre, its distance from the axis; the tip is flat inside it"}
+  r_prong_n:    {basis: source, from: rotor, value: 7, interpretation: "prongs, evenly about the axis"}
+  r_prong_y:    {basis: source, from: rotor, value: -40.2330, interpretation: "the prongs' tips"}
+  r_prong_w:    {basis: source, from: rotor, value: 5, interpretation: "a prong's outer corner is 5 from the plane of its other side; both sides are planes through the axis"}
+  r_prong_a:    {basis: source, from: rotor, value: 90, interpretation: "prong 1's first side, the +z axis; the prong reaches from it towards +x"}
+  r_hole_n:     {basis: source, from: P1-rotors.tubes, interpretation: "tube holes, evenly about the axis, as the released body has them"}
+  r_hole_r:     {basis: source, from: rotor, value: 5.57, interpretation: "tube hole radius"}
+  r_hole_tilt:  {basis: source, from: rotor, value: 45, interpretation: "a tube hole's axis is tilted 45 from the spin axis, leaning out as it goes down: square to the bowl's wall"}
+  r_hole_slope: {basis: source, from: rotor, value: 9.6498, interpretation: "a tube hole's axis crosses the bowl's inside cone 9.6498 up its slope from (radius, y) = (10, 0)"}
+  r_hole_a:     {basis: source, from: rotor, value: 270, interpretation: "the direction tube hole 1 leans out towards, -z"}
+
+  # ---- a bought part in a printed opening
+  fit_gap:      {basis: proposed, value: 0.25, rationale: "the gap the body's 13 mm cut-out leaves each side of the stated 12.5 mm main switch, taken for every bought part pushed into a printed opening", gap: G-fit}
+
+  # ---- the fit coupon, printed and tried before the body: a slice of its deck and wall, placed by no instance
+  coupon_step:  {basis: proposed, value: 0.1, rationale: "the coupon holds the DC socket's hole at the fit's gap and 0.1 mm either side of it, 0.15, 0.25 and 0.35 mm: half a 0.2 mm layer, the step a slicer's horizontal expansion is set in", gap: G-fit}
+  coupon_margin: {basis: proposed, value: 5, rationale: "5 mm of PLA between the coupon's openings and to its edges, more than twice the 2 mm wall, so no opening gives way to its neighbour as a part is pushed in", gap: G-fit}
+
+  # ---- the fan, in its own frame: its deck-side face at y = 0, its corners on the x and z axes
+  fan_size:     {basis: source, from: B-fan.size, interpretation: "the side of the fan's square frame"}
+  fan_blades:   {basis: source, from: B-fan.blades, interpretation: "blades, evenly about the hub"}
+  fan_hub_d:    {basis: source, from: D-rotor.hub_d, interpretation: "the hub's diameter, the one the Rotor - 32.5 mm is released for"}
+  fan_t:        {basis: proposed, value: 25, rationale: "an 80 mm case fan as it is sold, 80 x 80 x 25 mm; it stands 2 mm clear of the bottom plate", gap: G-fan-frame}
+  fan_flange_t: {basis: proposed, value: 4, rationale: "an 80 x 80 x 25 mm case fan's open corners as Fig. 9 shows them: a 4 mm flange at each face and a round duct between, so the fan's own short screws reach the deck through the deck-side flange and a screwdriver reaches them through the other flange's hole; a closed 25 mm corner lets neither through", gap: G-fan-frame}
+  fan_corner_r: {basis: proposed, value: 4, rationale: "the rounded corners Fig. 3 and Fig. 10 draw, a 4 mm radius about each mounting hole", gap: G-fan-frame}
+  fan_bore_d:   {basis: proposed, value: 76, rationale: "the frame's round opening as Fig. 10 draws it, 2 mm of frame left at mid-side", gap: G-fan-frame}
+  fan_mount_d:  {basis: proposed, value: 4.3, rationale: "the mounting hole an 80 mm case fan is sold with, which its own screws form their thread in", gap: G-fan-frame}
+  fan_mount_R:  {basis: derived, expr: b_fan_hole_R, gap: G-fan-frame, interpretation: "the fan's four corner holes sit on the deck's four holes, 71.28 apart; an 80 mm fan's usual hole pitch is 71.5"}
+  fan_screw_n:  {basis: derived, expr: b_fan_hole_n, gap: G-fan-screws, interpretation: "one of the fan's own screws through each corner hole into each of the deck's four holes, from inside the body as Fig. 9 shows; the screws form their own thread, which no thread table holds, so they are not built and the deck's 4 mm holes carry no declared thread"}
+  fan_strut_w:  {basis: proposed, value: 4, rationale: "the struts across the fan's back as Fig. 9 shows them, one to each corner", gap: G-fan-frame}
+  fan_strut_t:  {basis: proposed, value: 3, rationale: "the struts' depth as Fig. 9 shows it, an eighth of the frame's", gap: G-fan-frame}
+  hub_recess:   {basis: proposed, value: 1, rationale: "a case fan's hub stands just inside its frame's face, so the blades clear a panel; 1 mm", gap: G-rotor-place}
+  fan_tip_d:    {basis: proposed, value: 74, rationale: "the blades' tip circle as Fig. 10 draws it, 1 mm inside the frame's opening", gap: G-fan-hub}
+  fan_blade_chord: {basis: proposed, value: 24, rationale: "a blade as Fig. 3 draws it, a plate about a third of the fan's side wide; with its pitch it stands 1.5 mm clear of the struts and of the hub's top", gap: G-fan-hub}
+  fan_blade_pitch: {basis: proposed, value: 45, rationale: "the blades' pitch as Fig. 3 draws it, about half a right angle", gap: G-fan-hub}
+  fan_blade_t:  {basis: proposed, value: 1.5, rationale: "an injection-moulded fan blade's thickness", gap: G-fan-hub}
+  fan_blade_a:  {basis: proposed, value: 29, rationale: "the direction of blade 1, the hub turned so each blade's upper edge lies midway between two of the rotor's prongs, as the rotor is pressed on (Fig. 6); the blades clear the prongs from 21 to 37, and 29 is set to pass the check clear", gap: G-fan-hub}
+  rotor_y:      {basis: derived, expr: -b_deck_t - hub_recess - r_seat_y, interpretation: "the rotor's frame in the assembly's: its seat face on the hub's top"}
+
+  # ---- the lid, in its own frame: its rim at y = 0
+  lid_d:        {basis: source, from: P4-lid.d, interpretation: "the outside diameter of the rim that stands in the groove"}
+  lid_wall:     {basis: proposed, value: 1, rationale: "the wall of a thin injection-moulded food container, measured across the rim", gap: G-lid}
+  lid_top_d:    {basis: proposed, value: 100, rationale: "the lid's taper as Fig. 1 shows it: its closed end, before the corner's round, about 0.86 of its rim", gap: G-lid}
+  lid_corner_r: {basis: proposed, value: 10, rationale: "the round between the lid's side and its closed end as Fig. 1 shows it", gap: G-lid}
+  t2_h:         {basis: source, from: T2-dims.H, interpretation: "the centrifuge's height with its lid on, feet to lid; the table's header gives the cell in cm"}
+  overall_h:    {basis: derived, expr: t2_h * 10, value: 100, interpretation: "Table 2's cell is in cm, by its header: Dimensions W*L*H (cm)"}
+  lid_seat_y:   {basis: derived, expr: -g_in_drop - sqrt(g_in_round * g_in_round - (g_in_c - lid_d / 2 + lid_wall) * (g_in_c - lid_d / 2 + lid_wall)), interpretation: "the height of the lid's flat rim: its inner edge rests on the groove's inner round, its outer edge 0.01 above the outer round"}
+  lid_h:        {basis: derived, expr: overall_h - b_h - bp_t - bp_foot_h - lid_seat_y, gap: G-lid, interpretation: "the lid's height closes the stated overall height, 10 cm from the feet to the lid's top; that is printed to the centimetre, so the lid's height is open by 5 mm either way"}
+
+  # ---- the lid switch, in its own frame: its top face at y = 0, x across its thickness
+  ls_t:         {basis: source, from: B-lid-switch.a, interpretation: "the switch body's thickness, across the pocket's 6 mm"}
+  ls_h:         {basis: source, from: B-lid-switch.b, interpretation: "the switch body's height, standing in the pocket"}
+  ls_l:         {basis: derived, expr: pk_w - 2 * fit_gap, gap: G-lid-switch, interpretation: "the switch body's length, along the pocket's 12 mm less the fit's gap at each end"}
+  ls_top_y:     {basis: derived, expr: -g_in_drop - g_in_round, gap: G-lid-switch, interpretation: "the switch body's top in the plane of the groove's floor, so the lid's rim comes down onto its lever; the lever is not built"}
+
+  # ---- the main switch, in its own frame: the back of its bezel at x = 0
+  msw_L:        {basis: source, from: B-main-switch.L, interpretation: "the switch body's height, in the cut-out's 19 mm"}
+  msw_W:        {basis: source, from: B-main-switch.W, interpretation: "the switch body's width, in the cut-out's 13 mm"}
+  msw_depth:    {basis: proposed, value: 14, rationale: "the body of a KCD1-size rocker switch behind its bezel, terminals aside", gap: G-main-switch}
+  msw_bezel_h:  {basis: proposed, value: 21, rationale: "the bezel of a KCD1-size rocker switch, the one sold for a 19 x 13 mm cut-out: 21 x 15 mm", gap: G-main-switch}
+  msw_bezel_w:  {basis: proposed, value: 15, rationale: "the bezel of a KCD1-size rocker switch: 21 x 15 mm", gap: G-main-switch}
+  msw_bezel_t:  {basis: proposed, value: 2, rationale: "the bezel of a KCD1-size rocker switch stands 2 mm off the panel; the rocker is not built", gap: G-main-switch}
+
+  # ---- the DC socket, in its own frame: the back of its flange at x = 0
+  dcs_bore_d:   {basis: source, from: B-dc-socket.d_barrel, interpretation: "the socket's bore, which takes the plug's 5.5 mm barrel"}
+  dcs_pin_d:    {basis: source, from: B-dc-socket.d_pin, interpretation: "the socket's centre pin, which the plug's 2.1 mm hole takes"}
+  dcs_body_d:   {basis: derived, expr: 2 * dc_hole_r - 2 * fit_gap, gap: G-dc-socket, interpretation: "the socket's ribbed barrel, in the 8.5 mm hole with the fit's gap around it: 8 mm, a push-in panel socket's"}
+  dcs_len:      {basis: proposed, value: 12, rationale: "the barrel of a push-in 5.5 x 2.1 mm panel socket behind its flange, as Fig. 10's photograph shows it, terminals aside", gap: G-dc-socket}
+  dcs_flange_d: {basis: proposed, value: 10.5, rationale: "the flange of a push-in 5.5 x 2.1 mm panel socket, as Fig. 10's photograph shows it: 1 mm proud of the 8.5 mm hole all round", gap: G-dc-socket}
+  dcs_flange_t: {basis: proposed, value: 1.5, rationale: "the flange's thickness as Fig. 10's photograph shows it", gap: G-dc-socket}
+  dcs_bore_depth: {basis: proposed, value: 9, rationale: "the bore takes a 5.5 x 2.1 mm plug's barrel, 9 mm of it", gap: G-dc-socket}
+
+  # ---- the bottom plate's screws, in their own frame: the head's flat face at y = 0
+  plate_screw:     {basis: source, thread: M3, from: B-screws, length: plate_screw_len}
+  plate_screw_len: {basis: proposed, value: 10, rationale: "ISO 888's shorter length inside the stated 10 to 12 mm: a countersunk screw's length counts its head, and 7.4 mm of it stands in the post's 15 mm hole", gap: G-plate-screw-length}
+  plate_screw_head_d: {basis: proposed, value: 6.72, rationale: "a hexagon socket countersunk head screw, ISO 10642, M3: the bill of materials' link names countersunk hexagonal screws; its 90 degree head is 6.72 across and 1.86 deep, inside the feet's 3 mm", gap: G-plate-screw-length}
+
+  # ---- the printed parts' material
+  pla_density:  {basis: proposed, value: 0.00124, rationale: "1.24 g/cm3, the density of Cura's Generic PLA, the material Fig. 8's estimate is sliced with, and a PLA filament's usual one", gap: G-pla-density}
+
+parts:                       # the mass model
+  body:         {density: pla_density}
+  bottom_plate: {density: pla_density}
+  rotor:        {density: pla_density}
