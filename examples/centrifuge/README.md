@@ -6,7 +6,7 @@ A 3D-printed centrifuge built around an 80 mm computer fan, from Viktor Soma Po√
 scripts/cadrev check examples/centrifuge
 ```
 
-Expected status: `VERIFIED PENDING REVIEW: 0 errors, 0 warnings, 27/27 checks pass`
+Expected status: `VERIFIED: 0 errors, 0 warnings, 27/27 checks pass`
 
 It takes about 25 seconds. Then open `build/assembly.step` in a CAD program, and read `build/report.md` and the plan, `build/plan.md`.
 
@@ -20,7 +20,7 @@ A static assembly with a plan, taken through `noob`, `build-model` and `ask-mach
 - **Sources that disagree are recorded.** The paper gives the rotor 16 g, but the six-tube rotor built from its file weighs 13.15 g at the proposed density, and the PCR-strip rotor's file matches the 16 g. No check compares that mass, and the conflict says why.
 - **The plan is held to the model.** It prints three parts, a fit coupon and the authors' fit tester, buys the rest, and places all 12 instances in 8 of its 11 steps. The machinist's review opened the fan's corners so its screws can be reached, and left two concerns on the authors' geometry: the √ò3.2 post holes are wider than an M3 thread, so the coupon tries them, and the 1 mm plate is too thin to countersink, so the screw heads stand proud of it, within the height of its 3 mm feet.
 
-The run earns no warnings. Its status stays PENDING REVIEW until a named person confirms the seven figure readings against their crops in `figures/crops/`, recorded as `confirmed_by` in `evidence.yaml`.
+The run earns no warnings and ended at VERIFIED PENDING REVIEW. A named reviewer then checked its seven figure readings against their crops in `figures/crops/`, recorded as `confirmed_by` in `evidence.yaml`, which makes it VERIFIED.
 
 ## Sources
 
