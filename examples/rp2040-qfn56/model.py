@@ -78,7 +78,7 @@ def build(p):
         "body.dot_y_min": (p.dot_x, p.dot_y - p.dot_size / 2, dot_z),
         "lead.outer": (0, 0, p.frame_A3 / 2),
         "lead.tip": (p.lead_L, 0, 0),
-        "lead.round_centre": (straight, 0, 0),
+        "lead.round_centre": (straight, 0, p.frame_A3 / 2),
         "lead.side_a": (straight / 2, -p.lead_b / 2, 0),
         "lead.side_b": (straight / 2, p.lead_b / 2, 0),
         "lead.bottom": (straight / 2, 0, 0),

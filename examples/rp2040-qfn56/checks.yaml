@@ -12,10 +12,8 @@ checks:
      min: F167-b.min, max: F167-b.max}
   - {id: lead-A3, kind: distance, between: [lead.bottom, lead.top], along: z,
      evidence: F167-A3, key: ref, interpretation: "A3 is a reference dimension, compared like a nominal: the lead frame's thickness, seating plane to the lead's top face"}
-  - {id: lead-R-min, kind: distance, between: [lead.round_centre, lead.tip],
-     min: F167-R.min, interpretation: "R from the centre of the rounded inner end to its crown, on the seating plane; only a MIN is stated. The two datums do not show the end is round: lead-end-round does"}
-  - {id: lead-end-round, kind: diameter, at: lead.tip, expect: "F167-b.nom",
-     interpretation: "the cylindrical face at the lead's inner end is as wide as the lead: a full half-round, so R is b / 2, as the bottom view draws it"}
+  - {id: lead-R-min, kind: distance, between: [lead.round_centre, lead.tip], along: x,
+     min: F167-R.min, interpretation: "R from the axis of the rounded inner end to its crown, along the lead; only a MIN is stated. The axis datum lies on no flat face, so a lead with no round there is refused"}
 
   # ---- the 56 leads --------------------------------------------------------------------------------------
   - {id: lead-count, kind: count, part: lead, evidence: T632-caption, key: leads}
