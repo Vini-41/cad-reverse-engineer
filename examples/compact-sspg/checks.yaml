@@ -1,21 +1,45 @@
-# Written by checks_gen.py; edit that and rerun. Expected values come from evidence.yaml, never from params.yaml.
+# Geometry checks. Expected values come from evidence.yaml, never from params.yaml.
 checks:
-  # ---- the train: pitch circles, centre distances, planet count, ring outside, extrusion clearance
-  - {id: "sun-pitch", kind: "distance", between: ["sun_gear.flank_a", "sun_gear.flank_b"], expect: "T1.module * T1.z_sun", interpretation: "opposite flanks at the pitch radius, half a turn apart"}
-  - {id: "planet-pitch", kind: "distance", between: ["planet_gear.flank_a", "planet_gear.flank_b"], expect: "T1.module * T1.z_planet", interpretation: "opposite flanks at the pitch radius, half a turn apart"}
-  - {id: "ring-pitch", kind: "distance", between: ["casing.rp_a", "casing.rp_b"], expect: "T1.module * T1.z_ring", interpretation: "opposite flanks of the internal ring at its pitch radius"}
-  - {id: "sun-planet", kind: "distance", instances: ["sun_1", "planet_1"], between: ["sun_1.axis_hi", "planet_1.axis"], along: "y", expect: "T1.module * (T1.z_sun + T1.z_planet) / 2", interpretation: "planet 1 sits at 90 deg, so its axis's y is the centre distance"}
-  - {id: "ring-planet", kind: "distance", instances: ["casing_1", "planet_1"], between: ["casing_1.axis_lo", "planet_1.axis"], along: "y", expect: "T1.module * (T1.z_ring - T1.z_planet) / 2", interpretation: "the planet axis's distance from the ring axis"}
-  - {id: "planets", kind: "count", part: "planet_gear", evidence: "T1", key: "n_planets"}
-  - {id: "ring-od", kind: "distance", between: ["casing.nk2", "casing.nk2_b"], expect: "T1.module * T1.z_ring + 2 * DRW.drw", interpretation: "the ring's outside cylinder below the flare: pitch diameter plus twice the stated radial width"}
-  - {id: "ext-clear", kind: "distance", between: ["primary_carrier.pin_axis", "primary_carrier.ext_side"], expect: "T1.module * T1.z_planet / 2 + T1.module + DCE.dce", interpretation: "an extrusion's flank from the planet axis: the planet's tip radius (one-module addendum) plus the stated clearance"}
-  # ---- motion: the carrier's turn per sun turn, the output of the 7.2:1 train
-  - {id: "carrier-turn", kind: "angle", instances: ["casing_1", "carrier_1"], between: ["casing_1.ang_ref", "casing_1.ang_axis", "carrier_1.pin_axis_lo"], from: {}, pose: {"sun": 360}, expect: "360 / R1.ratio", interpretation: "the carrier's pin 1 starts a quarter turn from the casing's reference; one sun turn moves it 50 deg on"}
-  - {id: "mesh-clear", kind: "interference", pairs: [["sun_1", "planet_1"], ["sun_1", "planet_2"], ["sun_1", "planet_3"], ["planet_1", "casing_1"], ["planet_2", "casing_1"], ["planet_3", "casing_1"], ["carrier_1", "casing_1"], ["sec_1", "casing_1"], ["planet_1", "carrier_1"], ["planet_1", "sec_1"], ["sun_1", "carrier_1"], ["sun_1", "sec_1"], ["retainer_1", "casing_1"]], max_volume: 0.001}
-  # ---- each released body against the part that reproduces it
-  - {id: "planet-shape", kind: "shape", part: "planet_gear", body: "planet"}
-  - {id: "sun-shape", kind: "shape", part: "sun_gear", body: "sun"}
-  - {id: "carrier-shape", kind: "shape", part: "primary_carrier", body: "carrier_updated"}
-  - {id: "sec-shape", kind: "shape", part: "secondary_carrier", body: "sec_carrier"}
-  - {id: "casing-shape", kind: "shape", part: "casing", body: "gearbox_casing"}
-  - {id: "retainer-shape", kind: "shape", part: "retainer", body: "bearing_retainer"}
+  # Each released body the target builds is compared whole with the part built in its frame
+  # (read_bodies.py prints each frame).
+  - {id: sun-shape, kind: shape, part: sun, body: sun}
+  - {id: planet-shape, kind: shape, part: planet, body: planet}
+  - {id: carrier-shape, kind: shape, part: carrier, body: carrier_updated}
+  - {id: sec-carrier-shape, kind: shape, part: sec_carrier, body: sec_carrier}
+  - {id: casing-shape, kind: shape, part: gearbox_casing, body: gearbox_casing}
+  - {id: retainer-shape, kind: shape, part: bearing_retainer, body: bearing_retainer}
+
+  # ---- the train: Table I ------------------------------------------------------------------
+  - {id: pitch-sun, kind: distance, between: [sun.flank_a, sun.flank_b],
+     expect: "T1-sspg.module * T1-sspg.z_sun",
+     interpretation: "pitch diameter, module x teeth, across two flanks half a turn apart"}
+  - {id: pitch-planet, kind: distance, between: [planet.flank_a, planet.flank_b],
+     expect: "T1-sspg.module * T1-sspg.z_planet",
+     interpretation: "pitch diameter, module x teeth, across two flanks half a turn apart"}
+  - {id: pitch-ring, kind: distance, between: [gearbox_casing.flank_a, gearbox_casing.flank_b],
+     expect: "T1-sspg.module * T1-sspg.z_ring",
+     interpretation: "the ring gear's pitch diameter inside the casing, module x teeth, across two flanks half a turn apart"}
+  - {id: ring-radial-width, kind: distance, between: [gearbox_casing.pitch, gearbox_casing.waist],
+     evidence: C5-ring-width, key: delta_rw,
+     interpretation: "the ring gear's radial width read from its pitch circle, the circle Eq. (15) adds it to, out to the casing's outside at its waist"}
+  - {id: planets, kind: count, part: planet, evidence: T1-sspg, key: n_planets}
+  - {id: sun-planet-1, kind: distance, instances: [sun_1, planet_1], between: [sun_1.axis_end, planet_1.axis], along: y,
+     expect: "T1-sspg.module * (T1-sspg.z_sun + T1-sspg.z_planet) / 2",
+     interpretation: "centre distance of the sun and the first planet, which stands on +y from the axis"}
+  - {id: sun-planet-2, kind: distance, instances: [sun_1, planet_2, planet_3], between: [planet_2.axis, planet_3.axis], along: x,
+     expect: "T1-sspg.module * (T1-sspg.z_sun + T1-sspg.z_planet) / 2 * sqrt(3)",
+     interpretation: "the other two planets stand a third of a turn either side of the first, so their axes lie the centre distance x sqrt(3) apart"}
+  - {id: ring-planet-1, kind: distance, instances: [gearbox_casing_1, planet_1], between: [gearbox_casing_1.axis, planet_1.axis], along: y,
+     expect: "T1-sspg.module * (T1-sspg.z_ring - T1-sspg.z_planet) / 2",
+     interpretation: "centre distance of the ring and the first planet: the count the ring needs, z_ring = z_sun + 2 z_planet, gives the sun's again"}
+
+  # ---- the motion: Section II-A, Eq. (1) ---------------------------------------------------
+  - {id: carrier-turn, kind: angle, instances: [gearbox_casing_1, carrier_1],
+     between: [gearbox_casing_1.mark, gearbox_casing_1.axis, carrier_1.mark], along: z, from: {}, pose: {sun: 360},
+     expect: "360 / T1-sspg.ratio",
+     interpretation: "the carrier's turn in the fixed ring for one turn of the sun, 360 degrees over the stated 7.2:1; the casing's mark stands a quarter turn from the carrier's as built"}
+  # The teeth are released with no backlash allowance, so meshing flanks touch along their whole
+  # width: the limit is what a flank spline's 0.0001 departure from the involute overlaps there.
+  - {id: mesh-clear, kind: interference, max_volume: 0.00001}
+  # One turn of the sun on: the teeth still clear, which a wrong ratio or sign would not allow.
+  - {id: mesh-clear-turned, kind: interference, max_volume: 0.00001, pose: {sun: 360}}

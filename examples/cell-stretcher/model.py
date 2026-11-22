@@ -1,631 +1,602 @@
-"""Six-well uniaxial cell stretcher (Kah et al. 2021) and its PDMS casting mould.
+"""Parametric model. Reads every dimension from p (params.yaml); holds no dimension literals.
 
-Every dimension comes from p (params.yaml). Cut parts are built in their cut-file frame:
-x right, y down the sheet, origin at the region's bounding-box corner, thickness along +z.
+A cut part is built in its region's frame, as read_bodies.py prints it: x = u, y = v as the sheet lies,
+z through the sheet's thickness. The two printed parts are built in the frames of their STL files.
+World frame of the assembly: x across the unit, from the side of the first long profile; y along the rods,
+from the long profiles' ends at the stationary end towards the motors; z up from the profiles' underside.
 """
 
-from math import cos, radians, sin
+import math
 
 from build123d import *  # noqa: F403
 
-MINS = (Align.MIN, Align.MIN, Align.MIN)
-CTR = (Align.CENTER, Align.CENTER, Align.MIN)
+X, Y, Z = (1, 0, 0), (0, 1, 0), (0, 0, 1)
+NX, NY, NZ = (-1, 0, 0), (0, -1, 0), (0, 0, -1)
 
 
-# ---------------------------------------------------------------- 2D-in-3D helpers
-def rect(x0, y0, x1, y1, t):
-    return Pos(x0, y0, 0) * Box(x1 - x0, y1 - y0, t, align=MINS)
+# ----------------------------------------------------------------------------- sketch helpers
+def poly(pts):
+    return make_face(Polyline(*pts, close=True))
 
 
-def disc(x, y, d, t):
-    return Pos(x, y, 0) * Cylinder(d / 2, t, align=CTR)
+def disc(u, v, d):
+    return Pos(u, v) * Circle(d / 2)
 
 
-def slot(x, y, length, w, t):
-    return Pos(x, y, 0) * extrude(SlotOverall(length, w), t)
+def rect(u0, v0, u1, v1):
+    return poly([(u0, v0), (u1, v0), (u1, v1), (u0, v1)])
 
 
-def rrect(x, y, w, h, r, t):
-    return Pos(x, y, 0) * extrude(RectangleRounded(w, h, r), t)
+def bez_box(u0, v0, u1, v1, du, dv, hu, hv):
+    """A box whose corners are each one cubic Bezier spanning du x dv with handles hu and hv, as the sheets
+    draw their rounded cut-outs. A straight side of no length is left out."""
+    pts = [(u0 + du, v0), (u1 - du, v0), (u1, v0 + dv), (u1, v1 - dv), (u1 - du, v1), (u0 + du, v1), (u0, v1 - dv), (u0, v0 + dv)]
+    handles = [((hu, 0), (0, hv)), ((0, hv), (-hu, 0)), ((-hu, 0), (0, -hv)), ((0, -hv), (hu, 0))]
+    edges = []
+    for k, (out, into) in enumerate(handles):
+        a, b, c = pts[2 * k], pts[2 * k + 1], pts[(2 * k + 2) % len(pts)]
+        if math.dist(a, b) > 0:
+            edges.append(Line(a, b))
+        edges.append(Bezier(b, (b[0] + out[0], b[1] + out[1]), (c[0] - into[0], c[1] - into[1]), c))
+    return make_face(edges)
 
 
-def ellipse(x, y, rx, ry, t):
-    return Pos(x, y, 0) * extrude(Ellipse(rx, ry), t)
+def arc_to(a, b, centre, r, bulge):
+    """The arc of radius r about centre from a to b, through the point of the circle towards bulge."""
+    n = math.hypot(*bulge)
+    return ThreePointArc(a, (centre[0] + r * bulge[0] / n, centre[1] + r * bulge[1] / n), b)
 
 
-def poly(pts, t):
-    return extrude(Polygon(*pts, align=None), t)
+def tabs(first, n, pitch, width):
+    return [(first + k * pitch, first + k * pitch + width) for k in range(int(n))]
 
 
-def row(x0, pitch, n, w, y0, y1, t):
-    """n rectangles of width w starting at x0, every pitch, spanning y0..y1."""
-    out = None
-    for i in range(int(n)):
-        b = rect(x0 + i * pitch, y0, x0 + i * pitch + w, y1, t)
-        out = b if out is None else out + b
-    return out
+def castle(spans, base, tip, reverse=False):
+    """Corner points of an edge that runs at `base` and steps to `tip` over each span."""
+    pts = []
+    for s, e in (reversed(spans) if reverse else spans):
+        a, b = (e, s) if reverse else (s, e)
+        pts += [(a, base), (a, tip), (b, tip), (b, base)]
+    return pts
 
 
-def tab_pattern(p, w_total, y0, y1, t):
-    """The carriage comb: an outer group at each end and the middle run, symmetric about the centre."""
-    a = row(p.tab_o1, p.tab_p, p.tab_n_out, p.tab_w, y0, y1, t)
-    b = row(w_total - p.tab_o1 - p.tab_w - (p.tab_n_out - 1) * p.tab_p, p.tab_p, p.tab_n_out, p.tab_w, y0, y1, t)
-    c = row(p.tab_m1, p.tab_p, p.tab_n_mid, p.tab_w, y0, y1, t)
-    return a + b + c
+def place(origin, udir, vdir):
+    """Where a part's frame sits: its origin, and where its x and y axes point. Its z follows."""
+    zdir = (udir[1] * vdir[2] - udir[2] * vdir[1], udir[2] * vdir[0] - udir[0] * vdir[2], udir[0] * vdir[1] - udir[1] * vdir[0])
+    return Location(Plane(origin=origin, x_dir=udir, z_dir=zdir))
+
+
+# A thread is declared on each hole that carries one and on each hole clearly larger than its screw. A hole cut at
+# the screw's own diameter (d4 for M4, d5 for M5, d3 for M3, d6 for M6) is left undeclared: cadrev reads a declared
+# hole of that size as carrying the thread.
+class Model:
+    def __init__(self):
+        self.parts, self.datums, self.assembly, self.sheets, self.threads = {}, {}, {}, {}, {}
+
+    def cut(self, name, t, outer, holes=(), cutouts=()):
+        """A plate cut from a sheet: its outline less its round holes and cut-outs. A hole is
+        (label, u, v, d, thread param or None) and gets a datum at mid-thickness, on its axis."""
+        sk = outer
+        minus = [disc(u, v, d) for (_l, u, v, d, _t) in holes] + list(cutouts)
+        if minus:
+            sk = sk - minus
+        self.parts[name] = extrude(sk, amount=t)
+        for label, u, v, _d, thread in holes:
+            self.datums[f"{name}.{label}"] = (u, v, t / 2)
+            if thread:
+                self.threads[f"{name}.{label}"] = thread
+
+    def on_sheet(self, sheet, part, x, y, w=0, h=0, turned=False):
+        loc = Location((x + w, y + h, 0), (0, 0, 180)) if turned else Location((x, y, 0))
+        px, py = (x + w / 2, y + h / 2)
+        self.sheets[sheet] = (part, loc)
+        return px, py
 
 
 def build(p):
-    parts, datums, assembly = {}, {}, {}
-    t6, t3 = p.t6, p.t3
-    W = p.prof_short_L + 2 * p.prof_w  # outer width of the frame, the end plates' width
-    h6 = t6 / 2
+    m = Model()
+    t6, t3, tab = p.t6, p.t3, p.tab
+    fj = 2 * tab                                   # pitch of a finger joint: a tab and a gap
+    W = p.unit_w
 
-    def d(name, x, y, z):
-        datums[name] = (x, y, z)
+    # ============================================================== carriage
+    # --- wall: the rods cross it; v 0 is the edge the cover closes
+    end_a = tabs(p.fj_end_u0, p.fj_end_n, fj, tab)
+    mid = tabs(p.fj_mid_u0, p.fj_mid_n, fj, tab)
+    end_b = [(W - e, W - s) for s, e in reversed(end_a)]
+    end_a_stop = end_a[-1][1]                        # where the end section's fingers stop
+    mid_stop = mid[-1][1]
+    wall_h = p.cw_h + t6
+    low_tabs = [(end_a_stop, p.fj_mid_u0)] + [(s + tab, e + tab) for s, e in mid[:-1]] + [(mid_stop, W - end_a_stop)]
+    side = p.rib_tab_v
+    pts = [(0, 0)] + castle(end_a + mid + end_b, 0, t6) + [(W, 0), (W, side), (W - t6, side), (W - t6, side + tab), (W, side + tab), (W, p.cw_h)]
+    pts += castle(low_tabs, p.cw_h, wall_h, reverse=True)
+    pts += [(0, p.cw_h), (0, side + tab), (t6, side + tab), (t6, side), (0, side)]
+    holes = []
+    for end, sx in (("a", 1), ("b", -1)):
+        us = p.screw_u if sx > 0 else W - p.screw_u
+        ug = p.guide_u if sx > 0 else W - p.guide_u
+        holes.append((f"nut_{end}", us, p.cw_rod_v, p.cw_nut_d, None))
+        holes.append((f"bearing_{end}", ug, p.cw_rod_v, p.cw_bearing_d, None))
+        k = 0
+        for du in (-1, 1):
+            for dv in (-1, 1):
+                k += 1
+                holes.append((f"nut_{end}_m3_{k}", us + du * p.cw_nut_hole_off, p.cw_rod_v + dv * p.cw_nut_hole_off, p.m3.tap, "m3"))
+        # the retainer's pair lies on the diagonal that rises towards the unit's side
+        holes.append((f"ret_{end}_m3_1", ug - sx * p.cw_ret_hole_off, p.cw_rod_v + p.cw_ret_hole_off, p.m3.tap, "m3"))
+        holes.append((f"ret_{end}_m3_2", ug + sx * p.cw_ret_hole_off, p.cw_rod_v - p.cw_ret_hole_off, p.m3.tap, "m3"))
+    windows = [rect(u, side, u + t6, side + tab) for u in (p.rib_u, W - p.rib_u - t6)]
+    m.cut("carriage_wall", t6, poly(pts), holes, windows)
+    m.datums["carriage_wall.face_a"] = (W / 2, p.cw_h / 2, 0)
+    m.datums["carriage_wall.face_b"] = (W / 2, p.cw_h / 2, t6)
+    m.on_sheet("acryl6@195.28,199.92", "carriage_wall", p.at_left, p.cw_at_y1)
+    m.on_sheet("acryl6@195.28,246.92", "carriage_wall", p.at_left, p.cw_at_y2)
 
-    # ================================================================ stretcher end plates
-    def end_row(cx, h1, h2, t):
-        yy = p.ep_h - p.row_off
-        s = slot(cx - p.slot_dx, yy, p.slot_L, p.slot_w, t) + slot(cx + p.slot_dx, yy, p.slot_L, p.slot_w, t)
-        for hx in (h1, h2):
-            s = s + disc(cx - hx, yy, p.d_m5, t) + disc(cx + hx, yy, p.d_m5, t)
-        return s
+    # --- cover: closes the box over both walls, fingers on both long edges
+    D = p.box_depth
+    et = p.end_tab_v
+    fingers = end_a + mid + end_b
+    slots = [(p.rib_u, p.rib_u + t6), (W - p.rib_u - t6, W - p.rib_u)]
 
-    # A: far end-piece, inner layer (lead-screw and rod bores)
-    a = rect(0, 0, W, p.ep_h, t6)
-    a = a - disc(W / 2 - p.ep_m3_dx, p.ep_m3_y, p.d_m3tap, t6) - disc(W / 2 + p.ep_m3_dx, p.ep_m3_y, p.d_m3tap, t6)
-    for x in (p.scr_x, p.rod_x, W - p.rod_x, W - p.scr_x):
-        a = a - disc(x, p.ax_y, p.d_bore8, t6)
-    for x in (p.ep_h1, p.ep_h2, W - p.ep_h1, W - p.ep_h2):
-        a = a - disc(x, p.ep_h - p.row_off, p.d_m6, t6)
-    a = a - end_row(W / 2, W / 2 - p.ep_h3, W / 2 - p.ep_h4, t6)
-    parts["end_far_in"] = a
-    d("end_far_in.m3_l", W / 2 - p.ep_m3_dx, p.ep_m3_y, h6)
-    d("end_far_in.screw_l", p.scr_x, p.ax_y, h6)
-    d("end_far_in.screw_r", W - p.scr_x, p.ax_y, h6)
-    d("end_far_in.rod_l", p.rod_x, p.ax_y, h6)
+    def cover_edge(base, tip, deep, reverse):
+        spans = [(s, e, tip) for s, e in fingers] + [(s, e, deep) for s, e in slots]
+        spans.sort(key=lambda q: q[0], reverse=reverse)
+        out = []
+        for s, e, lvl in spans:
+            a, b = (e, s) if reverse else (s, e)
+            out += [(a, base), (a, lvl), (b, lvl), (b, base)]
+        return out
 
-    # B: far end-piece, outer layer
-    b = rect(0, 0, W, p.ep_h, t6)
-    b = b - disc(W / 2 - p.ep_m3_dx, p.ep_m3_y, p.d_m3clr, t6) - disc(W / 2 + p.ep_m3_dx, p.ep_m3_y, p.d_m3clr, t6)
-    for x in (p.ep_h1, p.ep_h2, W - p.ep_h1, W - p.ep_h2):
-        b = b - disc(x, p.ep_h - p.row_off, p.d_m6, t6)
-    b = b - end_row(W / 2, W / 2 - p.ep_h3, W / 2 - p.ep_h4, t6)
-    parts["end_far_out"] = b
-    d("end_far_out.m3_l", W / 2 - p.ep_m3_dx, p.ep_m3_y, h6)
-    d("end_far_out.m3_r", W / 2 + p.ep_m3_dx, p.ep_m3_y, h6)
-    d("end_far_out.m6_l", p.ep_h1, p.ep_h - p.row_off, h6)
+    pts = [(t6, t6)] + cover_edge(t6, 0, et, False) + [(W - t6, t6), (W - t6, et), (W, et), (W, et + tab), (W - t6, et + tab), (W - t6, D - t6)]
+    pts += cover_edge(D - t6, D, et + tab, True) + [(t6, D - t6), (t6, et + tab), (0, et + tab), (0, et), (t6, et)]
+    m.cut("carriage_cover", t6, poly(pts))
+    m.datums["carriage_cover.a"] = (W / 2, t6, t6 / 2)
+    m.datums["carriage_cover.b"] = (W / 2, D - t6, t6 / 2)
+    m.on_sheet("acryl6@114.03,153.42", "carriage_cover", p.at_left, p.cc_at_y)
 
-    # D: motor-end end-piece, inner layer (rod bores, D-sub cut-out)
-    cw = p.ec_w / 2
-    rod_half = W / 2 - p.rod_x
-    dd = rect(0, 0, p.ec_w, p.ep_h, t6)
-    dd = dd - disc(cw - p.ep_m3_dx, p.ep_m3_y, p.d_m3tap, t6) - disc(cw + p.ep_m3_dx, p.ep_m3_y, p.d_m3tap, t6)
-    dd = dd - disc(cw - rod_half, p.ax_y, p.d_bore8, t6) - disc(cw + rod_half, p.ax_y, p.d_bore8, t6)
-    dd = dd - rrect(cw, p.dsub_y, p.dsub_w, p.dsub_h, p.dsub_r, t6)
-    dd = dd - disc(cw - p.dsub_dx, p.dsub_y, p.d_m3tap, t6) - disc(cw + p.dsub_dx, p.dsub_y, p.d_m3tap, t6)
-    dd = dd - end_row(cw, p.ec_h1, p.ec_h2, t6)
-    parts["end_motor_in"] = dd
-    d("end_motor_in.rod_l", cw - rod_half, p.ax_y, h6)
-    d("end_motor_in.rod_r", cw + rod_half, p.ax_y, h6)
-    d("end_motor_in.m3_l", cw - p.ep_m3_dx, p.ep_m3_y, h6)
+    # --- plate: the box's floor between the tall cross plates, and the shelf with the twelve threads
+    L = p.cpl_len
+    pf = tabs(p.cpl_finger_u0, p.cpl_n_fingers, fj, tab)
+    w2 = D - t6                                      # where the second wall stands on the plate
+    pts = [(t6, t6)] + castle(pf, t6, 0) + [(L - t6, t6), (L - t6, et), (L, et), (L, et + tab), (L - t6, et + tab), (L - t6, w2),
+                                             (L - p.cpl_finger_u0, w2), (L - p.cpl_finger_u0, D), (L - t6, D), (L - t6, p.cpl_wid), (t6, p.cpl_wid),
+                                             (t6, D), (p.cpl_finger_u0, D), (p.cpl_finger_u0, w2), (t6, w2), (t6, et + tab), (0, et + tab), (0, et), (t6, et)]
+    holes = [(f"thread_{k + 1}", p.cpl_thread_u0 + k * p.mount_hole_pitch, p.cpl_thread_v, p.mount_screw.tap, "mount_screw")
+             for k in range(int(p.n_mount_threads))]
+    wall_slots = [rect(s + tab, w2, e + tab, D) for s, e in pf[:-1]]
+    m.cut("carriage_plate", t6, poly(pts), holes, wall_slots)
+    m.on_sheet("acryl6@206.95,76.8", "carriage_plate", p.at_left, p.cpl_at_y)
 
-    # C: motor-end end-piece, outer layer (connector window)
-    c = rect(0, 0, p.ec_w, p.ep_h, t6)
-    c = c - disc(cw - p.ep_m3_dx, p.ep_m3_y, p.d_m3clr_c, t6) - disc(cw + p.ep_m3_dx, p.ep_m3_y, p.d_m3clr_c, t6)
-    c = c - rrect(cw, p.dsub_y, p.win_w, p.win_h, p.win_r, t6)
-    c = c - end_row(cw, p.ec_h1, p.ec_h2, t6)
-    parts["end_motor_out"] = c
-    d("end_motor_out.m3_l", cw - p.ep_m3_dx, p.ep_m3_y, h6)
-    d("end_motor_out.m3_r", cw + p.ep_m3_dx, p.ep_m3_y, h6)
-    d("end_motor_out.m5_l", cw - p.ec_h1, p.ep_h - p.row_off, h6)
+    # --- cross plates: a tall one each side of the plate, a short one closing each end
+    def rib(height, low_notch):
+        pts = [(t6, 0), (t6, side), (0, side), (0, side + tab), (t6, side + tab), (t6, height)]
+        if low_notch:
+            pts += [(et, height), (et, height - t6), (et + tab, height - t6), (et + tab, height)]
+        pts += [(D - t6, height), (D - t6, side + tab), (D, side + tab), (D, side), (D - t6, side), (D - t6, 0),
+                (et + tab, 0), (et + tab, t6), (et, t6), (et, 0)]
+        return poly(pts)
 
-    # ================================================================ carriage
-    # H: carriage top wall, comb on both long edges, slots for the partitions
-    hh = p.car_d
-    h = rect(t6, t6, W - t6, hh - t6, t6)
-    h = h + tab_pattern(p, W, 0, t6, t6) + tab_pattern(p, W, hh - t6, hh, t6)
-    side_y = (hh - p.tab_w) / 2
-    h = h + rect(0, side_y, t6, side_y + p.tab_w, t6) + rect(W - t6, side_y, W, side_y + p.tab_w, t6)
-    for ox in (p.o_x, W - p.o_x):
-        h = h - rect(ox - h6, t6, ox + h6, t6 + p.h_notch, t6)
-        h = h - rect(ox - h6, hh - t6 - p.h_notch, ox + h6, hh - t6, t6)
-    parts["carriage_top"] = h
-    d("carriage_top.p1", p.o_x + t6, hh / 2, t6)
-    d("carriage_top.p2", W / 2, hh / 2, t6)
-    d("carriage_top.p3", p.tab_m1 + p.tab_w / 2, hh - t6 / 2, t6)
+    m.cut("carriage_rib_tall", t6, rib(wall_h, True))
+    m.cut("carriage_rib_short", t6, rib(p.cw_h, False))
+    m.on_sheet("acryl6@318.62,387.24", "carriage_rib_tall", p.rib_at_x1, p.rt_at_y)
+    m.on_sheet("acryl6@367.16,387.24", "carriage_rib_tall", p.rib_at_x2, p.rt_at_y)
+    m.on_sheet("acryl6@318.62,436.57", "carriage_rib_short", p.rib_at_x1, p.rs_at_y)
+    m.on_sheet("acryl6@367.16,436.57", "carriage_rib_short", p.rib_at_x2, p.rs_at_y)
 
-    # G: carriage face plates (lead-screw nut and linear-bearing seats)
-    gh = p.g_h
-    band0 = p.tab_o1 + (p.tab_n_out - 1) * p.tab_p + p.tab_w
-    g = rect(0, 0, W, gh - t6, t6) - tab_pattern(p, W, 0, t6, t6)
-    g = g + rect(band0, gh - t6, W - band0, gh, t6) - row(p.tab_m1, p.tab_p, p.tab_n_mid, p.tab_w, gh - t6, gh, t6)
-    gy = (gh - p.tab_w) / 2
-    g = g - rect(0, gy, t6, gy + p.tab_w, t6) - rect(W - t6, gy, W, gy + p.tab_w, t6)
-    for ox in (p.o_x, W - p.o_x):
-        g = g - rect(ox - h6, gy, ox + h6, gy + p.tab_w, t6)
-    ca, sa = cos(radians(p.hole_ang)), sin(radians(p.hole_ang))
-    for sx in (-1, 1):
-        nx = W / 2 + sx * (W / 2 - p.scr_x)
-        bxx = W / 2 + sx * (W / 2 - p.rod_x)
-        g = g - disc(nx, p.g_ax, p.d_nut, t6) - disc(bxx, p.g_ax, p.d_brg, t6)
-        rn = p.nut_pcd / 2
-        for ux in (-1, 1):
-            for uy in (-1, 1):
-                g = g - disc(nx + ux * rn * ca, p.g_ax + uy * rn * sa, p.d_m3tap, t6)
-        rb = p.brg_pcd / 2
-        for u in (-1, 1):
-            g = g - disc(bxx - sx * u * rb * ca, p.g_ax - u * rb * sa, p.d_m3tap, t6)
-    parts["carriage_face"] = g
-    d("carriage_face.brg_l", p.rod_x, p.g_ax, h6)
-    d("carriage_face.brg_l_top", p.rod_x, p.g_ax, t6)
-    d("carriage_face.brg_l_bot", p.rod_x, p.g_ax, 0)
-    d("carriage_face.nut_l", p.scr_x, p.g_ax, h6)
-    d("carriage_face.nut_r", W - p.scr_x, p.g_ax, h6)
-    d("carriage_face.brg_r", W - p.rod_x, p.g_ax, h6)
-    d("carriage_face.mid", W / 2, gh / 2, t6)
+    # --- bearing retainer: an ellipse over a bearing's end, its three holes along its long axis
+    cu, cv = p.br_half_len, p.br_half_wid
+    m.cut("bearing_retainer", t6, Pos(cu, cv) * Ellipse(cu, cv), [("rod", cu, cv, p.br_rod_d, None),
+                                                                ("m3_1", cu - p.br_hole_off, cv, p.d_m3_clear, "m3"),
+                                                                ("m3_2", cu + p.br_hole_off, cv, p.d_m3_clear, "m3")])
+    for name, x, y in (("331.64,330.03", p.br_at_x1, p.br_at_y1), ("372.28,330.03", p.br_at_x2, p.br_at_y1),
+                       ("331.64,344.59", p.br_at_x1, p.br_at_y2), ("372.28,344.59", p.br_at_x2, p.br_at_y2)):
+        m.on_sheet(f"acryl6@{name}", "bearing_retainer", x, y)
 
-    # E: carriage flange carrying the mobile substrate mountings
-    ex0 = (W - p.e_w) / 2
-    e = rect(t6, t6, p.e_w - t6, p.e_h, t6)
-    e = e - rect(t6, hh - t6, t6 + p.e_notch, hh, t6) - rect(p.e_w - t6 - p.e_notch, hh - t6, p.e_w - t6, hh, t6)
-    e = e + rect(0, side_y, t6, side_y + p.tab_w, t6) + rect(p.e_w - t6, side_y, p.e_w, side_y + p.tab_w, t6)
-    e = e + row(p.tab_m1 - ex0, p.tab_p, p.tab_n_mid, p.tab_w, 0, t6, t6)
-    e = e - row(p.tab_m1 + p.tab_w - ex0, p.tab_p, p.tab_n_mid - 1, p.tab_w, hh - t6, hh, t6)
-    for k in range(int(p.n_wells)):
-        xc = p.well_x0 + k * p.well_p - ex0
-        e = e - disc(xc - p.q_m4_dx, p.e_hole_y, p.d_m4tap, t6) - disc(xc + p.q_m4_dx, p.e_hole_y, p.d_m4tap, t6)
-    parts["carriage_flange"] = e
-    d("carriage_flange.h1", p.well_x0 - ex0 - p.q_m4_dx, p.e_hole_y, h6)
-    d("carriage_flange.h12", p.well_x0 + (p.n_wells - 1) * p.well_p - ex0 + p.q_m4_dx, p.e_hole_y, h6)
-    d("carriage_flange.p_mid", p.e_w / 2, hh / 2, t6)
+    # ============================================================== stationary bar and mountings
+    rows = (p.slot_edge, p.slot_edge + p.slot_pitch)
+    holes = []
+    for j, v in enumerate(rows):
+        for i, u in enumerate((p.slot_edge, p.slot_edge + p.slot_pitch, W - p.slot_edge - p.slot_pitch, W - p.slot_edge)):
+            holes.append((f"long_{j + 1}_{i + 1}", u, v, p.d_m5, None))
+        us = [p.sb_slot_u1] + [p.sb_slot_u2 + k * p.sb_slot_pitch for k in range(int(p.sb_slot_n))] + [W - p.sb_slot_u1]
+        for i, u in enumerate(us):
+            holes.append((f"short_{j + 1}_{i + 1}", u, v, p.sb_slot_d, "m5"))
+    holes += [(f"thread_{k + 1}", p.sb_thread_u0 + k * p.mount_hole_pitch, p.sb_thread_v, p.mount_screw.tap, "mount_screw")
+              for k in range(int(p.n_mount_threads))]
+    m.cut("stationary_bar", t6, rect(0, 0, W, p.sb_wid), holes)
+    m.on_sheet("acryl6@48.75,290.92", "stationary_bar", 0, p.sb_at_y)
 
-    # O1 / O2: carriage partitions and end caps
-    o1 = rect(t6, 0, hh - t6, gh, t6) + rect(0, gy, t6, gy + p.tab_w, t6) + rect(hh - t6, gy, hh, gy + p.tab_w, t6)
-    o1 = o1 - rect(side_y, 0, side_y + p.tab_w, t6, t6) - rect(side_y, gh - t6, side_y + p.tab_w, gh, t6)
-    parts["carriage_partition"] = o1
-    d("carriage_partition.p1", hh / 2, gh / 2, t6)
-    d("carriage_partition.p2", t6 / 2, gy + p.tab_w / 2, t6)
-    d("carriage_partition.p3", hh / 2, t6 + t6 / 2, t6)
-    o2 = rect(t6, 0, hh - t6, gh - t6, t6) + rect(0, gy, t6, gy + p.tab_w, t6) + rect(hh - t6, gy, hh, gy + p.tab_w, t6)
-    o2 = o2 - rect(side_y, 0, side_y + p.tab_w, t6, t6)
-    parts["carriage_end"] = o2
-    d("carriage_end.p1", hh / 2, gh / 2, t6)
-    d("carriage_end.p2", t6 / 2, gy + p.tab_w / 2, t6)
-    d("carriage_end.p3", hh / 2, t6 + t6 / 2, t6)
+    # --- mounting: a lobe about each hook's hole, a recess between them
+    ML, MW, lr, hu = p.mt_len, p.mt_wid, p.mt_lobe_r, p.mt_hook_u
+    chord = math.sqrt(lr * lr - (lr - p.mt_recess_v) ** 2)
+    a1, a2 = (hu, lr), (ML - hu, lr)
+    edges = [
+        Polyline((hu - lr, lr), (0, lr), (0, MW), (ML, MW), (ML, lr), (ML - hu + lr, lr)),
+        arc_to((ML - hu + lr, lr), (ML - hu - chord, p.mt_recess_v), a2, lr, (0, -1)),
+        Line((ML - hu - chord, p.mt_recess_v), (hu + chord, p.mt_recess_v)),
+        arc_to((hu + chord, p.mt_recess_v), (hu - lr, lr), a1, lr, (0, -1)),
+    ]
+    holes = [("hook_1", hu, lr, p.hook_thread.tap, "hook_thread"), ("hook_2", ML - hu, lr, p.hook_thread.tap, "hook_thread"),
+             ("bolt_1", p.mt_bolt_u, p.mt_bolt_v, p.frame_bolt.tap, "frame_bolt"), ("bolt_2", ML - p.mt_bolt_u, p.mt_bolt_v, p.frame_bolt.tap, "frame_bolt"),
+             ("screw_1", p.mt_screw_u, p.mt_screw_v, p.mt_screw_d, None), ("screw_2", ML - p.mt_screw_u, p.mt_screw_v, p.mt_screw_d, None)]
+    m.cut("mounting", t6, make_face(edges), holes)
+    mt_x = (p.mt_at_x1, p.mt_at_x2, p.mt_at_x3, p.mt_at_x4)
+    mt_names = (("410.55,488.48", "445.95,498.52", "481.59,488.48", "516.99,498.52"), ("410.55,530.39", "445.95,540.42", "481.59,530.39", "516.99,540.42"),
+                ("410.55,571.5", "445.95,581.53", "481.59,571.5", "516.99,581.53"))
+    for names, y in zip(mt_names, (p.mt_at_y1, p.mt_at_y2, p.mt_at_y3)):
+        for k, (name, x) in enumerate(zip(names, mt_x)):
+            m.on_sheet(f"acryl6@{name}", "mounting", x, y, ML, MW, turned=bool(k % 2))
 
-    # ================================================================ stationary bar
-    f = rect(0, 0, W, p.f_h, t6)
-    for k in range(int(p.n_wells)):
-        xc = p.well_x0 + k * p.well_p
-        f = f - disc(xc - p.q_m4_dx, p.f_m4_y, p.d_m4tap, t6) - disc(xc + p.q_m4_dx, p.f_m4_y, p.d_m4tap, t6)
-        for yy in (p.ep_h1, p.ep_h2):
-            f = f - disc(xc, yy, p.d_m5clr, t6)
-    for yy in (p.ep_h1, p.ep_h2):
-        f = f - disc(p.well_x0 - p.f_c_off, yy, p.d_m5clr, t6)
-        f = f - disc(p.well_x0 + (p.n_wells - 1) * p.well_p + p.f_c_off, yy, p.d_m5clr, t6)
-        for x in (p.ep_h1, p.ep_h2, W - p.ep_h1, W - p.ep_h2):
-            f = f - disc(x, yy, p.d_m5, t6)
-    parts["stat_bar"] = f
-    d("stat_bar.m4_1", p.well_x0 - p.q_m4_dx, p.f_m4_y, h6)
-    d("stat_bar.m5_a", p.ep_h1, p.ep_h1, h6)
-    d("stat_bar.m5_b", W - p.ep_h1, p.ep_h2, h6)
+    # ============================================================== end-pieces
+    def end_piece(name, length, shift, rods, pin_d, pin_thread, m6, m5_u, extra_holes=(), extra_cuts=()):
+        """A 71 high end-piece. `shift` is how far its u 0 edge lies in from the unit's side."""
+        holes = [(f"rod_{i + 1}", u - shift, p.ep_rod_v, p.ep_rod_d, None) for i, u in enumerate(rods)]
+        if m6:
+            for i, u in enumerate((p.slot_edge, p.slot_edge + p.slot_pitch, W - p.slot_edge - p.slot_pitch, W - p.slot_edge)):
+                holes.append((f"m6_{i + 1}", u, p.ep_bolt_v, p.ep_m6_d, None))
+        for i, u in enumerate((m5_u, m5_u + p.slot_pitch, length - m5_u - p.slot_pitch, length - m5_u)):
+            holes.append((f"m5_{i + 1}", u, p.ep_bolt_v, p.d_m5, None))
+        for i, u in enumerate((p.ep_pin_u - shift, length - p.ep_pin_u + shift)):
+            holes.append((f"pin_{i + 1}", u, p.ep_pin_v, pin_d, pin_thread))
+        cuts = list(extra_cuts)
+        for k in range(2):
+            u0 = p.ep_slot_u0 - shift + k * p.ep_slot_pitch
+            cuts.append(bez_box(u0, p.ep_bolt_v - p.ep_slot_w / 2, u0 + p.ep_slot_len, p.ep_bolt_v + p.ep_slot_w / 2,
+                                p.ep_slot_w / 2, p.ep_slot_w / 2, p.ep_slot_k, p.ep_slot_k))
+        m.cut(name, t6, rect(0, 0, length, p.ep_h), holes + list(extra_holes), cuts)
 
-    # ================================================================ substrate mounting plate
-    qcx = p.q_w / 2
-    q = rect(0, p.q_lobe_r, p.q_w, p.q_h, t6) + rect(qcx - p.q_lobe_dx, p.q_neck_y, qcx + p.q_lobe_dx, p.q_lobe_r, t6)
-    q = q + disc(qcx - p.q_lobe_dx, p.q_lobe_r, 2 * p.q_lobe_r, t6) + disc(qcx + p.q_lobe_dx, p.q_lobe_r, 2 * p.q_lobe_r, t6)
-    q = q - disc(qcx - p.q_lobe_dx, p.q_lobe_r, p.d_m3tap, t6) - disc(qcx + p.q_lobe_dx, p.q_lobe_r, p.d_m3tap, t6)
-    q = q - disc(qcx - p.q_c_dx, p.q_c_y, p.d_m4tap, t6) - disc(qcx + p.q_c_dx, p.q_c_y, p.d_m4tap, t6)
-    q = q - disc(qcx - p.q_m4_dx, p.q_b_y, p.d_m4clr, t6) - disc(qcx + p.q_m4_dx, p.q_b_y, p.d_m4clr, t6)
-    parts["mount_plate"] = q
-    d("mount_plate.post_a", qcx - p.q_lobe_dx, p.q_lobe_r, h6)
-    d("mount_plate.post_b", qcx + p.q_lobe_dx, p.q_lobe_r, h6)
-    d("mount_plate.m4_a", qcx - p.q_m4_dx, p.q_b_y, h6)
-    d("mount_plate.c_b", qcx + p.q_c_dx, p.q_c_y, h6)
+    all_rods = (p.screw_u, p.guide_u, W - p.guide_u, W - p.screw_u)
+    end_piece("end_plate", W, 0, all_rods, p.m3.tap, "m3", True, p.ep_m5_u)
+    m.datums["end_plate.over_screw_1"] = (p.screw_u, 0, t6 / 2)                       # on its top edge, square over a screw's axis
+    m.datums["end_plate.over_screw_2"] = (W - p.screw_u, 0, t6 / 2)
+    end_piece("end_cover", W, 0, (), p.d_m3_clear, "m3", True, p.ep_m5_u)
+    m.on_sheet("acryl6@195.28,558.3", "end_plate", p.at_left, p.ep_at_y)
+    m.on_sheet("acryl6@195.28,486.51", "end_cover", p.at_left, p.ec_at_y)
 
-    # ================================================================ stretch-holding frames
-    def frame(w, sx, ww):
-        fr = rrect(w / 2, p.fr_h / 2, w, p.fr_h, p.fr_r, t6)
-        fr = fr - rrect(w / 2, p.fr_h / 2, ww, p.fr_win_h, p.fr_win_r, t6)
-        for x in (sx, w - sx):
-            for y in (p.fr_h / 2 - p.fr_slot_dy / 2, p.fr_h / 2 + p.fr_slot_dy / 2):
-                fr = fr - slot(x, y, p.fr_slot_L, p.fr_slot_w, t6)
-        return fr
+    inset = (W - p.mp_len) / 2                        # the motor end-pieces stand between the two motor mounting frames
+    mid_u = p.mp_len / 2
+    right_half = [(p.ds_u1, p.ds_v1), (p.ds_u2, p.ds_v1), (p.ds_u3, p.ds_v3), (p.ds_u4, p.ds_v4), (p.ds_u5, p.ds_v5),
+                  (p.ds_u6, p.ds_v6), (p.ds_u7, p.ds_v7), (p.ds_u8, p.ds_v7)]
+    r1, r2, r3, r4, r5, r6, r7, r8 = [(mid_u + u, v) for u, v in right_half]
+    l1, l2, l3, l4, l5, l6, l7, l8 = [(mid_u - u, v) for u, v in right_half]
+    dsub = make_face([Line(l1, r1), Bezier(r1, r2, r3, r4), Line(r4, r5), Bezier(r5, r6, r7, r8),
+                      Line(r8, l8), Bezier(l8, l7, l6, l5), Line(l5, l4), Bezier(l4, l3, l2, l1)])
+    ds_holes = [("dsub_1", mid_u - p.ds_hole_off, p.ds_hole_v, p.ds_hole_d, None), ("dsub_2", mid_u + p.ds_hole_off, p.ds_hole_v, p.ds_hole_d, None)]
+    end_piece("motor_end_plate", p.mp_len, inset, (p.guide_u, W - p.guide_u), p.m3.tap, "m3", False, p.mp_m5_u, ds_holes, [dsub])
+    window = bez_box(mid_u - p.mc_win_half, p.mc_win_v0, mid_u + p.mc_win_half, p.mc_win_v1, p.mc_cor_du, p.mc_cor_dv, p.mc_cor_hu, p.mc_cor_hv)
+    end_piece("motor_end_cover", p.mp_len, inset, (), p.mc_pin_d, "m3", False, p.mp_m5_u, (), [window])
+    m.on_sheet("acryl6@49.28,342.62", "motor_end_plate", p.at_left, p.mp_at_y)
+    m.on_sheet("acryl6@49.28,414.51", "motor_end_cover", p.at_left, p.mc_at_y)
 
-    parts["frame_wide"] = frame(p.fw_w, p.fw_slot_x, p.fw_win_w)
-    parts["frame_narrow"] = frame(p.fn_w, p.fn_slot_x, p.fn_win_w)
-    for nm, w, sx in (("frame_wide", p.fw_w, p.fw_slot_x), ("frame_narrow", p.fn_w, p.fn_slot_x)):
-        d(nm + ".s1", sx, p.fr_h / 2, t6)  # side bar, between its two slots
-        d(nm + ".s2", w - sx, p.fr_h / 2, t6)
-        d(nm + ".s3", w / 2, p.fr_r / 2, t6)  # end bar
+    # ============================================================== frame plates
+    holes = [(f"m5_{j + 1}_{i + 1}", p.slot_edge + i * p.slot_pitch, v, p.d_m5, None) for j, v in enumerate(rows) for i in range(int(p.cp_hole_n))]
+    m.cut("corner_plate", t6, rect(0, 0, p.cp_len, p.cp_wid), holes)
+    for name, x, y in (("414.55,122.86", p.cp_at_x1, p.cp_at_y1), ("534.98,122.86", p.cp_at_x2, p.cp_at_y1),
+                       ("414.55,163.36", p.cp_at_x1, p.cp_at_y2), ("534.98,163.36", p.cp_at_x2, p.cp_at_y2)):
+        m.on_sheet(f"acryl6@{name}", "corner_plate", x, y)
 
-    # ================================================================ corner plates, switch plate, rod flanges
-    kp = rect(0, 0, p.k_w, p.k_h, t6)
-    for i in range(int(p.k_n)):
-        for yy in (p.ep_h1, p.ep_h2):
-            kp = kp - disc(p.ep_h1 + i * p.k_p, yy, p.d_m5, t6)
-    parts["corner_plate"] = kp
-    d("corner_plate.a", p.ep_h1, p.ep_h1, h6)
-    d("corner_plate.b", p.ep_h1 + (p.k_n - 1) * p.k_p, p.ep_h1, h6)
-    d("corner_plate.c", p.ep_h1, p.ep_h2, h6)
+    # --- motor mounting frame: base on the profile, face the motor bolts to, a gusset each side
+    S = p.mm_size
+    mt = tabs(p.mm_tab_u0, 2, fj, tab)
+    right_side, left_side = [], []
+    for s, e in mt:
+        right_side += [(S - t6, s), (S, s), (S, e), (S - t6, e)]
+    for s, e in reversed(mt):
+        left_side += [(t6, e), (0, e), (0, s), (t6, s)]
+    pts = [(t6, t6)] + castle(mt, t6, 0) + [(S - t6, t6)] + right_side + [(S - t6, S), (t6, S)] + left_side
+    holes = [(f"m5_{j + 1}_{i + 1}", p.mb_hole_u + i * p.slot_pitch, v, p.mb_hole_d, None)
+             for j, v in enumerate((p.mb_hole_v1, p.mb_hole_v2)) for i in range(2)]
+    m.cut("motor_base", t6, poly(pts), holes)
+    m.on_sheet("acryl6@568.14,277.2", "motor_base", p.mb_at_x, p.mb_at_y1)
+    m.on_sheet("acryl6@568.14,333.08", "motor_base", p.mb_at_x, p.mb_at_y2)
 
-    sp = rect(0, 0, p.n_w, p.n_h, t6)
-    sp = sp - disc(p.sw_x - p.sw_dx, p.sw_y, p.d_sw, t6) - disc(p.sw_x + p.sw_dx, p.sw_y, p.d_sw, t6)
-    for x in (p.ep_h1, p.ep_h2):
-        for yy in (p.n_hy, p.n_hy + p.k_p):
-            sp = sp - disc(x, yy, p.d_m5, t6)
-    parts["switch_plate"] = sp
-    d("switch_plate.sw_a", p.sw_x - p.sw_dx, p.sw_y, h6)
-    d("switch_plate.m5_a", p.ep_h1, p.n_hy, h6)
-    d("switch_plate.m5_d", p.ep_h2, p.n_hy + p.k_p, h6)
+    right_side, left_side = [], []
+    for s, e in mt:
+        left_side += [(0, s), (t6, s), (t6, e), (0, e)]
+    for s, e in reversed(mt):
+        right_side += [(S, e), (S - t6, e), (S - t6, s), (S, s)]
+    pts = [(0, 0)] + left_side + [(0, S)] + castle(mt, S, S - t6) + [(S, S)] + right_side + [(S, 0)]
+    c, h = S / 2, p.mf_hole_pitch / 2
+    holes = [("pilot", c, c, p.mf_pilot_d, None)] + [(f"m3_{i + 1}", c + dx * h, c + dy * h, p.mf_hole_d, None)
+                                                      for i, (dx, dy) in enumerate(((-1, -1), (1, -1), (1, 1), (-1, 1)))]
+    m.cut("motor_face", t6, poly(pts), holes)
+    m.on_sheet("acryl6@575.07,369.06", "motor_face", p.mf_at_x, p.mf_at_y1)
+    m.on_sheet("acryl6@575.07,424.93", "motor_face", p.mf_at_x, p.mf_at_y2)
 
-    ov = ellipse(p.ov_rx, p.ov_ry, p.ov_rx, p.ov_ry, t6) - disc(p.ov_rx, p.ov_ry, p.d_ov, t6)
-    ov = ov - disc(p.ov_rx - p.ov_hx, p.ov_ry, p.d_m3clr, t6) - disc(p.ov_rx + p.ov_hx, p.ov_ry, p.d_m3clr, t6)
-    parts["rod_flange"] = ov
-    d("rod_flange.c", p.ov_rx, p.ov_ry, h6)
-    d("rod_flange.a", p.ov_rx - p.ov_hx, p.ov_ry, h6)
-    d("rod_flange.b", p.ov_rx + p.ov_hx, p.ov_ry, h6)
-    d("rod_flange.top_pt", p.ov_rx, p.ov_ry / 2, t6)
+    right_side = []
+    for s, e in reversed(mt):
+        right_side += [(S - t6, e), (S, e), (S, s), (S - t6, s)]
+    top = []
+    for s, e in reversed(mt):
+        top += [(e, 0), (e, t6), (s, t6), (s, 0)]
+    pts = [(S - t6, S)] + right_side + [(S - t6, 0)] + top + [(0, 0), (0, t6)]
+    m.cut("motor_gusset", t6, poly(pts))
+    m.datums["motor_gusset.foot"] = (S / 2, 0, t6 / 2)
+    for name, x, y, turned in (("578.17,495.25", p.mg_at_x1, p.mg_at_y1, False), ("558.09,515.54", p.mg_at_x2, p.mg_at_y2, True),
+                               ("578.17,557.52", p.mg_at_x1, p.mg_at_y3, False), ("558.09,577.8", p.mg_at_x2, p.mg_at_y4, True)):
+        m.on_sheet(f"acryl6@{name}", "motor_gusset", x, y, S, S, turned=turned)
 
-    # ================================================================ motor box
-    bx = p.mb_w
-    n0, n1 = p.mb_n0, p.mb_n0 + p.tab_p
-    lf = rect(0, 0, bx, bx, t6)
-    for a0 in (n0, n1):
-        lf = lf - rect(0, a0, t6, a0 + p.tab_w, t6) - rect(bx - t6, a0, bx, a0 + p.tab_w, t6)
-        lf = lf - rect(a0, bx - t6, a0 + p.tab_w, bx, t6)
-    lf = lf - disc(bx / 2, bx / 2, p.d_pilot, t6)
-    for ux in (-1, 1):
-        for uy in (-1, 1):
-            lf = lf - disc(bx / 2 + ux * p.motor_hp / 2, bx / 2 + uy * p.motor_hp / 2, p.d_motor_hole, t6)
-    parts["motor_face"] = lf
-    d("motor_face.c", bx / 2, bx / 2, h6)
-    d("motor_face.h1", bx / 2 - p.motor_hp / 2, bx / 2 - p.motor_hp / 2, h6)
-    d("motor_face.h2", bx / 2 + p.motor_hp / 2, bx / 2 - p.motor_hp / 2, h6)
+    # --- limit-switch plate
+    holes = [(f"m5_{j + 1}_{i + 1}", p.slot_edge + i * p.slot_pitch, p.sp_hole_v + j * p.slot_pitch, p.d_m5, None) for j in range(2) for i in range(2)]
+    holes += [(f"switch_{i + 1}", p.sp_sw_u + i * p.sp_sw_pitch, p.sp_sw_v, p.sp_sw_d, None) for i in range(2)]
+    m.cut("switch_plate", t6, rect(0, 0, p.sp_wid, p.sp_len), holes)
+    m.on_sheet("acryl6@565.86,206.38", "switch_plate", p.sp_at_x, p.sp_at_y)
 
-    mb = rect(t6, t6, bx - t6, bx, t6)
-    for a0 in (n0, n1):
-        mb = mb + rect(0, a0, t6, a0 + p.tab_w, t6) + rect(bx - t6, a0, bx, a0 + p.tab_w, t6)
-        mb = mb + rect(a0, 0, a0 + p.tab_w, t6, t6)
-    for ux in (-1, 1):
-        for yy in (p.mb_hy, p.mb_hy + p.mb_hp):
-            mb = mb - disc(bx / 2 + ux * p.mb_hx, yy, p.d_m6, t6)
-    parts["motor_base"] = mb
-    d("motor_base.h1", bx / 2 - p.mb_hx, p.mb_hy, h6)
-    d("motor_base.h2", bx / 2 + p.mb_hx, p.mb_hy, h6)
-    d("motor_base.h3", bx / 2 - p.mb_hx, p.mb_hy + p.mb_hp, h6)
+    # ============================================================== holding frames
+    def holding_frame(name, length, cor_du, cor_hu, win_u0, win_w, slot_us):
+        outer = bez_box(0, 0, length, p.hf_wid, cor_du, p.hf_cor_dv, cor_hu, p.hf_cor_hv)
+        cuts = [bez_box(win_u0, p.hf_win_v0, win_u0 + win_w, p.hf_win_v0 + p.hf_win_h, p.hf_win_du, p.hf_win_dv, p.hf_win_hu, p.hf_win_hv)]
+        for u in slot_us:
+            for v in (p.hf_slot_v, p.hf_wid - p.hf_slot_v):
+                cuts.append(bez_box(u - p.hf_slot_len / 2, v - p.hf_slot_w / 2, u + p.hf_slot_len / 2, v + p.hf_slot_w / 2,
+                                    p.hf_slot_w / 2, p.hf_slot_w / 2, p.hf_slot_k, p.hf_slot_k))
+        m.cut(name, t6, outer, (), cuts)
+        m.datums[f"{name}.face"] = (length / 2, p.hf_win_v0 / 2, 0)
 
-    leg = bx - t6
-    gu = poly([(t6, 0), (bx, leg), (t6, leg)], t6)  # counter-clockwise, so it extrudes up
-    for a0 in (n0, n1):
-        gu = gu + rect(0, a0, t6, a0 + p.tab_w, t6)
-    gu = gu + rect(t6, leg, n0, bx, t6) + rect(n0 + p.tab_w, leg, n1, bx, t6) + rect(n1 + p.tab_w, leg, bx, bx, t6)
-    parts["motor_gusset"] = gu
-    d("motor_gusset.a", t6 / 2, n0 + p.tab_w / 2, t6)
-    d("motor_gusset.b", n0 + p.tab_w + p.tab_w / 2, bx - t6 / 2, t6)
-    d("motor_gusset.c", t6 + t6 / 2, leg - t6 / 2, t6)
+    holding_frame("holding_frame_narrow", p.hn_len, p.hn_cor_du, p.hn_cor_hu, p.hn_win_u0, p.hn_win_w, (p.hn_slot_u, p.hn_len - p.hn_slot_u))
+    holding_frame("holding_frame_wide", p.hw_len, p.hw_cor_du, p.hw_cor_hu, p.hw_win_u0, p.hw_win_w, (p.hw_slot_u1, p.hw_slot_u2))
+    hn_names = ("399.92,206.61", "399.92,254.18", "399.92,301.22", "399.92,346.65", "399.92,394.23", "399.92,441.27")
+    hw_names = ("468.52,206.74", "468.52,254.32", "468.52,301.36", "468.52,346.79", "468.52,394.37", "468.52,441.41")
+    for nn, wn, y in zip(hn_names, hw_names, (p.hn_at_y1, p.hn_at_y2, p.hn_at_y3, p.hn_at_y4, p.hn_at_y5, p.hn_at_y6)):
+        m.on_sheet(f"acryl6@{nn}", "holding_frame_narrow", p.hn_at_x, y)
+        m.on_sheet(f"acryl6@{wn}", "holding_frame_wide", p.hw_at_x, y + p.hw_at_dy)
 
-    # ================================================================ purchased stretcher parts
-    parts["profile_long"] = Box(p.prof_w, p.prof_long_L, p.prof_h, align=MINS)
-    parts["profile_short"] = Box(p.prof_short_L, p.prof_w, p.prof_h, align=MINS)
-    d("profile_long.end_a", p.prof_w / 2, 0, p.prof_h / 2)
-    d("profile_long.end_b", p.prof_w / 2, p.prof_long_L, p.prof_h / 2)
-    d("profile_short.end_a", 0, p.prof_w / 2, p.prof_h / 2)
-    d("profile_short.end_b", p.prof_short_L, p.prof_w / 2, p.prof_h / 2)
+    # ============================================================== mould
+    ms = p.mo_side
+    ins = (p.mo_screw_in, ms - p.mo_screw_in)
+    posts = (p.mo_post_in, ms - p.mo_post_in)
+    holes = [(f"screw_{2 * j + i + 1}", u, v, p.mould_screw.tap, "mould_screw") for j, v in enumerate(ins) for i, u in enumerate(ins)]
+    holes += [(f"post_{2 * j + i + 1}", u, v, p.mo_post_hole_d, None) for j, v in enumerate(posts) for i, u in enumerate(posts)]
+    m.cut("mould_base", t3, rect(0, 0, ms, ms), holes)
+    m.datums["mould_base.top"] = (ms / 2, ms / 2, t3)
+    for name, x, y in (("85,515", p.mo_at_x2, p.mo_at_y1), ("140,515", p.mo_at_x3, p.mo_at_y1), ("30,570", p.mo_at_x1, p.mo_at_y2),
+                       ("85,570", p.mo_at_x2, p.mo_at_y2), ("140,570", p.mo_at_x3, p.mo_at_y2), ("195,570", p.mo_at_x4, p.mo_at_y2)):
+        m.on_sheet(f"acryl3@{name}", "mould_base", x, y)
 
-    parts["lead_screw"] = Cylinder(p.d_screw / 2, p.screw_L, align=CTR)
-    d("lead_screw.ax_a", 0, 0, 0)
-    d("lead_screw.ax_b", 0, 0, p.screw_L)
-    parts["guide_rod"] = Cylinder(p.d_rod / 2, p.rod_L, align=CTR)
-    d("guide_rod.ax_a", 0, 0, 0)
-    d("guide_rod.ax_b", 0, 0, p.rod_L)
-    cp = Cylinder(p.coupler_d / 2, p.coupler_L, align=CTR)
-    cp = cp - Cylinder(p.d_screw / 2, p.coupler_L / 2, align=CTR)
-    cp = cp - Pos(0, 0, p.coupler_L / 2) * Cylinder(p.d_shaft / 2, p.coupler_L / 2, align=CTR)
-    parts["coupler"] = cp
-    d("coupler.ax", 0, 0, p.coupler_L)
-    mt = Pos(0, 0, p.pilot_h) * Box(p.motor_w, p.motor_w, p.motor_L, align=CTR)
-    mt = mt + Cylinder(p.pilot_d / 2, p.pilot_h, align=CTR)
-    mt = mt + Pos(0, 0, p.pilot_h - p.shaft_L) * Cylinder(p.d_shaft / 2, p.shaft_L, align=CTR)
-    parts["stepper_motor"] = mt
-    d("stepper_motor.shaft_tip", 0, 0, p.pilot_h - p.shaft_L)
-    d("stepper_motor.face", 0, 0, p.pilot_h)
-    parts["rubber_foot"] = Cylinder(p.foot_d / 2, p.foot_h, align=CTR)
-    d("rubber_foot.top", 0, 0, p.foot_h)
-    d("rubber_foot.bottom", 0, 0, 0)
+    mp_ = p.mo_plat
+    m.parts["mould_platform"] = extrude(Pos(mp_ / 2, mp_ / 2) * RectangleRounded(mp_, mp_, p.mo_plat_r), amount=t3)
+    m.datums["mould_platform.top"] = (mp_ / 2, mp_ / 2, t3)
+    m.datums["mould_platform.side_a"] = (0, mp_ / 2, t3 / 2)
+    m.datums["mould_platform.side_b"] = (mp_, mp_ / 2, t3 / 2)
+    for k, name in enumerate(("15,475", "40,475", "65,475", "90,475", "115,475", "140,475")[:int(p.pl_at_n)]):
+        m.on_sheet(f"acryl3@{name}", "mould_platform", p.pl_at_x1 + k * p.pl_at_dx, p.pl_at_y)
 
-    # ================================================================ 3D-printed stretching clamp (Clamp.stl frame)
-    r_cl = (p.cl_L - p.cl_pitch) / 2
-    hy = p.cl_W - r_cl
-    px = p.cl_pitch / 2
-    r_in = p.cl_nin / 2 - p.cl_c
-    r_out = p.cl_nout / 2 - p.cl_c
-    cc = cos(radians(p.cl_ang))
-    tx, ty = px + r_cl * cc, hy - r_cl * cc  # tangent point of the chamfer on the lobe
-    bx0 = tx - ty  # where the chamfer meets the bottom edge
-    outline = [(-bx0, 0), (bx0, 0), (tx, ty), (px, hy), (px, p.cl_flat), (-px, p.cl_flat), (-px, hy), (-tx, ty)]
-    pl = poly(outline, p.cl_t) + disc(-px, hy, 2 * r_cl, p.cl_t) + disc(px, hy, 2 * r_cl, p.cl_t)
+    c = ms / 2
+    win = bez_box(c - mp_ / 2, c - mp_ / 2, c + mp_ / 2, c + mp_ / 2, p.mo_plat_r, p.mo_plat_r, p.mo_templ_k, p.mo_templ_k)
+    holes = [(f"screw_{2 * j + i + 1}", u, v, p.mo_templ_d, None) for j, v in enumerate(ins) for i, u in enumerate(ins)]
+    m.cut("mould_template", t3, rect(0, 0, ms, ms), holes, [win])
+    m.on_sheet("acryl3@40.42,498.33", "mould_template", p.mo_at_x1, p.mo_at_y1)
 
-    def u_shape(r, height):
-        u = rect(-p.cl_c, 0, p.cl_c, r, height)
-        u = u + disc(-p.cl_c, 0, 2 * r, height) + disc(p.cl_c, 0, 2 * r, height)
-        return u - rect(-p.cl_c - r, -r, p.cl_c + r, 0, height)
+    rd = p.mo_ring_d
+    m.cut("mould_ring", t3, disc(rd / 2, rd / 2, rd), [("bore", rd / 2, rd / 2, p.mo_ring_bore, None)])
+    rg_names = (("176.81,517.41", "186.1,517.41"), ("176.81,523.41", "186.1,523.41"), ("176.81,529.41", "186.1,529.41"), ("176.81,535.41", "186.1,535.41"))
+    for k, names in enumerate(rg_names[:int(p.rg_at_rows)]):
+        for name, x in zip(names, (p.rg_at_x1, p.rg_at_x2)):
+            m.on_sheet(f"acryl3@{name}", "mould_ring", x, p.rg_at_y1 + k * p.rg_at_dy)
 
-    cl = pl + u_shape(r_out, p.cl_H)
-    cl = cl - u_shape(r_in, p.cl_H)
-    cl = cl - disc(-px, hy, p.cl_hole, p.cl_t) - disc(px, hy, p.cl_hole, p.cl_t)
-    parts["stretch_clamp"] = cl
-    d("stretch_clamp.hole_a", -px, hy, p.cl_t / 2)
-    d("stretch_clamp.hole_b", px, hy, p.cl_t / 2)
-    d("stretch_clamp.corner_l", -bx0, 0, 0)
-    d("stretch_clamp.corner_r", bx0, 0, 0)
-    d("stretch_clamp.top_l", -bx0, 0, p.cl_t)
-    d("stretch_clamp.wall_top", -p.cl_c - r_out, 0, p.cl_H)
-    d("stretch_clamp.inner_l", -p.cl_c - r_in, 0, 0)
-    d("stretch_clamp.inner_r", p.cl_c + r_in, 0, 0)
-    d("stretch_clamp.hole_a_w", -px - p.cl_hole / 2, hy, 0)
-    d("stretch_clamp.hole_a_e", -px + p.cl_hole / 2, hy, 0)
-    d("stretch_clamp.hole_b_w", px - p.cl_hole / 2, hy, 0)
-    d("stretch_clamp.wall_r", p.cl_c + r_out, 0, p.cl_H)
-    d("stretch_clamp.flat_l", -p.cl_c, r_in, 0)
-    d("stretch_clamp.flat_r", p.cl_c, r_in, 0)
+    # --- mould frame (frame of MoldFrame.stl: origin at the centre of the underside)
+    fs, at, la = p.mfr_side, p.mfr_hole_at, p.mfr_lobe_at
+    sk = Rectangle(fs, fs) - [Rectangle(p.mfr_open, p.mfr_open)] - [Pos(sx * la, sy * la) * Circle(p.mfr_lobe_d / 2) for sx in (-1, 1) for sy in (-1, 1)]
+    sk = sk - [Pos(sx * at, sy * at) * Circle(p.mfr_hole_d / 2) for sx in (-1, 1) for sy in (-1, 1)]
+    m.parts["mould_frame"] = extrude(sk, amount=p.mfr_h)
+    k = 0
+    for sy in (-1, 1):
+        for sx in (-1, 1):
+            k += 1
+            m.datums[f"mould_frame.screw_{k}"] = (sx * at, sy * at, p.mfr_h / 2)
+    m.datums["mould_frame.top"] = (fs / 2 - (fs - p.mfr_open) / 2 / 2, 0, p.mfr_h)
+    m.datums["mould_frame.bottom"] = (fs / 2 - (fs - p.mfr_open) / 2 / 2, 0, 0)
 
-    # ================================================================ mould (Acryl3MM parts, MoldFrame.stl)
-    mw = p.mb_side
-    base = rect(0, 0, mw, mw, t3)
-    for x in (p.mb_corner, mw - p.mb_corner):
-        for y in (p.mb_corner, mw - p.mb_corner):
-            base = base - disc(x, y, p.d_m4tap, t3)
-    for x in (mw / 2 - p.post_half, mw / 2 + p.post_half):
-        for y in (mw / 2 - p.post_half, mw / 2 + p.post_half):
-            base = base - disc(x, y, p.straw_d, t3)
-    parts["mould_base"] = base
-    d("mould_base.post_1", mw / 2 - p.post_half, mw / 2 - p.post_half, t3 / 2)
-    d("mould_base.post_2", mw / 2 + p.post_half, mw / 2 - p.post_half, t3 / 2)
-    d("mould_base.post_3", mw / 2 - p.post_half, mw / 2 + p.post_half, t3 / 2)
-    d("mould_base.post_4", mw / 2 + p.post_half, mw / 2 + p.post_half, t3 / 2)
-    d("mould_base.m4_1", p.mb_corner, p.mb_corner, t3 / 2)
+    # ============================================================== clamp (frame of Clamp.stl)
+    hx, hy, lr = p.cl_hole_x, p.cl_hole_y, p.cl_lobe_d / 2
+    ax, ri, ro = p.cl_arc_x, p.cl_wall_ri, p.cl_wall_ro
+    fa = math.radians(p.cl_flank_deg)
+    tx, ty = hx + lr * math.sin(fa), hy - lr * math.cos(fa)         # where the flank leaves the lobe
+    foot = tx - ty / math.tan(fa)
+    back_x = hx - math.sqrt(lr * lr - (p.cl_back_y - hy) ** 2)
 
-    pw_ = p.pf_w
-    parts["platform"] = rrect(pw_ / 2, pw_ / 2, pw_, pw_, p.pf_r, t3)
-    d("platform.top_c", pw_ / 2, pw_ / 2, t3)
-    d("platform.edge_w", 0, pw_ / 2, t3 / 2)
-    d("platform.edge_e", pw_, pw_ / 2, t3 / 2)
-    d("platform.p_a", p.pf_r, p.pf_r, t3)
-    d("platform.p_b", pw_ - p.pf_r, p.pf_r, t3)
+    def notch(r):
+        return [arc_to((ax + r, 0), (ax, r), (ax, 0), r, (1, 1)), Line((ax, r), (-ax, r)), arc_to((-ax, r), (-ax - r, 0), (-ax, 0), r, (-1, 1))]
 
-    jig = rect(0, 0, mw, mw, t3) - rrect(mw / 2, mw / 2, pw_, pw_, p.pf_r, t3)
-    for x in (p.mb_corner, mw - p.mb_corner):
-        for y in (p.mb_corner, mw - p.mb_corner):
-            jig = jig - disc(x, y, p.d_m4clr, t3)
-    parts["platform_jig"] = jig
-    d("platform_jig.h1", p.mb_corner, p.mb_corner, t3 / 2)
-    d("platform_jig.h2", mw - p.mb_corner, p.mb_corner, t3 / 2)
-    d("platform_jig.h3", p.mb_corner, mw - p.mb_corner, t3 / 2)
+    base = make_face(notch(ri) + [
+        Polyline((-ax - ri, 0), (-foot, 0), (-tx, ty)),
+        arc_to((-tx, ty), (-back_x, p.cl_back_y), (-hx, hy), lr, (-1, 1)),
+        Line((-back_x, p.cl_back_y), (back_x, p.cl_back_y)),
+        arc_to((back_x, p.cl_back_y), (tx, ty), (hx, hy), lr, (1, 1)),
+        Polyline((tx, ty), (foot, 0), (ax + ri, 0)),
+    ]) - [Pos(-hx, hy) * Circle(p.cl_hole_d / 2), Pos(hx, hy) * Circle(p.cl_hole_d / 2)]
+    wall = make_face(notch(ro) + [Line((-ax - ro, 0), (-ax - ri, 0))] + notch(ri) + [Line((ax + ri, 0), (ax + ro, 0))])
+    m.parts["clamp"] = extrude(base, amount=p.cl_base_t) + extrude(wall, amount=p.cl_h)
+    m.datums["clamp.hole_1"] = (-hx, hy, p.cl_base_t / 2)
+    m.datums["clamp.hole_2"] = (hx, hy, p.cl_base_t / 2)
 
-    ring = disc(p.ring_od / 2, p.ring_od / 2, p.ring_od, t3) - disc(p.ring_od / 2, p.ring_od / 2, p.straw_d, t3)
-    parts["post_ring"] = ring
-    d("post_ring.c", p.ring_od / 2, p.ring_od / 2, t3 / 2)
-    d("post_ring.mid_e", p.ring_od / 2 + p.ring_mid_r, p.ring_od / 2, t3)
-    d("post_ring.mid_n", p.ring_od / 2, p.ring_od / 2 + p.ring_mid_r, t3)
+    # ============================================================== bought parts, each held as its envelope
+    low = (Align.CENTER, Align.CENTER, Align.MIN)
 
-    parts["straw_post"] = Cylinder(p.straw_d / 2, p.straw_L, align=CTR)
-    d("straw_post.wall", p.straw_d / 2, 0, p.straw_L / 2)
-    d("straw_post.ax_top", 0, 0, p.straw_L)
+    def profile(length):
+        """A 20x40 profile along x: y across its width, z up its height, a plain slot where each T-slot is."""
+        a, b, sw, sd = p.prof_a, p.prof_b, p.prof_slot_w, p.prof_slot_depth
+        cuts = [Pos(sd / 2, a / 2) * Rectangle(sd, sw), Pos(b - sd / 2, a / 2) * Rectangle(sd, sw)]
+        for y in (p.slot_edge, p.slot_edge + p.slot_pitch):
+            cuts += [Pos(y, sd / 2) * Rectangle(sw, sd), Pos(y, a - sd / 2) * Rectangle(sw, sd)]
+        return extrude(Plane(origin=(0, 0, 0), x_dir=Y, z_dir=X) * (Pos(b / 2, a / 2) * Rectangle(b, a) - cuts), amount=length)
 
-    mf = p.mf_w
-    lr = (p.mf_lobe_span - p.mf_lobe_p) / 2
-    fr_ = rect(-mf / 2, -mf / 2, mf / 2, mf / 2, p.mf_h)
-    win = rect(-p.mf_win / 2, -p.mf_win / 2, p.mf_win / 2, p.mf_win / 2, p.mf_h)
-    for sx in (-1, 1):
-        for sy in (-1, 1):
-            win = win + disc(sx * p.mf_lobe_p / 2, sy * p.mf_lobe_p / 2, 2 * lr, p.mf_h)
-            fr_ = fr_ - disc(sx * p.mf_hole_p / 2, sy * p.mf_hole_p / 2, p.mf_hole_d, p.mf_h)
-    parts["mould_frame"] = fr_ - win
-    d("mould_frame.c1", -mf / 2, -mf / 2, 0)
-    d("mould_frame.c2", mf / 2, -mf / 2, 0)
-    d("mould_frame.c3", mf / 2, mf / 2, p.mf_h)
-    d("mould_frame.top", -mf / 2, -mf / 2, p.mf_h)
-    d("mould_frame.hole_w", -p.mf_hole_p / 2 - p.mf_hole_d / 2, -p.mf_hole_p / 2, 0)
-    d("mould_frame.hole_e", -p.mf_hole_p / 2 + p.mf_hole_d / 2, -p.mf_hole_p / 2, 0)
-    d("mould_frame.hole2_e", p.mf_hole_p / 2 - p.mf_hole_d / 2, -p.mf_hole_p / 2, 0)
-    d("mould_frame.lobe_n1", -p.mf_lobe_p / 2, p.mf_lobe_p / 2 + lr, 0)
-    d("mould_frame.lobe_n2", p.mf_lobe_p / 2, p.mf_lobe_p / 2 + lr, 0)
-    d("mould_frame.lobe_s1", -p.mf_lobe_p / 2, -p.mf_lobe_p / 2 - lr, 0)
-    d("mould_frame.win_w", -p.mf_win / 2, -p.mf_lobe_p / 2 + lr, 0)
-    d("mould_frame.win_e", p.mf_win / 2, -p.mf_lobe_p / 2 + lr, 0)
+    m.parts["profile_long"] = profile(p.prof_long_len)
+    m.parts["profile_short"] = profile(p.prof_short_len)
 
-    # ================================================================ assembly
-    XZ = (-90, 0, 0)  # local x -> X, local y -> -Z, local z -> +Y
-    YZ = (0, -90, 90)  # local x -> +Y, local y -> -Z, local z -> -X
-    FLIP = (180, 0, 0)  # local y -> -Y, local z -> -Z
-    R180 = (0, 0, 180)  # local x -> -X, local y -> -Y
+    m.parts["lead_screw"] = Cylinder(p.screw_d / 2, p.screw_len, align=low)
+    m.datums["lead_screw.a"] = (0, 0, 0)
+    m.datums["lead_screw.b"] = (0, 0, p.screw_len)
+    m.datums["lead_screw.mark"] = (p.screw_d / 2, 0, 0)                               # on its rim, to read its turn by
+    m.parts["guide_rod"] = Cylinder(p.rod_d / 2, p.rod_len, align=low)
+    m.datums["guide_rod.zero"] = (0, 0, p.carriage_y + p.box_depth / 2 + t6)      # where a bearing's middle rides at zero stretch
+    m.parts["bearing"] = Cylinder(p.bearing_od / 2, p.bearing_len, align=low) - Cylinder(p.rod_d / 2, p.bearing_len, align=low)
+    m.datums["bearing.mid"] = (0, 0, p.bearing_len / 2)
 
-    def put(name, part, xyz, rot=(0, 0, 0)):
-        assembly[name] = (part, Location(xyz, rot))
+    stub = p.nut_len - p.nut_flange_t
+    off = p.cw_nut_hole_off
+    corners = ((-1, -1), (1, -1), (1, 1), (-1, 1))
+    nut = Cylinder(p.nut_flange_d / 2, p.nut_flange_t, align=low) + Pos(0, 0, -stub) * Cylinder(p.nut_body_d / 2, stub, align=low)
+    nut -= [Pos(0, 0, -stub) * Cylinder(p.screw_d / 2, p.nut_len, align=low)] + [Pos(dx * off, dy * off, 0) * Cylinder(p.nut_hole_d / 2, p.nut_flange_t, align=low) for dx, dy in corners]
+    m.parts["lead_nut"] = nut
+    for i, (dx, dy) in enumerate(corners):
+        m.datums[f"lead_nut.m3_{i + 1}"] = (dx * off, dy * off, p.nut_flange_t / 2)
+        m.threads[f"lead_nut.m3_{i + 1}"] = "m3"
 
-    ph, pwid = p.prof_h, p.prof_w
-    y_m = p.rod_L - 2 * t6 - pwid  # motor-end short profile
-    axis_z = p.ep_h - p.ax_y
-    put("profile_long_1", "profile_long", (0, 0, 0))
-    put("profile_long_2", "profile_long", (W - pwid, 0, 0))
-    put("profile_short_far", "profile_short", (pwid, 0, 0))
-    put("profile_short_motor", "profile_short", (pwid, y_m, 0))
-    put("end_far_in_1", "end_far_in", (0, -t6, p.ep_h), XZ)
-    put("end_far_out_1", "end_far_out", (0, -2 * t6, p.ep_h), XZ)
-    xc0 = (W - p.ec_w) / 2
-    put("end_motor_in_1", "end_motor_in", (xc0, y_m + pwid, p.ep_h), XZ)
-    put("end_motor_out_1", "end_motor_out", (xc0, y_m + pwid + t6, p.ep_h), XZ)
-    for i, x in ((1, p.rod_x), (2, W - p.rod_x)):
-        put(f"guide_rod_{i}", "guide_rod", (x, -t6, axis_z), XZ)
-        put(f"rod_flange_far_{i}", "rod_flange", (x - p.ov_rx, 0, axis_z + p.ov_ry), XZ)
-        put(f"rod_flange_motor_{i}", "rod_flange", (x - p.ov_rx, y_m + pwid - t6, axis_z + p.ov_ry), XZ)
-    y_cp = -t6 + p.screw_L - p.coupler_L / 2  # the screw reaches halfway into its coupler
-    y_face = y_cp + p.coupler_L + p.cp_gap  # motor face plate, front face
-    for side, x in (("l", p.scr_x), ("r", W - p.scr_x)):
-        put(f"screw_{side}", "lead_screw", (x, -t6, axis_z), XZ)
-        put(f"coupler_{side}", "coupler", (x, y_cp, axis_z), XZ)
-        put(f"motor_{side}", "stepper_motor", (x, y_face + t6 - p.pilot_h, axis_z), XZ)
-        put(f"motor_face_{side}", "motor_face", (x - bx / 2, y_face, axis_z + bx / 2), XZ)
-        put(f"motor_base_{side}", "motor_base", (x - bx / 2, y_face + bx + t6, ph + t6), FLIP)
-        put(f"motor_gusset_{side}1", "motor_gusset", (x - bx / 2 + t6, y_face, axis_z + bx / 2), YZ)
-        put(f"motor_gusset_{side}2", "motor_gusset", (x + bx / 2, y_face, axis_z + bx / 2), YZ)
-    for i, (x, y) in enumerate(((0, 0), (W - p.k_w, 0), (0, y_m), (W - p.k_w, y_m)), start=1):
-        put(f"corner_plate_{i}", "corner_plate", (x, y, -t6))
-        put(f"rubber_foot_{i}", "rubber_foot", (x + p.k_w / 2, y + p.k_h / 2, -t6 - p.foot_h))
-    put("switch_plate_1", "switch_plate", (W / 2 - p.n_w / 2, y_m + pwid - p.n_h, ph))
+    mw, h = p.motor_w, p.mf_hole_pitch / 2
+    motor = Pos(0, 0, -p.motor_len / 2) * Box(mw, mw, p.motor_len) + Cylinder(p.motor_boss_d / 2, p.motor_boss_h, align=low) + Cylinder(p.motor_shaft_d / 2, p.motor_shaft_len, align=low)
+    motor -= [Pos(dx * h, dy * h, -p.motor_hole_depth) * Cylinder(p.m3.tap / 2, p.motor_hole_depth, align=low) for dx, dy in corners]
+    m.parts["motor"] = motor
+    for i, (dx, dy) in enumerate(corners):
+        m.datums[f"motor.m3_{i + 1}"] = (dx * h, dy * h, -p.motor_hole_depth / 2)
+        m.threads[f"motor.m3_{i + 1}"] = "m3"
 
-    # stationary bar and its mountings
-    yf = p.bar_y
-    put("stat_bar_1", "stat_bar", (0, yf + p.f_h, ph + t6), FLIP)
-    y_q_s = yf + p.f_h - p.f_m4_y + p.q_b_y  # stationary plate origin (turned 180 degrees)
-    z_q = ph + t6
-    y_post_s = y_q_s - p.q_lobe_r
-    y_post_m = y_post_s + p.baseline  # the mobile posts sit one baseline from the stationary ones
-    y_q_m = y_post_m - p.q_lobe_r
-    y_car = y_q_m + p.q_b_y + p.e_hole_y - hh  # carriage back face plate, outer face
-    z_cl = z_q + t6 + p.sub_t
-    for k in range(int(p.n_wells)):
-        xc = p.well_x0 + k * p.well_p
-        put(f"mount_stat_{k + 1}", "mount_plate", (xc + qcx, y_q_s, z_q), R180)
-        put(f"mount_mob_{k + 1}", "mount_plate", (xc - qcx, y_q_m, z_q))
-        put(f"clamp_stat_{k + 1}", "stretch_clamp", (xc, y_post_s + hy, z_cl), R180)
-        put(f"clamp_mob_{k + 1}", "stretch_clamp", (xc, y_post_m - hy, z_cl))
+    cl2 = p.coup_len / 2
+    m.parts["coupling"] = Cylinder(p.coup_d / 2, p.coup_len, align=low) - [Cylinder(p.motor_shaft_d / 2, cl2, align=low), Pos(0, 0, cl2) * Cylinder(p.screw_d / 2, cl2, align=low)]
 
-    # carriage
-    z_top = axis_z + p.g_ax
-    put("carriage_back", "carriage_face", (0, y_car, z_top), XZ)
-    put("carriage_front", "carriage_face", (0, y_car + hh - t6, z_top), XZ)
-    put("carriage_top_1", "carriage_top", (0, y_car, z_top - t6))
-    put("carriage_flange_1", "carriage_flange", (ex0, y_car + hh, ph + t6), FLIP)
-    put("carriage_partition_1", "carriage_partition", (p.o_x + h6, y_car, z_top), YZ)
-    put("carriage_partition_2", "carriage_partition", (W - p.o_x + h6, y_car, z_top), YZ)
-    put("carriage_end_1", "carriage_end", (t6, y_car, z_top), YZ)
-    put("carriage_end_2", "carriage_end", (W, y_car, z_top), YZ)
+    sw_hole_x, sw_hole_y = (p.sw_len - p.sp_sw_pitch) / 2, p.sw_h - p.sw_hole_in
+    m.parts["limit_switch"] = Pos(p.sw_len / 2, p.sw_h / 2, p.sw_t / 2) * Box(p.sw_len, p.sw_h, p.sw_t) - [
+        Pos(sw_hole_x + i * p.sp_sw_pitch, sw_hole_y, 0) * Cylinder(p.sw_hole_d / 2, p.sw_t, align=low) for i in range(2)]
 
-    # stretch-holding frames, kept beside the stretcher (not fitted at zero stretch)
-    for k in range(int(p.n_wells)):
-        put(f"frame_wide_{k + 1}", "frame_wide", (p.kit_x, 0, k * t6))
-        put(f"frame_narrow_{k + 1}", "frame_narrow", (p.kit_x, 2 * p.fr_h, k * t6))
+    m.parts["foot"] = Pos(0, 0, -p.foot_h) * Cylinder(p.foot_d / 2, p.foot_h, align=low) + Cylinder(p.foot_thread.tap / 2, p.foot_stud_len, align=low)
+    m.datums["foot.wall"] = (p.foot_d / 2, 0, -p.foot_h / 2)
+    m.datums["foot.stud"] = (0, 0, p.foot_stud_len / 2)
+    m.threads["foot.stud"] = "foot_thread"
 
-    # mould, assembled for casting, beside the stretcher
-    mx, my = p.kit_x, p.mould_y
-    put("mould_base_1", "mould_base", (mx, my, 0))
-    put("platform_1", "platform", (mx + mw / 2 - pw_ / 2, my + mw / 2 - pw_ / 2, t3))
-    put("mould_frame_1", "mould_frame", (mx + mw / 2, my + mw / 2, t3))
-    for i, (sx, sy) in enumerate(((-1, -1), (1, -1), (-1, 1), (1, 1)), start=1):
-        cx, cy = mx + mw / 2 + sx * p.post_half, my + mw / 2 + sy * p.post_half
-        put(f"straw_post_{i}", "straw_post", (cx, cy, 0))
-        put(f"post_ring_{i}", "post_ring", (cx - p.ring_od / 2, cy - p.ring_od / 2, t3))
-    put("platform_jig_1", "platform_jig", (mx + 2 * mw, my, 0))
+    hexagon = RegularPolygon(p.hook_af / 2, int(p.hook_sides), major_radius=False)
+    m.parts["hook"] = extrude(hexagon, amount=p.hook_len) + Pos(0, 0, -p.hook_stud_len) * Cylinder(p.hook_thread.tap / 2, p.hook_stud_len, align=low)
+    m.datums["hook.seat"] = (0, 0, 0)
+    m.datums["hook.stud"] = (0, 0, -p.hook_stud_len / 2)
+    m.threads["hook.stud"] = "hook_thread"
 
-    # ================================================================ motion
+    m.parts["mould_post"] = Cylinder(p.post_d / 2, p.post_len, align=low)
+    m.datums["mould_post.wall"] = (p.post_d / 2, 0, p.post_len / 2)
+
+    # ============================================================== assembly, at zero stretch
+    A = m.assembly
+    pa, pb, rz = p.prof_a, p.prof_b, p.rod_z
+    yme, F, yc = p.motor_end_y, p.motor_face_y, p.carriage_y
+    yms = yme - pb                                    # inner side of the motor-end short profile
+
+    # --- frame: the profiles flat, the short ones between the long ones, a corner plate under each joint
+    A["profile_long_1"] = ("profile_long", place((pb, 0, 0), Y, NX))
+    A["profile_long_2"] = ("profile_long", place((W, 0, 0), Y, NX))
+    A["profile_short_1"] = ("profile_short", Location((pb, 0, 0)))
+    A["profile_short_2"] = ("profile_short", Location((pb, yms, 0)))
+    k = 0
+    for y0, yfoot in ((0, p.slot_edge + p.slot_pitch), (yms, yms + p.slot_edge)):
+        for x0, xfoot in ((0, p.slot_edge + p.slot_pitch), (W - p.cp_len, W - p.slot_edge - p.slot_pitch)):
+            k += 1
+            A[f"corner_plate_{k}"] = ("corner_plate", Location((x0, y0, -t6)))
+            A[f"foot_{k}"] = ("foot", Location((xfoot, yfoot, -t6)))       # in the plate's hole over the long profile's inner slot
+
+    # --- end-pieces and the stationary bar
+    A["end_plate_1"] = ("end_plate", place((0, -t6, p.ep_h), X, NZ))
+    A["end_cover_1"] = ("end_cover", place((0, -2 * t6, p.ep_h), X, NZ))
+    A["motor_end_plate_1"] = ("motor_end_plate", place((inset, yme, p.ep_h), X, NZ))
+    A["motor_end_cover_1"] = ("motor_end_cover", place((inset, yme + t6, p.ep_h), X, NZ))
+    A["stationary_bar_1"] = ("stationary_bar", place((0, p.sb_wid, pa + t6), X, NY))
+    sp_x, sp_y = (W - p.sp_wid) / 2, yme - p.sp_len
+    A["switch_plate_1"] = ("switch_plate", Location((sp_x, sp_y, pa)))
+    A["limit_switch_1"] = ("limit_switch", Location((sp_x + p.sp_sw_u - sw_hole_x, sp_y + p.sp_sw_v - sw_hole_y, pa + t6)))
+
+    # --- drives: a motor in its mounting frame on each long profile, its screw, and the guide rod beside it
+    static = []
+    for k, (xs, xg) in enumerate(((p.screw_u, p.guide_u), (W - p.screw_u, W - p.guide_u))):
+        n = k + 1
+        x0 = xs - S / 2
+        A[f"motor_base_{n}"] = ("motor_base", place((x0, F, pa + t6), X, NY))
+        A[f"motor_face_{n}"] = ("motor_face", place((x0, F - t6, pa + S), X, NZ))
+        A[f"motor_gusset_{2 * k + 1}"] = ("motor_gusset", place((x0, F - S, pa), Y, Z))
+        A[f"motor_gusset_{2 * k + 2}"] = ("motor_gusset", place((x0 + S - t6, F - S, pa), Y, Z))
+        A[f"motor_{n}"] = ("motor", place((xs, F, rz), X, Z))
+        A[f"coupling_{n}"] = ("coupling", place((xs, F - p.motor_shaft_len + cl2, rz), X, Z))
+        A[f"lead_screw_{n}"] = ("lead_screw", place((xs, -t6, rz), X, NZ))
+        A[f"guide_rod_{n}"] = ("guide_rod", place((xg, -t6, rz), X, NZ))
+
+    # --- carriage: cover on top, plate below with its shelf towards the stationary bar
+    carriage = []
+    zt = rz + p.cw_rod_v                              # top of the carriage
+    A["carriage_cover_1"] = ("carriage_cover", Location((0, yc, zt - t6)))
+
+    def ride(name, part, loc):
+        A[name] = (part, loc)
+        carriage.append(name)
+
+    ride("carriage_wall_1", "carriage_wall", place((0, yc, zt), X, NZ))
+    ride("carriage_wall_2", "carriage_wall", place((0, yc + D - t6, zt), X, NZ))
+    ride("carriage_plate_1", "carriage_plate", place((p.rib_u, yc + D, zt - p.cw_h), X, NY))
+    ride("carriage_rib_tall_1", "carriage_rib_tall", place((p.rib_u + t6, yc, zt), Y, NZ))
+    ride("carriage_rib_tall_2", "carriage_rib_tall", place((W - p.rib_u, yc, zt), Y, NZ))
+    ride("carriage_rib_short_1", "carriage_rib_short", place((t6, yc, zt), Y, NZ))
+    ride("carriage_rib_short_2", "carriage_rib_short", place((W, yc, zt), Y, NZ))
+    rk = math.sqrt(0.5)
+    n = 0
+    for k, (xs, xg, sx) in enumerate(((p.screw_u, p.guide_u, 1), (W - p.screw_u, W - p.guide_u, -1))):
+        ride(f"bearing_{k + 1}", "bearing", place((xg, yc, rz), X, NZ))
+        ride(f"lead_nut_{k + 1}", "lead_nut", place((xs, yc + D, rz), X, NZ))       # its flange on the wall's face towards the motors
+        ud, vd = (sx * rk, 0, rk), (rk, 0, -sx * rk)
+        for y0 in (yc - t6, yc + D):
+            n += 1
+            o = (xg - ud[0] * p.br_half_len - vd[0] * p.br_half_wid, y0, rz - ud[2] * p.br_half_len - vd[2] * p.br_half_wid)
+            ride(f"bearing_retainer_{n}", "bearing_retainer", place(o, ud, vd))
+
+    # --- mountings, hooks and clamps: six on the stationary bar, six on the carriage's shelf
+    z_mt = pa + t6                                    # the mountings' underside, on the bar and on the shelf
+    z_clamp = z_mt + t6 + p.clamp_lift
+    z_hook = z_clamp + p.cl_base_t
+    ys_bolt = p.sb_wid - p.sb_thread_v
+    ym_bolt = yc - (p.cpl_thread_v - D)
+    reach = p.mt_screw_v - p.mt_lobe_r
+    y_hs, y_hm = ys_bolt + reach, ym_bolt - reach
+    n_wells = int(p.n_mount_threads) // 2
+    for i in range(n_wells):
+        x0 = p.sb_thread_u0 - p.mt_screw_u + 2 * i * p.mount_hole_pitch
+        xm = p.rib_u + p.cpl_thread_u0 - p.mt_screw_u + 2 * i * p.mount_hole_pitch
+        A[f"mounting_{i + 1}"] = ("mounting", place((x0, ys_bolt + p.mt_screw_v, z_mt + t6), X, NY))
+        ride(f"mounting_{n_wells + i + 1}", "mounting", Location((xm, ym_bolt - p.mt_screw_v, z_mt)))
+        A[f"clamp_{i + 1}"] = ("clamp", Location((x0 + ML / 2, y_hs + p.cl_hole_y, z_clamp), (0, 0, 180)))
+        ride(f"clamp_{n_wells + i + 1}", "clamp", Location((xm + ML / 2, y_hm - p.cl_hole_y, z_clamp)))
+        for j, u in enumerate((p.mt_hook_u, ML - p.mt_hook_u)):
+            A[f"hook_{2 * i + j + 1}"] = ("hook", Location((x0 + u, y_hs, z_hook)))
+            ride(f"hook_{2 * n_wells + 2 * i + j + 1}", "hook", Location((xm + u, y_hm, z_hook)))
+
+    # --- beside the unit, on the surface it stands on: the holding frames in two stacks, and one mould
+    zf = -t6 - p.foot_h
+    xa = W + S
+    for i in range(n_wells):
+        A[f"holding_frame_narrow_{i + 1}"] = ("holding_frame_narrow", Location((xa, 0, zf + i * t6)))
+        A[f"holding_frame_wide_{i + 1}"] = ("holding_frame_wide", Location((xa, 2 * p.hf_wid, zf + i * t6)))
+    bx, by = xa, yms
+    A["mould_base_1"] = ("mould_base", Location((bx, by, zf)))
+    A["mould_platform_1"] = ("mould_platform", Location((bx + (ms - mp_) / 2, by + (ms - mp_) / 2, zf + t3)))
+    A["mould_frame_1"] = ("mould_frame", Location((bx + ms / 2, by + ms / 2, zf + t3)))
+    k = 0
+    for v in posts:
+        for u in posts:
+            k += 1
+            A[f"mould_post_{k}"] = ("mould_post", Location((bx + u, by + v, zf)))
+
+    # ============================================================== motion
+    # Each motor turns its own lead screw through a rigid coupling; each screw's nut is fixed in the carriage,
+    # which slides on the two guide rods. The two motors are stepped together.
     joints = {
-        "motor_l": {"type": "revolute", "parent": "profile_long_1", "child": "screw_l",
-                    "axis": ["screw_l.ax_a", "screw_l.ax_b"], "drive": "actuated"},
-        "motor_r": {"type": "revolute", "parent": "profile_long_2", "child": "screw_r",
-                    "axis": ["screw_r.ax_a", "screw_r.ax_b"], "drive": "actuated"},
-        "coupling_l": {"type": "fixed", "parent": "screw_l", "child": "coupler_l"},
-        "coupling_r": {"type": "fixed", "parent": "screw_r", "child": "coupler_r"},
-        "carriage": {"type": "slide", "parent": "profile_long_1", "child": "carriage_back",
-                     "axis": ["carriage_back.brg_l_bot", "carriage_back.brg_l_top"],
-                     "range": ["stretch_max"], "drive": "passive"},
+        "screw_1": {"type": "revolute", "parent": "end_plate_1", "child": "lead_screw_1", "axis": ["lead_screw_1.a", "lead_screw_1.b"],
+                    "range": ["screw_turn_max"], "drive": "actuated"},
+        "screw_2": {"type": "revolute", "parent": "end_plate_1", "child": "lead_screw_2", "axis": ["lead_screw_2.a", "lead_screw_2.b"],
+                    "drive": "passive"},
+        "carriage": {"type": "slide", "parent": "end_plate_1", "child": "carriage_cover_1",
+                     "axis": ["carriage_cover_1.a", "carriage_cover_1.b"], "drive": "passive"},
+        "coupling_1": {"type": "fixed", "parent": "lead_screw_1", "child": "coupling_1"},
+        "coupling_2": {"type": "fixed", "parent": "lead_screw_2", "child": "coupling_2"},
     }
-    for nm in ("carriage_front", "carriage_top_1", "carriage_flange_1", "carriage_partition_1",
-               "carriage_partition_2", "carriage_end_1", "carriage_end_2"):
-        joints["fix_" + nm] = {"type": "fixed", "parent": "carriage_back", "child": nm}
-    for k in range(int(p.n_wells)):
-        joints[f"fix_mount_mob_{k + 1}"] = {"type": "fixed", "parent": "carriage_flange_1",
-                                            "child": f"mount_mob_{k + 1}"}
-        joints[f"fix_clamp_mob_{k + 1}"] = {"type": "fixed", "parent": f"mount_mob_{k + 1}",
-                                             "child": f"clamp_mob_{k + 1}"}
+    for name in carriage:
+        joints[f"on_carriage_{name}"] = {"type": "fixed", "parent": "carriage_cover_1", "child": name}
     couplings = {
-        "lead_l": {"driver": "motor_l", "driven": "carriage", "lead": "screw_lead"},
-        "lead_r": {"driver": "carriage", "driven": "motor_r", "lead": "screw_lead_r"},
+        "lead_1": {"driver": "screw_1", "driven": "carriage", "lead": "screw_lead"},
+        "lead_2": {"driver": "screw_2", "driven": "carriage", "lead": "screw_lead"},
     }
-    cables = {"substrate_1": {"path": ["mount_stat_1.post_a", "mount_mob_1.post_b"]}}
-    # Where the cut files draw each cut part: its region, the part, where the sheet draws the
-    # part's origin, its turn about z and whether it is turned over.
-    sheets = {}
-    for region, part, x, y, turn, over in [
-        ("acryl6mm@19.78,532.27", "end_far_in", p.end_far_in_1_x, p.end_far_in_1_y, 0, False),
-        ("acryl6mm@19.78,460.47", "end_far_out", p.end_far_out_1_x, p.end_far_out_1_y, 0, False),
-        ("acryl6mm@14.98,316.59", "end_motor_in", p.end_motor_in_1_x, p.end_motor_in_1_y, 0, False),
-        ("acryl6mm@14.98,388.47", "end_motor_out", p.end_motor_out_1_x, p.end_motor_out_1_y, 0, False),
-        ("acryl6mm@19.78,133.17", "carriage_top", p.carriage_top_1_x, p.carriage_top_1_y, 0, False),
-        ("acryl6mm@29.53,226.22", "carriage_face", p.carriage_face_1_x, p.carriage_face_1_y, 0, False),
-        ("acryl6mm@29.53,179.22", "carriage_face", p.carriage_face_2_x, p.carriage_face_2_y, 0, False),
-        ("acryl6mm@12.68,58.67", "carriage_flange", p.carriage_flange_1_x, p.carriage_flange_1_y, 0, False),
-        ("acryl6mm@351.41,366.54", "carriage_partition", p.carriage_partition_1_x, p.carriage_partition_1_y, 0, False),
-        ("acryl6mm@302.87,366.54", "carriage_partition", p.carriage_partition_2_x, p.carriage_partition_2_y, 0, False),
-        ("acryl6mm@351.41,415.24", "carriage_end", p.carriage_end_1_x, p.carriage_end_1_y, 0, False),
-        ("acryl6mm@302.87,415.24", "carriage_end", p.carriage_end_2_x, p.carriage_end_2_y, 0, False),
-        ("acryl6mm@19.5,272.92", "stat_bar", p.stat_bar_1_x, p.stat_bar_1_y, 0, False),
-        ("acryl6mm@430.2,475.44", "mount_plate", p.mount_plate_1_x, p.mount_plate_1_y, 180, False),
-        ("acryl6mm@501.24,475.44", "mount_plate", p.mount_plate_2_x, p.mount_plate_2_y, 180, False),
-        ("acryl6mm@465.84,475.44", "mount_plate", p.mount_plate_3_x, p.mount_plate_3_y, 0, False),
-        ("acryl6mm@394.8,475.44", "mount_plate", p.mount_plate_4_x, p.mount_plate_4_y, 0, False),
-        ("acryl6mm@465.84,558.46", "mount_plate", p.mount_plate_5_x, p.mount_plate_5_y, 0, False),
-        ("acryl6mm@394.8,558.46", "mount_plate", p.mount_plate_6_x, p.mount_plate_6_y, 0, False),
-        ("acryl6mm@430.2,558.46", "mount_plate", p.mount_plate_7_x, p.mount_plate_7_y, 180, False),
-        ("acryl6mm@501.24,558.46", "mount_plate", p.mount_plate_8_x, p.mount_plate_8_y, 180, False),
-        ("acryl6mm@465.84,517.35", "mount_plate", p.mount_plate_9_x, p.mount_plate_9_y, 0, False),
-        ("acryl6mm@394.8,517.35", "mount_plate", p.mount_plate_10_x, p.mount_plate_10_y, 0, False),
-        ("acryl6mm@430.2,517.35", "mount_plate", p.mount_plate_11_x, p.mount_plate_11_y, 180, False),
-        ("acryl6mm@501.24,517.35", "mount_plate", p.mount_plate_12_x, p.mount_plate_12_y, 180, False),
-        ("acryl6mm@466.09,237.98", "frame_wide", p.frame_wide_1_x, p.frame_wide_1_y, 0, False),
-        ("acryl6mm@466.09,378.02", "frame_wide", p.frame_wide_2_x, p.frame_wide_2_y, 0, False),
-        ("acryl6mm@466.09,190.4", "frame_wide", p.frame_wide_3_x, p.frame_wide_3_y, 0, False),
-        ("acryl6mm@466.09,425.06", "frame_wide", p.frame_wide_4_x, p.frame_wide_4_y, 0, False),
-        ("acryl6mm@466.09,285.01", "frame_wide", p.frame_wide_5_x, p.frame_wide_5_y, 0, False),
-        ("acryl6mm@466.09,330.45", "frame_wide", p.frame_wide_6_x, p.frame_wide_6_y, 0, False),
-        ("acryl6mm@397.69,190.26", "frame_narrow", p.frame_narrow_1_x, p.frame_narrow_1_y, 0, False),
-        ("acryl6mm@397.69,284.88", "frame_narrow", p.frame_narrow_2_x, p.frame_narrow_2_y, 0, False),
-        ("acryl6mm@397.69,330.31", "frame_narrow", p.frame_narrow_3_x, p.frame_narrow_3_y, 0, False),
-        ("acryl6mm@397.69,424.92", "frame_narrow", p.frame_narrow_4_x, p.frame_narrow_4_y, 0, False),
-        ("acryl6mm@397.69,237.84", "frame_narrow", p.frame_narrow_5_x, p.frame_narrow_5_y, 0, False),
-        ("acryl6mm@397.69,377.89", "frame_narrow", p.frame_narrow_6_x, p.frame_narrow_6_y, 0, False),
-        ("acryl6mm@398.55,145.36", "corner_plate", p.corner_plate_1_x, p.corner_plate_1_y, 0, False),
-        ("acryl6mm@478.98,145.36", "corner_plate", p.corner_plate_2_x, p.corner_plate_2_y, 0, False),
-        ("acryl6mm@398.55,104.86", "corner_plate", p.corner_plate_3_x, p.corner_plate_3_y, 0, False),
-        ("acryl6mm@478.98,104.86", "corner_plate", p.corner_plate_4_x, p.corner_plate_4_y, 0, False),
-        ("acryl6mm@547.86,189.38", "switch_plate", p.switch_plate_1_x, p.switch_plate_1_y, 0, False),
-        ("acryl6mm@356.83,339.62", "rod_flange", p.rod_flange_1_x, p.rod_flange_1_y, 0, False),
-        ("acryl6mm@356.83,316.47", "rod_flange", p.rod_flange_2_x, p.rod_flange_2_y, 0, False),
-        ("acryl6mm@316.19,339.62", "rod_flange", p.rod_flange_3_x, p.rod_flange_3_y, 0, False),
-        ("acryl6mm@316.19,316.47", "rod_flange", p.rod_flange_4_x, p.rod_flange_4_y, 0, False),
-        ("acryl6mm@544.02,362.76", "motor_face", p.motor_face_1_x, p.motor_face_1_y, 0, False),
-        ("acryl6mm@544.02,418.63", "motor_face", p.motor_face_2_x, p.motor_face_2_y, 0, False),
-        ("acryl6mm@550.59,306.53", "motor_base", p.motor_base_1_x, p.motor_base_1_y, 0, False),
-        ("acryl6mm@550.59,250.65", "motor_base", p.motor_base_2_x, p.motor_base_2_y, 0, False),
-        ("acryl6mm@547.12,539.97", "motor_gusset", p.motor_gusset_1_x, p.motor_gusset_1_y, 180, False),
-        ("acryl6mm@547.12,477.7", "motor_gusset", p.motor_gusset_2_x, p.motor_gusset_2_y, 180, False),
-        ("acryl6mm@544.59,546.75", "motor_gusset", p.motor_gusset_3_x, p.motor_gusset_3_y, 0, False),
-        ("acryl6mm@544.59,484.49", "motor_gusset", p.motor_gusset_4_x, p.motor_gusset_4_y, 0, False),
-        ("acryl3mm@7.5,547.5", "mould_base", p.mould_base_1_x, p.mould_base_1_y, 0, False),
-        ("acryl3mm@172.5,547.5", "mould_base", p.mould_base_2_x, p.mould_base_2_y, 0, False),
-        ("acryl3mm@62.5,547.5", "mould_base", p.mould_base_3_x, p.mould_base_3_y, 0, False),
-        ("acryl3mm@117.5,547.5", "mould_base", p.mould_base_4_x, p.mould_base_4_y, 0, False),
-        ("acryl3mm@117.5,492.5", "mould_base", p.mould_base_5_x, p.mould_base_5_y, 0, False),
-        ("acryl3mm@62.5,492.5", "mould_base", p.mould_base_6_x, p.mould_base_6_y, 0, False),
-        ("acryl3mm@7.5,492.5", "platform_jig", p.platform_jig_1_x, p.platform_jig_1_y, 0, False),
-        ("acryl3mm@133.0,466.0", "platform", p.platform_1_x, p.platform_1_y, 0, False),
-        ("acryl3mm@8.0,466.0", "platform", p.platform_2_x, p.platform_2_y, 0, False),
-        ("acryl3mm@33.0,466.0", "platform", p.platform_3_x, p.platform_3_y, 0, False),
-        ("acryl3mm@58.0,466.0", "platform", p.platform_4_x, p.platform_4_y, 0, False),
-        ("acryl3mm@83.0,466.0", "platform", p.platform_5_x, p.platform_5_y, 0, False),
-        ("acryl3mm@108.0,466.0", "platform", p.platform_6_x, p.platform_6_y, 0, True),
-        ("acryl3mm@178.44,521.91", "post_ring", p.post_ring_1_x, p.post_ring_1_y, 0, False),
-        ("acryl3mm@183.97,515.91", "post_ring", p.post_ring_2_x, p.post_ring_2_y, 0, False),
-        ("acryl3mm@178.44,533.91", "post_ring", p.post_ring_3_x, p.post_ring_3_y, 0, False),
-        ("acryl3mm@183.97,521.91", "post_ring", p.post_ring_4_x, p.post_ring_4_y, 0, False),
-        ("acryl3mm@183.97,527.91", "post_ring", p.post_ring_5_x, p.post_ring_5_y, 0, False),
-        ("acryl3mm@178.44,515.91", "post_ring", p.post_ring_6_x, p.post_ring_6_y, 0, False),
-        ("acryl3mm@178.44,527.91", "post_ring", p.post_ring_7_x, p.post_ring_7_y, 0, False),
-        ("acryl3mm@183.97,533.91", "post_ring", p.post_ring_8_x, p.post_ring_8_y, 0, False),
-    ]:
-        where = Location((x, y, 0), (0, 0, 1), turn)
-        sheets[region] = (part, where * Location((0, 0, 0), (1, 0, 0), 180) if over else where)
-    return {"parts": parts, "datums": datums, "assembly": assembly, "sheets": sheets, "joints": joints,
-            "couplings": couplings, "cables": cables}
+    return {"parts": m.parts, "datums": m.datums, "assembly": A, "sheets": m.sheets, "threads": m.threads,
+            "joints": joints, "couplings": couplings}
+

@@ -1,12 +1,73 @@
 # What the sources leave undefined, and how to close each gap (ask: authors | measure | datasheet | test).
+# The paper points to a supplement (a step-by-step building guide, Fig. S2 and S3 with the threads to cut)
+# that is not among this project's sources: it would answer most of the questions asked of the authors.
 gaps:
-  - {id: G-acryl6, question: "The Acryl6MM cut file draws the stretcher plates without dimensions, and Fig. S2 (threads to cut) is not among the sources: what are the plates' design dimensions?", ask: authors}
-  - {id: G-acryl3, question: "What are the design dimensions of the mould's Acryl3MM parts (base, platform, platform jig)?", ask: authors}
-  - {id: G-ring, question: "What are the eight 5 mm rings on Acryl3MM for, and where do they sit in the mould?", ask: authors}
-  - {id: G-straw, question: "How far do the straw posts stand above the mould base?", ask: authors}
-  - {id: G-clamp, question: "What are the clamp's chamfer angle and the height of its straight back edge (Clamp.stl gives them only as facet corners)?", ask: authors}
-  - {id: G-layout, question: "Where do the acrylic plates, profiles, rods, couplers and motor boxes sit relative to each other (the supplement's step-by-step build guide)?", ask: authors}
-  - {id: G-hw, question: "What are the diameters and lengths of the Anet A8 Z-axis lead screws, guide rods and couplers used?", ask: datasheet}
-  - {id: G-motor, question: "What are the envelope, pilot, shaft and mass of the 42SHDC3025-24B stepper?", ask: datasheet}
-  - {id: G-feet, question: "What diameter are the rubber feet, and how many of the set of ten are fitted?", ask: authors}
-  - {id: G-mass, question: "What do the parts weigh (acrylic, profile, steel and PLA densities as used)?", ask: measure}
+  # ---- parts that wait: bought, from the Anet A8 kit or the bill of materials
+  - id: G-profile
+    question: What is the slot section of the 20x40 B-Type Nut 6 aluminium profile (slot width and depth, core bores, corner radius)?
+    ask: datasheet
+  - id: G-motor
+    question: What are the stepper motor's (42SHDC3025-24B) body length, pilot boss, and shaft diameter and length?
+    ask: datasheet
+  - id: G-coupling
+    question: What are the shaft coupling's outer diameter, length and two bores, between a motor and its lead screw?
+    ask: measure
+  - id: G-leadscrew
+    question: What are the lead screw's diameter and length?
+    ask: measure
+  - id: G-nut
+    question: What are the lead-screw nut's flange diameter and thickness, and its body diameter and length?
+    ask: measure
+  - id: G-rod
+    question: What are the guide rod's diameter and length?
+    ask: measure
+  - id: G-bearing
+    question: What are the linear bearing's outer diameter, bore and length, and does each guide rod run in one bearing or in two?
+    ask: datasheet
+  - id: G-switch
+    question: What are the limit switch's body dimensions, and where does its lever meet the carriage?
+    ask: measure
+  - id: G-foot
+    question: Is the rubber foot's 15 mm its diameter or its height, what is the other, and how many feet carry the frame?
+    ask: datasheet
+  - id: G-hook
+    question: What are the length and the width across flats of the M3 spacer bolts, the hooks a substrate hangs on?
+    ask: measure
+  - id: G-post
+    question: How long are the mould's four posts, the 3 mm plastic straws?
+    ask: authors
+  # ---- settled parts whose place, or whose fasteners, the paper leaves open
+  - id: G-frame
+    question: How do the four profiles lie (flat or on edge, the short ones between the long ones or across their ends), and how far from each end of the long profiles do the short ones sit?
+    ask: authors
+  - id: G-fixtures
+    question: Where on the frame do the corner plates, the stationary bar, the two motor mounting frames and the limit-switch plate sit, and on which face of their bar do the mountings bolt?
+    ask: authors
+  - id: G-ends
+    question: Where do the end-pieces sit (the 390 x 71 pair at the stationary end, the 294 x 71 pair between the motor mounting frames), and which plate of each pair is outermost?
+    ask: authors
+  - id: G-carriage
+    question: How do the carriage's plates go together (which way round each wall faces, where the four cross plates stand, where the bearing retainers go) and on which side does the plate with the twelve threads hang?
+    ask: authors
+  - id: G-screws
+    question: Which holes does each screw of the bill of materials drive (M2.5 x 10, M3 x 8, x 10 and x 12, M5 x 12 and x 20, M6 x 20), and which holes of the 6 mm parts are tapped (Fig. S2)?
+    ask: authors
+  - id: G-travel
+    question: How far can the carriage travel from zero stretch to the limit switch? The paper states only the largest amplitude it tested, 25 mm.
+    ask: measure
+  - id: G-clamp
+    question: How does a clamp sit on its two hooks (which face down, at what height), and between which faces of two facing clamps is the 21.5 mm baseline measured? With the hooks 25 mm apart and each clamp's notch turned towards the other, the released clamps leave 18 mm between the notch faces of their walls and 20 mm between the walls' far faces.
+    ask: authors
+  - id: G-mould-screws
+    question: What length are the four M4 screws that hold the mould frame on its base?
+    ask: authors
+  - id: G-rings
+    question: What are the eight 5 mm rings with a 3 mm hole on the 3 mm sheet for, and where do they sit?
+    ask: authors
+  - id: G-template
+    question: What is the 50 x 50 plate with the 20 x 20 window and four 4 mm holes on the 3 mm sheet for?
+    ask: authors
+  # ---- asked while building
+  - id: G-mass
+    question: What do the bought parts weigh (profile per metre, motor, bearing, switch), and what are the densities of the acrylic glass and of the printed parts?
+    ask: datasheet

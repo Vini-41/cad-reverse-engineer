@@ -1,191 +1,206 @@
 # The only place numbers enter the model. basis: source | derived | measured | proposed.
-# A param a released STL settles cites its body; the part's shape check, comparing the two whole, checks it.
+# A value read off a released body is its design value as read_bodies.py prints it, with the
+# heights to the 0.0001 mm the STL holds them to.
 params:
-  # ---- train (Table I), ratio and tooth form
-  z_sun:      {basis: source, from: T1.z_sun, interpretation: "sun tooth count"}
-  z_planet:   {basis: source, from: T1.z_planet, interpretation: "planet tooth count"}
-  z_ring:     {basis: source, from: T1.z_ring, interpretation: "ring tooth count (internal)"}
-  module:     {basis: source, from: T1.module, interpretation: "module of all three gears, mm"}
-  n_planets:  {basis: source, from: T1.n_planets, interpretation: "planets, equally spaced on the carrier"}
-  pressure_angle: {basis: proposed, value: 20, rationale: "standard 20 deg involute; the released gears' flank corners sit on it (planet-, sun-, casing-shape)", gap: G-tooth}
-  addendum_coef:  {basis: proposed, value: 1, rationale: "standard full-depth addendum, 1 module; the released gears' tip circles sit on it", gap: G-tooth}
-  dedendum_coef:  {basis: proposed, value: 1.25, rationale: "standard dedendum, 1.25 module; the released gears' root circles sit on it", gap: G-tooth}
-  centre_dist:   {basis: derived, expr: module * (z_sun + z_planet) / 2, interpretation: "sun-to-planet axis distance (zero backlash, no profile shift); the pins' circle on both carriers"}
-  carrier_ratio: {basis: derived, expr: z_sun / (z_sun + z_ring), interpretation: "carrier turn per sun turn with the ring fixed, Eq. (1) inverted"}
-  planet_ratio:  {basis: derived, expr: -z_ring / z_planet, interpretation: "planet turn relative to the carrier per carrier turn, ring fixed (internal mesh)"}
-  sun_phase:    {basis: derived, expr: 90 / z_sun + degrees(tan(radians(pressure_angle)) - radians(pressure_angle)), gap: G-clock, interpretation: "tooth 0's centre angle (deg) from the part's 0 deg axis: half the tooth's angular thickness at the base circle, so the involute starts on the 0 deg axis, as in all three released gears"}
-  planet_phase: {basis: derived, expr: 90 / z_planet + degrees(tan(radians(pressure_angle)) - radians(pressure_angle)), gap: G-clock, interpretation: "as sun_phase, for the planet"}
-  ring_phase:   {basis: derived, expr: 90 / z_ring + degrees(tan(radians(pressure_angle)) - radians(pressure_angle)), gap: G-clock, interpretation: "as sun_phase, for the ring's tooth spaces, from the casing's bolt-pattern 0 deg"}
+  # ---- the train: Table I ----------------------------------------------------------------
+  z_sun: {basis: source, from: T1-sspg.z_sun}
+  z_planet: {basis: source, from: T1-sspg.z_planet}
+  z_ring: {basis: source, from: T1-sspg.z_ring}
+  module: {basis: source, from: T1-sspg.module}
+  n_planets: {basis: source, from: T1-sspg.n_planets}
+  pressure_angle: {basis: source, from: planet, value: 20, interpretation: "the involute's pressure angle, in degrees, the same on the sun, the planets and the ring; no profile shift and no backlash allowance on any of them"}
+  carrier_ratio: {basis: derived, expr: z_sun / (z_sun + z_ring), interpretation: "the carrier's turn per turn of the sun, the ring fixed"}
+  planet_ratio: {basis: derived, expr: -z_ring / z_planet, interpretation: "a planet's turn on its post per turn of the carrier, the ring fixed"}
+  flank_points: {basis: proposed, value: 5, rationale: "the points of the involute each flank's spline is drawn through, evenly spaced in roll angle: at five the spline lies within 0.0001 mm of the true involute on all three gears, and the released bodies' flank corners lie on it", gap: G-flank}
 
-  # ---- planet
-  planet_w:    {basis: source, from: planet, value: 22.135, interpretation: "face width = overall length along the planet axis"}
-  planet_bore: {basis: source, from: planet, value: 10, interpretation: "through bore between the bearing seats"}
-  planet_cb_d: {basis: source, from: planet, value: 12, interpretation: "bearing-seat counterbore at each face"}
-  planet_cb_h: {basis: source, from: planet, value: 3.5, interpretation: "bearing-seat depth, same at both faces"}
+  # ---- planet: read off its released body ------------------------------------------------
+  planet_axis_x: {basis: source, from: planet, value: 16.75, interpretation: "frame: the gear's axis runs along file z through x = 16.75"}
+  planet_axis_y: {basis: source, from: planet, value: 16.7461, interpretation: "frame: the gear's axis runs along file z through y = 16.7461, the reach of the tooth tip nearest -y"}
+  planet_width: {basis: source, from: planet, value: 22.1348, interpretation: "face width, file z from 0"}
+  planet_tip_d: {basis: source, from: planet, value: 33.5, interpretation: "tip circle diameter"}
+  planet_root_d: {basis: source, from: planet, value: 31.25, interpretation: "root circle diameter"}
+  planet_bore_d: {basis: source, from: planet, value: 10, interpretation: "bore between the two bearing seats"}
+  planet_seat_d: {basis: source, from: planet, value: 12, interpretation: "bearing seat diameter, one at each end"}
+  planet_seat_depth: {basis: source, from: planet, value: 3.5, interpretation: "bearing seat depth from each end face"}
 
-  # ---- sun (frame: shaft end at z = 0, flange at the top)
-  sun_cb_d:     {basis: source, from: sun, value: 8.9, interpretation: "bolt-head counterbore in the flange end"}
-  sun_bore_dr:  {basis: source, from: sun, value: 1.95, interpretation: "counterbore radius less the through bore's"}
-  sun_bore_d:   {basis: derived, expr: sun_cb_d - 2 * sun_bore_dr, interpretation: "through bore for the centre bolt"}
-  sun_cb_h:     {basis: source, from: sun, value: 5, interpretation: "counterbore depth"}
-  sun_tip_dr:   {basis: source, from: sun, value: 1, interpretation: "shaft end radius less the bore's"}
-  sun_tip_d:    {basis: derived, expr: sun_bore_d + 2 * sun_tip_dr, interpretation: "shaft end diameter after its chamfer"}
-  sun_cham:     {basis: source, from: sun, value: 0.5, interpretation: "shaft end chamfer height"}
-  sun_step_d:   {basis: source, from: sun, value: 9, interpretation: "bearing shoulder step above the shaft"}
-  sun_shaft_dr: {basis: source, from: sun, value: 0.5, interpretation: "step radius less the shaft's"}
-  sun_shaft_d:  {basis: derived, expr: sun_step_d - 2 * sun_shaft_dr, interpretation: "shaft (bearing seat) diameter"}
-  sun_shaft_l:  {basis: source, from: sun, value: 6.5, interpretation: "shaft length from its end to the step"}
-  sun_step_h:   {basis: source, from: sun, value: 1, interpretation: "step height"}
-  sun_hub_d:    {basis: source, from: sun, value: 10, interpretation: "hub diameter at the gear's lower face, reached by a chamfer from the step"}
-  sun_hub_ch:   {basis: source, from: sun, value: 0.5, interpretation: "chamfer height from the step to the hub"}
-  sun_face:     {basis: source, from: sun, value: 30.135, interpretation: "toothed length, gear lower face to the flange"}
-  sun_fl_dr:    {basis: source, from: sun, value: 12.05, interpretation: "flange radius less the counterbore's"}
-  sun_fl_d:     {basis: derived, expr: sun_cb_d + 2 * sun_fl_dr, interpretation: "flange (motor rotor coupling) diameter"}
-  sun_fl_t:     {basis: source, from: sun, value: 4, interpretation: "flange thickness"}
-  sun_pcd:      {basis: source, from: sun, value: 23, interpretation: "flange hole circle diameter"}
-  sun_hole:     {basis: source, from: sun, value: 4, interpretation: "flange hole"}
-  sun_csk:      {basis: source, from: sun, value: 8, interpretation: "flange hole countersink at the flange's lower face"}
-  sun_csk_h:    {basis: source, from: sun, value: 2, interpretation: "countersink depth"}
-  sun_hole_pitch: {basis: source, from: sun, value: 90, interpretation: "angle at a hole between its two neighbours"}
-  sun_n_holes:  {basis: derived, expr: 360 / (180 - sun_hole_pitch), interpretation: "holes in the flange: a regular polygon's interior angle is 180 - 360/n"}
+  # ---- sun: read off its released body ---------------------------------------------------
+  sun_axis_x: {basis: source, from: sun, value: 16.5, interpretation: "frame: the gear's axis runs along file z through x = 16.5"}
+  sun_axis_y: {basis: source, from: sun, value: 16.5, interpretation: "frame: the gear's axis runs along file z through y = 16.5"}
+  sun_bore_d: {basis: source, from: sun, value: 5, interpretation: "bore for the central bolt"}
+  sun_journal_d: {basis: source, from: sun, value: 8, interpretation: "journal at the shaft's free end, file z from 0"}
+  sun_journal_len: {basis: source, from: sun, value: 6.5, interpretation: "journal length, its end chamfer included"}
+  sun_journal_chamfer: {basis: source, from: sun, value: 0.5, interpretation: "chamfer on the journal's end"}
+  sun_shoulder_d: {basis: source, from: sun, value: 9, interpretation: "shoulder between the journal and the teeth"}
+  sun_shoulder_len: {basis: source, from: sun, value: 1.5, interpretation: "shoulder length, its chamfer up to the teeth included"}
+  sun_shoulder_chamfer: {basis: source, from: sun, value: 0.5, interpretation: "chamfer from the shoulder out to the core under the teeth"}
+  sun_teeth_len: {basis: source, from: sun, value: 30.1348, interpretation: "face width, from the shoulder to the flange"}
+  sun_tip_d: {basis: source, from: sun, value: 13.5, interpretation: "tip circle diameter"}
+  sun_root_d: {basis: source, from: sun, value: 11.25, interpretation: "root circle diameter"}
+  sun_flange_d: {basis: source, from: sun, value: 33, interpretation: "motor flange diameter"}
+  sun_flange_t: {basis: source, from: sun, value: 4, interpretation: "motor flange thickness"}
+  sun_pocket_d: {basis: source, from: sun, value: 8.9, interpretation: "bolt head pocket in the flange face"}
+  sun_pocket_depth: {basis: source, from: sun, value: 5, interpretation: "bolt head pocket depth from the flange face"}
+  sun_mount_circle_r: {basis: source, from: sun, value: 11.5, interpretation: "radius of the flange's mounting hole circle; the first hole lies on the file's +x from the axis"}
+  sun_mount_d: {basis: source, from: sun, value: 4, interpretation: "mounting hole diameter"}
+  sun_n_mounts: {basis: source, from: sun, value: 4, interpretation: "mounting holes, evenly spaced"}
+  sun_csk_d: {basis: source, from: sun, value: 8, interpretation: "countersink diameter on the flange's gear-side face"}
+  sun_csk_depth: {basis: source, from: sun, value: 2, interpretation: "countersink depth"}
 
-  # ---- primary carrier (frame: output face at z = 0)
-  car_h:      {basis: source, from: carrier_updated, value: 35.635, interpretation: "output face to the pins' and extrusions' top"}
-  car_disc_d: {basis: source, from: carrier_updated, value: 55, interpretation: "output disc, the output bearing's seat"}
-  car_cham:   {basis: source, from: carrier_updated, value: 0.5, interpretation: "45 deg chamfer on the disc's output edge"}
-  car_disc_h: {basis: source, from: carrier_updated, value: 9, interpretation: "disc height to the flange"}
-  car_fl_dr:  {basis: source, from: carrier_updated, value: 1.5, interpretation: "flange radius less the disc's"}
-  car_fl_d:   {basis: derived, expr: car_disc_d + 2 * car_fl_dr, interpretation: "flange, the output bearing's shoulder"}
-  car_fl_t:   {basis: source, from: carrier_updated, value: 1.5, interpretation: "flange thickness"}
-  car_b1:     {basis: source, from: carrier_updated, value: 13, interpretation: "central bore at the output face"}
-  car_b1_h:   {basis: source, from: carrier_updated, value: 5.5, interpretation: "its depth"}
-  car_b2:     {basis: source, from: carrier_updated, value: 16, interpretation: "sun bearing seat bore above it"}
-  car_b2_h:   {basis: source, from: carrier_updated, value: 4.5, interpretation: "seat depth to its entry chamfer"}
-  car_b2c:    {basis: source, from: carrier_updated, value: 17, interpretation: "seat entry chamfer diameter at the flange's top face"}
-  car_pock_dr: {basis: source, from: carrier_updated, value: 1.95, interpretation: "pin pocket radius less the pin bore's"}
-  car_pock_h: {basis: source, from: carrier_updated, value: 5, interpretation: "pin pocket depth from the output face"}
-  car_pinb:   {basis: source, from: carrier_updated, value: 5.4, interpretation: "planet-pin bore"}
-  car_pin:    {basis: source, from: carrier_updated, value: 8, interpretation: "planet pin outside diameter"}
-  car_col:    {basis: source, from: carrier_updated, value: 10, interpretation: "pin collar diameter"}
-  car_col_h:  {basis: source, from: carrier_updated, value: 1.5, interpretation: "collar height on the flange's top face"}
-  car_col_f:  {basis: source, from: carrier_updated, value: 0.5, interpretation: "round on the collar's top edge (radius = its height between tangent points)"}
-  car_bolt:   {basis: source, from: carrier_updated, value: 3.4, interpretation: "bolt hole through each extrusion"}
-  car_bcb_dr: {basis: source, from: carrier_updated, value: 1.45, interpretation: "bolt counterbore radius less the hole's"}
-  car_bcb_h:  {basis: source, from: carrier_updated, value: 3, interpretation: "bolt counterbore depth from the output face"}
-  car_bolt_dy: {basis: source, from: carrier_updated, value: 35.25, interpretation: "y difference of the bolts at -90 and 30 deg"}
-  car_bolt_r: {basis: derived, expr: car_bolt_dy * 2 / 3, interpretation: "bolt circle radius: holes at -90 and 30 deg differ in y by R (1 + sin 30) = 1.5 R"}
-  car_nut:    {basis: source, from: carrier_updated, value: 4.4, interpretation: "disc bolt hole"}
-  car_nut_d:  {basis: source, from: carrier_updated, value: 36, interpretation: "disc bolt circle diameter"}
-  car_hex:    {basis: source, from: carrier_updated, value: 8.083, interpretation: "nut trap across corners, a corner at 90 deg"}
-  car_hex_h:  {basis: source, from: carrier_updated, value: 6, interpretation: "nut trap depth from the flange's top face"}
-  car_nut_pitch: {basis: source, from: carrier_updated, value: 120, interpretation: "angle at a disc bolt hole between its neighbours"}
-  car_hex_ang: {basis: source, from: carrier_updated, value: 120, interpretation: "angle at a nut trap's corner between its neighbours"}
-  hex_sides:  {basis: derived, expr: 360 / (180 - car_hex_ang), interpretation: "sides of every nut trap (carrier, secondary carrier, casing slots): hexagons, a regular polygon's interior angle being 180 - 360/n"}
-  car_n_nuts: {basis: derived, expr: 360 / (180 - car_nut_pitch), interpretation: "disc bolt holes: a regular polygon's interior angle is 180 - 360/n"}
-  dce:        {basis: source, from: DCE.dce, interpretation: "clearance between a planet's tip circle and the carrier extrusions"}
-  ext_clear_r: {basis: derived, expr: module * z_planet / 2 + addendum_coef * module + dce, interpretation: "each extrusion's flank: an arc about the planet axis at the planet's tip radius plus the stated clearance"}
-  car_tip_dy: {basis: source, from: carrier_updated, value: 2.75, interpretation: "extrusion tip's inner circle radius less the seat chamfer's"}
-  ext_in_r:   {basis: derived, expr: car_b2c / 2 + car_tip_dy, interpretation: "extrusions' inner bound, a circle about the carrier axis"}
-  ext_fillet: {basis: proposed, value: 1.5, rationale: "round on the extrusions' four vertical edges; the released corners fit a 1.5 mm arc", gap: G-rounds}
+  # ---- carrier (updated release): read off its released body -----------------------------
+  car_axis_x: {basis: source, from: carrier_updated, value: 29, interpretation: "frame: the carrier's axis runs along file z through x = 29"}
+  car_axis_y: {basis: source, from: carrier_updated, value: 29, interpretation: "frame: the carrier's axis runs along file z through y = 29"}
+  car_z0: {basis: source, from: carrier_updated, value: 0.2099, interpretation: "frame: the output face lies at file z = 0.2099"}
+  car_len: {basis: source, from: carrier_updated, value: 35.6348, interpretation: "overall length, output face to the ends of the posts and extrusions"}
+  car_journal_d: {basis: source, from: carrier_updated, value: 55, interpretation: "journal the output bearing sits on"}
+  car_journal_len: {basis: source, from: carrier_updated, value: 9, interpretation: "journal length from the output face, its chamfer included"}
+  car_journal_chamfer: {basis: source, from: carrier_updated, value: 0.5, interpretation: "chamfer on the journal's output end"}
+  car_flange_d: {basis: source, from: carrier_updated, value: 58, interpretation: "flange behind the journal, the bearing's shoulder"}
+  car_flange_t: {basis: source, from: carrier_updated, value: 1.5, interpretation: "flange thickness; its far face is the plate's inner face"}
+  car_bore_d: {basis: source, from: carrier_updated, value: 13, interpretation: "central bore from the output face to the sun bearing's seat"}
+  car_seat_d: {basis: source, from: carrier_updated, value: 16, interpretation: "sun bearing seat, opening on the inner face"}
+  car_seat_depth: {basis: source, from: carrier_updated, value: 5, interpretation: "seat depth from the inner face, its chamfer included"}
+  car_seat_chamfer: {basis: source, from: carrier_updated, value: 0.5, interpretation: "chamfer at the seat's mouth"}
+  car_out_circle_r: {basis: source, from: carrier_updated, value: 18, interpretation: "radius of the output mounting holes' circle; the first hole lies on the file's +x from the axis"}
+  car_out_hole_d: {basis: source, from: carrier_updated, value: 4.4, interpretation: "output mounting hole diameter"}
+  car_n_out: {basis: source, from: carrier_updated, value: 6, interpretation: "output mounting holes, evenly spaced"}
+  car_out_hole_len: {basis: source, from: carrier_updated, value: 4.5, interpretation: "output mounting hole length from the output face to its nut pocket"}
+  car_out_nut_af: {basis: source, from: carrier_updated, value: 7, interpretation: "nut pocket across flats, a flat square to the radius; the pocket opens on the inner face"}
+  hex_sides: {basis: source, from: carrier_updated, value: 6, interpretation: "sides of a nut pocket: every one is a hexagon, on the carrier, the secondary carrier and the casing"}
+  car_post_circle_r: {basis: source, from: carrier_updated, value: 22.5, interpretation: "radius of the planet posts' circle; the first post lies on the file's +y from the axis"}
+  car_post_d: {basis: source, from: carrier_updated, value: 8, interpretation: "planet post diameter"}
+  car_boss_d: {basis: source, from: carrier_updated, value: 10, interpretation: "boss at the foot of each post"}
+  car_boss_h: {basis: source, from: carrier_updated, value: 1.5, interpretation: "boss height above the inner face"}
+  car_boss_round: {basis: source, from: carrier_updated, value: 0.5, interpretation: "round on the boss's outer edge"}
+  car_head_d: {basis: source, from: carrier_updated, value: 9.3, interpretation: "planet shaft bolt head pocket in the output face"}
+  car_head_depth: {basis: source, from: carrier_updated, value: 5, interpretation: "head pocket depth"}
+  car_shaft_hole_d: {basis: source, from: carrier_updated, value: 5.4, interpretation: "planet shaft bolt hole through each post"}
+  car_ext_circle_r: {basis: source, from: carrier_updated, value: 23.5, interpretation: "radius of the extrusion bolt holes' circle, midway between the posts"}
+  car_ext_hole_d: {basis: source, from: carrier_updated, value: 3.4, interpretation: "extrusion bolt hole diameter"}
+  car_ext_head_d: {basis: source, from: carrier_updated, value: 6.3, interpretation: "extrusion bolt head pocket in the output face"}
+  car_ext_head_depth: {basis: source, from: carrier_updated, value: 3, interpretation: "extrusion bolt head pocket depth"}
+  car_lobe_inner_d: {basis: source, from: carrier_updated, value: 22.5, interpretation: "the extrusions' inner faces lie on this circle about the axis"}
+  car_lobe_outer_d: {basis: source, from: carrier_updated, value: 55, interpretation: "the extrusions' outer faces lie on this circle about the axis"}
+  car_lobe_clear_r: {basis: source, from: carrier_updated, value: 17.75, interpretation: "the extrusions' flanks are arcs of this radius about the posts, 1 mm off the planets' tip circle"}
+  car_lobe_fillet: {basis: source, from: carrier_updated, value: 1.5, interpretation: "fillet on the four corners of each extrusion's section"}
 
-  # ---- secondary carrier (frame: pin bosses' face at z = 0)
-  sec_od:      {basis: source, from: sec_carrier, value: 56.5, interpretation: "outside diameter"}
-  sec_id:      {basis: source, from: sec_carrier, value: 32, interpretation: "inside diameter"}
-  sec_t:       {basis: source, from: sec_carrier, value: 5, interpretation: "plate thickness"}
-  sec_boss_h:  {basis: source, from: sec_carrier, value: 1.5, interpretation: "pin boss height below the plate"}
-  sec_boss_id: {basis: source, from: sec_carrier, value: 8, interpretation: "pin boss bore (fits over the pin end)"}
-  sec_boss_ch: {basis: source, from: sec_carrier, value: 0.25, interpretation: "45 deg chamfer on the boss bore's face edge"}
-  sec_boss_bot_r: {basis: proposed, value: 4.56, rationale: "pin boss's outer radius at its face, where its flank (modelled as a cone to the root) starts; read off the released corners", gap: G-boss}
-  sec_boss_dr: {basis: source, from: sec_carrier, value: 4, interpretation: "boss root radius at the plate less the pin hole's"}
-  sec_pin:     {basis: source, from: sec_carrier, value: 5, interpretation: "pin hole"}
-  sec_phex:    {basis: source, from: sec_carrier, value: 10.161, interpretation: "pin nut trap across corners, a corner at 0 deg"}
-  sec_hex_h:   {basis: source, from: sec_carrier, value: 2.5, interpretation: "nut trap depth (both traps)"}
-  sec_bolt:    {basis: source, from: sec_carrier, value: 3, interpretation: "bolt hole"}
-  sec_bhex:    {basis: source, from: sec_carrier, value: 7.275, interpretation: "bolt nut trap across corners, a corner at 90 deg"}
-  sec_bolt_dy: {basis: source, from: sec_carrier, value: 36.375, interpretation: "y difference of the bolts at -90 and 30 deg"}
-  sec_bolt_r:  {basis: derived, expr: sec_bolt_dy * 2 / 3, interpretation: "bolt circle radius, 1.5 R as on the primary carrier"}
+  # ---- secondary carrier: read off its released body -------------------------------------
+  sec_axis_x: {basis: source, from: sec_carrier, value: 28.25, interpretation: "frame: the plate's axis runs along file z through x = 28.25"}
+  sec_axis_y: {basis: source, from: sec_carrier, value: 28.25, interpretation: "frame: the plate's axis runs along file z through y = 28.25"}
+  sec_z0: {basis: source, from: sec_carrier, value: 0.2783, interpretation: "frame: the bosses' end faces lie at file z = 0.2783"}
+  sec_od: {basis: source, from: sec_carrier, value: 56.5, interpretation: "plate outer diameter"}
+  sec_id: {basis: source, from: sec_carrier, value: 32, interpretation: "plate bore, which the sun passes through"}
+  sec_t: {basis: source, from: sec_carrier, value: 5, interpretation: "plate thickness"}
+  sec_post_circle_r: {basis: source, from: sec_carrier, value: 22.5, interpretation: "radius of the circle the bosses and their post sockets stand on; the first lies on the file's +y from the axis"}
+  sec_boss_d: {basis: source, from: sec_carrier, value: 10, interpretation: "boss diameter at its end face"}
+  sec_boss_h: {basis: source, from: sec_carrier, value: 1.5, interpretation: "boss height off the plate"}
+  sec_boss_fillet: {basis: source, from: sec_carrier, value: 1.5, interpretation: "fillet from each boss into the plate's face; where the plate's rim cuts the face short the fillet's ball rolls on the rim's edge"}
+  sec_boss_round: {basis: source, from: sec_carrier, value: 0.5, interpretation: "round on the end face's outer edge, on the first boss alone: the released body rounds one boss of the three"}
+  sec_socket_d: {basis: source, from: sec_carrier, value: 8, interpretation: "socket in each boss for a carrier post"}
+  sec_socket_depth: {basis: source, from: sec_carrier, value: 1.5, interpretation: "socket depth from the boss's end face, its chamfer included"}
+  sec_socket_chamfer: {basis: source, from: sec_carrier, value: 0.25, interpretation: "chamfer at the socket's mouth"}
+  sec_shaft_hole_d: {basis: source, from: sec_carrier, value: 5, interpretation: "planet shaft bolt hole from each socket to its nut pocket"}
+  sec_shaft_nut_af: {basis: source, from: sec_carrier, value: 8.8, interpretation: "planet shaft nut pocket across flats, a flat square to the radius"}
+  sec_nut_depth: {basis: source, from: sec_carrier, value: 2.5, interpretation: "depth of every nut pocket from the plate's far face"}
+  sec_ext_circle_r: {basis: source, from: sec_carrier, value: 24.25, interpretation: "radius of the extrusion bolt holes' circle, midway between the bosses"}
+  sec_ext_hole_d: {basis: source, from: sec_carrier, value: 3, interpretation: "extrusion bolt hole diameter"}
+  sec_ext_nut_af: {basis: source, from: sec_carrier, value: 6.3, interpretation: "extrusion nut pocket across flats, a corner on the radius"}
 
-  # ---- gearbox casing (frame: output face at z = 0, ring axis on z)
-  cas_h:      {basis: source, from: gearbox_casing, value: 40.635, interpretation: "output face to the motor-end face"}
-  cas_b0:     {basis: source, from: gearbox_casing, value: 74, interpretation: "bearing bore entry diameter at the output face"}
-  cas_od_dr:  {basis: source, from: gearbox_casing, value: 7, interpretation: "output-end outside radius less the bore entry's"}
-  cas_b1_dr:  {basis: source, from: gearbox_casing, value: 1, interpretation: "bore entry radius less the bearing bore's (45 deg chamfer)"}
-  cas_bch:    {basis: source, from: gearbox_casing, value: 1, interpretation: "bore entry chamfer height"}
-  cas_b1_h:   {basis: source, from: gearbox_casing, value: 9, interpretation: "bearing bore depth from the output face"}
-  cas_lip_dr: {basis: source, from: gearbox_casing, value: 1.5, interpretation: "bearing bore radius less the shoulder lip's"}
-  cas_lip_h:  {basis: source, from: gearbox_casing, value: 1.5, interpretation: "lip height, up to the ring's lower face"}
-  cas_ring_w: {basis: source, from: gearbox_casing, value: 23.635, interpretation: "ring face width"}
-  drw:        {basis: source, from: DRW.drw, interpretation: "ring's radial width from its pitch circle to its outside"}
-  cas_neck0:  {basis: source, from: gearbox_casing, value: 1.199, interpretation: "taper from the output-end diameter to the ring's outside, starting at the ring's lower face"}
-  cas_neck1:  {basis: source, from: gearbox_casing, value: 2.557, interpretation: "straight length of the ring's outside before the flare"}
-  cas_fl:     {basis: source, from: gearbox_casing, value: 9.642, interpretation: "flare's end on the body cylinder, below the motor-end face"}
-  cas_body:   {basis: source, from: gearbox_casing, value: 102.8, interpretation: "body diameter at the motor end"}
-  cas_pk:     {basis: source, from: gearbox_casing, value: 96.8, interpretation: "motor-end spigot pocket"}
-  cas_pk_h:   {basis: source, from: gearbox_casing, value: 2, interpretation: "pocket depth"}
-  cas_lobe:   {basis: source, from: gearbox_casing, value: 99.8, interpretation: "pocket lobes' peaks, across"}
-  cas_lobe_pitch: {basis: source, from: gearbox_casing, value: 160, interpretation: "angle at a lobe peak between its neighbours"}
-  cas_n_lobes: {basis: derived, expr: 360 / (180 - cas_lobe_pitch), interpretation: "lobes: a regular polygon's interior angle is 180 - 360/n"}
-  lobe_fillet: {basis: proposed, value: 2.5, rationale: "round where each lobe meets the pocket; the released corners fit a 2.5 mm arc", gap: G-rounds}
-  cas_sh45:   {basis: source, from: gearbox_casing, value: 90, interpretation: "shelf's inner edge at the pocket floor"}
-  cas_sh43:   {basis: source, from: gearbox_casing, value: 86.5, interpretation: "bore above the ring"}
-  cas_shc:    {basis: source, from: gearbox_casing, value: 2.5, interpretation: "chamfer from that bore to the shelf, height"}
-  cas_shb:    {basis: source, from: gearbox_casing, value: 1, interpretation: "that bore's straight length"}
-  cas_shf:    {basis: source, from: gearbox_casing, value: 1, interpretation: "round between the ring's upper face and that bore (radius = its height between tangent points)"}
-  cas_lugt:   {basis: source, from: gearbox_casing, value: 112.3, interpretation: "mounting lugs' tips, across"}
-  cas_lug_d:  {basis: source, from: gearbox_casing, value: 104.8, interpretation: "lug hole circle diameter"}
-  cas_lugh:   {basis: source, from: gearbox_casing, value: 3, interpretation: "lug hole"}
-  cas_lug_pitch: {basis: source, from: gearbox_casing, value: 120, interpretation: "angle at a lug between its neighbours"}
-  cas_n_lugs: {basis: derived, expr: 360 / (180 - cas_lug_pitch), interpretation: "lugs: a regular polygon's interior angle is 180 - 360/n"}
-  lug_fillet: {basis: proposed, value: 3, rationale: "round where each lug meets the body; the released corners fit a 3 mm arc", gap: G-rounds}
-  cas_lcb:    {basis: source, from: gearbox_casing, value: 5.9, interpretation: "lug counterbore, cut from below"}
-  cas_lcbz:   {basis: source, from: gearbox_casing, value: 4.5, interpretation: "counterbore's top below the motor-end face"}
-  cas_hole:   {basis: source, from: gearbox_casing, value: 4, interpretation: "output-end bolt hole"}
-  cas_hole_h: {basis: source, from: gearbox_casing, value: 9, interpretation: "its depth"}
-  cas_hole_d: {basis: source, from: gearbox_casing, value: 80, interpretation: "output-end bolt circle diameter"}
-  cas_hole_pitch: {basis: source, from: gearbox_casing, value: 120, interpretation: "angle at a hole between its neighbours"}
-  cas_n_holes: {basis: derived, expr: 360 / (180 - cas_hole_pitch), interpretation: "holes: a regular polygon's interior angle is 180 - 360/n"}
-  cas_nut:    {basis: source, from: gearbox_casing, value: 8.083, interpretation: "nut slot across corners, corners tangential; also the slot's width"}
-  cas_nut_z:  {basis: source, from: gearbox_casing, value: 3, interpretation: "slot's lower face above the output face"}
-  cas_nut_t:  {basis: source, from: gearbox_casing, value: 3.2, interpretation: "slot thickness"}
+  # ---- gearbox casing, with the ring gear inside it: read off its released body ----------
+  cas_axis_x: {basis: source, from: gearbox_casing, value: 51.4, interpretation: "frame: the casing's axis runs along file z through x = 51.4, the flange's radius"}
+  cas_axis_y: {basis: source, from: gearbox_casing, value: 56.15, interpretation: "frame: the casing's axis runs along file z through y = 56.15, the reach of the flange's ears"}
+  cas_len: {basis: source, from: gearbox_casing, value: 40.6348, interpretation: "overall length, file z from 0 at the output end to the motor-side flange face"}
+  cas_body_d: {basis: source, from: gearbox_casing, value: 88, interpretation: "outer diameter at the output end"}
+  cas_body_len: {basis: source, from: gearbox_casing, value: 10.5, interpretation: "length of the output end's outer cylinder"}
+  cas_neck_len: {basis: source, from: gearbox_casing, value: 1.199, interpretation: "length of the cone from the outer cylinder down to the waist"}
+  cas_waist_d: {basis: source, from: gearbox_casing, value: 87.5, interpretation: "waist diameter, the narrowest of the outside"}
+  cas_flare_z: {basis: source, from: gearbox_casing, value: 14.2556, interpretation: "file z where the waist ends and the flare to the flange begins, tangent to the waist"}
+  cas_flare_r: {basis: source, from: gearbox_casing, value: 22.1348, interpretation: "radius of the flare's arc in section, its centre outside the casing level with the flare's start"}
+  cas_flange_d: {basis: source, from: gearbox_casing, value: 102.8, interpretation: "flange diameter between its ears"}
+  cas_ear_circle_r: {basis: source, from: gearbox_casing, value: 52.4, interpretation: "radius of the circle the flange's ears and their holes stand on, the first midway to the next from the file's +x"}
+  cas_ear_r: {basis: source, from: gearbox_casing, value: 3.75, interpretation: "radius of each ear about its hole"}
+  cas_ear_fillet: {basis: source, from: gearbox_casing, value: 3, interpretation: "fillet joining each ear to the flange's circle"}
+  cas_n_ears: {basis: source, from: gearbox_casing, value: 6, interpretation: "ears, evenly spaced"}
+  cas_ear_hole_d: {basis: source, from: gearbox_casing, value: 3, interpretation: "hole through each ear"}
+  cas_ear_hole_len: {basis: source, from: gearbox_casing, value: 4.5, interpretation: "ear hole length from the flange face down to its counterbore"}
+  cas_ear_cbore_d: {basis: source, from: gearbox_casing, value: 5.9, interpretation: "counterbore under each ear hole, cut up through the flare"}
+  cas_seat_d: {basis: source, from: gearbox_casing, value: 72, interpretation: "output bearing seat diameter"}
+  cas_seat_depth: {basis: source, from: gearbox_casing, value: 9, interpretation: "seat depth from the output end, its chamfer included"}
+  cas_seat_chamfer: {basis: source, from: gearbox_casing, value: 1, interpretation: "chamfer at the seat's mouth"}
+  cas_shoulder_d: {basis: source, from: gearbox_casing, value: 69, interpretation: "bore of the shoulder between the bearing seat and the ring gear"}
+  cas_ring_z: {basis: source, from: gearbox_casing, value: 10.5, interpretation: "file z where the ring gear's teeth begin"}
+  cas_ring_width: {basis: source, from: gearbox_casing, value: 23.6348, interpretation: "ring gear face width"}
+  cas_ring_tip_d: {basis: source, from: gearbox_casing, value: 76.5, interpretation: "ring gear tip circle diameter"}
+  cas_ring_root_d: {basis: source, from: gearbox_casing, value: 78.75, interpretation: "ring gear root circle diameter"}
+  cas_well_floor_d: {basis: source, from: gearbox_casing, value: 84.5, interpretation: "diameter the flat floor above the ring gear reaches before its fillet"}
+  cas_well_fillet: {basis: source, from: gearbox_casing, value: 1, interpretation: "fillet from that floor up into the well's wall"}
+  cas_well_len: {basis: source, from: gearbox_casing, value: 2, interpretation: "well length above the ring gear, its fillet included"}
+  cas_mouth_d: {basis: source, from: gearbox_casing, value: 90, interpretation: "diameter the well's cone opens to at the pocket floor"}
+  cas_mouth_len: {basis: source, from: gearbox_casing, value: 2.5, interpretation: "length of the cone from the well's wall to the pocket floor"}
+  cas_pocket_d: {basis: source, from: gearbox_casing, value: 96.8, interpretation: "diameter of the pocket in the flange face"}
+  cas_notch_r: {basis: source, from: gearbox_casing, value: 1.5, interpretation: "radius of each notch in the pocket's wall, centred on the pocket's circle, the first on the file's +x"}
+  cas_n_notches: {basis: source, from: gearbox_casing, value: 18, interpretation: "notches in the pocket's wall, evenly spaced"}
+  cas_notch_fillet: {basis: source, from: gearbox_casing, value: 3, interpretation: "fillet joining each notch to the pocket's circle"}
+  cas_ret_circle_r: {basis: source, from: gearbox_casing, value: 40, interpretation: "radius of the retainer screw holes' circle, the first midway to the next from the file's +x"}
+  cas_ret_hole_d: {basis: source, from: gearbox_casing, value: 4, interpretation: "retainer screw hole diameter"}
+  cas_ret_hole_depth: {basis: source, from: gearbox_casing, value: 9, interpretation: "retainer screw hole depth from the output end, through its nut slot"}
+  cas_n_ret: {basis: source, from: gearbox_casing, value: 6, interpretation: "retainer screw holes, evenly spaced"}
+  cas_slot_z: {basis: source, from: gearbox_casing, value: 3, interpretation: "file z of each nut slot's floor"}
+  cas_slot_w: {basis: source, from: gearbox_casing, value: 3.2, interpretation: "nut slot width along the axis"}
+  cas_slot_af: {basis: source, from: gearbox_casing, value: 7, interpretation: "nut slot across flats, a flat square to the radius; the slot runs out through the casing's side at its width across corners"}
 
-  # ---- bearing retainer (frame: casing side at z = 0)
-  ret_od:   {basis: source, from: bearing_retainer, value: 88, interpretation: "outside diameter"}
-  ret_id:   {basis: source, from: bearing_retainer, value: 70.5, interpretation: "inside diameter"}
-  ret_t:    {basis: source, from: bearing_retainer, value: 2, interpretation: "thickness"}
-  ret_hole: {basis: source, from: bearing_retainer, value: 4, interpretation: "bolt hole"}
-  ret_hole_d: {basis: source, from: bearing_retainer, value: 80, interpretation: "bolt circle diameter"}
-  ret_pitch: {basis: source, from: bearing_retainer, value: 120, interpretation: "angle at a hole between its neighbours"}
-  ret_n_holes: {basis: derived, expr: 360 / (180 - ret_pitch), interpretation: "holes: a regular polygon's interior angle is 180 - 360/n"}
+  # ---- bearing retainer: read off its released body --------------------------------------
+  ret_axis_z: {basis: source, from: bearing_retainer, value: 44, interpretation: "frame: the ring's axis runs along file y through z = 44"}
+  ret_axis_x: {basis: source, from: bearing_retainer, value: 44, interpretation: "frame: the ring's axis runs along file y through x = 44"}
+  ret_od: {basis: source, from: bearing_retainer, value: 88, interpretation: "outer diameter"}
+  ret_id: {basis: source, from: bearing_retainer, value: 70.5, interpretation: "inner diameter"}
+  ret_t: {basis: source, from: bearing_retainer, value: 2, interpretation: "thickness, file y from 0"}
+  ret_hole_d: {basis: source, from: bearing_retainer, value: 4, interpretation: "screw hole diameter"}
+  ret_hole_circle_r: {basis: source, from: bearing_retainer, value: 40, interpretation: "radius of the screw holes' circle; the first hole lies on the file's +z from the axis"}
+  ret_n_holes: {basis: source, from: bearing_retainer, value: 6, interpretation: "screw holes, evenly spaced"}
 
-  # ---- assembly placement (frames' z offsets in the casing frame)
-  sun_z:    {basis: derived, expr: car_disc_h + car_fl_t - sun_shaft_l, gap: G-place, interpretation: "the sun's step sits on its bearing, whose top is flush with the carrier's flange top"}
-  planet_z: {basis: derived, expr: car_disc_h + car_fl_t + car_col_h, gap: G-place, interpretation: "each planet's face rests on its pin collar"}
-  sec_z:    {basis: derived, expr: car_h - sec_boss_h, gap: G-place, interpretation: "the secondary carrier's plate rests on the pins' tops, the bosses around the pin ends"}
+  # ---- where the settled parts sit: no source states it; each follows from the seats ------
+  carrier_z: {basis: derived, expr: cas_seat_depth - car_journal_len, gap: G-carrier-place, interpretation: "height of the carrier's output face above the casing's output end: the journal's shoulder level with the shoulder of the casing's bearing seat, the two faces one bearing sits against"}
+  planet_z: {basis: derived, expr: carrier_z + car_journal_len + car_flange_t + car_boss_h, gap: G-planet-place, interpretation: "height of each planet's near end face: level with the top of its post's boss, so a bearing flush in the planet's seat sits on the boss"}
+  sun_z: {basis: derived, expr: carrier_z + car_journal_len + car_flange_t - sun_journal_len, gap: G-sun-place, interpretation: "height of the sun's journal end: the journal's shoulder level with the carrier's inner face, where a bearing flush in the carrier's seat ends"}
+  sec_z: {basis: derived, expr: carrier_z + car_len - sec_socket_depth, gap: G-sec-carrier-place, interpretation: "height of the secondary carrier's boss faces: its sockets bottomed on the ends of the carrier's posts, bosses towards the planets, the rounded boss on the first post"}
+  ret_z: {basis: derived, expr: -ret_t, gap: G-retainer-place, interpretation: "height of the retainer's near face: the ring lies on the casing's output end face, outside it"}
+  ret_turn: {basis: derived, expr: 180 / cas_n_ret, gap: G-retainer-place, interpretation: "the retainer's turn about the axis, in degrees, from where its file holds it: its holes over the casing's"}
 
-  # ---- where each released file holds its part: its frame, which the part is built in
-  planet_file_x:    {basis: source, from: planet, value: 16.75, interpretation: "planet axis in its file, x"}
-  planet_file_y:    {basis: source, from: planet, value: 16.74608, interpretation: "planet axis in its file, y"}
-  planet_file_turn: {basis: source, from: planet, value: 182.769231, interpretation: "planet turned about its axis in its file from the model's tooth 0, deg: half a tooth past a half turn"}
-  sun_file_x:       {basis: source, from: sun, value: 16.5, interpretation: "sun axis in its file, x"}
-  sun_file_y:       {basis: source, from: sun, value: 16.5, interpretation: "sun axis in its file, y"}
-  car_file_x:       {basis: source, from: carrier_updated, value: 29, interpretation: "primary carrier axis in its file, x"}
-  car_file_y:       {basis: source, from: carrier_updated, value: 29, interpretation: "primary carrier axis in its file, y"}
-  car_file_z:       {basis: source, from: carrier_updated, value: 0.21, interpretation: "primary carrier's output face above its file's origin"}
-  sec_file_x:       {basis: source, from: sec_carrier, value: 28.25, interpretation: "secondary carrier axis in its file, x"}
-  sec_file_y:       {basis: source, from: sec_carrier, value: 28.25, interpretation: "secondary carrier axis in its file, y"}
-  sec_file_z:       {basis: source, from: sec_carrier, value: 0.278, interpretation: "secondary carrier's boss faces above its file's origin"}
-  cas_file_x:       {basis: source, from: gearbox_casing, value: 51.4, interpretation: "casing axis in its file, x"}
-  cas_file_y:       {basis: source, from: gearbox_casing, value: 56.15, interpretation: "casing axis in its file, y"}
-  ret_file_x:       {basis: source, from: bearing_retainer, value: 44, interpretation: "retainer axis in its file, x; the file stands it on y, its casing side at y 0"}
-  ret_file_z:       {basis: source, from: bearing_retainer, value: 44, interpretation: "retainer axis in its file, z"}
+  # ---- purchased parts no source sizes: proposed from the seats the released bodies give them
+  out_brg_bore: {basis: proposed, value: 55, rationale: "deep-groove ball bearing 6811 (61811), 55 x 72 x 9: the catalogue size whose bore is the carrier's 55 journal and whose outside the casing's 72 seat", gap: G-output-bearing}
+  out_brg_od: {basis: proposed, value: 72, rationale: "bearing 6811, 55 x 72 x 9: its outside diameter is the casing's seat", gap: G-output-bearing}
+  out_brg_w: {basis: proposed, value: 9, rationale: "bearing 6811, 55 x 72 x 9: its width is the seat's 9 depth and the journal's 9 length, so the retainer and the carrier's flange clamp it", gap: G-output-bearing}
+  out_brg_mass: {basis: proposed, value: 83, rationale: "bearing 6811: 0.083 kg in the makers' catalogues", gap: G-output-bearing}
+  sun_brg_bore: {basis: proposed, value: 8, rationale: "deep-groove ball bearing 688-2Z, 8 x 16 x 5: the catalogue size whose bore is the sun's 8 journal and whose outside the carrier's 16 seat", gap: G-sun-bearing}
+  sun_brg_od: {basis: proposed, value: 16, rationale: "bearing 688-2Z, 8 x 16 x 5: its outside diameter is the carrier's seat", gap: G-sun-bearing}
+  sun_brg_w: {basis: proposed, value: 5, rationale: "bearing 688-2Z, 8 x 16 x 5: the shielded width, which fills the seat's 5 depth; the open 688 is 4 wide", gap: G-sun-bearing}
+  sun_brg_mass: {basis: proposed, value: 4, rationale: "bearing 688-2Z: 4 g in the makers' catalogues", gap: G-sun-bearing}
+  planet_brg_bore: {basis: proposed, value: 8, rationale: "miniature ball bearing MR128-2Z, 8 x 12 x 3.5: the catalogue size whose bore is the carrier's 8 post and whose outside the planet's 12 seat", gap: G-planet-bearings}
+  planet_brg_od: {basis: proposed, value: 12, rationale: "bearing MR128-2Z, 8 x 12 x 3.5: its outside diameter is the planet's seat", gap: G-planet-bearings}
+  planet_brg_w: {basis: proposed, value: 3.5, rationale: "bearing MR128-2Z, 8 x 12 x 3.5: its width is the seat's 3.5 depth", gap: G-planet-bearings}
+  planet_brg_mass: {basis: proposed, value: 0.7, rationale: "bearing MR128-2Z: 0.7 g in the makers' catalogues", gap: G-planet-bearings}
+  planet_brgs: {basis: proposed, value: 2, rationale: "one bearing in each of a planet's two seats, the near one on the post's boss and the far one under the secondary carrier's boss", gap: G-planet-bearings}
 
-  # ---- mass model
-  print_density: {basis: proposed, value: 0.00124, rationale: "PLA at 1.24 g/cm3 (the paper prints in PLA at 100% infill); weighs the printed parts for the MJCF", gap: G-density}
+  # ---- screws and nuts no source sizes: proposed from the holes and pockets the bodies give them
+  sun_bolt: {basis: proposed, thread: M5, length: sun_bolt_len, rationale: "socket head cap screw ISO 4762 M5: the sun's 5 bore is its shank and the 8.9 x 5 pocket its 8.5 x 5 head", gap: G-sun-bolt}
+  sun_bolt_len: {basis: proposed, value: 40, rationale: "the longest standard length that ends inside the carrier's bore: 37.13 of sun and 2.87 standing out of the journal's end, for a thin nut (ISO 4035, 2.7)", gap: G-sun-bolt}
+  shaft_bolt: {basis: proposed, thread: M5, length: shaft_bolt_len, rationale: "socket head cap screw ISO 4762 M5 with a hex nut: the carrier's 5.4 holes clear it, the secondary carrier's 5 holes are its shank, and the 9.3 x 5 pockets take its 8.5 x 5 head; the 8.8 nut pockets are loose on its 8 nut", gap: G-planet-shaft-bolts}
+  shaft_bolt_len: {basis: proposed, value: 40, rationale: "the shortest standard length through a full nut: 33.13 from the head pocket's floor to the nut pocket's, and 35 would leave the nut 1.87 of thread", gap: G-planet-shaft-bolts}
+  ext_bolt: {basis: proposed, thread: M3, length: ext_bolt_len, rationale: "socket head cap screw ISO 4762 M3 with a hex nut: the carrier's 3.4 holes are its clearance, the secondary carrier's 3 holes its shank, and the 6.3 x 3 pockets take its 5.5 x 3 head; the 6.3 nut pockets are loose on its 5.5 nut. The two plates' hole circles differ by 0.75 (conflict K-extrusion-holes)", gap: G-extrusion-bolts}
+  ext_bolt_len: {basis: proposed, value: 40, rationale: "the shortest standard length through its nut: 35.13 from the head pocket's floor to the nut pocket's, which 35 does not reach", gap: G-extrusion-bolts}
+  ret_screw: {basis: proposed, thread: M4, length: ret_screw_len, rationale: "M4 screw with a hex nut: the casing's side slots, 7 across flats and 3.2 wide, are an M4 nut's 7 x 3.2, and the 4 holes are its shank", gap: G-retainer-screws}
+  ret_screw_len: {basis: proposed, value: 10, rationale: "2 of retainer and 8 into the casing's 9 hole, through the whole nut in its slot from 3 to 6.2", gap: G-retainer-screws}
+  out_thread: {basis: proposed, thread: M4, rationale: "M4 hex nuts in the output face's pockets: 7 across flats is an M4 nut's, behind 4.4 holes that clear its screw; the screws are the user's, by what is mounted", gap: G-output-nuts}
 
+  # ---- the mass model ----------------------------------------------------------------------
+  pla_density: {basis: proposed, value: 0.00124, rationale: "PLA at 1.24 g/cm3, the density filament makers list, for parts printed solid at 100% infill", gap: G-density}
 parts:
-  planet_gear: {density: print_density}
-  sun_gear: {density: print_density}
-  primary_carrier: {density: print_density}
-  secondary_carrier: {density: print_density}
-  casing: {density: print_density}
-  retainer: {density: print_density}
+  sun: {density: pla_density}
+  planet: {density: pla_density}
+  carrier: {density: pla_density}
+  sec_carrier: {density: pla_density}
+  gearbox_casing: {density: pla_density}
+  bearing_retainer: {density: pla_density}
+  output_bearing: {mass: out_brg_mass}
+  sun_bearing: {mass: sun_brg_mass}
+  planet_bearing: {mass: planet_brg_mass}

@@ -8,19 +8,21 @@ A six-well stretching stage of laser-cut acrylic, from Kah et al., *A low-cost u
 scripts/cadrev check examples/cell-stretcher
 ```
 
-Expected status: `NOT VERIFIED: 41 errors, 86 warnings, 62/103 checks pass`
+Expected status: `VERIFIED: 0 errors, 4 warnings, 106/106 checks pass`
 
-It takes under a minute. Then open `build/assembly.step` in a CAD program and read `build/report.md`. The mechanism is in `build/model.mjcf`, for MuJoCo.
+It takes about 50 seconds. Then open `build/assembly.step` in a CAD program and read `build/report.md`. The mechanism is in `build/model.mjcf`, for MuJoCo.
 
 ## What it shows
 
-A lead-screw stage whose sources hold shapes but few dimensions. A fresh agent reconstructed it from the skill and these sources alone: the stretcher unit with its 3D-printed clamps, and the mould its PDMS substrates are cast in. The electronics and controller unit is left out.
+A lead-screw stage whose sources hold shapes but few dimensions, taken through `noob` and `build-model` by a fresh agent for each, given the skills and these sources alone. No one was there to answer, so the run chose for itself: millimetres, acrylic cut from 6 mm and 3 mm sheet with printed clamps and mould frame, built as designed, and the complete model. The electronics and controller unit are left out.
 
-- **The lead screws are checked in motion.** Two stepper motors each turn their own screw, and both move one carriage. One turn of either moves it the stated "8 mm per revolution", and a third check works the same lead out from the stated top speed and motor speed. The carriage's range is 25 mm, Table 2's largest tested amplitude.
-- **Cut sheets are sources.** Every region of `Acryl6MM.svg` (54) and the mould's regions of `Acryl3MM.svg` is compared, outline to outline, with the plate the model builds, where model.py places it on the sheet: once for each region it is cut from. The controller housing's regions are skipped with a reason.
-- **Proposed values are named, then held to the shape.** The paper prints no plate dimensions, so 138 of the 320 parameters are proposed, under ten gaps for the authors and the datasheets. The plates built from them still have to match the cut sheets within 0.001 mm, and 41 of the 75 regions do not: they differ by 0.0019 to 1.16 mm (`end_motor_in` 1.16, the stretch-holding frames 0.10, `end_motor_out` 0.038, `motor_base` 0.024, …). Those regions' places on the sheet stay unchecked until their shape checks pass: 82 of the warnings.
-- **What nothing holds is named.** Four more warnings: the mould and its platform jig stand beside the stretcher, as do the two stacks of stretch-holding frames; each clamp stands 3.5 mm off its mounting, the substrate between them not built; and the carriage 1.5 mm off its lead screws, their nuts not built.
-- **The printed parts are compared with their meshes.** The clamp and the mould frame are built where `Clamp.stl` and `MoldFrame.stl` hold them, their dimensions cite those bodies, and both pass their shape checks at 0.001 mm.
+- **The lead screws are checked in motion.** Two stepper motors each turn their own screw, and both move one carriage. One turn of the first moves the carriage the stated "8 mm per revolution". Over the 25 mm stroke, Table 2's largest tested amplitude, the second screw is checked at the same lead, 25/8 of a turn.
+- **The cut sheets are sources.** All 54 regions of `Acryl6MM.svg` and the mould's 21 regions of `Acryl3MM.svg` are compared, outline to outline, with the plates the model builds. The rest of the 3 mm sheet, the controller housing's plates, is skipped with a reason.
+- **The printed parts are compared with their meshes.** The clamp and the mould frame are built where `Clamp.stl` and `MoldFrame.stl` hold them, and both lie within 0.000001 mm.
+- **The tolerance was widened for the sheets.** The authors' drawing is not perfectly regular: a mounting's lobe stands about 0.003 mm off the centre of its hole. The model takes the design values, so the run set the project's length tolerance to 0.005 mm, from the default 0.001. The largest difference is 0.0035 mm. At 0.001, 29 of the 77 shape checks fail and every other check still passes.
+- **What the sources leave open is proposed.** The paper's supplement and the printer kit's datasheets are not among the sources, so the rods, screws, bearings, nuts, couplings and motors are sized by the run: 50 proposed parameters of the 309, under 22 gaps. 59 rest on them.
+- **Sources that disagree are recorded.** The paper's 21.5 mm clamp baseline does not fit the released clamp on hooks 25 mm apart, and its stated 47 × 42 × 11 cm envelope is not the 452 × 404 × 95 mm the sheets and profiles build. Each is kept as context with its reason.
+- **What nothing holds is named.** Two warnings: the mould and the two stacks of stretch-holding frames stand beside the unit. Two more: the template and rings cut on the 3 mm sheet are built and compared, but no source says what they are for, so no instance places them and their two gaps name no parameter.
 
 No figure reading is needed, so no reviewer confirms one.
 

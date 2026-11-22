@@ -1,20 +1,59 @@
 # What the sources leave undefined, and how to close each gap (ask: authors | measure | datasheet | test).
 gaps:
-  - id: G-tooth
-    question: What tooth form does the COMPAct gear generator use (pressure angle, addendum and dedendum in modules, profile shift, backlash)?
+  # ---- purchased parts the paper shows or names, and no source sizes: each waits ----------
+  - id: G-output-bearing
+    question: "Which bearing carries the carrier in the gearbox casing, and what are the output bearing's bore, outer diameter and width? (The carrier's journal is 55 in diameter and 8.5 long above a 0.5 chamfer, the casing's seat 72 in diameter and 8 deep under a 1 chamfer.)"
     ask: authors
+  - id: G-planet-bearings
+    question: "Which bearings carry each planet on its carrier post, how many per planet, and what are the planet bearing's bore, outer diameter and width? (Each planet has a seat 12 in diameter and 3.5 deep at both ends; the posts are 8 in diameter.)"
+    ask: authors
+  - id: G-sun-bearing
+    question: "Which bearing steadies the sun's shaft end in the carrier, and what are the sun bearing's bore, outer diameter and width? (The sun's journal is 8 in diameter and 6 long; the carrier's seat is 16 in diameter and 4.5 deep under a 0.5 chamfer.)"
+    ask: authors
+  - id: G-sun-bolt
+    question: "What thread and length is the sun's central bolt, and what does it screw into? (The sun's bore is 5 in diameter, with a pocket 8.9 in diameter and 5 deep at the flange.)"
+    ask: authors
+  - id: G-planet-shaft-bolts
+    question: "What thread and length are the three planet shaft bolts through the carrier posts, and what size are their nuts? (Bores 5.4 in the carrier and 5 in the secondary carrier; head pockets 9.3 in diameter and 5 deep; nut pockets 8.8 across flats.)"
+    ask: authors
+  - id: G-extrusion-bolts
+    question: "What thread and length are the three carrier extrusion bolts, and what size are their nuts? (Bores 3.4 in the carrier and 3 in the secondary carrier; head pockets 6.3 in diameter and 3 deep; nut pockets 6.3 across flats.)"
+    ask: authors
+  - id: G-retainer-screws
+    question: "What thread and length are the six bearing retainer screws, and what size are the nuts in the casing's side slots? (Holes 4 in diameter in the retainer and the casing; slots 7 across flats and 3.2 wide.)"
+    ask: authors
+  - id: G-output-nuts
+    question: "What size are the six nuts in the carrier's output-face pockets, the output's mounting thread? (Pockets 7 across flats behind holes 4.4 in diameter.)"
+    ask: authors
+
+  # ---- settled parts whose place no source states -----------------------------------------
+  - id: G-carrier-place
+    question: "Where along the axis does the carrier sit in the gearbox casing?"
+    ask: authors
+  - id: G-planet-place
+    question: "Where along its carrier post does each planet sit?"
+    ask: authors
+  - id: G-sun-place
+    question: "Where along the axis does the sun sit in the gearbox?"
+    ask: authors
+  - id: G-sec-carrier-place
+    question: "Where does the secondary carrier sit against the carrier's posts and extrusions, and which of its faces is towards the planets?"
+    ask: authors
+  - id: G-retainer-place
+    question: "Where does the bearing retainer sit, and at what turn about the axis?"
+    ask: authors
+
+  # ---- where the released bodies disagree with each other ---------------------------------
+  - id: G-extrusion-hole-circle
+    question: "The carrier's three extrusion bolt holes stand 23.5 from the axis and the secondary carrier's 24.25: which hole circle is right, and is the released secondary carrier the one that goes with the updated carrier?"
+    ask: authors
+
+  # ---- how the teeth are drawn ------------------------------------------------------------
+  - id: G-flank
+    question: "How do the authors' CAD files draw a tooth flank: as a true involute, and through how many points? (The released STL files hold each flank as three to six corners, all within 0.0001 mm of a 20 degree involute.)"
+    ask: authors
+
+  # ---- what a mass model needs ------------------------------------------------------------
   - id: G-density
-    question: What is the printed parts' density (filament and infill as printed, 100% infill stated)?
+    question: "What is the density of the printed parts (PLA at 100% infill)?"
     ask: measure
-  - id: G-clock
-    question: Is each gear clocked with its involute's base point on the part's 0 deg axis (the bolt pattern's, on the sun and ring), as the released files show, and is that the generator's rule?
-    ask: authors
-  - id: G-rounds
-    question: What radii are the rounds on the carrier extrusions, the casing lugs and the casing pocket lobes in the parametric CAD?
-    ask: authors
-  - id: G-boss
-    question: What profile does the secondary carrier's pin boss have (outer radius at its face, flank shape)?
-    ask: authors
-  - id: G-place
-    question: How are the sun, planets and secondary carrier located axially in the assembled actuator (which faces bear on which bearings)?
-    ask: authors

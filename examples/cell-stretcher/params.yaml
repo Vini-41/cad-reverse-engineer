@@ -1,378 +1,385 @@
 # The only place numbers enter the model. basis: source | derived | measured | proposed.
-# Cut-file dimensions are proposed: the cut files (Acryl6MM.svg, Acryl3MM.svg) draw contours without
-# dimensions, so each value is read off its region, and the region's shape check holds the part
-# to it. Where each region lies on its sheet, its x and y, cites the region.
+# A cut part's numbers are in its region's frame: origin at the top-left corner of the region's box on the sheet,
+# u right and v down as the sheet lies (read_bodies.py prints each). A number several plates repeat because they
+# mate (a finger joint, a rod's place, the profiles' slot pitch) is one param, citing one of the regions.
 params:
-  # ---------------------------------------------------------------- sheets
-  t6: {basis: source, from: E-t6.t, interpretation: "thickness of every Acryl6MM part, along each part's z"}
-  t3: {basis: source, from: E-base.t, interpretation: "thickness of every Acryl3MM mould part (base, platform, jig, rings), along z"}
-  # ---------------------------------------------------------------- shared hole sizes (Acryl6MM / Acryl3MM)
-  d_m3tap: {basis: proposed, value: 2.5, rationale: "M3 tap-drill holes as drawn in the cut files (end plates, carriage, mountings)", gap: G-acryl6}
-  d_m3clr: {basis: proposed, value: 3.1, rationale: "M3 clearance holes of the far outer end plate and the rod flanges, as drawn", gap: G-acryl6}
-  d_m3clr_c: {basis: proposed, value: 3.06, rationale: "M3 clearance holes of the motor-end outer plate, as drawn (3.06, not the far plate's 3.1)", gap: G-acryl6}
-  d_m4tap: {basis: proposed, value: 3.3, rationale: "M4 tap-drill holes (stationary bar, carriage flange, mountings, mould base), as drawn", gap: G-acryl6}
-  d_m4clr: {basis: proposed, value: 4, rationale: "M4 clearance holes (mountings, platform jig), as drawn", gap: G-acryl6}
-  d_m5: {basis: proposed, value: 5, rationale: "5 mm holes into the profiles (M6 tap or tight M5 clearance), as drawn", gap: G-acryl6}
-  d_m5clr: {basis: proposed, value: 5.3, rationale: "5.3 mm holes of the stationary bar, as drawn", gap: G-acryl6}
-  d_m6: {basis: proposed, value: 6, rationale: "6 mm holes into the long profiles' ends and the motor base, as drawn", gap: G-acryl6}
-  d_bore8: {basis: proposed, value: 8, rationale: "bores for the 8 mm lead screws and rods in the end plates, as drawn", gap: G-acryl6}
-  # ---------------------------------------------------------------- end plates
-  ep_h: {basis: proposed, value: 71, rationale: "end-plate height, Acryl6MM regions acryl6mm@195.28,558.3 and @49.28,342.62", gap: G-acryl6}
-  ep_m3_dx: {basis: proposed, value: 123.664, rationale: "M3 holes joining inner and outer end plates, from the plate centre", gap: G-acryl6}
-  ep_m3_y: {basis: proposed, value: 12, rationale: "M3 joining holes from the top edge", gap: G-acryl6}
-  ax_y: {basis: proposed, value: 24, rationale: "screw and rod bores from the end plates' top edge", gap: G-acryl6}
-  scr_x: {basis: proposed, value: 20, rationale: "lead-screw bore from the far end plate's side edge (also the carriage nut seat)", gap: G-acryl6}
-  rod_x: {basis: proposed, value: 60, rationale: "guide-rod bore from the far end plate's side edge (also the carriage bearing seat)", gap: G-acryl6}
-  row_off: {basis: proposed, value: 10, rationale: "profile fixing row from the end plates' bottom edge", gap: G-acryl6}
-  ep_h1: {basis: proposed, value: 10, rationale: "first profile-slot hole from a plate edge (end plates, stationary bar, corner and switch plates)", gap: G-acryl6}
-  ep_h2: {basis: proposed, value: 30, rationale: "second profile-slot hole from a plate edge", gap: G-acryl6}
-  ep_h3: {basis: proposed, value: 52.5, rationale: "far end plates: first short-profile hole from the side edge", gap: G-acryl6}
-  ep_h4: {basis: proposed, value: 72.5, rationale: "far end plates: second short-profile hole from the side edge", gap: G-acryl6}
-  slot_L: {basis: proposed, value: 90, rationale: "length of the end plates' profile slots", gap: G-acryl6}
-  slot_w: {basis: proposed, value: 6, rationale: "width of the end plates' profile slots", gap: G-acryl6}
-  slot_dx: {basis: proposed, value: 50, rationale: "profile slots' centres from the plate centre", gap: G-acryl6}
-  ec_w: {basis: proposed, value: 294, rationale: "width of the motor-end end plates, regions acryl6mm@49.28,342.62 and @49.28,414.51", gap: G-acryl6}
-  ec_h1: {basis: proposed, value: 132.5, rationale: "motor-end plates: outer profile holes from the centre", gap: G-acryl6}
-  ec_h2: {basis: proposed, value: 112.5, rationale: "motor-end plates: inner profile holes from the centre", gap: G-acryl6}
-  dsub_w: {basis: proposed, value: 28.81, rationale: "D-sub cut-out width; drawn as a trapezoid with rounded corners, modelled as a rounded rectangle", gap: G-acryl6}
-  dsub_h: {basis: proposed, value: 11.118, rationale: "D-sub cut-out height", gap: G-acryl6}
-  dsub_r: {basis: proposed, value: 2.5, rationale: "D-sub cut-out corner radius, approximating the drawn trapezoid's rounded corners", gap: G-acryl6}
-  dsub_y: {basis: proposed, value: 24.274, rationale: "D-sub cut-out and connector window centre from the top edge", gap: G-acryl6}
-  dsub_dx: {basis: proposed, value: 16.7, rationale: "D-sub screw holes from the centre", gap: G-acryl6}
-  win_w: {basis: proposed, value: 50.266, rationale: "connector window width in the motor-end outer plate", gap: G-acryl6}
-  win_h: {basis: proposed, value: 20.225, rationale: "connector window height", gap: G-acryl6}
-  win_r: {basis: proposed, value: 2.3, rationale: "connector window corner radius (drawn slightly elliptical, 2.1 x 2.5)", gap: G-acryl6}
-  # ---------------------------------------------------------------- carriage
-  car_d: {basis: proposed, value: 45, rationale: "carriage depth: top wall and partitions, face plate to face plate over their tabs", gap: G-acryl6}
-  g_h: {basis: proposed, value: 46, rationale: "carriage face plate height over its tabs", gap: G-acryl6}
-  tab_w: {basis: proposed, value: 12, rationale: "finger-joint tab width, all Acryl6MM boxes", gap: G-acryl6}
-  tab_p: {basis: proposed, value: 24, rationale: "finger-joint tab pitch", gap: G-acryl6}
-  tab_o1: {basis: proposed, value: 8.5, rationale: "first tab of the carriage comb from the plate end", gap: G-acryl6}
-  tab_n_out: {basis: proposed, value: 3, rationale: "tabs in each end group of the carriage comb, counted on the cut file", gap: G-acryl6}
-  tab_m1: {basis: proposed, value: 81, rationale: "first tab of the comb's middle run from the plate end", gap: G-acryl6}
-  tab_n_mid: {basis: proposed, value: 10, rationale: "tabs in the comb's middle run, counted on the cut file", gap: G-acryl6}
-  o_x: {basis: proposed, value: 74, rationale: "partition slots' centre from the carriage end", gap: G-acryl6}
-  h_notch: {basis: proposed, value: 10.5, rationale: "depth of the top wall's partition notches", gap: G-acryl6}
-  g_ax: {basis: proposed, value: 19, rationale: "nut and bearing seats from the face plate's notched edge", gap: G-acryl6}
-  d_nut: {basis: proposed, value: 11, rationale: "lead-nut seat in the carriage face plates", gap: G-acryl6}
-  d_brg: {basis: proposed, value: 15.2, rationale: "linear-bearing seat in the carriage face plates", gap: G-acryl6}
-  nut_pcd: {basis: proposed, value: 16, rationale: "lead-nut flange screw circle", gap: G-acryl6}
-  brg_pcd: {basis: proposed, value: 25.5, rationale: "bearing flange screw circle", gap: G-acryl6}
-  hole_ang: {basis: proposed, value: 45, rationale: "flange screws sit on the diagonals of their seats", gap: G-acryl6}
-  e_w: {basis: proposed, value: 248, rationale: "carriage flange width, region acryl6mm@206.95,76.8", gap: G-acryl6}
-  e_h: {basis: proposed, value: 75, rationale: "carriage flange depth", gap: G-acryl6}
-  e_notch: {basis: proposed, value: 4, rationale: "small notches beside the flange's slot row", gap: G-acryl6}
-  e_hole_y: {basis: proposed, value: 67.5, rationale: "mounting-plate holes from the flange's tabbed edge", gap: G-acryl6}
-  # ---------------------------------------------------------------- stationary bar and wells
-  f_h: {basis: proposed, value: 40, rationale: "stationary bar depth, region acryl6mm@48.75,290.92", gap: G-acryl6}
-  f_m4_y: {basis: proposed, value: 7.5, rationale: "mounting-plate holes from the bar's edge", gap: G-acryl6}
-  f_c_off: {basis: proposed, value: 25, rationale: "outer 5.3 mm holes beyond the first and last well", gap: G-acryl6}
-  n_wells: {basis: source, from: E-six.n, interpretation: "six substrate positions: six mounting plates on each bar, six clamps each side, six frames of each width"}
-  well_x0: {basis: proposed, value: 95, rationale: "first well's centre from the bar's end", gap: G-acryl6}
-  well_p: {basis: proposed, value: 40, rationale: "well pitch along the bars", gap: G-acryl6}
-  q_m4_dx: {basis: proposed, value: 10, rationale: "a mounting plate's two M4 fixing holes from its centre line", gap: G-acryl6}
-  # ---------------------------------------------------------------- substrate mounting plates
-  q_w: {basis: proposed, value: 35, rationale: "mounting plate width, region acryl6mm@410.55,488.48", gap: G-acryl6}
-  q_h: {basis: proposed, value: 40.125, rationale: "mounting plate length", gap: G-acryl6}
-  q_lobe_r: {basis: proposed, value: 5.025, rationale: "radius of the lobes round the M3 post holes, which sit at the lobes' centres", gap: G-acryl6}
-  q_lobe_dx: {basis: proposed, value: 12.45, rationale: "M3 post holes from the centre line (24.9 apart)", gap: G-acryl6}
-  q_neck_y: {basis: proposed, value: 3.124, rationale: "straight edge between the two lobes", gap: G-acryl6}
-  q_c_dx: {basis: proposed, value: 12.5, rationale: "central M4 threads (frame spacer bolts) from the centre line", gap: G-acryl6}
-  q_c_y: {basis: proposed, value: 20.075, rationale: "central M4 threads from the lobed end", gap: G-acryl6}
-  q_b_y: {basis: proposed, value: 32.973, rationale: "M4 fixing holes from the lobed end", gap: G-acryl6}
-  # ---------------------------------------------------------------- stretch-holding frames
-  fw_w: {basis: proposed, value: 72.939, rationale: "wide frame length, region acryl6mm@468.52,206.74", gap: G-acryl6}
-  fn_w: {basis: proposed, value: 66.892, rationale: "narrow frame length, region acryl6mm@399.92,206.61", gap: G-acryl6}
-  fr_h: {basis: proposed, value: 44.572, rationale: "frame width", gap: G-acryl6}
-  fr_r: {basis: proposed, value: 4.6, rationale: "frame corners, drawn as Bezier corners 5.14 x 4.08, modelled as one radius", gap: G-acryl6}
-  fr_win_h: {basis: proposed, value: 35, rationale: "frame window width", gap: G-acryl6}
-  fr_win_r: {basis: proposed, value: 4.4, rationale: "frame window corners, drawn as Bezier corners 5.0 x 3.89, modelled as one radius", gap: G-acryl6}
-  fw_win_w: {basis: proposed, value: 50.251, rationale: "wide frame window length", gap: G-acryl6}
-  fn_win_w: {basis: proposed, value: 44, rationale: "narrow frame window length", gap: G-acryl6}
-  fr_slot_L: {basis: proposed, value: 6.6, rationale: "frame slot length", gap: G-acryl6}
-  fr_slot_w: {basis: proposed, value: 4.1, rationale: "frame slot width", gap: G-acryl6}
-  fr_slot_dy: {basis: proposed, value: 25, rationale: "frame slots' spacing across the frame", gap: G-acryl6}
-  fw_slot_x: {basis: proposed, value: 4.67, rationale: "wide frame slots from its ends (drawn 4.638 and 4.700, made symmetric)", gap: G-acryl6}
-  fn_slot_x: {basis: proposed, value: 4.896, rationale: "narrow frame slots from its ends", gap: G-acryl6}
-  # ---------------------------------------------------------------- corner, switch and rod-flange plates
-  k_w: {basis: proposed, value: 80, rationale: "corner plate length, region acryl6mm@414.55,163.36", gap: G-acryl6}
-  k_h: {basis: proposed, value: 40, rationale: "corner plate width", gap: G-acryl6}
-  k_p: {basis: proposed, value: 20, rationale: "hole pitch of the corner and switch plates", gap: G-acryl6}
-  k_n: {basis: proposed, value: 4, rationale: "holes along a corner plate, counted on the cut file", gap: G-acryl6}
-  n_w: {basis: proposed, value: 40, rationale: "switch plate width, region acryl6mm@565.86,206.38", gap: G-acryl6}
-  n_h: {basis: proposed, value: 60, rationale: "switch plate length", gap: G-acryl6}
-  n_hy: {basis: proposed, value: 30, rationale: "switch plate's first fixing row from the switch end", gap: G-acryl6}
-  sw_x: {basis: proposed, value: 19.89, rationale: "limit-switch screw pair centre from the plate edge", gap: G-acryl6}
-  sw_dx: {basis: proposed, value: 4.75, rationale: "limit-switch screws from their centre (9.5 apart)", gap: G-acryl6}
-  sw_y: {basis: proposed, value: 7.75, rationale: "limit-switch screws from the plate end", gap: G-acryl6}
-  d_sw: {basis: proposed, value: 2, rationale: "limit-switch screw holes", gap: G-acryl6}
-  ov_rx: {basis: proposed, value: 18.177, rationale: "rod flange half-length (elliptical outline), region acryl6mm@331.64,344.59", gap: G-acryl6}
-  ov_ry: {basis: proposed, value: 10.294, rationale: "rod flange half-width", gap: G-acryl6}
-  d_ov: {basis: proposed, value: 10, rationale: "rod flange centre bore", gap: G-acryl6}
-  ov_hx: {basis: proposed, value: 12.75, rationale: "rod flange screw holes from its centre", gap: G-acryl6}
-  # ---------------------------------------------------------------- motor box
-  mb_w: {basis: proposed, value: 54, rationale: "motor box plates' size over their tabs, regions acryl6mm@575.07,424.93, @568.14,333.08, @558.09,577.8", gap: G-acryl6}
-  mb_n0: {basis: proposed, value: 9, rationale: "first finger-joint notch of the motor box plates from a corner", gap: G-acryl6}
-  d_pilot: {basis: proposed, value: 23, rationale: "motor face plate's pilot bore", gap: G-acryl6}
-  motor_hp: {basis: proposed, value: 31, rationale: "motor face plate's screw square", gap: G-acryl6}
-  d_motor_hole: {basis: proposed, value: 3, rationale: "motor screw holes", gap: G-acryl6}
-  mb_hx: {basis: proposed, value: 10, rationale: "motor base fixing holes from its centre line", gap: G-acryl6}
-  mb_hy: {basis: proposed, value: 15, rationale: "motor base's first fixing row from its tabbed edge", gap: G-acryl6}
-  mb_hp: {basis: proposed, value: 30, rationale: "motor base fixing rows' spacing", gap: G-acryl6}
-  # ---------------------------------------------------------------- profiles
-  prof_h: {basis: source, from: E-prof-short.h, interpretation: "20 x 40 profile read as 20 mm tall (z) by 40 mm wide, the frame lying flat"}
-  prof_w: {basis: source, from: E-prof-short.w, interpretation: "the profile's 40 mm side, horizontal"}
-  prof_short_L: {basis: source, from: E-prof-short.L, interpretation: "short profiles, across the frame between the long ones"}
-  prof_long_L: {basis: source, from: E-prof-long.L, interpretation: "long profiles, along the stretch direction"}
-  # ---------------------------------------------------------------- purchased drive parts
-  d_screw: {basis: proposed, value: 8, rationale: "Anet A8 Z lead screw, taken as 8 mm to match the end plates' 8 mm bores", gap: G-hw}
-  screw_L: {basis: proposed, value: 400, rationale: "lead screw long enough to reach from the far end plate into the coupler", gap: G-hw}
-  d_rod: {basis: proposed, value: 8, rationale: "guide rods, taken as 8 mm to match the 8 mm bores", gap: G-hw}
-  rod_L: {basis: proposed, value: 372, rationale: "guide rods from the far inner end plate through the motor-end inner plate", gap: G-layout}
-  coupler_d: {basis: proposed, value: 19, rationale: "flexible shaft coupler as in Fig. 2D", gap: G-hw}
-  coupler_L: {basis: proposed, value: 25, rationale: "flexible shaft coupler length", gap: G-hw}
-  cp_gap: {basis: proposed, value: 6, rationale: "coupler to motor face plate, so the shaft tip clears the screw end", gap: G-layout}
-  motor_w: {basis: proposed, value: 42, rationale: "NEMA 17 frame, 42SHDC3025-24B; 42 rather than 42.3 so it sits on the motor base", gap: G-motor}
-  motor_L: {basis: proposed, value: 40, rationale: "stepper body length", gap: G-motor}
-  pilot_d: {basis: proposed, value: 22, rationale: "NEMA 17 pilot boss", gap: G-motor}
-  pilot_h: {basis: proposed, value: 2, rationale: "pilot boss height", gap: G-motor}
-  d_shaft: {basis: proposed, value: 5, rationale: "NEMA 17 shaft", gap: G-motor}
-  shaft_L: {basis: proposed, value: 24, rationale: "shaft length from the face", gap: G-motor}
-  foot_d: {basis: proposed, value: 20, rationale: "rubber foot diameter", gap: G-feet}
-  foot_h: {basis: source, from: E-feet.h, interpretation: "M5 x 15 mm read as a 15 mm tall foot on an M5 stud"}
-  # ---------------------------------------------------------------- clamp (Clamp.stl)
-  cl_L: {basis: source, from: clamp, value: 33, interpretation: "clamp length over its two lobes, x"}
-  cl_W: {basis: source, from: clamp, value: 11.5, interpretation: "clamp depth, notch edge to lobe tops, y"}
-  cl_H: {basis: source, from: clamp, value: 5, interpretation: "height of the U wall, z"}
-  cl_hole: {basis: source, from: clamp, value: 3, interpretation: "post-hole diameter"}
-  cl_pitch: {basis: source, from: clamp, value: 25, interpretation: "post-hole pitch, the lobes' centres"}
-  cl_t: {basis: source, from: clamp, value: 1, interpretation: "plate thickness"}
-  cl_nin: {basis: source, from: clamp, value: 18, interpretation: "notch width at the open edge, inside the wall"}
-  cl_nout: {basis: source, from: clamp, value: 20, interpretation: "wall width at the open edge, outside"}
-  cl_nflat: {basis: source, from: clamp, value: 10, interpretation: "straight run of the notch between its two arcs"}
-  cl_c: {basis: derived, expr: cl_nflat / 2, interpretation: "the notch arcs' centres sit at the ends of its straight run"}
-  cl_flat: {basis: proposed, value: 10, rationale: "straight back edge between the lobes, read from the STL's facet corners", gap: G-clamp}
-  cl_ang: {basis: proposed, value: 45, rationale: "the side chamfers run at 45 degrees, tangent to the lobes, read from the STL", gap: G-clamp}
-  # ---------------------------------------------------------------- mould
-  mb_side: {basis: proposed, value: 50, rationale: "mould base side, region acryl3mm@85,570", gap: G-acryl3}
-  mb_corner: {basis: proposed, value: 5, rationale: "mould base and jig corner holes from the edges", gap: G-acryl3}
-  post_half: {basis: proposed, value: 12.5, rationale: "straw post holes from the base centre", gap: G-acryl3}
-  straw_d: {basis: source, from: E-straw.d, interpretation: "straw diameter: the posts, the base's post holes and the rings' bores"}
-  straw_L: {basis: proposed, value: 10, rationale: "straw posts standing proud of the frame for the substrate's holes", gap: G-straw}
-  pf_w: {basis: derived, expr: sqrt(culture_area), interpretation: "the 4 cm2 culture area read as the raised platform's square, 20 x 20 mm, its rounded corners aside", gap: G-acryl3}
-  culture_area: {basis: source, from: E-area.a, interpretation: "culture area per substrate, the floor of the well the platform casts"}
-  pf_r: {basis: proposed, value: 5, rationale: "platform corner radius, region acryl3mm@140,475", gap: G-acryl3}
-  ring_od: {basis: proposed, value: 5, rationale: "the eight rings of acryl3mm@178.689,522 etc.", gap: G-ring}
-  ring_mid_r: {basis: derived, expr: (ring_od + straw_d) / 4, interpretation: "mid-radius of the ring, where its shape-check datums sit"}
-  mf_w: {basis: source, from: moldframe, value: 50, interpretation: "mould frame side"}
-  mf_h: {basis: source, from: E-frame-h.h, interpretation: "mould frame height, z"}
-  mf_hole_d: {basis: source, from: moldframe, value: 4, interpretation: "frame screw holes"}
-  mf_hole_p: {basis: source, from: moldframe, value: 40, interpretation: "frame screw-hole pitch, both ways"}
-  mf_win: {basis: source, from: moldframe, value: 30, interpretation: "the square window, flat to flat"}
-  mf_lobe_p: {basis: source, from: moldframe, value: 25, interpretation: "the window's corner lobes round the posts, centre pitch"}
-  mf_lobe_span: {basis: source, from: moldframe, value: 35, interpretation: "lobe top to lobe bottom across the window"}
-  sub_t: {basis: source, from: E-frame-h.h, interpretation: "the cast substrate is as thick as the frame is tall; the clamps sit on it"}
-  # ---------------------------------------------------------------- layout
-  bar_y: {basis: proposed, value: 60, rationale: "stationary bar placed on the long profiles 60 mm from their far end", gap: G-layout}
-  baseline: {basis: source, from: E-baseline.L, interpretation: "the substrate's post holes, stationary to mobile, at zero stretch: the 25 mm baseline"}
-  kit_x: {basis: proposed, value: 450, rationale: "the frames and the mould are set beside the stretcher, not in it", gap: G-layout}
-  mould_y: {basis: proposed, value: 200, rationale: "the mould beside the frames", gap: G-layout}
-  # ---------------------------------------------------------------- motion
-  screw_lead: {basis: source, from: E-lead.lead, interpretation: "left screw: carriage travel per screw turn, + away from the stationary bar for + motor turn"}
-  screw_lead_r: {basis: source, from: E-lead.lead, interpretation: "right screw, the same Anet A8 screw"}
-  stretch_max: {basis: source, from: E-T2.a, interpretation: "the carriage's travel from zero stretch, the largest amplitude Table 2 runs; the rail travel itself is not stated"}
-  sweep_steps: {basis: proposed, value: 6, rationale: "sweep resolution"}
-  # ---------------------------------------------------------------- mass model
-  rho_pmma: {basis: proposed, value: 0.00118, rationale: "acrylic glass, 1.18 g/cm3", gap: G-mass}
-  rho_al: {basis: proposed, value: 0.0027, rationale: "aluminium profile taken solid at 2.7 g/cm3 (a slotted profile weighs less)", gap: G-mass}
-  rho_steel: {basis: proposed, value: 0.00785, rationale: "steel screws and rods", gap: G-mass}
-  rho_pla: {basis: proposed, value: 0.00124, rationale: "printed clamps and mould frame, PLA", gap: G-mass}
-  rho_rubber: {basis: proposed, value: 0.0011, rationale: "rubber feet", gap: G-mass}
-  m_motor: {basis: proposed, value: 280, rationale: "a 40 mm NEMA 17 stepper", gap: G-motor}
+  # ================= sheets
+  t6: {basis: source, from: P3-carriage.t, interpretation: "thickness of every part cut from the 6 mm sheet, and the depth of its finger joints"}
+  t3: {basis: source, from: P3-mould-base.t, interpretation: "thickness of the mould's base, and of every part cut from the 3 mm sheet"}
+  tab: {basis: source, from: "acryl6@206.95,76.8", value: 12, interpretation: "length of a finger-joint tab and of the gap beside it"}
+  slot_edge: {basis: source, from: "acryl6@414.55,122.86", value: 10, interpretation: "a profile slot's centre from the profile's edge, where every plate bolted on a 20x40 profile has its first hole"}
+  slot_pitch: {basis: source, from: "acryl6@414.55,122.86", value: 20, interpretation: "pitch of the profile slots, which every plate bolted on a profile repeats"}
+  d_m5: {basis: source, from: "acryl6@414.55,122.86", value: 5, interpretation: "the d5 hole of the plates bolted on the profiles' slots"}
+  d_m3_clear: {basis: source, from: "acryl6@195.28,486.51", value: 3.1, interpretation: "the d3.1 hole over a d2.5 one: end cover, bearing retainer"}
+  unit_w: {basis: source, from: "acryl6@48.75,290.92", value: 390, interpretation: "length of the stationary bar, the end-pieces and the carriage's walls and cover: the unit's width across the two long profiles"}
+  screw_u: {basis: source, from: "acryl6@195.28,558.3", value: 20, interpretation: "a lead screw's axis from the unit's side: end plate d8 and carriage wall d11"}
+  guide_u: {basis: source, from: "acryl6@195.28,558.3", value: 60, interpretation: "a guide rod's axis from the unit's side: end plate d8 and carriage wall d15.2"}
+  mount_hole_pitch: {basis: source, from: "acryl6@206.95,76.8", value: 20, interpretation: "pitch of the twelve M4 threads of the carriage plate and of the stationary bar, and of a mounting's two screw holes"}
+  n_mount_threads: {basis: source, from: "acryl6@206.95,76.8", value: 12, interpretation: "threads in the row"}
 
-  # ---------------------------------------------------------------- where the sheets draw each cut part
-  end_far_in_1_x: {basis: source, from: "acryl6mm@19.78,532.27", value: 0.284261, interpretation: "where the sheet draws the part's origin, x"}
-  end_far_in_1_y: {basis: source, from: "acryl6mm@19.78,532.27", value: 528.716416, interpretation: "where the sheet draws the part's origin, y"}
-  end_far_out_1_x: {basis: source, from: "acryl6mm@19.78,460.47", value: 0.283846, interpretation: "where the sheet draws the part's origin, x"}
-  end_far_out_1_y: {basis: source, from: "acryl6mm@19.78,460.47", value: 456.922086, interpretation: "where the sheet draws the part's origin, y"}
-  end_motor_in_1_x: {basis: source, from: "acryl6mm@14.98,316.59", value: 0.283974, interpretation: "where the sheet draws the part's origin, x"}
-  end_motor_in_1_y: {basis: source, from: "acryl6mm@14.98,316.59", value: 313.039864, interpretation: "where the sheet draws the part's origin, y"}
-  end_motor_out_1_x: {basis: source, from: "acryl6mm@14.98,388.47", value: 0.283705, interpretation: "where the sheet draws the part's origin, x"}
-  end_motor_out_1_y: {basis: source, from: "acryl6mm@14.98,388.47", value: 384.922043, interpretation: "where the sheet draws the part's origin, y"}
-  carriage_top_1_x: {basis: source, from: "acryl6mm@19.78,133.17", value: 0.283592, interpretation: "where the sheet draws the part's origin, x"}
-  carriage_top_1_y: {basis: source, from: "acryl6mm@19.78,133.17", value: 130.921703, interpretation: "where the sheet draws the part's origin, y"}
-  carriage_face_1_x: {basis: source, from: "acryl6mm@29.53,226.22", value: 0.283874, interpretation: "where the sheet draws the part's origin, x"}
-  carriage_face_1_y: {basis: source, from: "acryl6mm@29.53,226.22", value: 223.921825, interpretation: "where the sheet draws the part's origin, y"}
-  carriage_face_2_x: {basis: source, from: "acryl6mm@29.53,179.22", value: 0.283874, interpretation: "where the sheet draws the part's origin, x"}
-  carriage_face_2_y: {basis: source, from: "acryl6mm@29.53,179.22", value: 176.921788, interpretation: "where the sheet draws the part's origin, y"}
-  carriage_flange_1_x: {basis: source, from: "acryl6mm@12.68,58.67", value: 0.28368, interpretation: "where the sheet draws the part's origin, x"}
-  carriage_flange_1_y: {basis: source, from: "acryl6mm@12.68,58.67", value: 54.921967, interpretation: "where the sheet draws the part's origin, y"}
-  carriage_partition_1_x: {basis: source, from: "acryl6mm@351.41,366.54", value: 344.657317, interpretation: "where the sheet draws the part's origin, x"}
-  carriage_partition_1_y: {basis: source, from: "acryl6mm@351.41,366.54", value: 364.238583, interpretation: "where the sheet draws the part's origin, y"}
-  carriage_partition_2_x: {basis: source, from: "acryl6mm@302.87,366.54", value: 296.115041, interpretation: "where the sheet draws the part's origin, x"}
-  carriage_partition_2_y: {basis: source, from: "acryl6mm@302.87,366.54", value: 364.238583, interpretation: "where the sheet draws the part's origin, y"}
-  carriage_end_1_x: {basis: source, from: "acryl6mm@351.41,415.24", value: 344.657317, interpretation: "where the sheet draws the part's origin, x"}
-  carriage_end_1_y: {basis: source, from: "acryl6mm@351.41,415.24", value: 413.238788, interpretation: "where the sheet draws the part's origin, y"}
-  carriage_end_2_x: {basis: source, from: "acryl6mm@302.87,415.24", value: 296.115041, interpretation: "where the sheet draws the part's origin, x"}
-  carriage_end_2_y: {basis: source, from: "acryl6mm@302.87,415.24", value: 413.238788, interpretation: "where the sheet draws the part's origin, y"}
-  stat_bar_1_x: {basis: source, from: "acryl6mm@19.5,272.92", value: 0.000219, interpretation: "where the sheet draws the part's origin, x"}
-  stat_bar_1_y: {basis: source, from: "acryl6mm@19.5,272.92", value: 270.923939, interpretation: "where the sheet draws the part's origin, y"}
-  mount_plate_1_x: {basis: source, from: "acryl6mm@430.2,475.44", value: 463.448017, interpretation: "where the sheet draws the part's origin, x"}
-  mount_plate_1_y: {basis: source, from: "acryl6mm@430.2,475.44", value: 513.562166, interpretation: "where the sheet draws the part's origin, y"}
-  mount_plate_2_x: {basis: source, from: "acryl6mm@501.24,475.44", value: 534.491853, interpretation: "where the sheet draws the part's origin, x"}
-  mount_plate_2_y: {basis: source, from: "acryl6mm@501.24,475.44", value: 513.562166, interpretation: "where the sheet draws the part's origin, y"}
-  mount_plate_3_x: {basis: source, from: "acryl6mm@465.84,475.44", value: 464.091488, interpretation: "where the sheet draws the part's origin, x"}
-  mount_plate_3_y: {basis: source, from: "acryl6mm@465.84,475.44", value: 473.437166, interpretation: "where the sheet draws the part's origin, y"}
-  mount_plate_4_x: {basis: source, from: "acryl6mm@394.8,475.44", value: 393.047651, interpretation: "where the sheet draws the part's origin, x"}
-  mount_plate_4_y: {basis: source, from: "acryl6mm@394.8,475.44", value: 473.437166, interpretation: "where the sheet draws the part's origin, y"}
-  mount_plate_5_x: {basis: source, from: "acryl6mm@465.84,558.46", value: 464.091488, interpretation: "where the sheet draws the part's origin, x"}
-  mount_plate_5_y: {basis: source, from: "acryl6mm@465.84,558.46", value: 556.454713, interpretation: "where the sheet draws the part's origin, y"}
-  mount_plate_6_x: {basis: source, from: "acryl6mm@394.8,558.46", value: 393.047651, interpretation: "where the sheet draws the part's origin, x"}
-  mount_plate_6_y: {basis: source, from: "acryl6mm@394.8,558.46", value: 556.454713, interpretation: "where the sheet draws the part's origin, y"}
-  mount_plate_7_x: {basis: source, from: "acryl6mm@430.2,558.46", value: 463.448017, interpretation: "where the sheet draws the part's origin, x"}
-  mount_plate_7_y: {basis: source, from: "acryl6mm@430.2,558.46", value: 596.579713, interpretation: "where the sheet draws the part's origin, y"}
-  mount_plate_8_x: {basis: source, from: "acryl6mm@501.24,558.46", value: 534.491853, interpretation: "where the sheet draws the part's origin, x"}
-  mount_plate_8_y: {basis: source, from: "acryl6mm@501.24,558.46", value: 596.579713, interpretation: "where the sheet draws the part's origin, y"}
-  mount_plate_9_x: {basis: source, from: "acryl6mm@465.84,517.35", value: 464.091488, interpretation: "where the sheet draws the part's origin, x"}
-  mount_plate_9_y: {basis: source, from: "acryl6mm@465.84,517.35", value: 515.345063, interpretation: "where the sheet draws the part's origin, y"}
-  mount_plate_10_x: {basis: source, from: "acryl6mm@394.8,517.35", value: 393.047651, interpretation: "where the sheet draws the part's origin, x"}
-  mount_plate_10_y: {basis: source, from: "acryl6mm@394.8,517.35", value: 515.345063, interpretation: "where the sheet draws the part's origin, y"}
-  mount_plate_11_x: {basis: source, from: "acryl6mm@430.2,517.35", value: 463.448017, interpretation: "where the sheet draws the part's origin, x"}
-  mount_plate_11_y: {basis: source, from: "acryl6mm@430.2,517.35", value: 555.470063, interpretation: "where the sheet draws the part's origin, y"}
-  mount_plate_12_x: {basis: source, from: "acryl6mm@501.24,517.35", value: 534.491853, interpretation: "where the sheet draws the part's origin, x"}
-  mount_plate_12_y: {basis: source, from: "acryl6mm@501.24,517.35", value: 555.470063, interpretation: "where the sheet draws the part's origin, y"}
-  frame_wide_1_x: {basis: source, from: "acryl6mm@466.09,237.98", value: 462.442683, interpretation: "where the sheet draws the part's origin, x"}
-  frame_wide_1_y: {basis: source, from: "acryl6mm@466.09,237.98", value: 235.746539, interpretation: "where the sheet draws the part's origin, y"}
-  frame_wide_2_x: {basis: source, from: "acryl6mm@466.09,378.02", value: 462.442683, interpretation: "where the sheet draws the part's origin, x"}
-  frame_wide_2_y: {basis: source, from: "acryl6mm@466.09,378.02", value: 375.795861, interpretation: "where the sheet draws the part's origin, y"}
-  frame_wide_3_x: {basis: source, from: "acryl6mm@466.09,190.4", value: 462.442683, interpretation: "where the sheet draws the part's origin, x"}
-  frame_wide_3_y: {basis: source, from: "acryl6mm@466.09,190.4", value: 188.172526, interpretation: "where the sheet draws the part's origin, y"}
-  frame_wide_4_x: {basis: source, from: "acryl6mm@466.09,425.06", value: 462.442683, interpretation: "where the sheet draws the part's origin, x"}
-  frame_wide_4_y: {basis: source, from: "acryl6mm@466.09,425.06", value: 422.835317, interpretation: "where the sheet draws the part's origin, y"}
-  frame_wide_5_x: {basis: source, from: "acryl6mm@466.09,285.01", value: 462.442683, interpretation: "where the sheet draws the part's origin, x"}
-  frame_wide_5_y: {basis: source, from: "acryl6mm@466.09,285.01", value: 282.785994, interpretation: "where the sheet draws the part's origin, y"}
-  frame_wide_6_x: {basis: source, from: "acryl6mm@466.09,330.45", value: 462.442683, interpretation: "where the sheet draws the part's origin, x"}
-  frame_wide_6_y: {basis: source, from: "acryl6mm@466.09,330.45", value: 328.221848, interpretation: "where the sheet draws the part's origin, y"}
-  frame_narrow_1_x: {basis: source, from: "acryl6mm@397.69,190.26", value: 394.34343, interpretation: "where the sheet draws the part's origin, x"}
-  frame_narrow_1_y: {basis: source, from: "acryl6mm@397.69,190.26", value: 188.033461, interpretation: "where the sheet draws the part's origin, y"}
-  frame_narrow_2_x: {basis: source, from: "acryl6mm@397.69,284.88", value: 394.34343, interpretation: "where the sheet draws the part's origin, x"}
-  frame_narrow_2_y: {basis: source, from: "acryl6mm@397.69,284.88", value: 282.646929, interpretation: "where the sheet draws the part's origin, y"}
-  frame_narrow_3_x: {basis: source, from: "acryl6mm@397.69,330.31", value: 394.34343, interpretation: "where the sheet draws the part's origin, x"}
-  frame_narrow_3_y: {basis: source, from: "acryl6mm@397.69,330.31", value: 328.082783, interpretation: "where the sheet draws the part's origin, y"}
-  frame_narrow_4_x: {basis: source, from: "acryl6mm@397.69,424.92", value: 394.34343, interpretation: "where the sheet draws the part's origin, x"}
-  frame_narrow_4_y: {basis: source, from: "acryl6mm@397.69,424.92", value: 422.696252, interpretation: "where the sheet draws the part's origin, y"}
-  frame_narrow_5_x: {basis: source, from: "acryl6mm@397.69,237.84", value: 394.34343, interpretation: "where the sheet draws the part's origin, x"}
-  frame_narrow_5_y: {basis: source, from: "acryl6mm@397.69,237.84", value: 235.60746, interpretation: "where the sheet draws the part's origin, y"}
-  frame_narrow_6_x: {basis: source, from: "acryl6mm@397.69,377.89", value: 394.34343, interpretation: "where the sheet draws the part's origin, x"}
-  frame_narrow_6_y: {basis: source, from: "acryl6mm@397.69,377.89", value: 375.656782, interpretation: "where the sheet draws the part's origin, y"}
-  corner_plate_1_x: {basis: source, from: "acryl6mm@398.55,145.36", value: 394.548124, interpretation: "where the sheet draws the part's origin, x"}
-  corner_plate_1_y: {basis: source, from: "acryl6mm@398.55,145.36", value: 143.360313, interpretation: "where the sheet draws the part's origin, y"}
-  corner_plate_2_x: {basis: source, from: "acryl6mm@478.98,145.36", value: 474.981499, interpretation: "where the sheet draws the part's origin, x"}
-  corner_plate_2_y: {basis: source, from: "acryl6mm@478.98,145.36", value: 143.360313, interpretation: "where the sheet draws the part's origin, y"}
-  corner_plate_3_x: {basis: source, from: "acryl6mm@398.55,104.86", value: 394.548124, interpretation: "where the sheet draws the part's origin, x"}
-  corner_plate_3_y: {basis: source, from: "acryl6mm@398.55,104.86", value: 102.861399, interpretation: "where the sheet draws the part's origin, y"}
-  corner_plate_4_x: {basis: source, from: "acryl6mm@478.98,104.86", value: 474.981499, interpretation: "where the sheet draws the part's origin, x"}
-  corner_plate_4_y: {basis: source, from: "acryl6mm@478.98,104.86", value: 102.861399, interpretation: "where the sheet draws the part's origin, y"}
-  switch_plate_1_x: {basis: source, from: "acryl6mm@547.86,189.38", value: 545.860914, interpretation: "where the sheet draws the part's origin, x"}
-  switch_plate_1_y: {basis: source, from: "acryl6mm@547.86,189.38", value: 186.377303, interpretation: "where the sheet draws the part's origin, y"}
-  rod_flange_1_x: {basis: source, from: "acryl6mm@356.83,339.62", value: 345.015076, interpretation: "where the sheet draws the part's origin, x"}
-  rod_flange_1_y: {basis: source, from: "acryl6mm@356.83,339.62", value: 338.587595, interpretation: "where the sheet draws the part's origin, y"}
-  rod_flange_2_x: {basis: source, from: "acryl6mm@356.83,316.47", value: 345.015076, interpretation: "where the sheet draws the part's origin, x"}
-  rod_flange_2_y: {basis: source, from: "acryl6mm@356.83,316.47", value: 315.44536, interpretation: "where the sheet draws the part's origin, y"}
-  rod_flange_3_x: {basis: source, from: "acryl6mm@316.19,339.62", value: 304.375055, interpretation: "where the sheet draws the part's origin, x"}
-  rod_flange_3_y: {basis: source, from: "acryl6mm@316.19,339.62", value: 338.587595, interpretation: "where the sheet draws the part's origin, y"}
-  rod_flange_4_x: {basis: source, from: "acryl6mm@316.19,316.47", value: 304.375055, interpretation: "where the sheet draws the part's origin, x"}
-  rod_flange_4_y: {basis: source, from: "acryl6mm@316.19,316.47", value: 315.44536, interpretation: "where the sheet draws the part's origin, y"}
-  motor_face_1_x: {basis: source, from: "acryl6mm@544.02,362.76", value: 541.323615, interpretation: "where the sheet draws the part's origin, x"}
-  motor_face_1_y: {basis: source, from: "acryl6mm@544.02,362.76", value: 360.055162, interpretation: "where the sheet draws the part's origin, y"}
-  motor_face_2_x: {basis: source, from: "acryl6mm@544.02,418.63", value: 541.323615, interpretation: "where the sheet draws the part's origin, x"}
-  motor_face_2_y: {basis: source, from: "acryl6mm@544.02,418.63", value: 415.932341, interpretation: "where the sheet draws the part's origin, y"}
-  motor_base_1_x: {basis: source, from: "acryl6mm@550.59,306.53", value: 541.141765, interpretation: "where the sheet draws the part's origin, x"}
-  motor_base_1_y: {basis: source, from: "acryl6mm@550.59,306.53", value: 303.828886, interpretation: "where the sheet draws the part's origin, y"}
-  motor_base_2_x: {basis: source, from: "acryl6mm@550.59,250.65", value: 541.141765, interpretation: "where the sheet draws the part's origin, x"}
-  motor_base_2_y: {basis: source, from: "acryl6mm@550.59,250.65", value: 247.951686, interpretation: "where the sheet draws the part's origin, y"}
-  motor_gusset_1_x: {basis: source, from: "acryl6mm@547.12,539.97", value: 598.423432, interpretation: "where the sheet draws the part's origin, x"}
-  motor_gusset_1_y: {basis: source, from: "acryl6mm@547.12,539.97", value: 591.265205, interpretation: "where the sheet draws the part's origin, y"}
-  motor_gusset_2_x: {basis: source, from: "acryl6mm@547.12,477.7", value: 598.423432, interpretation: "where the sheet draws the part's origin, x"}
-  motor_gusset_2_y: {basis: source, from: "acryl6mm@547.12,477.7", value: 529.002055, interpretation: "where the sheet draws the part's origin, y"}
-  motor_gusset_3_x: {basis: source, from: "acryl6mm@544.59,546.75", value: 537.8379, interpretation: "where the sheet draws the part's origin, x"}
-  motor_gusset_3_y: {basis: source, from: "acryl6mm@544.59,546.75", value: 544.050339, interpretation: "where the sheet draws the part's origin, y"}
-  motor_gusset_4_x: {basis: source, from: "acryl6mm@544.59,484.49", value: 537.8379, interpretation: "where the sheet draws the part's origin, x"}
-  motor_gusset_4_y: {basis: source, from: "acryl6mm@544.59,484.49", value: 481.787161, interpretation: "where the sheet draws the part's origin, y"}
-  mould_base_1_x: {basis: source, from: "acryl3mm@7.5,547.5", value: 5.000132, interpretation: "where the sheet draws the part's origin, x"}
-  mould_base_1_y: {basis: source, from: "acryl3mm@7.5,547.5", value: 545.000213, interpretation: "where the sheet draws the part's origin, y"}
-  mould_base_2_x: {basis: source, from: "acryl3mm@172.5,547.5", value: 170.000217, interpretation: "where the sheet draws the part's origin, x"}
-  mould_base_2_y: {basis: source, from: "acryl3mm@172.5,547.5", value: 545.000213, interpretation: "where the sheet draws the part's origin, y"}
-  mould_base_3_x: {basis: source, from: "acryl3mm@62.5,547.5", value: 60.00016, interpretation: "where the sheet draws the part's origin, x"}
-  mould_base_3_y: {basis: source, from: "acryl3mm@62.5,547.5", value: 545.000213, interpretation: "where the sheet draws the part's origin, y"}
-  mould_base_4_x: {basis: source, from: "acryl3mm@117.5,547.5", value: 115.000189, interpretation: "where the sheet draws the part's origin, x"}
-  mould_base_4_y: {basis: source, from: "acryl3mm@117.5,547.5", value: 545.000213, interpretation: "where the sheet draws the part's origin, y"}
-  mould_base_5_x: {basis: source, from: "acryl3mm@117.5,492.5", value: 115.000189, interpretation: "where the sheet draws the part's origin, x"}
-  mould_base_5_y: {basis: source, from: "acryl3mm@117.5,492.5", value: 490.000196, interpretation: "where the sheet draws the part's origin, y"}
-  mould_base_6_x: {basis: source, from: "acryl3mm@62.5,492.5", value: 60.00016, interpretation: "where the sheet draws the part's origin, x"}
-  mould_base_6_y: {basis: source, from: "acryl3mm@62.5,492.5", value: 490.000196, interpretation: "where the sheet draws the part's origin, y"}
-  platform_jig_1_x: {basis: source, from: "acryl3mm@7.5,492.5", value: 5.000182, interpretation: "where the sheet draws the part's origin, x"}
-  platform_jig_1_y: {basis: source, from: "acryl3mm@7.5,492.5", value: 490.000408, interpretation: "where the sheet draws the part's origin, y"}
-  platform_1_x: {basis: source, from: "acryl3mm@133.0,466.0", value: 130.00008, interpretation: "where the sheet draws the part's origin, x"}
-  platform_1_y: {basis: source, from: "acryl3mm@133.0,466.0", value: 465.000269, interpretation: "where the sheet draws the part's origin, y"}
-  platform_2_x: {basis: source, from: "acryl3mm@8.0,466.0", value: 5.000009, interpretation: "where the sheet draws the part's origin, x"}
-  platform_2_y: {basis: source, from: "acryl3mm@8.0,466.0", value: 465.000269, interpretation: "where the sheet draws the part's origin, y"}
-  platform_3_x: {basis: source, from: "acryl3mm@33.0,466.0", value: 30.000022, interpretation: "where the sheet draws the part's origin, x"}
-  platform_3_y: {basis: source, from: "acryl3mm@33.0,466.0", value: 465.000269, interpretation: "where the sheet draws the part's origin, y"}
-  platform_4_x: {basis: source, from: "acryl3mm@58.0,466.0", value: 55.00003, interpretation: "where the sheet draws the part's origin, x"}
-  platform_4_y: {basis: source, from: "acryl3mm@58.0,466.0", value: 465.000269, interpretation: "where the sheet draws the part's origin, y"}
-  platform_5_x: {basis: source, from: "acryl3mm@83.0,466.0", value: 80.000041, interpretation: "where the sheet draws the part's origin, x"}
-  platform_5_y: {basis: source, from: "acryl3mm@83.0,466.0", value: 465.000269, interpretation: "where the sheet draws the part's origin, y"}
-  platform_6_x: {basis: source, from: "acryl3mm@108.0,466.0", value: 105.000052, interpretation: "where the sheet draws the part's origin, x"}
-  platform_6_y: {basis: source, from: "acryl3mm@108.0,466.0", value: 485.000269, interpretation: "where the sheet draws the part's origin, y"}
-  post_ring_1_x: {basis: source, from: "acryl3mm@178.44,521.91", value: 176.188764, interpretation: "where the sheet draws the part's origin, x"}
-  post_ring_1_y: {basis: source, from: "acryl3mm@178.44,521.91", value: 521.537825, interpretation: "where the sheet draws the part's origin, y"}
-  post_ring_2_x: {basis: source, from: "acryl3mm@183.97,515.91", value: 181.720291, interpretation: "where the sheet draws the part's origin, x"}
-  post_ring_2_y: {basis: source, from: "acryl3mm@183.97,515.91", value: 515.537834, interpretation: "where the sheet draws the part's origin, y"}
-  post_ring_3_x: {basis: source, from: "acryl3mm@178.44,533.91", value: 176.188764, interpretation: "where the sheet draws the part's origin, x"}
-  post_ring_3_y: {basis: source, from: "acryl3mm@178.44,533.91", value: 533.537836, interpretation: "where the sheet draws the part's origin, y"}
-  post_ring_4_x: {basis: source, from: "acryl3mm@183.97,521.91", value: 181.720291, interpretation: "where the sheet draws the part's origin, x"}
-  post_ring_4_y: {basis: source, from: "acryl3mm@183.97,521.91", value: 521.537825, interpretation: "where the sheet draws the part's origin, y"}
-  post_ring_5_x: {basis: source, from: "acryl3mm@183.97,527.91", value: 181.720291, interpretation: "where the sheet draws the part's origin, x"}
-  post_ring_5_y: {basis: source, from: "acryl3mm@183.97,527.91", value: 527.537845, interpretation: "where the sheet draws the part's origin, y"}
-  post_ring_6_x: {basis: source, from: "acryl3mm@178.44,515.91", value: 176.188764, interpretation: "where the sheet draws the part's origin, x"}
-  post_ring_6_y: {basis: source, from: "acryl3mm@178.44,515.91", value: 515.537834, interpretation: "where the sheet draws the part's origin, y"}
-  post_ring_7_x: {basis: source, from: "acryl3mm@178.44,527.91", value: 176.188764, interpretation: "where the sheet draws the part's origin, x"}
-  post_ring_7_y: {basis: source, from: "acryl3mm@178.44,527.91", value: 527.537845, interpretation: "where the sheet draws the part's origin, y"}
-  post_ring_8_x: {basis: source, from: "acryl3mm@183.97,533.91", value: 181.720291, interpretation: "where the sheet draws the part's origin, x"}
-  post_ring_8_y: {basis: source, from: "acryl3mm@183.97,533.91", value: 533.537836, interpretation: "where the sheet draws the part's origin, y"}
+  # ================= carriage
+  cpl_len: {basis: source, from: "acryl6@206.95,76.8", value: 248}
+  cpl_wid: {basis: source, from: "acryl6@206.95,76.8", value: 75}
+  cpl_finger_u0: {basis: source, from: "acryl6@206.95,76.8", value: 10, interpretation: "start of the first finger of the v 0 edge"}
+  cpl_n_fingers: {basis: source, from: "acryl6@206.95,76.8", value: 10}
+  cpl_thread_u0: {basis: source, from: "acryl6@206.95,76.8", value: 14}
+  cpl_thread_v: {basis: source, from: "acryl6@206.95,76.8", value: 67.5}
+  end_tab_v: {basis: source, from: "acryl6@114.03,153.42", value: 16.5, interpretation: "start of the 12 mm end tab of the cover and of the plate, and of the notch of a cross plate that takes it"}
+  box_depth: {basis: source, from: "acryl6@114.03,153.42", value: 45, interpretation: "width of the cover with its fingers: the carriage box over both walls"}
+  fj_end_u0: {basis: source, from: "acryl6@114.03,153.42", value: 8.5, interpretation: "first finger of an end section, cover and wall"}
+  fj_end_n: {basis: source, from: "acryl6@114.03,153.42", value: 3}
+  fj_mid_u0: {basis: source, from: "acryl6@114.03,153.42", value: 81, interpretation: "first finger of the middle section, cover and wall"}
+  fj_mid_n: {basis: source, from: "acryl6@114.03,153.42", value: 10}
+  rib_u: {basis: source, from: "acryl6@114.03,153.42", value: 71, interpretation: "near face of a tall cross plate: the cover's slot and the wall's 6 x 12 window"}
+  cw_h: {basis: source, from: "acryl6@195.28,199.92", value: 40, interpretation: "height of a wall at its ends, and of a short cross plate; the tabs of its middle add the plate's thickness"}
+  rib_tab_v: {basis: source, from: "acryl6@195.28,199.92", value: 17, interpretation: "start of a cross plate's 12 mm side tab, and of the wall's notch and window that take it"}
+  cw_rod_v: {basis: source, from: "acryl6@195.28,199.92", value: 19, interpretation: "the rods' axes below the wall's v 0 edge"}
+  cw_bearing_d: {basis: source, from: "acryl6@195.28,199.92", value: 15.2}
+  cw_nut_d: {basis: source, from: "acryl6@195.28,199.92", value: 11}
+  cw_nut_hole_off: {basis: source, from: "acryl6@195.28,199.92", value: 5.657, interpretation: "the nut's four d2.5 holes, in u and in v from the screw's axis"}
+  cw_ret_hole_off: {basis: source, from: "acryl6@195.28,199.92", value: 9.016, interpretation: "the retainer's two d2.5 holes, in u and in v from the rod's axis"}
+  # the file draws the retainer as an ellipse (four arcs of radii 36.475 x 64.406 user units, turned a quarter);
+  # read_bodies.py prints it as four circular arcs of r14.235 and a 21.916 high box, which the file does not hold
+  br_half_len: {basis: source, from: "acryl6@331.64,330.03", value: 18.177, interpretation: "the ellipse's half-axis along its three holes"}
+  br_half_wid: {basis: source, from: "acryl6@331.64,330.03", value: 10.294, interpretation: "the ellipse's other half-axis"}
+  br_rod_d: {basis: source, from: "acryl6@331.64,330.03", value: 10.01}
+  br_hole_off: {basis: source, from: "acryl6@331.64,330.03", value: 12.75}
+
+  # ================= stationary bar, mountings
+  sb_wid: {basis: source, from: "acryl6@48.75,290.92", value: 40}
+  sb_slot_d: {basis: source, from: "acryl6@48.75,290.92", value: 5.3}
+  sb_slot_u1: {basis: source, from: "acryl6@48.75,290.92", value: 70}
+  sb_slot_u2: {basis: source, from: "acryl6@48.75,290.92", value: 95}
+  sb_slot_pitch: {basis: source, from: "acryl6@48.75,290.92", value: 40}
+  sb_slot_n: {basis: source, from: "acryl6@48.75,290.92", value: 6}
+  sb_thread_u0: {basis: source, from: "acryl6@48.75,290.92", value: 85}
+  sb_thread_v: {basis: source, from: "acryl6@48.75,290.92", value: 7.5}
+  mt_len: {basis: source, from: "acryl6@410.55,488.48", value: 35}
+  mt_wid: {basis: source, from: "acryl6@410.55,488.48", value: 40.125}
+  mt_lobe_r: {basis: source, from: "acryl6@410.55,488.48", value: 5.025, interpretation: "radius of the lobe about a hook's hole, and that hole's v"}
+  mt_hook_u: {basis: source, from: "acryl6@410.55,488.48", value: 5.05}
+  mt_recess_v: {basis: source, from: "acryl6@410.55,488.48", value: 3.124}
+  mt_bolt_u: {basis: source, from: "acryl6@410.55,488.48", value: 5}
+  mt_bolt_v: {basis: source, from: "acryl6@410.55,488.48", value: 20.075}
+  mt_screw_u: {basis: source, from: "acryl6@410.55,488.48", value: 7.5}
+  mt_screw_v: {basis: source, from: "acryl6@410.55,488.48", value: 32.975}
+  mt_screw_d: {basis: source, from: "acryl6@410.55,488.48", value: 4}
+
+  # ================= end-pieces
+  ep_h: {basis: source, from: "acryl6@195.28,558.3", value: 71}
+  ep_rod_v: {basis: source, from: "acryl6@195.28,558.3", value: 24}
+  ep_rod_d: {basis: source, from: "acryl6@195.28,558.3", value: 8}
+  ep_bolt_v: {basis: source, from: "acryl6@195.28,558.3", value: 61}
+  ep_m6_d: {basis: source, from: "acryl6@195.28,558.3", value: 6}
+  ep_m5_u: {basis: source, from: "acryl6@195.28,558.3", value: 52.5}
+  ep_pin_u: {basis: source, from: "acryl6@195.28,558.3", value: 71.336}
+  ep_pin_v: {basis: source, from: "acryl6@195.28,558.3", value: 12}
+  ep_slot_u0: {basis: source, from: "acryl6@195.28,558.3", value: 100}
+  ep_slot_len: {basis: source, from: "acryl6@195.28,558.3", value: 90}
+  ep_slot_w: {basis: source, from: "acryl6@195.28,558.3", value: 6}
+  ep_slot_pitch: {basis: source, from: "acryl6@195.28,558.3", value: 100}
+  ep_slot_k: {basis: source, from: "acryl6@195.28,558.3", value: 1.662, interpretation: "handle of the Bezier the file rounds a slot's end with"}
+  mp_len: {basis: source, from: "acryl6@49.28,342.62", value: 294}
+  mp_m5_u: {basis: source, from: "acryl6@49.28,342.62", value: 14.5}
+  ds_hole_off: {basis: source, from: "acryl6@49.28,342.62", value: 16.699, interpretation: "a D-sub screw hole from the plate's middle"}
+  ds_hole_v: {basis: source, from: "acryl6@49.28,342.62", value: 24.276}
+  ds_hole_d: {basis: source, from: "acryl6@49.28,342.62", value: 2.5}
+  # the D-sub cut-out's right half, u from the plate's middle: its top edge, a Bezier corner, the slanted side,
+  # a Bezier corner, its bottom edge
+  ds_u1: {basis: source, from: "acryl6@49.28,342.62", value: 11.807}
+  ds_u2: {basis: source, from: "acryl6@49.28,342.62", value: 13.507}
+  ds_u3: {basis: source, from: "acryl6@49.28,342.62", value: 14.655}
+  ds_u4: {basis: source, from: "acryl6@49.28,342.62", value: 14.36}
+  ds_u5: {basis: source, from: "acryl6@49.28,342.62", value: 13.646}
+  ds_u6: {basis: source, from: "acryl6@49.28,342.62", value: 13.35}
+  ds_u7: {basis: source, from: "acryl6@49.28,342.62", value: 11.717}
+  ds_u8: {basis: source, from: "acryl6@49.28,342.62", value: 10.018}
+  ds_v1: {basis: source, from: "acryl6@49.28,342.62", value: 18.715}
+  ds_v3: {basis: source, from: "acryl6@49.28,342.62", value: 20.22}
+  ds_v4: {basis: source, from: "acryl6@49.28,342.62", value: 22.06}
+  ds_v5: {basis: source, from: "acryl6@49.28,342.62", value: 26.488}
+  ds_v6: {basis: source, from: "acryl6@49.28,342.62", value: 28.328}
+  ds_v7: {basis: source, from: "acryl6@49.28,342.62", value: 29.833}
+  mc_pin_d: {basis: source, from: "acryl6@49.28,414.51", value: 3.064}
+  mc_win_half: {basis: source, from: "acryl6@49.28,414.51", value: 25.134}
+  mc_win_v0: {basis: source, from: "acryl6@49.28,414.51", value: 14.162}
+  mc_win_v1: {basis: source, from: "acryl6@49.28,414.51", value: 34.386}
+  mc_cor_du: {basis: source, from: "acryl6@49.28,414.51", value: 2.094}
+  mc_cor_dv: {basis: source, from: "acryl6@49.28,414.51", value: 2.545}
+  mc_cor_hu: {basis: source, from: "acryl6@49.28,414.51", value: 1.157}
+  mc_cor_hv: {basis: source, from: "acryl6@49.28,414.51", value: 1.407}
+
+  # ================= frame plates
+  cp_len: {basis: source, from: "acryl6@414.55,122.86", value: 80}
+  cp_wid: {basis: source, from: "acryl6@414.55,122.86", value: 40}
+  cp_hole_n: {basis: source, from: "acryl6@414.55,122.86", value: 4, interpretation: "holes in a row"}
+  mm_size: {basis: source, from: "acryl6@568.14,277.2", value: 54, interpretation: "side of the three plates of a motor mounting frame"}
+  mm_tab_u0: {basis: source, from: "acryl6@568.14,277.2", value: 9, interpretation: "start of the first of two finger tabs along an edge"}
+  mb_hole_u: {basis: source, from: "acryl6@568.14,277.2", value: 17}
+  mb_hole_v1: {basis: source, from: "acryl6@568.14,277.2", value: 14.976}
+  mb_hole_v2: {basis: source, from: "acryl6@568.14,277.2", value: 45}
+  mb_hole_d: {basis: source, from: "acryl6@568.14,277.2", value: 6}
+  mf_pilot_d: {basis: source, from: "acryl6@575.07,369.06", value: 23}
+  mf_hole_pitch: {basis: source, from: "acryl6@575.07,369.06", value: 31}
+  mf_hole_d: {basis: source, from: "acryl6@575.07,369.06", value: 3}
+  sp_wid: {basis: source, from: "acryl6@565.86,206.38", value: 40}
+  sp_len: {basis: source, from: "acryl6@565.86,206.38", value: 60}
+  sp_hole_v: {basis: source, from: "acryl6@565.86,206.38", value: 30}
+  sp_sw_u: {basis: source, from: "acryl6@565.86,206.38", value: 15.14}
+  sp_sw_pitch: {basis: source, from: "acryl6@565.86,206.38", value: 9.5}
+  sp_sw_v: {basis: source, from: "acryl6@565.86,206.38", value: 7.75}
+  sp_sw_d: {basis: source, from: "acryl6@565.86,206.38", value: 2.006}
+
+  # ================= holding frames
+  hf_wid: {basis: source, from: "acryl6@399.92,206.61", value: 44.572}
+  hf_cor_dv: {basis: source, from: "acryl6@399.92,206.61", value: 4.084, interpretation: "an outer corner's extent along v; each corner is one Bezier"}
+  hf_cor_hv: {basis: source, from: "acryl6@399.92,206.61", value: 2.262, interpretation: "its handle along v"}
+  hf_win_v0: {basis: source, from: "acryl6@399.92,206.61", value: 4.786}
+  hf_win_h: {basis: source, from: "acryl6@399.92,206.61", value: 35}
+  hf_win_du: {basis: source, from: "acryl6@399.92,206.61", value: 5}
+  hf_win_dv: {basis: source, from: "acryl6@399.92,206.61", value: 3.889}
+  hf_win_hu: {basis: source, from: "acryl6@399.92,206.61", value: 2.77}
+  hf_win_hv: {basis: source, from: "acryl6@399.92,206.61", value: 2.154}
+  hf_slot_len: {basis: source, from: "acryl6@399.92,206.61", value: 6.6}
+  hf_slot_w: {basis: source, from: "acryl6@399.92,206.61", value: 4.1}
+  hf_slot_k: {basis: source, from: "acryl6@399.92,206.61", value: 1.132}
+  hf_slot_v: {basis: source, from: "acryl6@399.92,206.61", value: 9.786}
+  hn_len: {basis: source, from: "acryl6@399.92,206.61", value: 66.892}
+  hn_cor_du: {basis: source, from: "acryl6@399.92,206.61", value: 5.154}
+  hn_cor_hu: {basis: source, from: "acryl6@399.92,206.61", value: 2.855}
+  hn_win_u0: {basis: source, from: "acryl6@399.92,206.61", value: 11.446}
+  hn_win_w: {basis: source, from: "acryl6@399.92,206.61", value: 44}
+  hn_slot_u: {basis: source, from: "acryl6@399.92,206.61", value: 4.896}
+  hw_len: {basis: source, from: "acryl6@468.52,206.74", value: 72.939}
+  hw_cor_du: {basis: source, from: "acryl6@468.52,206.74", value: 5.141}
+  hw_cor_hu: {basis: source, from: "acryl6@468.52,206.74", value: 2.848}
+  hw_win_u0: {basis: source, from: "acryl6@468.52,206.74", value: 11.345}
+  hw_win_w: {basis: source, from: "acryl6@468.52,206.74", value: 50.25}
+  hw_slot_u1: {basis: source, from: "acryl6@468.52,206.74", value: 4.6385}
+  hw_slot_u2: {basis: source, from: "acryl6@468.52,206.74", value: 68.2385}
+
+  # ================= mould
+  mo_side: {basis: source, from: "acryl3@85,515", value: 50}
+  mo_screw_in: {basis: source, from: "acryl3@85,515", value: 5}
+  mo_post_in: {basis: source, from: "acryl3@85,515", value: 12.5}
+  mo_post_hole_d: {basis: source, from: "acryl3@85,515", value: 3}
+  mo_plat: {basis: source, from: "acryl3@15,475", value: 20}
+  mo_plat_r: {basis: source, from: "acryl3@15,475", value: 5}
+  mo_templ_d: {basis: source, from: "acryl3@40.42,498.33", value: 4}
+  mo_templ_k: {basis: source, from: "acryl3@40.42,498.33", value: 2.77, interpretation: "handle of the Bezier the file rounds the window's r5 corner with"}
+  mo_ring_d: {basis: source, from: "acryl3@176.81,517.41", value: 5}
+  mo_ring_bore: {basis: source, from: "acryl3@176.81,517.41", value: 3}
+  mfr_side: {basis: source, from: moldframe, value: 50}
+  mfr_h: {basis: source, from: P4-mould-frame.H}
+  mfr_hole_d: {basis: source, from: moldframe, value: 4}
+  mfr_hole_at: {basis: source, from: moldframe, value: 20}
+  mfr_open: {basis: source, from: moldframe, value: 30}
+  mfr_lobe_d: {basis: source, from: moldframe, value: 10}
+  mfr_lobe_at: {basis: source, from: moldframe, value: 12.5}
+
+  # ================= clamp (frame of Clamp.stl)
+  cl_base_t: {basis: source, from: clamp, value: 1}
+  cl_h: {basis: source, from: clamp, value: 5}
+  cl_hole_d: {basis: source, from: clamp, value: 3}
+  cl_hole_x: {basis: source, from: clamp, value: 12.5}
+  cl_hole_y: {basis: source, from: clamp, value: 7.5}
+  cl_lobe_d: {basis: source, from: clamp, value: 8}
+  cl_back_y: {basis: source, from: clamp, value: 10}
+  cl_arc_x: {basis: source, from: clamp, value: 5}
+  cl_wall_ri: {basis: source, from: clamp, value: 4}
+  cl_wall_ro: {basis: source, from: clamp, value: 5}
+  cl_flank_deg: {basis: source, from: clamp, value: 45}
+
+  # ================= where each region lies on its sheet (the top-left corner of its box)
+  at_left: {basis: source, from: "acryl6@206.95,76.8", value: 0.284, interpretation: "x of the long plates down the 6 mm sheet's left side"}
+  cpl_at_y: {basis: source, from: "acryl6@206.95,76.8", value: 54.922}
+  cc_at_y: {basis: source, from: "acryl6@114.03,153.42", value: 130.922}
+  cw_at_y1: {basis: source, from: "acryl6@195.28,199.92", value: 176.922}
+  cw_at_y2: {basis: source, from: "acryl6@195.28,246.92", value: 223.922}
+  rib_at_x1: {basis: source, from: "acryl6@318.62,387.24", value: 296.115}
+  rib_at_x2: {basis: source, from: "acryl6@367.16,387.24", value: 344.657}
+  rt_at_y: {basis: source, from: "acryl6@318.62,387.24", value: 364.238}
+  rs_at_y: {basis: source, from: "acryl6@318.62,436.57", value: 413.238}
+  br_at_x1: {basis: source, from: "acryl6@331.64,330.03", value: 304.375}
+  br_at_x2: {basis: source, from: "acryl6@372.28,330.03", value: 345.015}
+  br_at_y1: {basis: source, from: "acryl6@331.64,330.03", value: 315.445}
+  br_at_y2: {basis: source, from: "acryl6@331.64,344.59", value: 338.587}
+  sb_at_y: {basis: source, from: "acryl6@48.75,290.92", value: 270.924}
+  mt_at_x1: {basis: source, from: "acryl6@410.55,488.48", value: 393.047}
+  mt_at_x2: {basis: source, from: "acryl6@445.95,498.52", value: 428.448}
+  mt_at_x3: {basis: source, from: "acryl6@481.59,488.48", value: 464.091}
+  mt_at_x4: {basis: source, from: "acryl6@516.99,498.52", value: 499.492}
+  mt_at_y1: {basis: source, from: "acryl6@410.55,488.48", value: 473.437}
+  mt_at_y2: {basis: source, from: "acryl6@410.55,530.39", value: 515.345}
+  mt_at_y3: {basis: source, from: "acryl6@410.55,571.5", value: 556.455}
+  ep_at_y: {basis: source, from: "acryl6@195.28,558.3", value: 528.716}
+  ec_at_y: {basis: source, from: "acryl6@195.28,486.51", value: 456.922}
+  mp_at_y: {basis: source, from: "acryl6@49.28,342.62", value: 313.04}
+  mc_at_y: {basis: source, from: "acryl6@49.28,414.51", value: 384.922}
+  cp_at_x1: {basis: source, from: "acryl6@414.55,122.86", value: 394.548}
+  cp_at_x2: {basis: source, from: "acryl6@534.98,122.86", value: 474.981}
+  cp_at_y1: {basis: source, from: "acryl6@414.55,122.86", value: 102.861}
+  cp_at_y2: {basis: source, from: "acryl6@414.55,163.36", value: 143.36}
+  mb_at_x: {basis: source, from: "acryl6@568.14,277.2", value: 541.142}
+  mb_at_y1: {basis: source, from: "acryl6@568.14,277.2", value: 247.952}
+  mb_at_y2: {basis: source, from: "acryl6@568.14,333.08", value: 303.829}
+  mf_at_x: {basis: source, from: "acryl6@575.07,369.06", value: 541.323}
+  mf_at_y1: {basis: source, from: "acryl6@575.07,369.06", value: 360.055}
+  mf_at_y2: {basis: source, from: "acryl6@575.07,424.93", value: 415.932}
+  mg_at_x1: {basis: source, from: "acryl6@578.17,495.25", value: 544.423}
+  mg_at_x2: {basis: source, from: "acryl6@558.09,515.54", value: 537.838}
+  mg_at_y1: {basis: source, from: "acryl6@578.17,495.25", value: 475.002}
+  mg_at_y2: {basis: source, from: "acryl6@558.09,515.54", value: 481.787}
+  mg_at_y3: {basis: source, from: "acryl6@578.17,557.52", value: 537.265}
+  mg_at_y4: {basis: source, from: "acryl6@558.09,577.8", value: 544.05}
+  sp_at_x: {basis: source, from: "acryl6@565.86,206.38", value: 545.861}
+  sp_at_y: {basis: source, from: "acryl6@565.86,206.38", value: 186.377}
+  hn_at_x: {basis: source, from: "acryl6@399.92,206.61", value: 394.343}
+  hn_at_y1: {basis: source, from: "acryl6@399.92,206.61", value: 188.033}
+  hn_at_y2: {basis: source, from: "acryl6@399.92,254.18", value: 235.607}
+  hn_at_y3: {basis: source, from: "acryl6@399.92,301.22", value: 282.647}
+  hn_at_y4: {basis: source, from: "acryl6@399.92,346.65", value: 328.083}
+  hn_at_y5: {basis: source, from: "acryl6@399.92,394.23", value: 375.657}
+  hn_at_y6: {basis: source, from: "acryl6@399.92,441.27", value: 422.696}
+  hw_at_x: {basis: source, from: "acryl6@468.52,206.74", value: 462.443}
+  hw_at_dy: {basis: source, from: "acryl6@468.52,206.74", value: 0.139, interpretation: "a wide frame lies this far below the narrow one beside it"}
+  mo_at_x1: {basis: source, from: "acryl3@30,570", value: 5}
+  mo_at_x2: {basis: source, from: "acryl3@85,515", value: 60}
+  mo_at_x3: {basis: source, from: "acryl3@140,515", value: 115}
+  mo_at_x4: {basis: source, from: "acryl3@195,570", value: 170}
+  mo_at_y1: {basis: source, from: "acryl3@85,515", value: 490}
+  mo_at_y2: {basis: source, from: "acryl3@30,570", value: 545}
+  pl_at_x1: {basis: source, from: "acryl3@15,475", value: 5}
+  pl_at_dx: {basis: source, from: "acryl3@40,475", value: 25, interpretation: "pitch of the six platforms in their row"}
+  pl_at_n: {basis: source, from: "acryl3@40,475", value: 6}
+  pl_at_y: {basis: source, from: "acryl3@15,475", value: 465}
+  rg_at_x1: {basis: source, from: "acryl3@176.81,517.41", value: 176.189}
+  rg_at_x2: {basis: source, from: "acryl3@186.1,517.41", value: 181.72}
+  rg_at_y1: {basis: source, from: "acryl3@176.81,517.41", value: 515.538}
+  rg_at_dy: {basis: source, from: "acryl3@176.81,523.41", value: 6, interpretation: "pitch of the four rows of rings"}
+  rg_at_rows: {basis: source, from: "acryl3@176.81,523.41", value: 4}
+
+  # ================= threads the sources name
+  mount_screw: {basis: source, thread: M4, from: P5-m4x12, length: mount_screw_len}
+  mount_screw_len: {basis: source, from: P5-m4x12.L, interpretation: "through a mounting's 6 mm and the 6 mm of the bar or the carriage plate under it"}
+  frame_bolt: {basis: source, thread: M4, from: P9-frame-bolts}
+  hook_thread: {basis: source, thread: M3, from: P8-hook-bolts}
+  mould_screw: {basis: source, thread: M4, from: P7-mould-posts, length: mould_screw_len}
+  mould_screw_len: {basis: proposed, value: 6, rationale: "M4 x 6, the standard length that passes the 3.5 mm frame and stays within the base's 3 mm, so the mould sits flat", gap: G-mould-screws}
+  # ================= threads the sheets' holes imply
+  m3: {basis: proposed, thread: M3, rationale: "d2.5 is the M3 tap drill and d3.1 clears M3; the paper lists an M3 tap and M3 screws", gap: G-screws}
+  m5: {basis: proposed, thread: M5, rationale: "the d5 and d5.3 holes over the profiles' slots take the M5 screws of the bill of materials, into its M5 T-slot nuts; the four d6 holes of the stationary end-pieces face the long profiles' core bores, which its four M6 x 20 fit", gap: G-screws}
+
+  # ================= what the paper states of the bought parts and of the motion
+  prof_a: {basis: source, from: P4-profile-short.a, interpretation: "the profile's height as it lies: Fig. 2E shows two slots on its underside"}
+  prof_b: {basis: source, from: P4-profile-short.b, interpretation: "the profile's width as it lies"}
+  prof_short_len: {basis: source, from: P4-profile-short.L}
+  prof_long_len: {basis: source, from: P4-profile-long.L}
+  foot_d: {basis: source, from: P4-feet.size, interpretation: "read as the foot's diameter: the feet of Fig. 2E are about that wide"}
+  post_d: {basis: source, from: P7-mould-posts.d}
+  baseline: {basis: source, from: P11-baseline-hooks.L, interpretation: "between the hooks of the stationary and of the mobile mounting at zero stretch, where the assembly is built"}
+  screw_lead: {basis: source, from: P11-lead.lead, interpretation: "carriage travel per turn of a lead screw; the paper calls it the pitch"}
+  stroke: {basis: source, from: P12-stroke.amplitude, interpretation: "the largest stretch amplitude the paper ran (Table 2), a travel the carriage must reach; not its travel to the limit switch"}
+  stroke_turn: {basis: derived, expr: stroke / screw_lead * 360, value: 1125, interpretation: "turn of a screw, in degrees, that moves the carriage by the stroke"}
+
+  # ================= proposed: the bought parts (Anet A8 kit and bill of materials), each held as its envelope
+  prof_slot_w: {basis: proposed, value: 6, rationale: "the bill of materials names the slot, B-Type Nut 6: a 6 mm slot", gap: G-profile}
+  prof_slot_depth: {basis: proposed, value: 6, rationale: "about the depth of a 6 mm slot in a 20 mm profile; the profile is held as its envelope with plain slots", gap: G-profile}
+  rod_d: {basis: proposed, value: 8, rationale: "the Anet A8's 8 mm smooth rod, which the end-pieces' d8 holes take", gap: G-rod}
+  rod_len: {basis: proposed, value: 380, rationale: "the 380 mm rod of the Anet A8 kit: Fig. 2E shows the long profiles standing about 70 mm past the motor-end short profile, where a rod of that length ends", gap: G-rod}
+  screw_d: {basis: proposed, value: 8, rationale: "the Anet A8's T8 lead screw, which the end plate's d8 holes take", gap: G-leadscrew}
+  screw_len: {basis: proposed, value: 345, rationale: "the Anet A8's Z-axis lead screw, T8 x 345 mm", gap: G-leadscrew}
+  nut_flange_d: {basis: proposed, value: 22, rationale: "the brass T8 flange nut of the Anet A8: 22 mm flange", gap: G-nut}
+  nut_flange_t: {basis: proposed, value: 3.5, rationale: "its flange, 3.5 mm thick", gap: G-nut}
+  nut_body_d: {basis: proposed, value: 10.2, rationale: "its 10.2 mm body, which the wall's d11 bore takes", gap: G-nut}
+  nut_len: {basis: proposed, value: 15, rationale: "its 15 mm overall length, held with the flange at one end", gap: G-nut}
+  nut_hole_d: {basis: proposed, value: 3.5, rationale: "its four 3.5 mm holes on a 16 mm circle, which the wall's four M3 threads match", gap: G-nut}
+  bearing_od: {basis: proposed, value: 15, rationale: "LM8LUU, the long linear bearing of the Anet A8's Z axis: 15 mm outside, in the wall's d15.2", gap: G-bearing}
+  bearing_len: {basis: proposed, value: 45, rationale: "LM8LUU is 45 mm long, the carriage box's depth over both walls: one bearing a rod, held between its two retainers", gap: G-bearing}
+  motor_w: {basis: proposed, value: 42, rationale: "NEMA 17 body, 42 mm square (42SHDC3025-24B)", gap: G-motor}
+  motor_len: {basis: proposed, value: 40, rationale: "its 40 mm body", gap: G-motor}
+  motor_boss_d: {basis: proposed, value: 22, rationale: "the NEMA 17 pilot boss, 22 mm, in the face plate's d23", gap: G-motor}
+  motor_boss_h: {basis: proposed, value: 2, rationale: "the NEMA 17 pilot boss, 2 mm high", gap: G-motor}
+  motor_shaft_d: {basis: proposed, value: 5, rationale: "the NEMA 17 shaft, 5 mm", gap: G-motor}
+  motor_shaft_len: {basis: proposed, value: 24, rationale: "its shaft, 24 mm from the mounting face", gap: G-motor}
+  motor_hole_depth: {basis: proposed, value: 4.5, rationale: "the NEMA 17 M3 mounting threads, 4.5 mm deep, on the 31 mm square the face plate's holes give", gap: G-motor}
+  coup_d: {basis: proposed, value: 19, rationale: "the Anet A8's 5 to 8 mm flexible coupling, 19 mm across", gap: G-coupling}
+  coup_len: {basis: proposed, value: 25, rationale: "and 25 mm long, half on the motor's shaft and half on the screw", gap: G-coupling}
+  sw_len: {basis: proposed, value: 20, rationale: "a 20 mm microswitch, whose two holes are 9.5 mm apart as the plate's are", gap: G-switch}
+  sw_h: {basis: proposed, value: 10, rationale: "its body, 10 mm from the plunger's face to the terminals", gap: G-switch}
+  sw_t: {basis: proposed, value: 6.4, rationale: "its body, 6.4 mm thick", gap: G-switch}
+  sw_hole_in: {basis: proposed, value: 2.9, rationale: "its holes, 2.9 mm from the terminals' face; the lever is left out", gap: G-switch}
+  sw_hole_d: {basis: proposed, value: 2.5, rationale: "its 2.5 mm holes, for the M2.5 screws the plate's d2 holes are tapped for", gap: G-switch}
+  foot_h: {basis: proposed, value: 15, rationale: "a 15 x 15 mm rubber buffer with an M5 stud, a catalogue size that fits the bill's 15 mm whether it is the diameter or the height", gap: G-foot}
+  foot_thread: {basis: source, thread: M5, from: P4-feet}
+  foot_stud_len: {basis: proposed, value: 10, rationale: "an M5 x 10 stud: 6 mm of corner plate and 4 mm into the slot's nut", gap: G-foot}
+  hook_af: {basis: proposed, value: 5.5, rationale: "an M3 hexagonal spacer bolt, 5.5 mm across flats", gap: G-hook}
+  hook_sides: {basis: proposed, value: 6, rationale: "a hexagonal spacer bolt, as Fig. 6 shows", gap: G-hook}
+  hook_len: {basis: proposed, value: 10, rationale: "a 10 mm body, about what Fig. 6C shows standing on a substrate", gap: G-hook}
+  hook_stud_len: {basis: proposed, value: 6, rationale: "the 6 mm stud of a catalogue M3 spacer bolt", gap: G-hook}
+  post_len: {basis: proposed, value: 10, rationale: "through the 3 mm base and the 3.5 mm cavity and 3.5 mm proud of the frame, about as Fig. 1C draws the posts", gap: G-post}
+
+  # ================= proposed: where the parts sit (each choice, and the gap that would settle it)
+  rod_z: {basis: derived, expr: ep_h - ep_rod_v, value: 47, gap: G-ends, interpretation: "height of the four rod axes: the end-pieces stand with their v 71 edge on the profiles' underside line, their d6 and d5 row at the middle of the 20 mm profile, the plate with the rod holes against the profiles and its cover outside"}
+  motor_end_y: {basis: derived, expr: rod_len - 2 * t6, value: 368, gap: G-frame, interpretation: "outer side of the motor-end short profile, from the long profiles' ends: the guide rods run from the outer face of the end plate to the outer face of the motor end plate, which bolts on that profile's side; the profiles lie flat, the short ones between the long ones, the stationary one flush with their ends"}
+  motor_face_y: {basis: derived, expr: screw_len - t6 + motor_shaft_len, value: 363, gap: G-fixtures, interpretation: "the motor's mounting face: a lead screw runs from the end plate's outer face to the tip of the motor's shaft, the coupling half on each; the mounting frame's base is on the long profile's top slots, the motor behind it over the profile"}
+  carriage_y: {basis: derived, expr: sb_wid - sb_thread_v + 2 * (mt_screw_v - mt_lobe_r) + baseline + cpl_thread_v - box_depth, value: 135.9, gap: G-carriage, interpretation: "the carriage box's face towards the stationary bar at zero stretch: the bar's threads on its inner edge, the plate's shelf towards the bar and under the box, the cover on top, so both rows of mountings lie at one height with their hooks a baseline apart"}
+  clamp_lift: {basis: derived, expr: mfr_h, gap: G-clamp, interpretation: "a clamp's base lies one substrate thickness above its mounting, flat face down, under the spacer bolts' bodies, its notch towards the facing clamp"}
+  travel_max: {basis: derived, expr: motor_end_y - sp_len - carriage_y - box_depth, value: 127.1, gap: G-travel, interpretation: "from zero stretch until the carriage plate meets the limit-switch plate's edge; the switch's lever, left out of the model, trips a little before"}
+  screw_turn_max: {basis: derived, expr: travel_max / screw_lead * 360, interpretation: "turn of a screw over the carriage's travel, in degrees"}
+  sweep_steps: {basis: proposed, value: 5, rationale: "poses across the travel at which nothing may collide", gap: G-travel}
+
+  # ================= proposed: what the parts weigh (the kinematic model's masses; no source states one)
+  rho_acrylic: {basis: proposed, value: 0.00119, rationale: "cast acrylic glass, 1.19 g/cm3", gap: G-mass}
+  rho_steel: {basis: proposed, value: 0.00785, rationale: "steel rod and screw, 7.85 g/cm3, on the plain cylinder", gap: G-mass}
+  rho_brass: {basis: proposed, value: 0.0085, rationale: "brass, 8.5 g/cm3", gap: G-mass}
+  rho_alu: {basis: proposed, value: 0.0027, rationale: "aluminium, 2.7 g/cm3, on the coupling's envelope", gap: G-mass}
+  rho_rubber: {basis: proposed, value: 0.0012, rationale: "rubber, 1.2 g/cm3", gap: G-mass}
+  rho_nylon: {basis: proposed, value: 0.00114, rationale: "polyamide spacer bolt, 1.14 g/cm3", gap: G-mass}
+  rho_pla: {basis: proposed, value: 0.00124, rationale: "printed PLA, 1.24 g/cm3 solid", gap: G-mass}
+  rho_straw: {basis: proposed, value: 0.0009, rationale: "polypropylene straw, 0.9 g/cm3, on the plain cylinder", gap: G-mass}
+  prof_lin_mass: {basis: proposed, value: 0.8, rationale: "a 20x40 slot-6 profile weighs about 0.8 kg/m", gap: G-mass}
+  prof_long_mass: {basis: derived, expr: prof_lin_mass * prof_long_len}
+  prof_short_mass: {basis: derived, expr: prof_lin_mass * prof_short_len}
+  motor_mass: {basis: proposed, value: 280, rationale: "a 40 mm NEMA 17 stepper, about 280 g", gap: G-mass}
+  bearing_mass: {basis: proposed, value: 30, rationale: "an LM8LUU, about 30 g", gap: G-mass}
+  switch_mass: {basis: proposed, value: 2, rationale: "a 20 mm microswitch, about 2 g", gap: G-mass}
 
 parts:
-  end_far_in: {density: rho_pmma}
-  end_far_out: {density: rho_pmma}
-  end_motor_in: {density: rho_pmma}
-  end_motor_out: {density: rho_pmma}
-  carriage_top: {density: rho_pmma}
-  carriage_face: {density: rho_pmma}
-  carriage_flange: {density: rho_pmma}
-  carriage_partition: {density: rho_pmma}
-  carriage_end: {density: rho_pmma}
-  stat_bar: {density: rho_pmma}
-  mount_plate: {density: rho_pmma}
-  frame_wide: {density: rho_pmma}
-  frame_narrow: {density: rho_pmma}
-  corner_plate: {density: rho_pmma}
-  switch_plate: {density: rho_pmma}
-  rod_flange: {density: rho_pmma}
-  motor_face: {density: rho_pmma}
-  motor_base: {density: rho_pmma}
-  motor_gusset: {density: rho_pmma}
-  profile_long: {density: rho_al}
-  profile_short: {density: rho_al}
-  lead_screw: {density: rho_steel}
-  guide_rod: {density: rho_steel}
-  coupler: {density: rho_al}
-  stepper_motor: {mass: m_motor}
-  rubber_foot: {density: rho_rubber}
-  stretch_clamp: {density: rho_pla}
-  mould_base: {density: rho_pmma}
-  platform: {density: rho_pmma}
-  platform_jig: {density: rho_pmma}
-  post_ring: {density: rho_pmma}
-  straw_post: {density: rho_pla}
+  carriage_wall: {density: rho_acrylic}
+  carriage_cover: {density: rho_acrylic}
+  carriage_plate: {density: rho_acrylic}
+  carriage_rib_tall: {density: rho_acrylic}
+  carriage_rib_short: {density: rho_acrylic}
+  bearing_retainer: {density: rho_acrylic}
+  stationary_bar: {density: rho_acrylic}
+  mounting: {density: rho_acrylic}
+  end_plate: {density: rho_acrylic}
+  end_cover: {density: rho_acrylic}
+  motor_end_plate: {density: rho_acrylic}
+  motor_end_cover: {density: rho_acrylic}
+  corner_plate: {density: rho_acrylic}
+  motor_base: {density: rho_acrylic}
+  motor_face: {density: rho_acrylic}
+  motor_gusset: {density: rho_acrylic}
+  switch_plate: {density: rho_acrylic}
+  holding_frame_narrow: {density: rho_acrylic}
+  holding_frame_wide: {density: rho_acrylic}
+  mould_base: {density: rho_acrylic}
+  mould_platform: {density: rho_acrylic}
+  mould_template: {density: rho_acrylic}
+  mould_ring: {density: rho_acrylic}
   mould_frame: {density: rho_pla}
+  mould_post: {density: rho_straw}
+  clamp: {density: rho_pla}
+  profile_long: {mass: prof_long_mass}
+  profile_short: {mass: prof_short_mass}
+  foot: {density: rho_rubber}
+  motor: {mass: motor_mass}
+  coupling: {density: rho_alu}
+  lead_screw: {density: rho_steel}
+  lead_nut: {density: rho_brass}
+  guide_rod: {density: rho_steel}
+  bearing: {mass: bearing_mass}
+  limit_switch: {mass: switch_mass}
+  hook: {density: rho_nylon}

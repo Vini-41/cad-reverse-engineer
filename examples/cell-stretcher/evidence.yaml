@@ -1,77 +1,373 @@
-# Every number the sources state about the object. Each item is a verbatim quote
-# (text sources) or a pinned figure crop with its reading.
+# Every number the sources state about the object. Each item is a verbatim quote or a pinned
+# figure crop with its reading.
+# The paper prints no dimension inside a figure: its figures carry scale bars only, and Fig. 5 (the
+# pyStretch windows) and Fig. 6 ("0 mm Stretch", "5 mm Stretch") show settings their captions restate.
+# The released geometry states no numbers here: read_bodies.py prints what each body settles.
 evidence:
-  # ---------------------------------------------------------------- materials and sheets
-  - {id: E-t6, source: paper, page: 3, locator: "Sec. 2.1, carriage", quote: "which is fabricated from 6 mm thick acrylic glass", values: {t: 6}}
-  - {id: E-t6-bom, source: paper, page: 4, locator: "Bill of materials, stretcher acrylic", quote: "Acrylic glass 6 mm 60 cm 30 cm 2", values: {t: 6, L: 60, W: 30}, scope: context, reason: "restates E-t6 (sheet thickness); the stock sheet size is material, not a part"}
-  - {id: E-t6-build, source: paper, page: 6, locator: "Sec. 5.1", quote: "two sheets with a size of 6 mm 30 cm 60 cm", values: {t: 6}, scope: context, reason: "restates E-t6; stock sheet size"}
-  - {id: E-t6-fig2, source: paper, page: 6, locator: "Fig. 2 caption", quote: "A: Acrylic glass parts (of 6 mm thickness) needed for the stretcher unit", values: {t: 6}, scope: context, reason: "restates E-t6"}
-  - {id: E-base, source: paper, page: 3, locator: "Sec. 2.3, molds", quote: "a 3 mm acrylic glass base with 4 posts", values: {t: 3, n_posts: 4}}
-  - {id: E-base-p7, source: paper, page: 7, locator: "Sec. 5.3", quote: "which is fabricated from 3 mm acrylic glass parts", values: {t: 3}, scope: context, reason: "restates E-base"}
-  - {id: E-frame-h, source: paper, page: 4, locator: "Sec. 2.3, mold frame", quote: "a mold frame with a height of 3.5 mm, which results in a bottom thickness of 0.5 mm", values: {h: 3.5, bottom: 0.5}}
-  - {id: E-1mm, source: paper, page: 4, locator: "Sec. 2.3", quote: "the bottom thickness of the substrate should not exceed 1 mm", values: {max: 1}, scope: context, reason: "an imaging guideline for the cast substrate; E-frame-h states the bottom the released frame gives"}
-  - {id: E-straw, source: paper, page: 7, locator: "Sec. 5.3", quote: "stick plastic straws with a diameter of 3 mm", values: {d: 3}}
-  - {id: E-area, source: paper, page: 1, locator: "Abstract", quote: "the cell culture area of 4 cm2 per substrate", values: {a: 4}}
-  # ---------------------------------------------------------------- frame
-  - {id: E-prof-short, source: paper, page: 4, locator: "Bill of materials", quote: "Aluminum proﬁle 20x40 B-Type Nut 6 310 mm length 2", values: {h: 20, w: 40, L: 310, n: 2}}
-  - {id: E-prof-long, source: paper, page: 4, locator: "Bill of materials", quote: "Aluminum proﬁle 20x40 B-Type Nut 6 440 mm length 2", values: {h: 20, w: 40, L: 440, n: 2}}
-  - {id: E-feet, source: paper, page: 4, locator: "Bill of materials", quote: "Rubber feet M5 15 mm", values: {h: 15}}
-  - {id: E-env, source: paper, page: 2, locator: "Sec. 2", quote: "the stretcher has dimensions of 47 ✕ 42 ✕ 11 cm (w ✕ d ✕ h)", values: {w: 47, d: 42, h: 11}, scope: context, reason: "overall size including motors, cables, connector and feet; see conflict K-env"}
-  - {id: E-tnuts, source: paper, page: 4, locator: "Bill of materials", quote: "Slim T-slot nuts M5 10 mm 6 mm", values: {L: 10}, scope: not-modeled, reason: "fasteners: the reconstruction builds plates, profiles and the drive, not screws, nuts and washers"}
-  - {id: E-fasteners, source: paper, page: 5, locator: "Bill of materials, General", quote: "General Screw M2.5 16 mm 4 0.04 0.16 DOLD 2 Metal General Screw M2.5 10 mm 2 0.04 0.08 DOLD 2 Metal General Screw M3 8 mm 16 0.04 0.64 DOLD 2 Metal General Screw M3 10 mm 4 0.04 0.16 DOLD 2 Metal General Screw M3 12 mm 40 0.04 1.60 DOLD 2 Metal General Screw M4 12 mm 24 0.06 1.44 DOLD 2 Metal General Screw M5 12 mm 50 0.10 5.00 DOLD 2 Metal General Screw M5 20 mm 8 0.20 1.60 DOLD 2 Metal General Screw M6 20 mm 4 0.30 1.20 DOLD 2 Metal General Washer M2.5 4 0.12 0.48 DOLD 2 Metal General Washer M3 48 0.12 5.76 DOLD 2 Metal General Washer M4 24 0.14 3.36 DOLD 2 Metal General Washer M5 62 0.13 8.06 DOLD 2 Metal General Washer M6 4 0.16 0.64 DOLD 2 Metal General Spring Washer M2.5 4 0.10 0.40 DOLD 2 Metal General Spring Washer M3 52 0.08 4.16 DOLD 2 Metal General Spring Washer M4 24 0.08 1.92 DOLD 2 Metal General Spring Washer M5 62 0.08 4.96 DOLD 2 Metal General Spring Washer M6 4 0.10 0.40 DOLD 2 Metal", values: {n_m5_washers: 62}, scope: not-modeled, reason: "fasteners: screws, washers and spring washers are not built"}
-  - {id: E-m4-mold, source: paper, page: 7, locator: "Sec. 5.3", quote: "Connect the two parts with M4 screws", scope: not-modeled, reason: "fasteners of the mould are not built", values: {n: two}}
-  - {id: E-m3-spacers, source: paper, page: 8, locator: "Sec. 6.3", quote: "Secure the PDMS substrates with M3 spacer bolts", scope: context, reason: "the spacer bolts are fasteners, not built; their M3 thread matches the tapped holes of the mounting plates"}
-  - {id: E-m4-spacers, source: paper, page: 9, locator: "Sec. 6.3", quote: "mount M4 spacer bolts into the central threads of the acrylic glass mounting and attach the acrylic glass frame using M4 screws", scope: context, reason: "fasteners for the stretch-holding frames, not built"}
-  # ---------------------------------------------------------------- drive
-  - {id: E-actuators, source: paper, page: 3, locator: "Sec. 2.1", quote: "Uniaxial stretch is realized by two spindle-driven linear actuators", values: {n: two}}
-  - {id: E-motors, source: paper, page: 3, locator: "Sec. 2.1", quote: "operated by two linear stepper motors", values: {n: two}}
-  - {id: E-lead, source: paper, page: 11, locator: "Sec. 8", quote: "lead screws of 8 mm per revolution", values: {lead: 8}}
-  - {id: E-rpm, source: paper, page: 11, locator: "Sec. 8", quote: "have a maximum angular speed of 1000 rpm without load", values: {rpm: 1000}}
-  - {id: E-vmax, source: paper, page: 11, locator: "Sec. 8", quote: "theoretical maximum stretching velocity of 133.33 mm/s", values: {v: 133.33}}
-  - {id: E-T2, source: paper, page: 12, locator: "Table 2, 0.5 Hz row", quote: "0.5 Hz 25 mm (116%)", values: {a: 25}}
-  # ---------------------------------------------------------------- substrates, mountings, frames
-  - {id: E-six, source: paper, page: 3, locator: "Sec. 2.1", quote: "Up to six elastic cell culture substrates made from PDMS are", values: {n: six}}
-  - {id: E-amp-hooks, source: paper, page: 3, locator: "Sec. 2.1", quote: "For soft PDMS substrates and stretching amplitudes up to 5 mm, load transfer with four hooks", values: {a: 5, n: four}, scope: context, reason: "the hook mounting the clamps replace; the target is clamped"}
-  - {id: E-amp-clamps, source: paper, page: 8, locator: "Sec. 6.3", quote: "This is recommended for very soft substrates and stretching amplitudes higher than 5 mm", values: {a: 5}, scope: context, reason: "operating advice for the clamps"}
-  - {id: E-frames, source: paper, page: 9, locator: "Sec. 6.3", quote: "one design for narrow frames (for stretch amplitudes of 0–5 mm)", values: {lo: 0, hi: 5}}
-  - {id: E-frames-wide, source: paper, page: 9, locator: "Sec. 6.3", quote: "one design for wide frames (for stretch amplitudes of 5–10 mm)", values: {lo: 5, hi: 10}, scope: context, reason: "the wide frames' amplitudes; the carriage's range is E-T2 and the stroke check uses E-frames"}
-  - {id: E-fig6a, source: paper, page: 10, locator: "Fig. 6 caption, A", quote: "A: Cell substrate inserted into the acrylic glass mountings at 0% stretch", values: {s: 0}, scope: context, reason: "restates E-frames.lo, the zero-stretch configuration"}
-  - {id: E-fig6b, source: paper, page: 10, locator: "Fig. 6 caption, B", quote: "B: The same sample stretched to 5 mm", values: {s: 5}, scope: context, reason: "restates E-frames.hi"}
-  - {id: E-fig6d, source: paper, page: 10, locator: "Fig. 6 caption, D", quote: "the acrylic glass frame maintains the 5 mm stretch amplitude", values: {s: 5}, scope: context, reason: "restates E-frames.hi"}
-  - {id: E-baseline, source: paper, page: 11, locator: "Fig. 8 caption, B", quote: "represents the target stretch assuming a baseline length of 25 mm", values: {L: 25}}
-  - {id: E-baseline-cl, source: paper, page: 11, locator: "Fig. 8 caption, E", quote: "The dashed line in (E) is the target stretch assuming a baseline length of 21.5 mm", values: {L: 21.5}, scope: context, reason: "the effective free length with clamps fitted; how it maps onto the clamp geometry is not stated"}
-  - {id: E-baseline-cl2, source: paper, page: 11, locator: "Sec. 7", quote: "slightly reduces the baseline length of 21.5 mm at the corners", values: {L: 21.5}, scope: context, reason: "restates E-baseline-cl"}
+  # ---- the device as a whole
+  - id: P1-wells
+    source: paper
+    page: 1
+    locator: Abstract
+    quote: "Up to six flexible optically clear substrates can be stretched simultaneously"
+    values: {wells: 6}
+  - id: P1-area
+    source: paper
+    page: 1
+    locator: Abstract
+    quote: "cell culture area of 4 cm2 per substrate"
+    values: {area: 4}
+  - id: P2-envelope
+    source: paper
+    page: 2
+    locator: Section 2
+    quote: "the stretcher has dimensions of 47 ✕ 42 ✕ 11 cm (w ✕ d ✕ h)"
+    values: {w: 47, d: 42, h: 11}
+    scope: context
+    reason: "conflict K2: the unit built from the released sheets and the bill's profiles is smaller on every axis; kept as stated, compared by no check"
+  - id: P2-cutter
+    source: paper
+    page: 2
+    locator: Section 2, tools
+    quote: "A laser cutting device for acrylic glass (of up to 6 mm thickness)"
+    values: {t: 6}
+    scope: context
+    reason: "restates P3-carriage"
+  - id: P2-taps
+    source: paper
+    page: 2
+    locator: Section 2, tools
+    quote: "Metric plug taps (M2.5, M3, M4, M5, M6)"
+    scope: context
+    reason: "the taps name the threads cut in the acrylic, not which hole takes which: each tapped hole is told by its tap drill on the sheet (d2 M2.5, d2.5 M3, d3.3 M4, d5 M6)"
+
+  # ---- stretcher unit
+  - id: P3-drive
+    source: paper
+    page: 3
+    locator: Section 2.1
+    quote: "Uniaxial stretch is realized by two spindle-driven linear actuators from the Z-axis drive of an Anet A8 3D printer, operated by two linear stepper motors (Fig. 1A)"
+    values: {actuators: 2, motors: 2}
+  - id: P3-carriage
+    source: paper
+    page: 3
+    locator: Section 2.1
+    quote: "a mobile bar, or carriage, which is fabricated from 6 mm thick acrylic glass"
+    values: {t: 6}
+  - id: P3-wells
+    source: paper
+    page: 3
+    locator: Section 2.1
+    quote: "Up to six elastic cell culture substrates made from PDMS are mounted via hooks between the mobile bar and a stationary bar"
+    values: {wells: 6}
+    scope: context
+    reason: "restates P1-wells"
+  - id: P3-frame
+    source: paper
+    page: 3
+    locator: Section 2.1
+    quote: "The frame of the cell stretcher consists of four aluminum profiles"
+    values: {profiles: 4}
+  - id: P3-hooks
+    source: paper
+    page: 3
+    locator: Section 2.1
+    quote: "For soft PDMS substrates and stretching amplitudes up to 5 mm, load transfer with four hooks (two on each side of the mobile and the stationary bar)"
+    values: {hooks: 4, per_bar: 2}
+  - id: P3-housing
+    source: paper
+    page: 3
+    locator: Section 2.2
+    quote: "in a housing made from 3 mm thick acrylic glass (Fig. 1B)"
+    values: {t: 3}
+    scope: not-modeled
+    reason: "the electronics and controller unit's housing, which the target leaves out"
+  - id: P4-profile-short
+    source: paper
+    page: 4
+    locator: Bill of materials
+    quote: "Aluminum profile 20x40 B-Type Nut 6 310 mm length 2 3.20"
+    values: {a: 20, b: 40, L: 310, n: 2}
+  - id: P4-profile-long
+    source: paper
+    page: 4
+    locator: Bill of materials
+    quote: "Aluminum profile 20x40 B-Type Nut 6 440 mm length 2 4.43"
+    values: {L: 440, n: 2}
+  - id: P4-sheet6
+    source: paper
+    page: 4
+    locator: Bill of materials
+    quote: "Acrylic glass 6 mm  60 cm  30 cm 2"
+    values: {t: 6, L: 60, W: 30}
+    scope: context
+    reason: "the stock sheets the 6 mm parts are cut from; restates P3-carriage"
+  - id: P4-feet
+    source: paper
+    page: 4
+    locator: Bill of materials
+    quote: "Rubber feet M5  15 mm Set (10"
+    values: {size: 15}
+  - id: P4-tnuts
+    source: paper
+    page: 4
+    locator: Bill of materials
+    quote: "Slim T-slot nuts M5 10 mm  6 mm"
+    values: {a: 10, b: 6}
+    scope: not-modeled
+    reason: "nuts inside the profiles' slots, fasteners the model does not build"
+  - id: P5-m25x16
+    source: paper
+    page: 5
+    locator: Bill of materials
+    quote: "Screw M2.5  16 mm 4"
+    values: {L: 16, n: 4}
+    scope: context
+    reason: "a total over the stretcher and the controller units, which the target splits; which holes it drives is gap G-screws"
+  - id: P5-m25x10
+    source: paper
+    page: 5
+    locator: Bill of materials
+    quote: "Screw M2.5  10 mm 2"
+    values: {L: 10, n: 2}
+    scope: context
+    reason: "a total over the stretcher and the controller units, which the target splits; which holes it drives is gap G-screws"
+  - id: P5-m3x8
+    source: paper
+    page: 5
+    locator: Bill of materials
+    quote: "Screw M3  8 mm 16"
+    values: {L: 8, n: 16}
+    scope: context
+    reason: "a total over the stretcher and the controller units, which the target splits; which holes it drives is gap G-screws"
+  - id: P5-m3x10
+    source: paper
+    page: 5
+    locator: Bill of materials
+    quote: "Screw M3  10 mm 4"
+    values: {L: 10, n: 4}
+    scope: context
+    reason: "a total over the stretcher and the controller units, which the target splits; which holes it drives is gap G-screws"
+  - id: P5-m3x12
+    source: paper
+    page: 5
+    locator: Bill of materials
+    quote: "Screw M3  12 mm 40"
+    values: {L: 12, n: 40}
+    scope: context
+    reason: "a total over the stretcher and the controller units, which the target splits; which holes it drives is gap G-screws"
+  - id: P5-m4x12
+    source: paper
+    page: 5
+    locator: Bill of materials
+    quote: "Screw M4  12 mm 24"
+    values: {L: 12, n: 24}
+  - id: P5-m5x12
+    source: paper
+    page: 5
+    locator: Bill of materials
+    quote: "Screw M5  12 mm 50"
+    values: {L: 12, n: 50}
+    scope: context
+    reason: "a total over the stretcher and the controller units, which the target splits; which holes it drives is gap G-screws"
+  - id: P5-m5x20
+    source: paper
+    page: 5
+    locator: Bill of materials
+    quote: "Screw M5  20 mm 8"
+    values: {L: 20, n: 8}
+    scope: context
+    reason: "a total over the stretcher and the controller units, which the target splits; which holes it drives is gap G-screws"
+  - id: P5-m6x20
+    source: paper
+    page: 5
+    locator: Bill of materials
+    quote: "Screw M6  20 mm 4"
+    values: {L: 20, n: 4}
+    scope: context
+    reason: "a total over the stretcher and the controller units, which the target splits; which holes it drives is gap G-screws"
+  - id: P6-sheets6
+    source: paper
+    page: 6
+    locator: Section 5.1
+    quote: "two sheets with a size of 6 mm  30 cm  60 cm"
+    values: {t: 6, W: 30, L: 60}
+    scope: context
+    reason: "the stock sheets the 6 mm parts are cut from; restates P3-carriage"
+  - id: P6-rods
+    source: paper
+    page: 6
+    locator: Section 5.1
+    quote: "Stick the two lead screws and the two guide rods into the carriage bar"
+    values: {lead_screws: 2, guide_rods: 2}
+  - id: P6-fig2a
+    source: paper
+    page: 6
+    locator: Fig. 2 caption
+    quote: "A: Acrylic glass parts (of 6 mm thickness) needed for the stretcher unit."
+    values: {t: 6}
+    scope: context
+    reason: "restates P3-carriage"
+  - id: P8-hook-bolts
+    source: paper
+    page: 8
+    locator: Section 6.3
+    quote: "Secure the PDMS substrates with M3 spacer bolts."
+  - id: P8-hooks
+    source: paper
+    page: 8
+    locator: Section 6.3
+    quote: "attach the PDMS substrate to the stationary and mobile acrylic glass bars with four hooks (Fig. 6A)"
+    values: {hooks: 4}
+    scope: context
+    reason: "restates P3-hooks"
+  - id: P9-frames
+    source: paper
+    page: 9
+    locator: Section 6.3
+    quote: "This file contains one design for narrow frames (for stretch amplitudes of 0–5 mm) and one design for wide frames (for stretch amplitudes of 5–10 mm)"
+    values: {narrow_min: 0, narrow_max: 5, wide_min: 5, wide_max: 10}
+    scope: context
+    reason: "the stretch a held substrate keeps, which tells the narrow frame from the wide one on the sheet; no dimension of either frame"
+  - id: P9-frame-bolts
+    source: paper
+    page: 9
+    locator: Section 6.3
+    quote: "mount M4 spacer bolts into the central threads of the acrylic glass mounting and attach the acrylic glass frame using M4 screws (Fig. 6C)"
+
+  # ---- motion
+  - id: P11-lead
+    source: paper
+    page: 11
+    locator: Section 8
+    quote: "lead screws of 8 mm per revolution"
+    values: {lead: 8}
+  - id: P11-motor
+    source: paper
+    page: 11
+    locator: Section 8
+    quote: "The stepper motors (model number: 42shdc3025-24b) have a maximum angular speed of 1000 rpm without load."
+    values: {rpm: 1000}
+    scope: not-modeled
+    reason: "the motor's no-load speed, behaviour the kinematic model leaves out"
+  - id: P11-speed
+    source: paper
+    page: 11
+    locator: Section 8
+    quote: "theoretical maximum stretching velocity of 133.33 mm/s"
+    values: {v: 133.33}
+    scope: not-modeled
+    reason: "a speed, behaviour the kinematic model leaves out: the lead of P11-lead times the motor speed of P11-motor"
+  - id: P12-stroke
+    source: paper
+    page: 12
+    locator: Table 2, first row
+    quote: "0.5 Hz 25 mm (116%)"
+    values: {amplitude: 25}
+  - id: P11-baseline-hooks
+    source: paper
+    page: 11
+    locator: Fig. 8 caption
+    quote: "Dashed line represents the target stretch assuming a baseline length of 25 mm."
+    values: {L: 25}
+  - id: P11-baseline-clamps
+    source: paper
+    page: 11
+    locator: Section 7
+    quote: "which slightly reduces the baseline length of 21.5 mm at the corners"
+    values: {L: 21.5}
+    scope: context
+    reason: "conflict K1: no two faces of the released clamps on hooks 25 mm apart are 21.5 mm apart; kept as stated, compared by no check"
+  - id: P11-baseline-clamps-fig
+    source: paper
+    page: 11
+    locator: Fig. 8 caption
+    quote: "The dashed line in (E) is the target stretch assuming a baseline length of 21.5 mm."
+    values: {L: 21.5}
+    scope: context
+    reason: "restates P11-baseline-clamps"
+
+  # ---- mould
+  - id: P3-mould-base
+    source: paper
+    page: 3
+    locator: Section 2.3
+    quote: "1) a 3 mm acrylic glass base with 4 posts (for the hooks or clamps) and a raised"
+    values: {t: 3, posts: 4}
+  - id: P4-bottom-max
+    source: paper
+    page: 4
+    locator: Section 2.3
+    quote: "the bottom thickness of the substrate should not exceed 1 mm"
+    values: {max: 1}
+    scope: context
+    reason: "a limit for imaging that the released 3.5 mm frame meets with 0.5 mm (P4-mould-frame); advice for other frames"
+  - id: P4-mould-frame
+    source: paper
+    page: 4
+    locator: Section 2.3
+    quote: "a mold frame with a height of 3.5 mm, which results in a bottom thickness of 0.5 mm"
+    values: {H: 3.5, bottom: 0.5}
+  - id: P5-sheet3
+    source: paper
+    page: 5
+    locator: Bill of materials
+    quote: "Acrylic glass 3 mm  60 cm  30 cm 2"
+    values: {t: 3, L: 60, W: 30}
+    scope: context
+    reason: "the stock sheets the 3 mm parts are cut from; restates P3-mould-base"
+  - id: P7-sheets3
+    source: paper
+    page: 7
+    locator: Section 5.2
+    quote: "two sheets with a size of 3 mm  30 cm  60 cm"
+    values: {t: 3, W: 30, L: 60}
+    scope: not-modeled
+    reason: "the sheets of the electronics and controller unit's housing, which the target leaves out"
+  - id: P7-mould-platform
+    source: paper
+    page: 7
+    locator: Section 5.3
+    quote: "a base with a raised platform, which is fabricated from 3 mm acrylic glass parts (Fig. 4A)"
+    values: {t: 3}
+  - id: P7-mould-posts
+    source: paper
+    page: 7
+    locator: Section 5.3
+    quote: "Connect the two parts with M4 screws and stick plastic straws with a diameter of 3 mm where later the substrate will have holes"
+    values: {d: 3}
 
 # Stated quantities that are not about the object (test conditions, results, other designs).
 skipped:
-  - {source: paper, page: 2, quote: "95% rel. humidity", reason: "operating conditions"}
-  - {source: paper, page: 2, quote: "A laser cutting device for acrylic glass (of up to 6 mm thickness)", reason: "a tool"}
-  - {source: paper, page: 2, quote: "Metric plug taps (M2.5, M3, M4, M5, M6)", reason: "tools"}
-  - {source: paper, page: 3, quote: "in a housing made from 3 mm thick acrylic glass", reason: "the controller unit, outside the target"}
-  - {source: paper, page: 4, quote: "cured at 65 C for 24 h", reason: "casting process"}
-  - {source: paper, page: 5, from: "Controller Acrylic glass 3 mm", to: "Controller IEC power cable", reason: "controller unit bill of materials, outside the target"}
-  - {source: paper, page: 6, quote: "sets under UV light for 20 min", reason: "assembly process"}
-  - {source: paper, page: 7, quote: "Fabricate the acrylic glass parts from two sheets with a size of 3 mm 30 cm 60 cm", reason: "controller unit build"}
-  - {source: paper, page: 7, from: "With crosslinker-to-base ratios", to: "using DPBS.", reason: "PDMS curing and substrate functionalisation protocol"}
-  - {source: paper, page: 8, from: "iii) Coat the cell substrate", to: "incubate the sample overnight", reason: "cell culture protocol"}
-  - {source: paper, page: 8, from: "Table 1", to: "114 ± 5", reason: "PDMS stiffness results"}
-  - {source: paper, page: 9, from: "7. Validation and characterization", to: "between two marker points in stretch direction.", reason: "validation experiments and results"}
-  - {source: paper, page: 11, from: "reproducibility of the measurement of effective substrate stretch", to: "unlikely to result in measurable biological", reason: "validation results"}
-  - {source: paper, page: 11, quote: "to a total amplitude of 5 mm in steps of 250 mm without clamps attached. The image shown was recorded at 5 mm stretch.", reason: "experiment description in Fig. 8"}
-  - {source: paper, page: 11, quote: "for target stretches between 0 and 5 mm (median (orange line), 25% / 75% percentiles", reason: "results plot description"}
-  - {source: paper, page: 12, from: "Note that the load was applied for 5 min", to: "rupture of the elastic substrates.", reason: "test conditions"}
-  - {source: paper, page: 12, from: "We prepared PDMS cell substrates", to: "inhibitors (Roche, Basel, Switzerland).", reason: "biological experiment protocol"}
-  - {source: paper, page: 12, from: "In agreement with previous reports", to: "for a 24.8% stretch.", reason: "biological results"}
-  - {source: paper, page: 12, from: "25 mm/s", to: "5 Hz 1 mm (5%) 10 mm/s", reason: "Table 2 test results at other frequencies; the largest amplitude is E-T2"}
-  - {source: paper, page: 13, quote: ">1h of operation per day", reason: "usage report"}
-  - {source: paper, page: 13, from: "Fig. 9. YAP activation", to: "normalized to GAPDH expression.", reason: "biological results"}
-  - {source: acryl3mm, within: [[0, 0], [600, 464.5]], reason: "electronics and controller unit housing panels, outside the target"}
-  - {source: acryl3mm, within: [[225, 464.5], [600, 600]], reason: "electronics and controller unit housing panels, outside the target"}
+  - {source: paper, page: 2, quote: "95% rel. humidity", reason: "the incubator's climate, not the object"}
+  - {source: paper, page: 4, quote: "for 24 h, we recommend making several molds", reason: "curing time of the PDMS"}
+  - {source: paper, page: 5, quote: "angled adapter DOWN (~30 cm)", reason: "a cable of the controller unit"}
+  - {source: paper, page: 5, from: "General Washer M2.5", to: "General Spring Washer M6 4 0.10 0.40 DOLD2 Metal", reason: "washers and spring washers under the screws, which the model does not build"}
+  - {source: paper, page: 6, quote: "While the acrylic adhesive sets under UV light for 20 min", reason: "a curing time of the adhesive"}
+  - {source: paper, page: 7, from: "PDMS base component and crosslinker (Fig. 4B)", to: "using DPBS.", reason: "mixing, curing and coating the PDMS substrates: the cast product and its chemistry"}
+  - {source: paper, page: 8, from: "iii) Coat the cell substrate", to: "in a cell culture incubator.", reason: "coating and seeding the substrates"}
+  - {source: paper, page: 8, quote: "This is recommended for very soft substrates and stretching amplitudes higher than 5 mm.", reason: "advice on when to use the clamps, no dimension"}
+  - {source: paper, page: 8, from: "Table 1", to: "1:32 6 h 114 ± 5", reason: "stiffness of PDMS samples cast in culture dishes"}
+  - {source: paper, page: 9, from: "To validate the cyclic stretching", to: "between two marker points in stretch direction.", reason: "the validation rig, its camera and its results"}
+  - {source: paper, page: 10, from: "Fig. 6. Stretching of PDMS cell substrates.", to: "maintains the 5 mm stretch amplitude.", reason: "one demonstrated stretch setting"}
+  - {source: paper, page: 11, from: "reproducibility of the measurement", to: "unlikely to result in measurable biological", reason: "measured stretch of test substrates"}
+  - {source: paper, page: 11, from: "Fig. 8. Uniaxial stretching", to: "1.5 inter-quantile range (error bars)).", reason: "test settings and statistics of the stretch measurement"}
+  - {source: paper, page: 12, quote: "the load was applied for 5 min by manually pressing against the carriage, as stretch amplitudes of 100%", reason: "how the speed test was loaded"}
+  - {source: paper, page: 12, from: "We prepared PDMS cell substrates", to: "for a 24.8% stretch.", reason: "the cell-biology experiment"}
+  - {source: paper, page: 12, from: "25 mm/s", to: "5 Hz 1 mm (5%) 10 mm/s", reason: "tested speeds and the smaller amplitudes at higher frequencies: operating points, not the travel"}
+  - {source: paper, page: 13, quote: "(>1h of operation per day)", reason: "how long the device has been in use"}
+  - {source: paper, page: 13, quote: "24.8 ± 2.3% at 0.5 Hz for 6 h", reason: "the cell-biology experiment"}
+  # the 3 mm sheet beyond the mould's parts
+  - {source: acryl3, within: [[0, 0], [600, 464]], reason: "plates of the electronics and controller unit's housing, which the target leaves out"}
+  - {source: acryl3, within: [[226, 464], [600, 600]], reason: "plates of the electronics and controller unit's housing, which the target leaves out"}
 
 # Places where sources disagree, and how the reconstruction resolves each.
 conflicts:
-  - id: K-env
-    evidence: [E-env, E-prof-long, E-feet]
-    summary: "The paper gives the assembled stretcher as 47 x 42 x 11 cm (w x d x h). Built from the 440 mm profiles, the released 71 mm end plates and the 15 mm feet, the reconstruction measures about 48.5 x 40.4 x 9.5 cm (along the profiles x across x up)."
-    resolution: "w and d agree within 4% once w is read along the profiles; the 15 mm height difference lies in what the overall size counts (cables, connector, motor-box overhang) and in where the motor boxes sit, which no source places (G-layout). The envelope is not checked; the profiles, plates and feet that make it up are checked from their own statements."
-
+  - id: K1
+    evidence: [P11-baseline-clamps, P11-baseline-hooks]
+    summary: The paper takes a baseline of 21.5 mm with the clamps on and 25 mm between the hooks. The released Clamp.stl, a clamp on each pair of hooks 25 mm apart with its notch towards the facing clamp, leaves 18 mm between the walls' near faces and 20 mm between their far faces, and no pair of faces 21.5 mm apart.
+    resolution: Built from the released clamp on hooks 25 mm apart, which the baseline-hooks check holds. The 21.5 mm is kept as context; gap G-clamp asks the authors between which faces it is measured.
+  - id: K2
+    evidence: [P2-envelope, P4-profile-long, P4-profile-short]
+    summary: The paper states 47 x 42 x 11 cm. Built from the released sheets and the bill's profiles the unit is 452 mm along the rods (440 mm profiles and two 6 mm end-pieces), 404 mm across (390 mm plates and 7 mm of a motor mounting frame each side) and 95 mm high on 15 mm feet, 15 to 18 mm less on every axis than the stated size, which is printed to the centimetre.
+    resolution: Built from the released sheets and the profile lengths, each checked. The stated envelope is kept as context. Screw heads, connectors and cables, which the model does not build, and a taller foot (gap G-foot) would make up part of the difference.
