@@ -12,8 +12,8 @@ import yaml
 from conftest import REPO, SKILL, SKILLS
 
 PLUGIN = REPO / "plugin"
-# build-model ships the CLI and the file formats; ask-machinist uses them from beside it.
-NAMES = ["ask-machinist", "build-model"]
+# build-model ships the CLI and the file formats; the other two use them from beside it.
+NAMES = ["ask-machinist", "build-model", "noob"]
 
 
 def test_plugin_ships_only_what_its_channels_accept():
@@ -63,7 +63,7 @@ def test_skill_frontmatter_names_itself_its_license_and_what_it_needs(name):
     assert 0 < len(front["description"]) <= 1024
     needs = front["compatibility"]
     assert len(needs) <= 500 and all(word in needs for word in ("uv", "3.12", "3.14", "network"))
-    # The CLI ships in build-model alone, and the other skill says it is used from beside it.
+    # The CLI ships in build-model alone, and each other skill says it is used from beside it.
     assert (SKILLS / name / "cadrev").is_file() == (name == SKILL.name)
     assert name == SKILL.name or "build-model skill installed beside it" in needs
 
