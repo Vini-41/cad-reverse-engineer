@@ -1,6 +1,6 @@
 # Reconstruction project. File formats: references/project-format.md in the build-model skill.
 format: 2   # version of these file formats; set by cadrev init
-name: "run-52"
+name: compact-sspg-7.2
 target: "The gearbox of the COMPAct single-stage planetary (SSPG) actuator at 7.2:1 for the T-Motor MN8014, the fabricated design of Singh 2025 (Table I, Fig. 3a, Fig. 4a) as released in sspg_7.2: the sun, three planets, the gearbox casing with the ring gear inside it, the updated carrier with its secondary carrier, and the bearing retainer; ring fixed, sun the input, carrier the output. Left out: the motor subassembly (motor, motor casing, driver) and the earlier carrier release."
 units: {length: mm, angle: deg, mass: g}
 material: "PLA, FDM printed"

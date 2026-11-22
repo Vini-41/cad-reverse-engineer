@@ -114,7 +114,7 @@ checks:
      evidence: P12-stroke, key: amplitude, from: {}, pose: {screw_1: stroke_turn},
      interpretation: "the largest amplitude the paper ran, 25 mm at 0.5 Hz: the carriage reaches it from zero stretch, inside its travel"}
   - {id: screw-2-turn, kind: angle, instances: [end_plate_1, lead_screw_2], between: [end_plate_1.over_screw_2, lead_screw_2.a, lead_screw_2.mark], along: y,
-     expect: "90 + 360 * P12-stroke.amplitude / P11-lead.lead - 1080", pose: {screw_1: stroke_turn},
-     interpretation: "over the 25 mm stroke the second screw has turned 25/8 turns with the first, 45 deg past three whole turns, from a mark a quarter turn off the reference"}
+     expect: "90 + 360 * (45 / 360 * P11-lead.lead) / P11-lead.lead", pose: {screw_1: 45},
+     interpretation: "an eighth of a turn of the first screw moves the carriage an eighth of the stated lead, which turns the second screw 45 deg at that lead, from a mark a quarter turn off the reference; under one turn, so the angle cannot wrap past a wrong lead"}
   - {id: clear, kind: interference}
   - {id: clear-travel, kind: interference, sweep: {joint: screw_1, steps: sweep_steps}}

@@ -116,7 +116,7 @@ VERIFIED means every number is accounted for and the geometry matches every chec
 </tr>
 <tr>
 <td><a href="examples/compact-sspg"><img src="docs/images/compact-sspg.webp" alt="A planetary gearbox with an amber sun gear and three blue planet gears"></a></td>
-<td><b><a href="examples/compact-sspg">COMPAct 7.2:1 gearbox</a></b><br><sub>Singh et al., <a href="https://arxiv.org/abs/2510.07197">arXiv 2025</a></sub><br><br>A planetary gearbox for a robot actuator. Its gears are built from the paper's tooth counts and module, its ratio is checked in motion, and all six parts are held to the authors' STL meshes.</td>
+<td><b><a href="examples/compact-sspg">COMPAct 7.2:1 gearbox</a></b><br><sub>Singh et al., <a href="https://arxiv.org/abs/2510.07197">arXiv 2025</a></sub><br><br>A planetary gearbox for a robot actuator. Its gears are built from the paper's tooth counts and module, its ratio is checked in motion, and its six printed parts are held to the authors' STL meshes.</td>
 </tr>
 <tr>
 <td><a href="examples/cell-stretcher"><img src="docs/images/cell-stretcher.webp" alt="A motion stage of laser-cut plates: two stepper motors turn two amber lead screws that move a grey carriage"></a></td>

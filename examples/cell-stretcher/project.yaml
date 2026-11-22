@@ -1,6 +1,6 @@
 # Reconstruction project. File formats: references/project-format.md in the build-model skill.
 format: 2   # version of these file formats; set by cadrev init
-name: "run-53"
+name: cell-stretcher
 target: >-
   Six-well uniaxial cell stretcher of Kah et al. 2021 (HardwareX 9, e00162) as released on Mendeley Data
   (doi:10.17632/mgkbmytx63.1): the stretcher unit, its carriage driven by two lead screws and standing at zero
