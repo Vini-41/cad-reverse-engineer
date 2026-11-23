@@ -107,7 +107,7 @@ def test_each_skills_sandbox_line_gives_uv_directories_of_this_users(tmp_path, n
 
 
 def test_every_pin_the_plugin_prints_is_the_package_version():
-    docs = [*PLUGIN.rglob("*.md"), REPO / "README.md"]
+    docs = [*PLUGIN.rglob("*.md"), REPO / "README.md", *REPO.glob("examples/*/README.md")]
     pins = [pin for doc in docs for pin in PIN.findall(doc.read_text())]
     assert len(pins) >= len(NAMES) and set(pins) == {PACKAGE["version"]}
 

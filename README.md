@@ -1,146 +1,63 @@
 <p align="center">
-  <img src="plugin/assets/icon.png" width="88" alt="">
+  <img src="plugin/assets/icon.png" width="72" alt="">
 </p>
 
 <h1 align="center">cad-reverse-engineer</h1>
 
 <p align="center">
-  <b>Turn a paper, patent or datasheet into parametric CAD, with every dimension traced to where it came from.</b>
+  <b>Turn a paper, patent or datasheet into parametric CAD,<br>with every dimension traced to where it came from.</b>
 </p>
 
 <p align="center">
-  <a href="#try-it">Try it</a> ·
-  <a href="#three-skills">Three skills</a> ·
-  <a href="#how-it-works">How it works</a> ·
-  <a href="#examples">Examples</a> ·
-  <a href="#install">Install</a>
+  <a href="#try-it">Try it</a> · <a href="#use-it-on-your-own-documents">Use it on your own documents</a>
 </p>
 
-<p align="center">
-  <img src="docs/images/compact-sspg.webp" width="640" alt="A planetary gearbox in CAD: an amber sun gear and three blue planet gears inside a grey casing with the ring gear cut into it">
-  <br>
-  <sub>The COMPAct 7.2:1 gearbox in <a href="examples/compact-sspg"><code>examples/compact-sspg</code></a>, rebuilt from the paper's tooth counts and held to the authors' STL meshes. Secondary carrier hidden.</sub>
-</p>
+<table align="center">
+<tr>
+<td align="center" valign="bottom" width="50%"><a href="examples/compact-sspg"><img src="docs/images/compact-sspg.webp" width="320" alt="A planetary gearbox with an amber sun gear and three blue planet gears inside a grey casing"></a><br><b><a href="examples/compact-sspg">Planetary gearbox</a></b><br><sub>from a paper and the authors' meshes</sub></td>
+<td align="center" valign="bottom" width="50%"><a href="examples/centrifuge"><img src="docs/images/centrifuge.webp" width="320" alt="A round printed centrifuge body, its lid off, with an amber six-tube rotor on the fan's hub"></a><br><b><a href="examples/centrifuge">Benchtop centrifuge</a></b><br><sub>from a paper and the authors' STEP files</sub></td>
+</tr>
+<tr>
+<td align="center" valign="bottom"><a href="examples/cell-stretcher"><img src="docs/images/cell-stretcher.webp" width="320" alt="A motion stage of laser-cut plates: two stepper motors turn two amber lead screws that move a grey carriage"></a><br><b><a href="examples/cell-stretcher">Cell stretcher</a></b><br><sub>from a paper and the authors' cut sheets</sub></td>
+<td align="center" valign="bottom"><a href="examples/rp2040-qfn56"><img src="docs/images/rp2040-qfn56.webp" width="320" alt="A square black chip package seen from above with its pin 1 dot, and from below with 56 amber leads around a notched amber centre pad"></a><br><b><a href="examples/rp2040-qfn56">RP2040 chip package</a></b><br><sub>from its datasheet</sub></td>
+</tr>
+</table>
 
-cad-reverse-engineer is three skills for coding agents, with their CLI, `cadrev`. Give the agent the documents a device was published in, and it builds:
+Published hardware rarely comes with CAD you can edit. Give your coding agent the documents instead. It rebuilds the object, checks the geometry against what they state, and shows you every dimension it had to propose.
 
-- **CAD you can open and change.** One STEP file per part and one for the assembly, for SolidWorks, Fusion, Onshape or FreeCAD. Behind them is a parametric [build123d](https://github.com/gumyr/build123d) model: every dimension is a named value in `params.yaml`, so you change a number and rebuild.
-- **A mechanism that moves.** Joints, gear ratios and lead screws export to MuJoCo, and stated motion is checked on the model: one turn of this gearbox's sun moves its carrier 50°, as its 7.2:1 ratio says.
-- **A drawing of each part.** Three views and an isometric one, dimensioned with the values the build was checked against, under an isometric view of the assembly. Screw threads are named from the ISO metric or Unified table and drawn as a drawing shows them; none is cut into the model.
-- **A report of where each dimension came from.** It was quoted from a document, read off a file the authors released, or proposed because nothing states it. Each proposed value is listed beside the question that would settle it.
-- **A plan to make it.** How each part is made, what to buy and the assembly sequence, each step under a view of what it places. `cadrev check` holds the plan to the model, so every part and screw it names is one the CAD has, and no part is left in mid-air.
+## What you get
 
-Published hardware rarely comes with CAD you can edit. A paper gives an envelope table and a few labelled figures, a datasheet one drawing, a repository a folder of meshes. A model rebuilt from that mixes stated values with guesses, and once the STEP file exists, nobody can tell which is which. This keeps them apart, and checks the built geometry against every value the sources state.
+- **CAD you can change.** Every dimension is a named parameter in `params.yaml`. Edit one and rerun the command under [Try it](#try-it) to get new STEP files for SolidWorks, Fusion, Onshape or FreeCAD. To change a number the documents print, mark it `proposed`. Until you do, or if any edit fails a check, the status says NOT VERIFIED.
+- **A drawing of each part.** Three views and an isometric one, with checked dimensions at their as-built values.
+- **A mechanism that moves.** When the model has joints, it exports to the MuJoCo simulator as a kinematic model, with its gear ratios and lead screws.
+- **A report you can audit.** Each dimension is traced to a quote, a figure or a released file, or marked as proposed, with the questions that would settle what is open.
+- **A plan to make it.** How each part is made, what to buy and how it goes together.
 
 ## Try it
 
-With [uv](https://docs.astral.sh/uv/) installed, rebuild the benchtop centrifuge from its paper and the authors' STEP files:
+With [uv](https://docs.astral.sh/uv/) installed, rebuild a finished example and check it against its paper and the authors' STEP files:
 
-```
+```bash
 git clone https://github.com/Vini-41/cad-reverse-engineer
 cd cad-reverse-engineer
 uvx --python '>=3.12,<3.15' cadrev==0.3.0 check examples/centrifuge
 ```
 
 ```
-building model.py
-evaluating checks.yaml
-wrote build/parts/body.step
-...
-wrote build/assembly.step
-wrote build/drawings/: 10 part drawings
-wrote build/isometric.png
-wrote build/steps/: 8 step views
-slowest check: body-shape 4.2 s
-wrote build/plan.md
-
-VERIFIED: 0 errors, 0 warnings, 27/27 checks pass. Report: build/report.md
+VERIFIED: 0 errors, 0 warnings, 27/27 checks pass
 ```
 
-The first run downloads build123d, OCC and MuJoCo (about a minute); the check itself takes about 25 seconds. Open `examples/centrifuge/build/assembly.step` in your CAD program, then read `build/report.md` beside it. It opens:
-
-> **VERIFIED**: 0 errors, 0 warnings. 27/27 geometry checks pass.\
-> Of 133 parameters, 95 rest on sources, 0 on measured values and 38 on proposed values.
-
-After its sources, the report lists what they leave open, eleven questions in all, among them:
-
-| gap | question | close by | params |
-|---|---|---|---|
-| G-rotor-place | Where does the rotor sit along the axis: how far below the fan's mounting face is the top of the fan's hub, which the rotor's seat face rests on? | measure | hub_recess |
-| G-fit | What gap does a printed opening need around a bought part pushed into it (the DC socket in its 8.5 mm hole, the lid switch along its 12 mm pocket), for the part to go in and stay? | test | fit_gap, coupon_step, coupon_margin |
-| G-pla-density | What is the density of the PLA filament (Filanora Filacorn PLA BIO HI)? | datasheet | pla_density |
-
-Below that come the parts, each with its drawing above the checks that read it, and then every parameter and quote as a table row you can audit against the paper.
+The first run installs about 1.3 GB of CAD libraries and takes a minute or more. After that it takes about 30 seconds. Open `assembly.step` and `report.md` from `examples/centrifuge/build/`. Of the model's 133 parameters, 95 rest on the sources and the other 38 on proposed values, listed with the questions that would settle them.
 
 <p align="center">
   <img src="docs/images/centrifuge-body-drawing.webp" width="720" alt="A drawing of the centrifuge body: top, front and right views with dimensions in blue, beside an isometric view">
   <br>
-  <sub><code>build/drawings/body.png</code>: each dimension is a check, printed at the value the body was built to.</sub>
+  <sub>The centrifuge body's drawing, with its checked overall dimensions and M3 hole callout.</sub>
 </p>
 
-## Three skills
+## Use it on your own documents
 
-One reads the documents, one builds the model, and one works out how to make it.
-
-- **`noob`** comes first, for every object. It tells you what the documents state part by part, what they leave open and what cadrev does not cover. You confirm what it read off the figures and answer three questions: metric or US, the material, and whether to follow the design or the function. Then you choose known first or the complete model, with the count of parts each would build.
-- **`build-model`** starts from that project, in a fresh context, and builds and checks the parts whose every dimension the documents settle, first. For the complete model it then proposes what the documents leave open, each value beside its question and each chosen to be made: a thread from the ISO metric or Unified table, a screw in a length you can buy, one screw size before two. Under **known first** it stops at the settled parts: every other part waits, with the question that would settle it, and nothing is guessed.
-- **`ask-machinist`** reviews the model as the person who has to make it, part by part, thumbs up or thumbs down. Then it writes the plan: how each part is made, what to buy, and the assembly sequence.
-
-*"Reverse-engineer the gripper in this paper"* starts with `noob`, and *"with nothing guessed"* chooses known first. `noob` and `build-model` each end by naming the line to run next. Clear the context before you run it: the project's files carry everything across, so each skill starts with its whole context free.
-
-```
-Reverse-engineer the gripper in this paper
-    clear the context
-Use the build-model skill on <dir>
-    clear the context
-Use the ask-machinist skill on <dir>
-```
-
-## How it works
-
-A reconstruction is a directory of plain files, and `cadrev check` holds them to each other:
-
-```
- project.yaml  evidence.yaml   params.yaml      model.py     checks.yaml     report.md
- ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
- │ Sources │ ─▶ │ Ledger  │ ─▶ │ Params  │ ─▶ │  Model  │ ─▶ │ Checks  │ ─▶ │ Report  │
- └─────────┘    └────┬────┘    └─────────┘    └─────────┘    └────▲────┘    └─────────┘
-                     └─── compared with the ledger, not params ───┘
-```
-
-1. **Ledger.** Every number the sources state about the object is recorded as a verbatim quote, located in a hash-pinned copy of the source. A number printed only inside a figure is a crop of that figure, with a reading a person confirms. Geometry the authors released (STEP, STL, laser-cut SVG) is compared whole with the part built from it, in the file's own frame.
-2. **Parameters.** The model takes every number from `params.yaml`, where each declares its basis: `source`, `derived`, `measured` or `proposed`. `model.py` is linted to hold no dimensions of its own.
-3. **Checks.** Each published value (an envelope, a hole pitch, a bore, a mass, a gear ratio, a stroke) is evaluated on the built solids and compared with the ledger, never with the parameters. A part whose file the authors released is also compared with it, surface to surface.
-4. **Report.** `build/report.md` gives the status, the questions that would replace each proposed value, the conflicts between sources, and then the full audit trail, its checks part by part under each part's drawing. Once the design has a plan, `build/plan.md` is its guide: what to make, what to buy and each step under its view, with each quantity counted from the model.
-
-VERIFIED means every number is accounted for and the geometry matches every checked source value. It does not mean the sources settle everything: what they leave open stays listed as proposed, so the report never claims more than the evidence supports. A number read off a figure holds the status at VERIFIED PENDING REVIEW until a named person confirms the reading.
-
-## Examples
-
-<table>
-<tr>
-<td width="230"><a href="examples/centrifuge"><img src="docs/images/centrifuge.webp" alt="A round printed centrifuge body, its lid off, with an amber six-tube rotor on the fan's hub"></a></td>
-<td><b><a href="examples/centrifuge">Benchtop centrifuge</a></b><br><sub>Poór, <a href="https://doi.org/10.1016/j.ohx.2022.e00328"><i>HardwareX</i> 2022</a></sub><br><br>Printed parts with their switch and fan cut-outs, rebuilt from the authors' STEP files, with a plan to make it. 95 of its 133 parameters rest on sources, and the other 38 on proposed values, each traced to the question that would settle it. It runs in about 25 seconds.</td>
-</tr>
-<tr>
-<td><a href="examples/compact-sspg"><img src="docs/images/compact-sspg.webp" alt="A planetary gearbox with an amber sun gear and three blue planet gears"></a></td>
-<td><b><a href="examples/compact-sspg">COMPAct 7.2:1 gearbox</a></b><br><sub>Singh et al., <a href="https://arxiv.org/abs/2510.07197">arXiv 2025</a></sub><br><br>A planetary gearbox for a robot actuator. Its gears are built from the paper's tooth counts and module, its ratio is checked in motion, and its six printed parts are held to the authors' STL meshes.</td>
-</tr>
-<tr>
-<td><a href="examples/cell-stretcher"><img src="docs/images/cell-stretcher.webp" alt="A motion stage of laser-cut plates: two stepper motors turn two amber lead screws that move a grey carriage"></a></td>
-<td><b><a href="examples/cell-stretcher">Cell stretcher</a></b><br><sub>Kah et al., <a href="https://doi.org/10.1016/j.ohx.2020.e00162"><i>HardwareX</i> 2021</a></sub><br><br>A stepper-driven stage of laser-cut acrylic. Both lead screws are checked at the stated 8 mm per turn. The paper prints no plate dimensions, so they are read off the authors' cut sheets, and the 75 cut regions it builds and both printed parts are held to the released files.</td>
-</tr>
-<tr>
-<td><a href="examples/rp2040-qfn56"><img src="docs/images/rp2040-qfn56.webp" alt="A square black chip package seen from above with its pin 1 dot, and from below with 56 amber leads around a notched amber centre pad"></a></td>
-<td><b><a href="examples/rp2040-qfn56">RP2040 QFN-56</a></b><br><sub>Raspberry Pi, <a href="https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf">datasheet</a></sub><br><br>A chip package from its datasheet's drawing, built in its footprint's frame so the STEP drops into an ECAD library. Each dimension the table states as a MIN and MAX is compared as a range.</td>
-</tr>
-</table>
-
-Fresh agents took each one through `noob` and `build-model` from its sources, and the centrifuge through `ask-machinist` too. Review then corrected checks on the cell stretcher and the RP2040. The [benchmark](docs/benchmark.md) records how Anthropic's and OpenAI's frontier models did on the flow before 0.3.0. Every example's sources are committed, so each runs from a fresh clone, and `scripts/check` holds it to the status its README states.
-
-## Install
-
-The skills are built for Fable 5.2, and run in Claude Code, Codex and any agent that reads skills.
+Install the plugin in your coding agent. The `cadrev` CLI it runs needs [uv](https://docs.astral.sh/uv/).
 
 <details open>
 <summary><b>Claude Code</b></summary>
@@ -160,7 +77,7 @@ codex plugin marketplace add Vini-41/cad-reverse-engineer
 codex plugin add cad-reverse-engineer@cad-reverse-engineer
 ```
 
-Codex's default sandbox blocks network access, which the CLI needs to download its dependencies. Allow it in `~/.codex/config.toml`:
+The CLI downloads its dependencies, so allow network access in `~/.codex/config.toml`:
 
 ```toml
 [sandbox_workspace_write]
@@ -176,35 +93,44 @@ network_access = true
 npx skills add Vini-41/cad-reverse-engineer --skill '*'
 ```
 
-Install all three: `noob` and `ask-machinist` read the file formats that `build-model` holds.
-
 </details>
 
-<details>
-<summary><b>The CLI alone</b></summary>
+Then give it the documents and ask:
 
-```bash
-alias cadrev="uvx --python '>=3.12,<3.15' cadrev==0.3.0"
-cadrev init my-project
-cadrev source my-project paper.pdf --id paper --kind paper --citation "Doe et al. 2026"
-cadrev text my-project paper --page 4      # the exact text quotes are matched against
-cadrev figures my-project paper            # render each page, extract each figure
-cadrev crop my-project figures/paper/p004_01.jpg 850 160 1240 385 --name fig2a --zoom 2
-cadrev check my-project                    # every rule and check; writes build/
+```
+Reverse-engineer the gripper in this paper
 ```
 
-</details>
+Three skills take it from there:
 
-Then give the agent your documents and ask, as [Three skills](#three-skills) says.
+1. **`noob` reads the documents.** It shows what they state and what they leave open, has you confirm what it read off the figures, and asks four things: metric or US, the material, whether to keep the design as shown or only its function, and whether to build only what the documents settle.
+2. **`build-model` builds and checks the CAD,** proposing what the documents leave open unless you chose to build only what they settle.
+3. **`ask-machinist` reviews the design you accept** as the person who has to make it, then writes the plan.
 
-The CLI runs on your machine and needs [uv](https://docs.astral.sh/uv/), with Python 3.12 to 3.14, which uv can install. The plugin ships from [`plugin/`](plugin): the three skills and their manifests, with no code. Each skill runs the `cadrev` package from PyPI at one exact version, built from [`src/`](src).
+`noob` and `build-model` each end by naming the line to run next. Start a fresh session and run it: the project's files carry everything across.
 
-## Development
+Built for Fable 5.2, and [benchmarked](docs/benchmark.md) across Anthropic's and OpenAI's frontier models on a version before 0.3.0.
 
-`scripts/check` is the repo's one check, run locally and by GitHub Actions on every pull request: ruff, pyright and the tests, which run every example. [`GLOSSARY.md`](GLOSSARY.md) defines the terms the skills, the CLI and its findings use.
+## How it works
 
-To report a problem, open an issue with the command you ran, the finding it printed, and the project directory or the paper.
+```
+Documents ──▶ Ledger ──▶ Params ──▶ Model ──▶ Checks ──▶ Report
+    │                                           ▲
+    └─────── compared with the documents ───────┘
+```
 
-## License
+- **The ledger** records each number the documents state, as a verbatim quote or a figure crop from a copy locked by its hash.
+- **Params** hold every number the model uses, each marked `source`, `derived`, `measured` or `proposed`.
+- **Checks** evaluate the built solids against the ledger and the authors' released files, never the params, so a wrong number cannot confirm itself. They also catch interference.
 
-The code is under the MIT license. Each example's sources and figure crops keep the license and credit its README names: CC BY 4.0 for the articles and their files, MIT for COMPAct's STL, CC BY-ND 4.0 for the RP2040 datasheet.
+With all checks passing and every number accounted for, the status is **VERIFIED**, or **VERIFIED PENDING REVIEW** if figure readings still need a person's confirmation. Proposed values stay marked in both cases.
+
+---
+
+<p align="center">
+  <a href="GLOSSARY.md">Glossary</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="https://github.com/Vini-41/cad-reverse-engineer/issues">Report a problem</a>
+  <br>
+  <sub>MIT license. Each example's sources keep the license its README names.</sub>
+</p>
