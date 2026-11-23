@@ -109,7 +109,7 @@ Three skills take it from there:
 
 `noob` and `build-model` each end by naming the line to run next. Start a fresh session and run it: the project's files carry everything across.
 
-Built for Fable 5.2, and [benchmarked](docs/benchmark.md) across Anthropic's and OpenAI's frontier models on a version before 0.3.0.
+Built for Fable 5.2, and [benchmarked](docs/benchmark.md) across Anthropic's, OpenAI's and Google's frontier models.
 
 ## How it works
 

@@ -61,4 +61,4 @@ To run the CLI yourself:
 uvx --python '>=3.12,<3.15' cadrev==0.3.0 check my-project
 ```
 
-Built for Fable 5.2, and [benchmarked](https://github.com/Vini-41/cad-reverse-engineer/blob/main/docs/benchmark.md) across Anthropic's and OpenAI's frontier models on a version before 0.3.0. See [four worked examples](https://github.com/Vini-41/cad-reverse-engineer#readme). MIT license.
+Built for Fable 5.2, and [benchmarked](https://github.com/Vini-41/cad-reverse-engineer/blob/main/docs/benchmark.md) across Anthropic's, OpenAI's and Google's frontier models. See [four worked examples](https://github.com/Vini-41/cad-reverse-engineer#readme). MIT license.
