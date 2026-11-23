@@ -594,21 +594,21 @@ def pdf(pages: list[str], image: bool = False) -> bytes:
     return bytes(out + b"startxref\n%d\n%%%%EOF\n" % xref)
 
 
-def docx(text: str, image: bytes | None = None) -> bytes:
-    """A DOCX with one paragraph per line of text, and image as word/media/image1.png."""
+def docx(text: str, image: bytes | None = None, name: str = "image1.png") -> bytes:
+    """A DOCX with one paragraph per line of text, and image as word/media/<name>."""
     body = "".join(f"<w:p><w:r><w:t>{line}</w:t></w:r></w:p>" for line in text.splitlines())
     space = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w") as z:
         z.writestr("word/document.xml", f'<w:document xmlns:w="{space}">{body}</w:document>')
         if image is not None:
-            z.writestr("word/media/image1.png", image)
+            z.writestr(f"word/media/{name}", image)
     return out.getvalue()
 
 
-def png(size: tuple[int, int] = (4, 2), format: str = "PNG") -> bytes:
+def png(size: tuple[int, int] = (4, 2), format: str = "PNG", mode: str = "RGB") -> bytes:
     from PIL import Image
 
     out = io.BytesIO()
-    Image.new("RGB", size, "red").save(out, format=format)
+    Image.new(mode, size, "red" if mode == "RGB" else 0).save(out, format=format)
     return out.getvalue()

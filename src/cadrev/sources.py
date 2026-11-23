@@ -385,18 +385,21 @@ _MAGIC = {b"\xff\xd8": ".jpg", b"\x89P": ".png", b"II": ".tif", b"MM": ".tif"}  
 
 
 def _write_viewable(target: Path, data: bytes) -> Path:
-    """Write an extracted image to target, or as PNG beside it when a viewer cannot show its
-    format (TIFF, BMP) and Pillow can read it; return the path written."""
-    if target.suffix.lower() not in VIEWABLE:
-        from PIL import Image, UnidentifiedImageError
+    """Write an extracted image to target, or as PNG beside it when Pillow can read it and a
+    viewer cannot be counted on to show it: a format none shows (TIFF, BMP), or a JPEG that is
+    not RGB, since a PDF's grayscale and CMYK ones are refused by some. Return the path written."""
+    from PIL import Image, UnidentifiedImageError
 
-        try:
-            with Image.open(io.BytesIO(data)) as image:
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            if target.suffix.lower() not in VIEWABLE or (
+                image.format == "JPEG" and image.mode != "RGB"
+            ):
                 png = target.with_suffix(".png")
-                image.save(png, format="PNG")
+                (image.convert("RGB") if image.mode == "CMYK" else image).save(png, format="PNG")
                 return png
-        except (UnidentifiedImageError, OSError, ValueError):
-            pass  # a format Pillow cannot read (EMF, WMF) is kept as extracted
+    except (UnidentifiedImageError, OSError, ValueError):
+        pass  # a format Pillow cannot read (EMF, WMF) is kept as extracted
     target.write_bytes(data)
     return target
 
