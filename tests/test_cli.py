@@ -170,6 +170,15 @@ FIGURES = {
         "figures/doc/p002.png  1224 x 1584 px",
     ),
     "paper.docx": (docx(PAPER, png((4, 2))), "figures/doc/image1.png  4 x 2 px"),
+    # A JPEG that is not RGB (grayscale, CMYK) is one some viewers refuse, so it is written as PNG.
+    "gray.docx": (
+        docx(PAPER, png((4, 2), "JPEG", "L"), "image1.jpg"),
+        "figures/doc/image1.png  4 x 2 px",
+    ),
+    "colour.docx": (
+        docx(PAPER, png((4, 2), "JPEG"), "image1.jpg"),
+        "figures/doc/image1.jpg  4 x 2 px",
+    ),
 }
 
 
