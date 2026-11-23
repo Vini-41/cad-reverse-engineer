@@ -1,6 +1,6 @@
 {
-  "include": ["plugin/skills/build-model/tool/src", "tests"],
-  "exclude": ["plugin/skills/build-model/tool/src/cadrev/template"],
-  "venvPath": "plugin/skills/build-model/tool",
+  "include": ["src", "tests"],
+  "exclude": ["src/cadrev/template"],
+  "venvPath": ".",
   "venv": ".venv"
 }

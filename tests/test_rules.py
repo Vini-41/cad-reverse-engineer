@@ -20,10 +20,10 @@ from conftest import (
     LOOP,
     M3_SCREW,
     PAPER,
+    REPO,
     SCREW,
     SHEET,
     SLIDE,
-    SKILL,
     TEN_LONG,
     add,
     add_line,
@@ -814,7 +814,7 @@ def source_rules() -> set[str]:
     Finding call names, and every hyphenated name the source holds as text, since a rule may
     reach those calls through a variable."""
     found: set[str] = set()
-    for path in (SKILL / "tool" / "src" / "cadrev").glob("*.py"):
+    for path in (REPO / "src" / "cadrev").glob("*.py"):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf8"))):
             named: list[ast.expr] = []
             if isinstance(node, ast.Call):

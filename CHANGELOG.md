@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **The CLI is a package, and the plugin holds no code.** `uvx --python '>=3.12,<3.15' cadrev==0.3.0` runs it with no clone, at exact versions of everything it depends on. Each skill calls that command itself, and the plugin is Markdown, manifests, its icon and its license.
 - **Format 2: the kinematic model claims nothing about behaviour.** A joint no longer takes `damping`, `stiffness`, `friction` or `spring_rest`, a param no longer takes `physics: true`, and the MJCF carries no spring, damper or friction. A stated stiffness, damping or friction still reads its unit, and is ledgered `scope: not-modeled`. Exact now sets aside a sweep's resolution and nothing else, and the report no longer counts proposed physics values apart (report.json's `physics_proposed` is gone).
 - **A stroke check compares with a printed length.** `claim: shortens` and `claim: lengthens` are gone: a source that states only a direction of change is ledgered `scope: context`, its reason saying so. A stroke still takes `from`, for a change in length stated between two poses.
 - **Every source is swept.** `coverage: false` is gone: skip what is not about the object, as in any other source.

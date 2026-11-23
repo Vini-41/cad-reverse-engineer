@@ -39,12 +39,12 @@ Codex's default sandbox blocks network access, which the CLI needs to download i
 network_access = true
 ```
 
-Any agent that reads skills: `npx skills add Vini-41/cad-reverse-engineer --skill '*'`. Install all three, since `noob` and `ask-machinist` use the CLI that `build-model` holds.
+Any agent that reads skills: `npx skills add Vini-41/cad-reverse-engineer --skill '*'`. Install all three, since `noob` and `ask-machinist` read the file formats that `build-model` holds.
 
 Built for Fable 5.2 and [benchmarked](https://github.com/Vini-41/cad-reverse-engineer/blob/main/docs/benchmark.md) across Anthropic's and OpenAI's frontier models.
 
 ## Requirements
 
-The skills' `cadrev` CLI runs locally on your machine and needs [uv](https://docs.astral.sh/uv/) and Python 3.12 to 3.14, which uv can install. Its first run downloads build123d, OCC and MuJoCo from PyPI (about a minute), at the versions pinned in `skills/build-model/tool/uv.lock`. Under Codex, allow network access as above.
+The skills run the `cadrev` CLI locally on your machine, which needs [uv](https://docs.astral.sh/uv/) and Python 3.12 to 3.14, which uv can install. Its first run downloads the package, build123d, OCC and MuJoCo from PyPI (about a minute), each at an exact version. Under Codex, allow network access as above.
 
 Three worked examples you can run, and the rest of the documentation: https://github.com/Vini-41/cad-reverse-engineer. MIT license.

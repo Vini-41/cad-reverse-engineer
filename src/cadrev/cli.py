@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
 import shutil
+import stat
 import sys
+import tempfile
 from pathlib import Path
 
 import yaml
@@ -225,7 +228,52 @@ def cmd_check(args) -> int:
     return 0 if status in report.PASSING else 1
 
 
+def _writable(path: Path) -> bool:
+    """Whether a file can be made in `path`, or in the nearest directory above it that exists. It
+    makes one rather than ask os.access, which Linux's Landlock sandbox does not answer."""
+    while not os.path.exists(path):
+        path = path.parent
+    try:
+        with tempfile.NamedTemporaryFile(dir=path, prefix=".cadrev-probe"):
+            return True
+    except OSError:
+        return False
+
+
+def _redirect_caches() -> None:
+    """A sandbox such as Codex's workspace-write lets cadrev write the workspace and TMPDIR, but
+    not the plotting and font caches under HOME. Each that cannot be written moves to a directory
+    of this user's under TMPDIR, before anything imports Matplotlib."""
+    if os.name != "posix":
+        return
+    home = Path(os.path.expanduser("~"))
+    config = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config")
+    plots = home / ".matplotlib" if sys.platform == "darwin" else config / "matplotlib"
+    caches = {
+        # fontconfig's cache, and Matplotlib's on Linux
+        "XDG_CACHE_HOME": ("cache", Path(os.environ.get("XDG_CACHE_HOME") or home / ".cache")),
+        "MPLCONFIGDIR": ("matplotlib", Path(os.environ.get("MPLCONFIGDIR") or plots)),
+    }
+    blocked = {var: name for var, (name, path) in caches.items() if not _writable(path)}
+    if not blocked:
+        return
+    try:
+        root = Path(tempfile.gettempdir()) / f"cadrev-{os.getuid()}"
+        root.mkdir(mode=0o700, exist_ok=True)
+        entry = root.lstat()
+    except OSError:
+        return
+    # TMPDIR may be the shared /tmp, so the directory is used only when this user owns it.
+    if not stat.S_ISDIR(entry.st_mode) or entry.st_uid != os.getuid() or not _writable(root):
+        return
+    for var, name in blocked.items():
+        with contextlib.suppress(OSError):
+            (root / name).mkdir(exist_ok=True)
+            os.environ[var] = str(root / name)
+
+
 def main(argv: list[str] | None = None) -> int:
+    _redirect_caches()
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["python"]:  # what follows is Python's to parse, and its exit is cadrev's
         os.execv(sys.executable, [sys.executable, *argv[1:]])
