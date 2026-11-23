@@ -1,22 +1,32 @@
 # cad-reverse-engineer
 
-Three skills that turn a paper, patent or datasheet into parametric CAD, with every dimension traced to where it came from. Give your coding agent the documents a device was published in, and it builds:
+Turn a paper, patent or datasheet into parametric CAD, with every dimension traced to where it came from.
 
-- **CAD you can open and change**: a STEP file per part and one for the assembly, from a parametric build123d model whose every dimension is a named value in `params.yaml`.
-- **A mechanism that moves**: joints, gear ratios and lead screws exported to MuJoCo, with stated motion checked on the model.
-- **A drawing of each part**: three views and an isometric one, dimensioned with the checked values, with screw threads named from the ISO metric or Unified table.
-- **A report of where each dimension came from**: quoted from a document, read off a file the authors released, or proposed because nothing states it, beside the question that would settle it.
-- **A plan to make it**: how each part is made, what to buy and the assembly sequence, which `cadrev check` holds to the model.
+Give your coding agent the documents a device was published in. It rebuilds the object, checks the geometry against what they state, and shows you every dimension it had to propose. You get:
 
-## The skills
+- **CAD you can change.** Every dimension is a named parameter in `params.yaml`, rebuilt into a STEP file for each part and the assembly.
+- **A drawing of each part.** Three views and an isometric one, with checked dimensions at their as-built values.
+- **A mechanism that moves.** When the model has joints, it exports to the MuJoCo simulator as a kinematic model, with its gear ratios and lead screws.
+- **A report you can audit.** Each dimension is traced to a quote, a figure or a released file, or marked as proposed, with the questions that would settle what is open.
+- **A plan to make it.** How each part is made, what to buy and how it goes together.
 
-- **`noob`** comes first, for every object. It tells you what the documents state and leave open and what cadrev does not cover, has you confirm what it read off the figures, and asks metric or US, the material, whether to follow the design or the function, and known first or the complete model.
-- **`build-model`** starts from that project and builds the parts the documents settle first. For the complete model it then proposes what they leave open from standard sizes: a thread from the table, a screw in a length you can buy. Under **known first** it stops at the settled parts, with what waits listed as questions.
-- **`ask-machinist`** reviews the model as the person who has to make it, part by part, and writes the plan.
+## Use it
 
-*"Reverse-engineer the gripper in this paper"* starts with `noob`, and *"with nothing guessed"* chooses known first. Say "build now" and `noob` answers its questions from the documents. `noob` and `build-model` each end by naming the line to run next: clear the context and run it, and the project's files carry everything across.
+Give your agent the documents and ask:
+
+```
+Reverse-engineer the gripper in this paper
+```
+
+1. **`noob` reads the documents.** It shows what they state and what they leave open, has you confirm what it read off the figures, and asks four things: metric or US, the material, whether to keep the design as shown or only its function, and whether to build only what the documents settle.
+2. **`build-model` builds and checks the CAD,** proposing what the documents leave open unless you chose to build only what they settle.
+3. **`ask-machinist` reviews the design you accept** as the person who has to make it, then writes the plan.
+
+`noob` and `build-model` each end by naming the line to run next. Start a fresh session and run it: the project's files carry everything across.
 
 ## Install
+
+The skills run the `cadrev` CLI, which needs [uv](https://docs.astral.sh/uv/).
 
 Claude Code:
 
@@ -32,25 +42,23 @@ codex plugin marketplace add Vini-41/cad-reverse-engineer
 codex plugin add cad-reverse-engineer@cad-reverse-engineer
 ```
 
-Codex's default sandbox blocks network access, which the CLI needs to download its dependencies. Allow it in `~/.codex/config.toml`:
+The CLI downloads its dependencies, so allow network access in `~/.codex/config.toml`:
 
 ```toml
 [sandbox_workspace_write]
 network_access = true
 ```
 
-Any agent that reads skills: `npx skills add Vini-41/cad-reverse-engineer --skill '*'`. Install all three, since `noob` and `ask-machinist` read the file formats that `build-model` holds.
+Any agent that reads skills:
 
-Built for Fable 5.2, and [benchmarked](https://github.com/Vini-41/cad-reverse-engineer/blob/main/docs/benchmark.md) across Anthropic's and OpenAI's frontier models on the flow before 0.3.0.
+```
+npx skills add Vini-41/cad-reverse-engineer --skill '*'
+```
 
-## The CLI
-
-The skills run the `cadrev` CLI on your machine. It needs [uv](https://docs.astral.sh/uv/), which can install the Python 3.12 to 3.14 it runs on. To run it yourself, with no clone:
+To run the CLI yourself:
 
 ```bash
 uvx --python '>=3.12,<3.15' cadrev==0.3.0 check my-project
 ```
 
-Its first run downloads the package, build123d, OCC and MuJoCo from PyPI (about a minute), each at an exact version. Under Codex, allow network access as above.
-
-Four worked examples you can run, and the rest of the documentation: https://github.com/Vini-41/cad-reverse-engineer. MIT license.
+Built for Fable 5.2, and [benchmarked](https://github.com/Vini-41/cad-reverse-engineer/blob/main/docs/benchmark.md) across Anthropic's and OpenAI's frontier models on a version before 0.3.0. See [four worked examples](https://github.com/Vini-41/cad-reverse-engineer#readme). MIT license.
