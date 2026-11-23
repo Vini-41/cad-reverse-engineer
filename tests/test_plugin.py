@@ -59,6 +59,7 @@ def test_every_channel_installs_the_plugin_from_plugin_and_finds_its_skills():
     codex = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
     for key in ("name", "version", "description", "author", "license", "keywords"):
         assert codex[key] == claude[key], key
+    assert claude["version"] == PACKAGE["version"]
     interface = codex["interface"]
     assert interface["displayName"] and 0 < len(interface["shortDescription"]) <= 30
     for icon in (interface["composerIcon"], interface["logo"]):

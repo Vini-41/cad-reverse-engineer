@@ -39,7 +39,7 @@ With [uv](https://docs.astral.sh/uv/) installed, rebuild the benchtop centrifuge
 ```
 git clone https://github.com/Vini-41/cad-reverse-engineer
 cd cad-reverse-engineer
-scripts/cadrev check examples/centrifuge
+uvx --python '>=3.12,<3.15' cadrev==0.3.0 check examples/centrifuge
 ```
 
 ```
@@ -86,7 +86,15 @@ One reads the documents, one builds the model, and one works out how to make it.
 - **`build-model`** starts from that project, in a fresh context, and builds and checks the parts whose every dimension the documents settle, first. For the complete model it then proposes what the documents leave open, each value beside its question and each chosen to be made: a thread from the ISO metric or Unified table, a screw in a length you can buy, one screw size before two. Under **known first** it stops at the settled parts: every other part waits, with the question that would settle it, and nothing is guessed.
 - **`ask-machinist`** reviews the model as the person who has to make it, part by part, thumbs up or thumbs down. Then it writes the plan: how each part is made, what to buy, and the assembly sequence.
 
-*"Reverse-engineer the gripper in this paper"* starts with `noob`, and *"with nothing guessed"* chooses known first.
+*"Reverse-engineer the gripper in this paper"* starts with `noob`, and *"with nothing guessed"* chooses known first. `noob` and `build-model` each end by naming the line to run next. Clear the context before you run it: the project's files carry everything across, so each skill starts with its whole context free.
+
+```
+Reverse-engineer the gripper in this paper
+    clear the context
+Use the build-model skill on <dir>
+    clear the context
+Use the ask-machinist skill on <dir>
+```
 
 ## How it works
 
@@ -128,7 +136,7 @@ VERIFIED means every number is accounted for and the geometry matches every chec
 </tr>
 </table>
 
-A fresh agent built each one from the skill and its sources alone; the [benchmark](docs/benchmark.md) compares how Anthropic's and OpenAI's frontier models do at that. Every example's sources are committed, so each runs from a fresh clone, and `scripts/check` holds it to the status its README states.
+Fresh agents took each one through `noob` and `build-model` from its sources, and the centrifuge through `ask-machinist` too. Review then corrected checks on the cell stretcher and the RP2040. The [benchmark](docs/benchmark.md) records how Anthropic's and OpenAI's frontier models did on the flow before 0.3.0. Every example's sources are committed, so each runs from a fresh clone, and `scripts/check` holds it to the status its README states.
 
 ## Install
 
