@@ -2,7 +2,7 @@
 name: build-model
 description: Build the parametric CAD (build123d, STEP, MuJoCo) of a published object from a project the noob skill prepared, every stated value checked on the built model. It builds the settled parts first, then proposes the rest to be made, from standard sizes for the user's units and material; a known-first project stops at the settled parts and lists what waits as questions. Use on a project noob prepared, or to complete a known-first project. A new object starts with noob.
 license: MIT
-compatibility: Runs its CLI locally through uv on Python 3.12-3.14; the first run downloads build123d, OCC and MuJoCo from PyPI, so it needs network access then.
+compatibility: Runs the cadrev CLI locally through uv on Python 3.12-3.14; the first run downloads it, build123d, OCC and MuJoCo from PyPI, so it needs network access then.
 ---
 
 # Build the model
@@ -22,13 +22,17 @@ The product is an honest report. `build/report.md` shows what the sources settle
 
 ## Tool
 
-The CLI is the `cadrev` script beside this file, and needs [`uv`](https://docs.astral.sh/uv/). Run it by its full path on every call, since shell functions and aliases do not carry between calls:
+The CLI is the `cadrev` package at the version this skill was written for, run by [`uv`](https://docs.astral.sh/uv/). Write the whole command on every call, since shell functions and aliases do not carry between calls:
 
 ```bash
-<the directory holding this SKILL.md>/cadrev --help
+uvx --python '>=3.12,<3.15' cadrev==0.3.0 --help
 ```
 
-`cadrev` below stands for that path. The first run installs build123d and MuJoCo (about a minute).
+`cadrev` below stands for `uvx --python '>=3.12,<3.15' cadrev==0.3.0`. The first run installs build123d and MuJoCo (about a minute). Where a sandbox refuses uv's cache, give uv a directory of this user's on each call:
+
+```bash
+d="${TMPDIR:-/tmp}/cadrev-$(id -u)"; mkdir -p -m 700 "$d" && [ -O "$d" ] && UV_CACHE_DIR="$d/uv" UV_PYTHON_INSTALL_DIR="$d/python" UV_TOOL_DIR="$d/tools" uvx --python '>=3.12,<3.15' cadrev==0.3.0 --help
+```
 
 - `cadrev check <dir>` runs every rule, builds the model, evaluates the checks and writes `build/`: the STEP files, an isometric view, a drawing of each part and the report. `cadrev check <dir> --no-build` runs every rule that needs no build in seconds. Each finding names its rule in brackets and says what is wrong and where.
 - Read [`references/project-format.md`](references/project-format.md) before writing project YAML and [`references/modeling.md`](references/modeling.md) before writing model.py. They give the formats; the findings give the rules as you meet them.

@@ -168,7 +168,7 @@ network_access = true
 npx skills add Vini-41/cad-reverse-engineer --skill '*'
 ```
 
-Install all three: `noob` and `ask-machinist` use the CLI that `build-model` holds.
+Install all three: `noob` and `ask-machinist` read the file formats that `build-model` holds.
 
 </details>
 
@@ -176,8 +176,7 @@ Install all three: `noob` and `ask-machinist` use the CLI that `build-model` hol
 <summary><b>The CLI alone</b></summary>
 
 ```bash
-git clone https://github.com/Vini-41/cad-reverse-engineer
-alias cadrev="$PWD/cad-reverse-engineer/plugin/skills/build-model/cadrev"
+alias cadrev="uvx --python '>=3.12,<3.15' cadrev==0.3.0"
 cadrev init my-project
 cadrev source my-project paper.pdf --id paper --kind paper --citation "Doe et al. 2026"
 cadrev text my-project paper --page 4      # the exact text quotes are matched against
@@ -190,7 +189,7 @@ cadrev check my-project                    # every rule and check; writes build/
 
 Then give the agent your documents and ask, as [Three skills](#three-skills) says.
 
-The CLI runs on your machine and needs [uv](https://docs.astral.sh/uv/), with Python 3.12 to 3.14, which uv can install. The plugin ships from [`plugin/`](plugin): the three skills, the CLI's source and lockfile, and nothing else of this repo.
+The CLI runs on your machine and needs [uv](https://docs.astral.sh/uv/), with Python 3.12 to 3.14, which uv can install. The plugin ships from [`plugin/`](plugin): the three skills and their manifests, with no code. Each skill runs the `cadrev` package from PyPI at one exact version, built from [`src/`](src).
 
 ## Development
 

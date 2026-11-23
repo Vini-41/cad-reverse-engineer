@@ -2,7 +2,7 @@
 name: noob
 description: The first step for every object, before anything is built. Any request to reverse-engineer or rebuild a part, gripper or mechanism as CAD from its paper, patent, supplement or datasheet starts here. It reads the sources, has the user confirm the figure readings and answer the foundational questions, and leaves the project build-model starts from.
 license: MIT
-compatibility: Uses the CLI of the build-model skill installed beside it, which runs locally through uv on Python 3.12-3.14 and needs network access on its first run.
+compatibility: Runs the cadrev CLI locally through uv on Python 3.12-3.14; the first run downloads it, build123d, OCC and MuJoCo from PyPI, so it needs network access then.
 ---
 
 # Read the sources
@@ -13,13 +13,17 @@ The project's files carry everything across: the target and the answers in `proj
 
 ## Tool
 
-The CLI is the `cadrev` script of the build-model skill installed beside this one, and needs [`uv`](https://docs.astral.sh/uv/). Run it by its full path on every call, since shell functions and aliases do not carry between calls:
+The CLI is the `cadrev` package at the version this skill was written for, run by [`uv`](https://docs.astral.sh/uv/). Write the whole command on every call, since shell functions and aliases do not carry between calls:
 
 ```bash
-<the directory holding this SKILL.md>/../build-model/cadrev --help
+uvx --python '>=3.12,<3.15' cadrev==0.3.0 --help
 ```
 
-`cadrev` below stands for that path. The first run installs build123d and MuJoCo (about a minute).
+`cadrev` below stands for `uvx --python '>=3.12,<3.15' cadrev==0.3.0`. The first run installs build123d and MuJoCo (about a minute). Where a sandbox refuses uv's cache, give uv a directory of this user's on each call:
+
+```bash
+d="${TMPDIR:-/tmp}/cadrev-$(id -u)"; mkdir -p -m 700 "$d" && [ -O "$d" ] && UV_CACHE_DIR="$d/uv" UV_PYTHON_INSTALL_DIR="$d/python" UV_TOOL_DIR="$d/tools" uvx --python '>=3.12,<3.15' cadrev==0.3.0 --help
+```
 
 - `cadrev check <dir> --no-build` runs every rule that needs no model, in seconds. Each finding names its rule in brackets and says what is wrong and where.
 - Read [`project-format.md`](../build-model/references/project-format.md) before writing project YAML. It gives the formats; the findings give the rules as you meet them.

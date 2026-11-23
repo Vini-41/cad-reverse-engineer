@@ -5,14 +5,14 @@
 #   scripts/check          # lint, types and every test, the examples among them
 #   scripts/check --lint   # ruff and pyright alone, in seconds, for after an edit
 set -euo pipefail
-cd "$(dirname "$0")/../plugin/skills/build-model/tool"
-uv sync -q --locked --extra test
-uv run ruff check ../../../..
-uv run ruff format --check ../../../..
-uv run pyright -p ../../../../pyrightconfig.json
+cd "$(dirname "$0")/.."
+uv sync -q --locked
+uv run ruff check .
+uv run ruff format --check .
+uv run pyright
 [ "${1-}" = --lint ] && exit
-uv run pytest -q -n auto ../../../../tests
+uv run pytest -q -n auto tests
 # The marketplace and the plugin it ships validate, where the claude CLI is installed.
 if command -v claude >/dev/null; then
-  (cd ../../../.. && claude plugin validate . && claude plugin validate plugin)
+  claude plugin validate . && claude plugin validate plugin
 fi

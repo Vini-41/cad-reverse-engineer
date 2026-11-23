@@ -2,14 +2,28 @@
 name: ask-machinist
 description: Review a reconstructed CAD project as the machinist who has to make it, and write its plan, how each part is made, what is bought and the assembly sequence, which cadrev holds to the model. Use when asked whether a design can be made, how to fabricate or assemble it, or for its bill of materials, on a project `build-model` built.
 license: MIT
-compatibility: Uses the CLI of the build-model skill installed beside it, which runs locally through uv on Python 3.12-3.14 and needs network access on its first run.
+compatibility: Runs the cadrev CLI locally through uv on Python 3.12-3.14; the first run downloads it, build123d, OCC and MuJoCo from PyPI, so it needs network access then.
 ---
 
 # Ask the machinist
 
 A design costs little to change until someone has to make it. Put the project's model in front of the person who will: say part by part whether it can be made, change what cannot, and write the **plan**: how each part is made, what is bought, and the steps that put the object together. `cadrev check` holds the plan to the model.
 
-This skill works on a project of the [build-model](../build-model/SKILL.md) skill, known first or complete. Its CLI is build-model's, installed beside it ([Tool](../build-model/SKILL.md#tool)), and so are its file formats.
+This skill works on a project of the [build-model](../build-model/SKILL.md) skill, known first or complete, and reads the file formats that skill holds.
+
+## Tool
+
+The CLI is the `cadrev` package at the version this skill was written for, run by [`uv`](https://docs.astral.sh/uv/). Write the whole command on every call, since shell functions and aliases do not carry between calls:
+
+```bash
+uvx --python '>=3.12,<3.15' cadrev==0.3.0 --help
+```
+
+`cadrev` below stands for `uvx --python '>=3.12,<3.15' cadrev==0.3.0`. The first run installs build123d and MuJoCo (about a minute). Where a sandbox refuses uv's cache, give uv a directory of this user's on each call:
+
+```bash
+d="${TMPDIR:-/tmp}/cadrev-$(id -u)"; mkdir -p -m 700 "$d" && [ -O "$d" ] && UV_CACHE_DIR="$d/uv" UV_PYTHON_INSTALL_DIR="$d/python" UV_TOOL_DIR="$d/tools" uvx --python '>=3.12,<3.15' cadrev==0.3.0 --help
+```
 
 ## 1. The model
 

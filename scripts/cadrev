@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run this working tree's cadrev from anywhere, through the script the build-model skill ships:
+# Run this working tree's cadrev from anywhere, at the locked versions:
 #
 #   scripts/cadrev check <dir> [--no-build]
-exec "$(dirname "$0")/../plugin/skills/build-model/cadrev" "$@"
+exec uv run -q --locked --project "$(dirname "$0")/.." cadrev "$@"
