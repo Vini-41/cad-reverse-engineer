@@ -1,19 +1,47 @@
 # Changelog
 
-## Unreleased
+## v0.3.0
 
+See what a document settles before anything is built, then build and plan the object in three skills, each started in a fresh context from the project's files. The CLI runs with one line, and the four examples were built through this flow.
+
+**A 0.2.0 project is read by 0.2.0.** 0.3.0 reads `format: 2` and refuses a format-1 project with one finding naming that version, and nothing migrates it. 0.2.0 is not on PyPI, so run it from its tag:
+
+```bash
+git clone --depth 1 --branch v0.2.0 https://github.com/Vini-41/cad-reverse-engineer cadrev-0.2.0
+cadrev-0.2.0/plugin/skills/known-first/cadrev check my-project
+```
+
+To carry a project to 0.3.0 by hand, make the changes below and set `format: 2`. Each removed key is an unknown key, a `[schema]` error, or `[model-return]` for a joint's or a cable's.
+
+### Added
+
+- **`noob` comes first.** A new skill reads the sources into the ledger before anything is built. It tells you what they state part by part, what they leave open and what cadrev does not cover, shows every figure crop beside its reading, asks the three foundational questions and known first or the complete model, saves your words as the brief, and names the line to run next in a fresh context.
 - **The CLI is a package, and the plugin holds no code.** `uvx --python '>=3.12,<3.15' cadrev==0.3.0` runs it with no clone, at exact versions of everything it depends on. Each skill calls that command itself, and the plugin is Markdown, manifests, its icon and its license.
-- **Format 2: the kinematic model claims nothing about behaviour.** A joint no longer takes `damping`, `stiffness`, `friction` or `spring_rest`, a param no longer takes `physics: true`, and the MJCF carries no spring, damper or friction. A stated stiffness, damping or friction still reads its unit, and is ledgered `scope: not-modeled`. Exact now sets aside a sweep's resolution and nothing else, and the report no longer counts proposed physics values apart (report.json's `physics_proposed` is gone).
-- **A stroke check compares with a printed length.** `claim: shortens` and `claim: lengthens` are gone: a source that states only a direction of change is ledgered `scope: context`, its reason saying so. A stroke still takes `from`, for a change in length stated between two poses.
-- **Every source is swept.** `coverage: false` is gone: skip what is not about the object, as in any other source.
-- **A released part is proven by one shape check.** The part is built in its released file's frame and compared whole with its body in place, within `tolerance.length`; the report gives the largest deviation and where it lies. An STL is held only at points both shapes hold exactly (its corners on the part, the part's sharp corners and closed edges on its corners, each facet on one smooth patch of the part), so facet sag loosens nothing. A part cut from a cut file is placed on the sheet once per region by model.py's new `sheets`. Probes, datums on released bodies, and a shape check's `pairs` and `tol` are gone, each an unknown key. A param a body settles cites it, `from: <body>` with its `value`, and counts as checked once the body's shape check passes. The three examples are rebuilt on it.
-- **Gear becomes coupling.** "Gear" names a toothed wheel only. Two joints that move in step, by meshed gears, a belt, a lead screw or a rack and pinion, are a coupling: model.py returns `couplings` in place of `gears`, a fault in one is `[model-coupling]`, and report.json's `motion.couplings` replaces `motion.gears`. A model that still returns `gears` gets `[model-return]`.
-- **A cable is a path, and a cord's closing is couplings.** A cable holds its `path` alone, whose length a stroke check reads; its `wheel` and `closes` are gone, each a `[model-return]` error. Each joint a cord closes is a coupling on the joint that winds it, its `ratio` (or its `lead`, across a revolute joint and a slide) a param worked out from the closed value and the winding joint's travel, so a posed check reads it as any coupling's. A stroke check names the `pose` it is taken at. A coupling's `ratio` of 0 is a `[model-coupling]` error, as a `lead` of 0 was, and `[cable-on-axis]` is gone with `closes`.
 - **The brief is a source.** What the user specified is saved in their own words as a `.txt` or `.md` file of `kind: brief`: quoted, swept, and a conflict where it disagrees with another source. A param quoted from it has basis `source` and rests on the brief, as does a param derived from it that reads nothing weaker and a check comparing a value of it. The report's headline and report.json (`counts.brief`, `rests_on_brief`) count those params apart from what the object's documents state, so `counts.source` no longer includes them, and an Exact project names them.
+- **A check compares with a stated range.** A `distance`, `angle`, `diameter`, `mass`, `stroke` or `count` check names `min`, `max` or both in place of one ledger value, as a datasheet prints them, and passes when the value it evaluates lies inside, each end within `tolerance.length` or `tolerance.angle`, and a `mass` or `count` exactly. It takes no `tol` of its own.
 - **A drawing prints its material and general tolerance.** plan.yaml takes one `general_tolerance`, a line of text, which the guide prints once. Each made part's drawing then prints it and the project's `material` in its title line. A bought part's drawing does not, a project with no plan draws as before, and no drawing prints a scale.
-- **A format-1 project is refused**, with one finding naming cadrev 0.2.0 as the version that reads it. Each removed key is an unknown key, a `[schema]` error, or `[model-return]` for a joint's. Set `format: 2` once a project names none of them.
-- **One skill builds.** `known-first` and `complete-model` are now `build-model`, which states every stage itself. It always takes the settled parts first. Known first is where it stops, recorded as `known_first` in project.yaml as before, and the complete model carries on and proposes the rest. A component or a board is built in its footprint's frame.
-- **`noob` comes first.** A new skill reads the sources into the ledger before anything is built. It tells you what they state part by part, what they leave open and what cadrev does not cover, shows every figure crop beside its reading, asks the three foundational questions and known first or the complete model, saves your words as the brief, and names the line to run next in a fresh context. `build-model` now starts at the params, on a project `noob` prepared, and names `noob` on any other.
+- **A step's view shows the action.** A step may name the signed axis its instances come from, as `from`. Its view draws them apart along it with a guideline to where they enter what is there, and every step's view is taken from the isometric corner that shows the most of what it places.
+- **An example from a datasheet.** The RP2040's QFN-56 package, built in its footprint's frame, with each dimension its table states as a MIN and MAX compared as a range.
+
+### Renamed
+
+- **Gear becomes coupling.** "Gear" names a toothed wheel only. Two joints that move in step, by meshed gears, a belt, a lead screw or a rack and pinion, are a coupling: model.py returns `couplings` in place of `gears`, a fault in one is `[model-coupling]`, and report.json's `motion.couplings` replaces `motion.gears`. A model that still returns `gears` gets `[model-return]`.
+- **`known-first` and `complete-model` are now `build-model`,** which states every stage itself. It starts at the params, on a project `noob` prepared, and names `noob` on any other. It always takes the settled parts first. Known first is where it stops, recorded as `known_first` in project.yaml as before, and the complete model carries on and proposes the rest. A component or a board is built in its footprint's frame.
+
+### Changed
+
+- **A released part is proven by one shape check.** The part is built in its released file's frame and compared whole with its body in place, within `tolerance.length`; the report gives the largest deviation and where it lies. An STL is held only at points both shapes hold exactly (its corners on the part, the part's sharp corners and closed edges on its corners, each facet on one smooth patch of the part), so facet sag loosens nothing. A part cut from a cut file is placed on the sheet once per region by model.py's new `sheets`. A param a body settles cites it, `from: <body>` with its `value`, and counts as checked once the body's shape check passes.
+- **A cable is a path, and a cord's closing is couplings.** A cable holds its `path` alone, whose length a stroke check reads. Each joint a cord closes is a coupling on the joint that winds it, its `ratio` (or its `lead`, across a revolute joint and a slide) a param worked out from the closed value and the winding joint's travel, so a posed check reads it as any coupling's. A stroke check names the `pose` it is taken at. A coupling's `ratio` of 0 is a `[model-coupling]` error, as a `lead` of 0 was.
+- **The kinematic model claims nothing about behaviour.** The MJCF carries no spring, damper or friction. A stated stiffness, damping or friction still reads its unit, and is ledgered `scope: not-modeled`. Exact now sets aside a sweep's resolution and nothing else.
+- **A stroke check compares with a printed length.** A source that states only a direction of change is ledgered `scope: context`, its reason saying so. A stroke still takes `from`, for a change in length stated between two poses.
+
+### Removed
+
+- A joint's `damping`, `stiffness`, `friction` and `spring_rest`, a param's `physics: true`, and the report's separate count of proposed physics values (report.json's `physics_proposed`).
+- A stroke check's `claim: shortens` and `claim: lengthens`.
+- A source's `coverage: false`. Every source is swept: skip what is not about the object, as in any other source.
+- Probes, datums on released bodies, and a shape check's `pairs` and `tol`.
+- A cable's `wheel` and `closes`, and `[cable-on-axis]` with them.
 
 ## v0.2.0
 

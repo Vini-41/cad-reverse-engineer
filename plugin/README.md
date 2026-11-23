@@ -14,7 +14,7 @@ Three skills that turn a paper, patent or datasheet into parametric CAD, with ev
 - **`build-model`** starts from that project and builds the parts the documents settle first. For the complete model it then proposes what they leave open from standard sizes: a thread from the table, a screw in a length you can buy. Under **known first** it stops at the settled parts, with what waits listed as questions.
 - **`ask-machinist`** reviews the model as the person who has to make it, part by part, and writes the plan.
 
-*"Reverse-engineer the gripper in this paper"* starts with `noob`, and *"with nothing guessed"* chooses known first. Say "build now" and `noob` answers its questions from the documents.
+*"Reverse-engineer the gripper in this paper"* starts with `noob`, and *"with nothing guessed"* chooses known first. Say "build now" and `noob` answers its questions from the documents. `noob` and `build-model` each end by naming the line to run next: clear the context and run it, and the project's files carry everything across.
 
 ## Install
 
@@ -41,10 +41,16 @@ network_access = true
 
 Any agent that reads skills: `npx skills add Vini-41/cad-reverse-engineer --skill '*'`. Install all three, since `noob` and `ask-machinist` read the file formats that `build-model` holds.
 
-Built for Fable 5.2 and [benchmarked](https://github.com/Vini-41/cad-reverse-engineer/blob/main/docs/benchmark.md) across Anthropic's and OpenAI's frontier models.
+Built for Fable 5.2, and [benchmarked](https://github.com/Vini-41/cad-reverse-engineer/blob/main/docs/benchmark.md) across Anthropic's and OpenAI's frontier models on the flow before 0.3.0.
 
-## Requirements
+## The CLI
 
-The skills run the `cadrev` CLI locally on your machine, which needs [uv](https://docs.astral.sh/uv/) and Python 3.12 to 3.14, which uv can install. Its first run downloads the package, build123d, OCC and MuJoCo from PyPI (about a minute), each at an exact version. Under Codex, allow network access as above.
+The skills run the `cadrev` CLI on your machine. It needs [uv](https://docs.astral.sh/uv/), which can install the Python 3.12 to 3.14 it runs on. To run it yourself, with no clone:
 
-Three worked examples you can run, and the rest of the documentation: https://github.com/Vini-41/cad-reverse-engineer. MIT license.
+```bash
+uvx --python '>=3.12,<3.15' cadrev==0.3.0 check my-project
+```
+
+Its first run downloads the package, build123d, OCC and MuJoCo from PyPI (about a minute), each at an exact version. Under Codex, allow network access as above.
+
+Four worked examples you can run, and the rest of the documentation: https://github.com/Vini-41/cad-reverse-engineer. MIT license.
