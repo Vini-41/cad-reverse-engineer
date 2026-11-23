@@ -2,6 +2,13 @@
 
 The highlights of each version. Its release has the full notes.
 
+## [v0.3.1](https://github.com/Vini-41/cad-reverse-engineer/releases/tag/v0.3.1)
+
+- **Figures reach every model.** `cadrev figures` writes a grayscale or CMYK JPEG as PNG, because some models refuse those JPEGs.
+- **A proposed or derived param takes no `from`.** Its citation counted a stated value as used even when the param contradicted it. This is now a `[param-from]` error.
+
+**Upgrading:** a project with such a param fails until its `from` is removed. If the param replaces a stated value, set that value aside with `scope: not-modeled` and a reason.
+
 ## [v0.3.0](https://github.com/Vini-41/cad-reverse-engineer/releases/tag/v0.3.0)
 
 See what a document settles before anything is built, then build and plan the object in three skills.

@@ -1,6 +1,6 @@
 [project]
 name = "cadrev"
-version = "0.3.0"
+version = "0.3.1"
 description = "Reverse-engineer CAD from a paper, with every dimension traceable to a quoted source."
 readme = "plugin/README.md"
 license = "MIT"

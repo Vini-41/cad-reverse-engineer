@@ -40,7 +40,7 @@ With [uv](https://docs.astral.sh/uv/) installed, rebuild a finished example and 
 ```bash
 git clone https://github.com/Vini-41/cad-reverse-engineer
 cd cad-reverse-engineer
-uvx --python '>=3.12,<3.15' cadrev==0.3.0 check examples/centrifuge
+uvx --python '>=3.12,<3.15' cadrev==0.3.1 check examples/centrifuge
 ```
 
 ```
