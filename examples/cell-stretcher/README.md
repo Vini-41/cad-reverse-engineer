@@ -14,7 +14,7 @@ It takes about 50 seconds. Then open `build/assembly.step` in a CAD program and 
 
 ## What it shows
 
-A lead-screw stage whose sources hold shapes but few dimensions, taken through `noob` and `build-model` by a fresh agent for each, given the skills and these sources alone. No one was there to answer, so the run chose for itself: millimetres, acrylic cut from 6 mm and 3 mm sheet with printed clamps and mould frame, built as designed, and the complete model. The electronics and controller unit are left out.
+A lead-screw stage whose sources hold shapes but few dimensions, taken through `noob` and `build-model` by a fresh agent for each, given the skills and these sources alone. No one was there to answer, so the run chose for itself: millimetres, acrylic cut from 6 mm and 3 mm sheet with printed clamps and mould frame, built as designed, and the complete model. The electronics and controller unit are left out. Review then replaced the run's check on the second screw, whose angle wrapped past a wrong lead, with one on the carriage's travel.
 
 - **The lead screws are checked in motion.** Two stepper motors each turn their own screw, and both move one carriage. One turn of either moves the carriage the stated "8 mm per revolution". The carriage also reaches the 25 mm of Table 2's largest tested amplitude.
 - **The cut sheets are sources.** All 54 regions of `Acryl6MM.svg` and 21 of `Acryl3MM.svg` (twelve mould parts, a template and eight rings) are compared, outline to outline, with the plates the model builds. The rest of the 3 mm sheet, the controller housing's plates, is skipped with a reason.

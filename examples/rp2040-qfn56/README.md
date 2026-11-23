@@ -14,7 +14,7 @@ It takes about 5 seconds. Then open `build/assembly.step` in a CAD program and r
 
 ## What it shows
 
-A component rebuilt from its package drawing, taken through `noob` and `build-model` by a fresh agent for each, given the skills and the datasheet alone. No one was there to answer, so the run chose for itself: millimetres, no material, built as designed, and the complete model.
+A component rebuilt from its package drawing, taken through `noob` and `build-model` by a fresh agent for each, given the skills and the datasheet alone. No one was there to answer, so the run chose for itself: millimetres, no material, built as designed, and the complete model. Review then moved the datum that R's check reads onto the axis of the lead's round end, in the model and the check, so a lead with no round there is refused.
 
 - **It is built in its footprint's frame.** The origin is where the centrelines of Figure 168's land pattern cross, Z = 0 is the board's surface and the package's seating plane, and pin 1 is at −X +Y seen from above. The STEP drops into an ECAD library with no transform.
 - **Each stated range is compared as a range.** A, A1, A2, b, D2, E2, L and R are held to the MIN, the MAX or both that Figure 167's table prints. The D, E, e and A3 it states as BSC or REF are compared as single values.
