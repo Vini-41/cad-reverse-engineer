@@ -458,6 +458,15 @@ LINK_FINDINGS = {
     "param-from: a released body, with no value": _released(
         lambda r, t: change(r, "params", "pitch", **{"from": "link_step"})
     ),
+    "param-from: a proposed param citing the value it replaces": _param(
+        "pitch", basis="proposed", value=31, rationale="a longer link", gap="G1"
+    ),
+    "param-from: a derived param citing a value": _params(
+        "half: {basis: derived, expr: pitch / 2, from: T1-link.L}"
+    ),
+    "param-from: a proposed thread citing a statement": _params(
+        "screw: {basis: proposed, thread: M3, from: T1-link, rationale: r, gap: G1}"
+    ),
     "param-mismatch: a source value": _param("pitch", value=31),
     "param-mismatch: a derived value": _params(
         "half: {basis: derived, expr: pitch / 2, value: 14}"

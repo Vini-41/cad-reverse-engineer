@@ -357,6 +357,14 @@ def _params(p: Project) -> None:
             p.error("param-gap", f"param {name}: a source param has no value for a gap to replace")
         elif gap and gap not in p.gaps:
             p.error("param-gap", f"param {name}: unknown gap {gap!r}")
+        if "from" in spec and basis not in ("source", "measured"):
+            # Else the citation would count its value as used, and a param that contradicts it
+            # would pass.
+            p.error(
+                "param-from",
+                f"param {name}: a {basis} param takes no from; a stated value it replaces is "
+                "set aside, scope: not-modeled with a reason",
+            )
         if "thread" in spec:
             with p.filing("param-thread", f"param {name}: "):
                 p.values[name] = _thread(p, name, spec)
