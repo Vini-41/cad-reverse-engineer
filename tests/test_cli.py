@@ -257,6 +257,12 @@ def test_partial_run_leaves_an_earlier_report_as_it_was(proj_dir):
     assert {f: f.read_bytes() for f in (proj_dir / "build").rglob("*") if f.is_file()} == before
 
 
+def test_only_a_build_says_a_source_param_is_unchecked(proj_dir):
+    edit(proj_dir, "checks.yaml", lambda d: d["checks"].pop(1))
+    assert "unchecked-source" not in check(proj_dir, "--no-build").rules
+    assert "unchecked-source" in check(proj_dir).rules
+
+
 @pytest.mark.parametrize("command", ["check", "text", "figures", "source"])
 @pytest.mark.parametrize("refusal", ["project-missing", "format-missing", "format-unknown"])
 def test_every_command_refuses_a_project_it_cannot_read_and_writes_nothing(

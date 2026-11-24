@@ -205,8 +205,9 @@ def cmd_check(args) -> int:
                 print(f"wrote build/steps/: {views} step view{'s' * (views != 1)}")
     if model is not None:
         read |= {thread.param for thread in model.threads}  # each held to its thread's sizes
-    passed = {r.id for r in results if r.ok}
-    ledger.unchecked(p, read, model.used if model else set(), passed)
+    if not args.no_build:  # only a build can say what a check covers
+        passed = {r.id for r in results if r.ok}
+        ledger.unchecked(p, read, model.used if model else set(), passed)
     ledger.known_first(p)
     status = report.status(p, partial=args.no_build)
     headline = report.counts(p, results)
