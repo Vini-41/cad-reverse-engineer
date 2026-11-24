@@ -1,14 +1,18 @@
 """The ledger: how a quote is matched and read, the units it prints, what the coverage sweep
 lists, what each param rests on, and a known-first project's waiting list."""
 
+import io
 import math
+import unicodedata
 
 import pytest
 from conftest import (
+    REPO,
     add,
     add_quote,
     add_reading,
     add_source,
+    cadrev,
     change,
     check,
     edit,
@@ -19,6 +23,8 @@ from conftest import (
     sheet,
     write,
 )
+from pypdf import PdfWriter, Transformation
+from pypdf.generic import RectangleObject
 
 
 # A quote as its source prints it and as it was copied: (printed, quoted, whether it matches).
@@ -34,6 +40,8 @@ MATCHING = [
     ("The rod is 3.7 mm wide.", "7 mm wide", False),
     ("The pin is 16 mm long", "The pin is 16 mm long.", False),
     ("a shaft of 17 mm", "a shaft of 17 cm", False),
+    ("two cells 1 4 € apart", "two cells 14 € apart", False),
+    ("one cell 25 € wide", "one cell 2 5 € wide", False),
 ]
 
 
@@ -55,6 +63,73 @@ def test_pdf_quote_matches_a_word_hyphenated_across_lines_either_way(proj_dir, t
         entry = {"id": f"N{i}", "source": "notes", "locator": "p. 1", "quote": quote}
         add(proj_dir, evidence=entry | {"values": {"g": 14}, "scope": "context", "reason": "test"})
     assert check(proj_dir).messages("quote-not-found") == []
+
+
+CENTRIFUGE = REPO / "examples/centrifuge/sources/SomaPoor2022_centrifuge.pdf"
+STRETCHER = REPO / "examples/cell-stretcher/sources/Kah2021_cell_stretcher.pdf"
+# What a page prints and what its PDF's text layer says there: (paper, page, printed, misread).
+TEXT_LAYER = [
+    (CENTRIFUGE, 3, "1 4 €", "14 €"),  # two table cells
+    (CENTRIFUGE, 4, "1 9 €", "19 €"),
+    (CENTRIFUGE, 3, "(0.75″*0.5″)", "(0.7500*0.500)"),  # inch marks
+    (STRETCHER, 9, "in steps of 250 µm", "in steps of 250 mm"),
+    (STRETCHER, 7, "with 500 µL of", "with 500 mL of"),
+    (STRETCHER, 4, "glass 6 mm × 60 cm × 30 cm", "glass 6 mm 60 cm 30 cm"),
+    (STRETCHER, 9, "60.8 × 11.7 mm", "60.8 11.7 mm"),
+]
+
+
+@pytest.mark.parametrize("paper, page, printed, misread", TEXT_LAYER)
+def test_pdf_text_and_quotes_hold_what_the_page_prints(
+    proj_dir, tmp_path, paper, page, printed, misread
+):
+    add_source(proj_dir, tmp_path, "source.pdf", paper.read_bytes())
+    text = unicodedata.normalize("NFKC", cadrev("text", proj_dir, "doc", "--page", page)[1])
+    assert unicodedata.normalize("NFKC", printed) in text and misread not in text
+    for eid, quote in (("printed", printed), ("misread", misread)):
+        entry = {"id": eid, "source": "doc", "page": page, "locator": "p", "quote": quote}
+        add(proj_dir, evidence=entry | {"scope": "context", "reason": "test"})
+    refused = check(proj_dir, "--no-build").messages("quote-not-found")
+    assert [message.split(":")[0] for message in refused] == ["misread"]
+
+
+def test_table_cells_stay_apart_on_a_page_whose_text_runs_up_it(proj_dir, tmp_path):
+    # The same page with its content turned a quarter and the page turned back: it looks the same.
+    writer = PdfWriter(clone_from=CENTRIFUGE)
+    page = writer.pages[2]
+    width, height = float(page.mediabox.width), float(page.mediabox.height)
+    page.add_transformation(Transformation().rotate(90).translate(height, 0))
+    page.mediabox = page.cropbox = RectangleObject((0, 0, height, width))
+    page.rotate(90)
+    turned = io.BytesIO()
+    writer.write(turned)
+    add_source(proj_dir, tmp_path, "source.pdf", turned.getvalue())
+    assert "1 4 €" in cadrev("text", proj_dir, "doc", "--page", 3)[1]
+
+
+def test_a_cell_that_opens_on_a_decimal_point_stays_a_number_of_its_own(proj_dir, tmp_path):
+    rows = [
+        ("cells 1 .4 mm wide", "cells 1.4 mm wide", {}),
+        ("cells 3 . 6 mm wide", "cells 3.6 mm wide", {}),
+        ("cells 7 . 2 mm wide", "cells 7 .2 mm wide", {}),
+        ("cells 8. 4 mm wide", "cells 8.4 mm wide", {}),
+        ("a 2.5 mm pin", "a 2 .5 mm pin", {}),
+    ]
+    run = ledgered(proj_dir, tmp_path, rows, scope="context", reason="matching")
+    refused = {m.split(":")[0] for m in run.messages("quote-not-found")}
+    assert refused == {f"N{i}" for i in range(len(rows))}
+
+
+def test_a_symbol_fonts_control_code_is_read_by_its_glyph_in_that_file(proj_dir, tmp_path):
+    # Code 3 draws × in the stretcher's symbol font, and another sign in the centrifuge's.
+    add_source(proj_dir, tmp_path, "source.pdf", CENTRIFUGE.read_bytes())
+    assert "× 100 g" not in cadrev("text", proj_dir, "doc", "--page", 4)[1]
+
+
+def test_the_sweep_lists_a_product_and_a_unit_a_symbol_font_prints(proj_dir, tmp_path):
+    add_source(proj_dir, tmp_path, "source.pdf", STRETCHER.read_bytes())
+    listed = [m.split("quantity ")[1].split("  …")[0] for m in check(proj_dir).messages("coverage")]
+    assert "60.8x11.7 mm" in listed and "250 μm" in listed and "250 mm" not in listed
 
 
 # The numbers a quote states, and near misses it does not: quote -> (values in it, values not).

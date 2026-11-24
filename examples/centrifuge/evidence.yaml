@@ -339,10 +339,10 @@ evidence:
     source: paper
     page: 3
     locator: Bill of materials, Main switch row
-    quote: "(0.7500*0.500)"
+    quote: "(0.75″*0.5″)"
     values: {L: 0.75, W: 0.5}
     scope: context
-    reason: "restates B-main-switch in inches, 0.75 in by 0.5 in: the PDF's text prints each inch mark as 00"
+    reason: "restates B-main-switch in inches"
 
   - id: B-dc-socket
     source: paper
