@@ -342,6 +342,7 @@ skipped:
   - {source: paper, page: 2, quote: "95% rel. humidity", reason: "the incubator's climate, not the object"}
   - {source: paper, page: 4, quote: "for 24 h, we recommend making several molds", reason: "curing time of the PDMS"}
   - {source: paper, page: 5, quote: "angled adapter DOWN (~30 cm)", reason: "a cable of the controller unit"}
+  - {source: paper, page: 5, quote: "HDMI 90° angle", reason: "an adapter of the controller unit"}
   - {source: paper, page: 5, from: "General Washer M2.5", to: "General Spring Washer M6 4 0.10 0.40 DOLD2 Metal", reason: "washers and spring washers under the screws, which the model does not build"}
   - {source: paper, page: 6, quote: "While the acrylic adhesive sets under UV light for 20 min", reason: "a curing time of the adhesive"}
   - {source: paper, page: 7, from: "PDMS base component and crosslinker (Fig. 4B)", to: "using DPBS.", reason: "mixing, curing and coating the PDMS substrates: the cast product and its chemistry"}
@@ -357,6 +358,7 @@ skipped:
   - {source: paper, page: 12, from: "25 mm/s", to: "5 Hz 1 mm (5%) 10 mm/s", reason: "tested speeds and the smaller amplitudes at higher frequencies: operating points, not the travel"}
   - {source: paper, page: 13, quote: "(>1h of operation per day)", reason: "how long the device has been in use"}
   - {source: paper, page: 13, quote: "24.8 ± 2.3% at 0.5 Hz for 6 h", reason: "the cell-biology experiment"}
+  - {source: paper, page: 13, quote: "Scale bars: 10 µm.", reason: "the scale of the micrographs of cells"}
   # the 3 mm sheet beyond the mould's parts
   - {source: acryl3, within: [[0, 0], [600, 464]], reason: "plates of the electronics and controller unit's housing, which the target leaves out"}
   - {source: acryl3, within: [[226, 464], [600, 600]], reason: "plates of the electronics and controller unit's housing, which the target leaves out"}
