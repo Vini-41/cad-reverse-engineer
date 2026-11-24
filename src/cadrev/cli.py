@@ -166,8 +166,16 @@ def cmd_crop(args) -> int:
 def cmd_check(args) -> int:
     from . import checks, lint, report
 
-    p = project.load(Path(args.dir))
-    if p.refused:  # not a project, or one this cadrev cannot read: write nothing into it
+    root, refused = Path(args.dir).resolve(), False
+    try:
+        p = project.load(root)
+        refused = p.refused
+    finally:
+        # From here the last run's report is not this run's, even if reading the project dies. A
+        # partial run writes nothing, so it stays, as it does in a project that is refused.
+        if not (args.no_build or refused):
+            report.withdraw(root)
+    if refused:  # not a project, or one this cadrev cannot read: write nothing into it
         _print(p.findings)
         print(f"\n{report.NOT_VERIFIED}: the project was not read, so no report was written.")
         return 1
