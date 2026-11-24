@@ -28,7 +28,7 @@ _Avoid_: quote (for image evidence)
 Two ledger entries that disagree about the same feature; open until it carries a resolution.
 
 **Stated quantity**:
-A number a source prints with a unit, as an `a×b×c` product, as a diameter callout (`Ø 32.5`, a length) or as a thread size (`M3`, `1/4-20`); each one is ledgered or skipped. A range printed with one unit (`5-10 mm`) is one stated quantity, and a MIN and a MAX each printed with its unit are two; a check compares either as a stated range, as it does a MIN or a MAX alone.
+A number a source prints with a unit, as an `a×b×c` product, as a diameter callout (`Ø 32.5`, a length) or as a thread size (`M3`, `1/4-20`); each one is ledgered or skipped. A number in scientific notation (`2.1 × 10⁵ MPa`) is one stated quantity, as is a range printed with one unit (`5-10 mm`). A MIN and a MAX each printed with its unit are two; a check compares either as a stated range, as it does a MIN or a MAX alone.
 _Avoid_: dimension (for anything that is not a size of the object's geometry), dimension candidate
 
 **Count**:

@@ -1,13 +1,14 @@
 """The built-in unit table: what each unit printed in a quote measures, and how large it is.
 
-Spellings are matched in normalized text (NFKC, lower case), so `MPa` is `mpa` and `N·m` is
-`n·m`; where lower case leaves two readings the one hardware papers use wins (`mn` is mN, `nm`
-is N·m). Sizes are in SI units of the quantity.
+Spellings are matched in normalized text (NFKC but for superscripts, lower case), so `MPa` is
+`mpa` and `N·m` is `n·m`; where lower case leaves two readings the one hardware papers use wins
+(`mn` is mN, `nm` is N·m). Sizes are in SI units of the quantity.
 """
 
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import NamedTuple
 
 # The quantities a project's `units` may set, with the unit used when it sets none.
@@ -39,9 +40,15 @@ INCH_IN = (
     r"|series|parallel)\b)"
 )
 _SEP = r"(?:\s?[·⋅*]\s?|[.-])?"  # between the parts of a compound unit: N·m, kg ·cm, N.m, Nm
-_CUBED = r"(?:3|\^3)"  # NFKC turns ³ into 3
-_PER_CC = rf"(?:/\s?cm{_CUBED}|/\s?cc|/\s?ml|{_SEP}cm-3)"  # g/cm³, g/cc, g/ml, g·cm⁻³
-_SQUARED = r"(?:2|\^2)"  # NFKC turns ² into 2
+# A unit's power, raised as printed or flat as typed: cm² or cm2, cm⁻³ or cm-3.
+_SQUARED = r"(?:2|²)"
+_CUBED = r"(?:3|³)"
+_PER_CUBED = r"(?:-3|⁻³)"
+_PER_CC = rf"(?:/\s?cm{_CUBED}|/\s?cc|/\s?ml|{_SEP}cm{_PER_CUBED})"  # g/cm³, g/cc, g/ml, g·cm⁻³
+# Every superscript character, the form source text writes a raised run in.
+SUPERSCRIPTS = "".join(
+    c for c in map(chr, range(0xA0, 0x2200)) if unicodedata.decomposition(c).startswith("<super>")
+)
 
 
 class Unit(NamedTuple):
@@ -63,7 +70,7 @@ UNITS: dict[str, Unit] = {
     "N/m": Unit("linear stiffness", 1.0, (r"n/\s?m",)),
     "N/mm": Unit("linear stiffness", 1e3, (r"n/\s?mm",)),
     "g/cm³": Unit("density", 1e3, (rf"g{_PER_CC}",)),
-    "kg/m³": Unit("density", 1.0, (rf"kg/\s?m{_CUBED}", rf"kg{_SEP}m-3")),
+    "kg/m³": Unit("density", 1.0, (rf"kg/\s?m{_CUBED}", rf"kg{_SEP}m{_PER_CUBED}")),
     "g/mm³": Unit("density", 1e6, (rf"g/\s?mm{_CUBED}",)),
     "N·m": Unit("torque", 1.0, (rf"n{_SEP}m",)),
     "N·mm": Unit("torque", 1e-3, (rf"n{_SEP}mm",)),
@@ -74,7 +81,7 @@ UNITS: dict[str, Unit] = {
     "cm/s": Unit("speed", 1e-2, (r"cm/s",)),
     "m/s": Unit("speed", 1.0, (r"m/s",)),
     "km/h": Unit("speed", 1 / 3.6, (r"km/h",)),
-    "MPa": Unit("pressure", 1e6, (r"mpa", r"n/\s?mm(?:2|\^2)")),
+    "MPa": Unit("pressure", 1e6, (r"mpa", rf"n/\s?mm{_SQUARED}")),
     "GPa": Unit("pressure", 1e9, (r"gpa",)),
     "kPa": Unit("pressure", 1e3, (r"kpa",)),
     "Pa": Unit("pressure", 1.0, (r"pa",)),
@@ -119,10 +126,15 @@ UNITS: dict[str, Unit] = {
 }
 
 
+_POWERS = SUPERSCRIPTS.replace("¹", "")  # a raised run that changes the unit before it
+
+
 def spelling(but: tuple[str, ...] = ()) -> str:
-    """A regex matching any unit's spelling as a whole word, leaving out the spellings in but."""
+    """A regex matching any unit's spelling as a whole word, leaving out the spellings in but. A
+    raised run after it is its power: one the spelling holds (cm²) or the first (mm¹), else the
+    unit is one no spelling names (s⁻¹), or a symbol (Nᵖ)."""
     words = "|".join(s for unit in UNITS.values() for s in unit.spellings if s not in but)
-    return rf"(?:{words})(?![a-z0-9/^])"
+    return rf"(?:{words})(?![a-z0-9/^{_POWERS}])"
 
 
 # What may sit between a number and its unit: a space, or the hyphen of a unit used as an
@@ -133,13 +145,16 @@ UNIT_GAP = r"(?:\s|-(?!\w+-\d))?"
 # the mm of "10 mm.The" ends a sentence.
 _FOLLOWING = re.compile(rf"{UNIT_GAP}({spelling()})(?!\.[a-z]\.)")
 _SPELLED = {name: re.compile(rf"(?:{'|'.join(unit.spellings)})") for name, unit in UNITS.items()}
+# Any spelling, raised to a power it does not hold: N·m² is no N·m, nor a newton.
+_POWERED = re.compile(rf"{UNIT_GAP}(?:{'|'.join(_SPELLED[n].pattern for n in UNITS)})[{_POWERS}]")
 
 
 def unit_at(text: str, pos: int) -> tuple[str, int] | None:
     """The unit printed at text[pos:] (normalized text, after an optional UNIT_GAP) and where its
-    spelling ends, or None."""
+    spelling ends, or None, as for a unit raised to a power no spelling holds."""
     m = _FOLLOWING.match(text, pos)
-    if m is None:
+    powered = _POWERED.match(text, pos)
+    if m is None or (powered and powered.end() > m.end()):
         return None
     name = next(name for name, spelled in _SPELLED.items() if spelled.fullmatch(m.group(1)))
     return name, m.end()
