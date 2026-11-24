@@ -5,7 +5,7 @@
 A 3D-printed centrifuge built around an 80 mm computer fan, rebuilt from [its paper](https://doi.org/10.1016/j.ohx.2022.e00328) and [the authors' STEP files](https://doi.org/10.17632/sy2vrhj227.1). With [uv](https://docs.astral.sh/uv/) installed, run this from the root of a clone:
 
 ```bash
-uvx --python '>=3.12,<3.15' cadrev==0.3.1 check examples/centrifuge
+uvx --python '>=3.12,<3.15' cadrev==0.4.0 check examples/centrifuge
 ```
 
 Expected status: `VERIFIED: 0 errors, 0 warnings, 27/27 checks pass`
