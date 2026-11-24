@@ -1,6 +1,6 @@
 {
   "name": "cad-reverse-engineer",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Reverse-engineer CAD from papers, patents and datasheets: a parametric build123d model where every stated number is quoted from a hashed source and checked on the built geometry, and what they leave open is listed beside the question that would settle it.",
   "author": {
     "name": "Vini Rezanejad",

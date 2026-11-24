@@ -25,13 +25,13 @@ The product is an honest report. `build/report.md` shows what the sources settle
 The CLI is the `cadrev` package at the version this skill was written for, run by [`uv`](https://docs.astral.sh/uv/). Write the whole command on every call, since shell functions and aliases do not carry between calls:
 
 ```bash
-uvx --python '>=3.12,<3.15' cadrev==0.4.0 --help
+uvx --python '>=3.12,<3.15' cadrev==0.4.1 --help
 ```
 
-`cadrev` below stands for `uvx --python '>=3.12,<3.15' cadrev==0.4.0`. The first run installs build123d and MuJoCo (about a minute). Where a sandbox refuses uv's cache, give uv a directory of this user's on each call:
+`cadrev` below stands for `uvx --python '>=3.12,<3.15' cadrev==0.4.1`. The first run installs build123d and MuJoCo (about a minute). Where a sandbox refuses uv's cache, give uv a directory of this user's on each call:
 
 ```bash
-d="${TMPDIR:-/tmp}/cadrev-$(id -u)"; mkdir -p -m 700 "$d" && [ -O "$d" ] && UV_CACHE_DIR="$d/uv" UV_PYTHON_INSTALL_DIR="$d/python" UV_TOOL_DIR="$d/tools" uvx --python '>=3.12,<3.15' cadrev==0.4.0 --help
+d="${TMPDIR:-/tmp}/cadrev-$(id -u)"; mkdir -p -m 700 "$d" && [ -O "$d" ] && UV_CACHE_DIR="$d/uv" UV_PYTHON_INSTALL_DIR="$d/python" UV_TOOL_DIR="$d/tools" uvx --python '>=3.12,<3.15' cadrev==0.4.1 --help
 ```
 
 - `cadrev check <dir>` runs every rule, builds the model, evaluates the checks and writes `build/`: the STEP files, an isometric view, a drawing of each part and the report. `cadrev check <dir> --no-build` runs every rule that needs no build in seconds. Each finding names its rule in brackets and says what is wrong and where.

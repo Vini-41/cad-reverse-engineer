@@ -5,7 +5,7 @@
 The 7×7 mm package of the RP2040 microcontroller, rebuilt from [its datasheet](https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf). With [uv](https://docs.astral.sh/uv/) installed, run this from the root of a clone:
 
 ```bash
-uvx --python '>=3.12,<3.15' cadrev==0.4.0 check examples/rp2040-qfn56
+uvx --python '>=3.12,<3.15' cadrev==0.4.1 check examples/rp2040-qfn56
 ```
 
 Expected status: `VERIFIED: 0 errors, 0 warnings, 138/138 checks pass`

@@ -2,6 +2,13 @@
 
 The highlights of each version. Its release has the full notes.
 
+## [v0.4.1](https://github.com/Vini-41/cad-reverse-engineer/releases/tag/v0.4.1)
+
+- **A raised number stays raised.** `cadrev text` writes a superscript as one: `10⁻⁵` and `cm²`, not `105` and `cm2`. This covers PDF, HTML and DOCX sources. `2.1 × 10⁵ MPa` reads as one quantity, 210 000 MPa. A raised run after a unit is that unit's power, and anywhere else it is a footnote marker and no number.
+- **A symbol font reads as printed.** In Elsevier papers, `cadrev text` now reads µ, β, °, ~, −, ©, ® and bullets as the page shows them. A concentration such as `20 µM` is no longer read as a length.
+
+**Upgrading:** a `[quote-not-found]` on a quote that passed before means it copied a flattened superscript or a misread symbol. Quote the page as `cadrev text` now prints it, with superscripts or carets (`10^-5`).
+
 ## [v0.4.0](https://github.com/Vini-41/cad-reverse-engineer/releases/tag/v0.4.0)
 
 - **The model states each hole's fit.** `threads` holds a hole or shank that carries the thread, and the new `clears` holds a hole its screw passes through. cadrev no longer guesses the fit from the diameter. The drawing, the plan's screw warning and a `count` check read the fit stated, and a count counts each screw once.
