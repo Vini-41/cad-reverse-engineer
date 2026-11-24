@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from .build import Model
+from .build import Model, screws
 from .project import Project
 
 
@@ -97,10 +97,12 @@ def _steps(p: Project, model: Model, placed: Counter, steps: list[dict]) -> Coun
             "assembly, each once",
         )
     for param in p.screws:
-        threaded = [t for t in model.threads if t.param == param and t.fit == "threaded"]
+        threaded = [
+            t for t in model.threads if t.param == param and t.fit == "threaded" and placed[t.part]
+        ]
+        shanks, unfilled = screws(threaded, model.assembly, p.length_tol)
         holes = sum(placed[t.part] for t in threaded if t.hole)
-        shanks = sum(placed[t.part] for t in threaded if not t.hole)
-        if param in p.thread_params and holes - shanks > driven[param]:
+        if param in p.thread_params and unfilled > driven[param]:
             built = f" and {_count(shanks, 'screw')} built as a part" if shanks else ""
             p.warn(
                 "plan-screw",

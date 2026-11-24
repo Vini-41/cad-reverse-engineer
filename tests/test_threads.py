@@ -154,14 +154,94 @@ def test_count_check_counts_the_holes_a_thread_is_cut_in(proj_dir, tmp_path):
     run = check(proj_dir)
     screws = run.result("screws")
     assert run.status == "VERIFIED" and screws["ok"], run.out
-    assert screws["measured"] == "2 holes or shanks threaded M3×0.5 (screw)"
+    assert screws["measured"] == "2 screws threaded M3×0.5 (screw)"
     assert (screws["rests_on"], screws["rests_on_params"]) == ("proposed", ["screw"])
     # A clearance hole carries no thread, so it is not one of them.
     remodel(proj_dir, '"link.b": "screw"', '"link.side": "screw"')
     assert "model-thread" in check(proj_dir).errors
     remodel(proj_dir, ', "link.side": "screw"', "")
     run = check(proj_dir)
-    assert run.errors == ["check-failed"] and run.result("screws")["measured"].startswith("1 hole ")
+    assert run.errors == ["check-failed"] and run.result("screws")["measured"].startswith(
+        "1 screw "
+    )
+
+
+@pytest.mark.parametrize(
+    "key, fit, other", [("threads", "threaded", "clearance"), ("clears", "clearance", "threaded")]
+)
+def test_the_model_states_the_fit_of_a_hole_at_the_major_diameter(
+    proj_dir, tmp_path, key, fit, other
+):
+    # A Ø3 hole for M3 may be tapped at its major diameter, or be a through hole for the screw.
+    threaded(proj_dir)
+    remodel(proj_dir, "p.screw.tap", "p.screw")
+    remodel(proj_dir, '"threads": {', f'"{key}": {{')
+    add_quote(proj_dir, tmp_path, "Two M3 screws hold each link.", values={"n": "two"})
+    add(proj_dir, checks="{id: screws, kind: count, thread: screw, evidence: N1, key: n}")
+    run = check(proj_dir)
+    (listed,) = run.report["threads"]
+    assert (listed[fit], listed[other]) == (["link.a", "link.b"], [])
+    assert run.result("screws")["ok"] is (key == "threads")
+
+
+def test_a_stated_fit_holds_the_cylinder_to_the_table_for_that_fit(proj_dir):
+    threaded(proj_dir)  # at the tap drill, which clears nothing
+    remodel(proj_dir, '"threads": {', '"clears": {')
+    assert check(proj_dir).errors == ["model-thread", "model-thread"]
+    remodel(proj_dir, "p.screw.tap", "p.screw.clearance")  # which carries no thread
+    assert check(proj_dir).rules == []
+    remodel(proj_dir, '"clears": {', '"threads": {')
+    assert check(proj_dir).errors == ["model-thread", "model-thread"]
+
+
+@pytest.mark.parametrize(
+    "links, pin_x, stated",
+    [
+        pytest.param(1, "-p.pitch / 2", "one", id="a built screw in its tapped hole"),
+        pytest.param(2, "-p.pitch / 2", "one", id="a built screw in two tapped holes"),
+        pytest.param(1, "p.pitch / 2", "two", id="a built screw beside a tapped hole of its own"),
+    ],
+)
+def test_count_counts_a_built_screw_and_the_holes_on_its_axis_as_one(
+    proj_dir, tmp_path, links, pin_x, stated
+):
+    threaded(proj_dir)
+    pin = "Cylinder(p.screw / 2, p.link_H)"
+    remodel(proj_dir, '{"link": link}', f'{{"link": link, "pin": {pin}}}')
+    remodel(proj_dir, '"link.b": "screw"', '"pin.axis": "screw"')
+    remodel(proj_dir, '"link.top":', '"pin.axis": (0, 0, 0),\n        "link.top":')
+    second = ', "link_2": ("link", Location((0, 0, p.link_H)))' * (links == 2)
+    placed = f'"pin_1": ("pin", Location(({pin_x}, 0, {links} * p.link_H)))'
+    remodel(
+        proj_dir,
+        '"link_1": ("link", Location())',
+        f'"link_1": ("link", Location()){second}, {placed}',
+    )
+    add_quote(proj_dir, tmp_path, f"{stated.title()} M3 screws hold it.", values={"n": stated})
+    add(proj_dir, checks="{id: screws, kind: count, thread: screw, evidence: N1, key: n}")
+    run = check(proj_dir)
+    assert run.result("screws")["ok"], run.result("screws")["measured"]
+
+
+def test_count_keeps_a_hole_of_an_unplaced_part_apart_from_a_built_screw(proj_dir, tmp_path):
+    # A coupon no instance places: in its own frame its hole lies on the placed screw's axis.
+    threaded(proj_dir)
+    pin = "Cylinder(p.screw / 2, p.link_H)"
+    remodel(proj_dir, '{"link": link}', f'{{"link": link, "coupon": link, "pin": {pin}}}')
+    remodel(
+        proj_dir, '"link.a": "screw", "link.b": "screw"', '"coupon.a": "screw", "pin.axis": "screw"'
+    )
+    remodel(
+        proj_dir,
+        '"link.top":',
+        '"coupon.a": (-p.pitch / 2, 0, 0),\n        "pin.axis": (0, 0, 0),\n        "link.top":',
+    )
+    placed = '"pin_1": ("pin", Location((-p.pitch / 2, 0, p.link_H)))'
+    remodel(proj_dir, '"link_1": ("link", Location())', f'"link_1": ("link", Location()), {placed}')
+    add_quote(proj_dir, tmp_path, "Two M3 screws hold it.", values={"n": "two"})
+    add(proj_dir, checks="{id: screws, kind: count, thread: screw, evidence: N1, key: n}")
+    run = check(proj_dir)
+    assert run.result("screws")["ok"], run.result("screws")["measured"]
 
 
 def test_thread_declared_on_the_axis_of_a_hole_in_a_boss_is_the_holes(proj_dir):

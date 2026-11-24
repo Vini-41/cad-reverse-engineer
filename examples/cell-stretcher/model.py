@@ -66,12 +66,13 @@ def place(origin, udir, vdir):
     return Location(Plane(origin=origin, x_dir=udir, z_dir=zdir))
 
 
-# A thread is declared on each hole that carries one and on each hole clearly larger than its screw. A hole cut at
-# the screw's own diameter (d4 for M4, d5 for M5, d3 for M3, d6 for M6) is left undeclared: cadrev reads a declared
-# hole of that size as carrying the thread.
+class Clears(str):
+    """In a hole's tuple, the thread param whose screw the hole clears; a plain name is one it carries."""
+
+
 class Model:
     def __init__(self):
-        self.parts, self.datums, self.assembly, self.sheets, self.threads = {}, {}, {}, {}, {}
+        self.parts, self.datums, self.assembly, self.sheets, self.threads, self.clears = {}, {}, {}, {}, {}, {}
 
     def cut(self, name, t, outer, holes=(), cutouts=()):
         """A plate cut from a sheet: its outline less its round holes and cut-outs. A hole is
@@ -84,7 +85,7 @@ class Model:
         for label, u, v, _d, thread in holes:
             self.datums[f"{name}.{label}"] = (u, v, t / 2)
             if thread:
-                self.threads[f"{name}.{label}"] = thread
+                (self.clears if isinstance(thread, Clears) else self.threads)[f"{name}.{label}"] = str(thread)
 
     def on_sheet(self, sheet, part, x, y, w=0, h=0, turned=False):
         loc = Location((x + w, y + h, 0), (0, 0, 180)) if turned else Location((x, y, 0))
@@ -187,8 +188,8 @@ def build(p):
     # --- bearing retainer: an ellipse over a bearing's end, its three holes along its long axis
     cu, cv = p.br_half_len, p.br_half_wid
     m.cut("bearing_retainer", t6, Pos(cu, cv) * Ellipse(cu, cv), [("rod", cu, cv, p.br_rod_d, None),
-                                                                ("m3_1", cu - p.br_hole_off, cv, p.d_m3_clear, "m3"),
-                                                                ("m3_2", cu + p.br_hole_off, cv, p.d_m3_clear, "m3")])
+                                                                ("m3_1", cu - p.br_hole_off, cv, p.d_m3_clear, Clears("m3")),
+                                                                ("m3_2", cu + p.br_hole_off, cv, p.d_m3_clear, Clears("m3"))])
     for name, x, y in (("331.64,330.03", p.br_at_x1, p.br_at_y1), ("372.28,330.03", p.br_at_x2, p.br_at_y1),
                        ("331.64,344.59", p.br_at_x1, p.br_at_y2), ("372.28,344.59", p.br_at_x2, p.br_at_y2)):
         m.on_sheet(f"acryl6@{name}", "bearing_retainer", x, y)
@@ -201,7 +202,7 @@ def build(p):
             holes.append((f"long_{j + 1}_{i + 1}", u, v, p.d_m5, None))
         us = [p.sb_slot_u1] + [p.sb_slot_u2 + k * p.sb_slot_pitch for k in range(int(p.sb_slot_n))] + [W - p.sb_slot_u1]
         for i, u in enumerate(us):
-            holes.append((f"short_{j + 1}_{i + 1}", u, v, p.sb_slot_d, "m5"))
+            holes.append((f"short_{j + 1}_{i + 1}", u, v, p.sb_slot_d, Clears("m5")))
     holes += [(f"thread_{k + 1}", p.sb_thread_u0 + k * p.mount_hole_pitch, p.sb_thread_v, p.mount_screw.tap, "mount_screw")
               for k in range(int(p.n_mount_threads))]
     m.cut("stationary_bar", t6, rect(0, 0, W, p.sb_wid), holes)
@@ -219,7 +220,8 @@ def build(p):
     ]
     holes = [("hook_1", hu, lr, p.hook_thread.tap, "hook_thread"), ("hook_2", ML - hu, lr, p.hook_thread.tap, "hook_thread"),
              ("bolt_1", p.mt_bolt_u, p.mt_bolt_v, p.frame_bolt.tap, "frame_bolt"), ("bolt_2", ML - p.mt_bolt_u, p.mt_bolt_v, p.frame_bolt.tap, "frame_bolt"),
-             ("screw_1", p.mt_screw_u, p.mt_screw_v, p.mt_screw_d, None), ("screw_2", ML - p.mt_screw_u, p.mt_screw_v, p.mt_screw_d, None)]
+             ("screw_1", p.mt_screw_u, p.mt_screw_v, p.mt_screw_d, Clears("mount_screw")),
+             ("screw_2", ML - p.mt_screw_u, p.mt_screw_v, p.mt_screw_d, Clears("mount_screw"))]
     m.cut("mounting", t6, make_face(edges), holes)
     mt_x = (p.mt_at_x1, p.mt_at_x2, p.mt_at_x3, p.mt_at_x4)
     mt_names = (("410.55,488.48", "445.95,498.52", "481.59,488.48", "516.99,498.52"), ("410.55,530.39", "445.95,540.42", "481.59,530.39", "516.99,540.42"),
@@ -250,7 +252,7 @@ def build(p):
     end_piece("end_plate", W, 0, all_rods, p.m3.tap, "m3", True, p.ep_m5_u)
     m.datums["end_plate.over_screw_1"] = (p.screw_u, 0, t6 / 2)                       # on its top edge, square over a screw's axis
     m.datums["end_plate.over_screw_2"] = (W - p.screw_u, 0, t6 / 2)
-    end_piece("end_cover", W, 0, (), p.d_m3_clear, "m3", True, p.ep_m5_u)
+    end_piece("end_cover", W, 0, (), p.d_m3_clear, Clears("m3"), True, p.ep_m5_u)
     m.on_sheet("acryl6@195.28,558.3", "end_plate", p.at_left, p.ep_at_y)
     m.on_sheet("acryl6@195.28,486.51", "end_cover", p.at_left, p.ec_at_y)
 
@@ -265,7 +267,7 @@ def build(p):
     ds_holes = [("dsub_1", mid_u - p.ds_hole_off, p.ds_hole_v, p.ds_hole_d, None), ("dsub_2", mid_u + p.ds_hole_off, p.ds_hole_v, p.ds_hole_d, None)]
     end_piece("motor_end_plate", p.mp_len, inset, (p.guide_u, W - p.guide_u), p.m3.tap, "m3", False, p.mp_m5_u, ds_holes, [dsub])
     window = bez_box(mid_u - p.mc_win_half, p.mc_win_v0, mid_u + p.mc_win_half, p.mc_win_v1, p.mc_cor_du, p.mc_cor_dv, p.mc_cor_hu, p.mc_cor_hv)
-    end_piece("motor_end_cover", p.mp_len, inset, (), p.mc_pin_d, "m3", False, p.mp_m5_u, (), [window])
+    end_piece("motor_end_cover", p.mp_len, inset, (), p.mc_pin_d, Clears("m3"), False, p.mp_m5_u, (), [window])
     m.on_sheet("acryl6@49.28,342.62", "motor_end_plate", p.at_left, p.mp_at_y)
     m.on_sheet("acryl6@49.28,414.51", "motor_end_cover", p.at_left, p.mc_at_y)
 
@@ -442,7 +444,7 @@ def build(p):
     m.parts["lead_nut"] = nut
     for i, (dx, dy) in enumerate(corners):
         m.datums[f"lead_nut.m3_{i + 1}"] = (dx * off, dy * off, p.nut_flange_t / 2)
-        m.threads[f"lead_nut.m3_{i + 1}"] = "m3"
+        m.clears[f"lead_nut.m3_{i + 1}"] = "m3"
 
     mw, h = p.motor_w, p.mf_hole_pitch / 2
     motor = Pos(0, 0, -p.motor_len / 2) * Box(mw, mw, p.motor_len) + Cylinder(p.motor_boss_d / 2, p.motor_boss_h, align=low) + Cylinder(p.motor_shaft_d / 2, p.motor_shaft_len, align=low)
@@ -597,6 +599,6 @@ def build(p):
         "lead_1": {"driver": "screw_1", "driven": "carriage", "lead": "screw_lead"},
         "lead_2": {"driver": "screw_2", "driven": "carriage", "lead": "screw_lead"},
     }
-    return {"parts": m.parts, "datums": m.datums, "assembly": A, "sheets": m.sheets, "threads": m.threads,
+    return {"parts": m.parts, "datums": m.datums, "assembly": A, "sheets": m.sheets, "threads": m.threads, "clears": m.clears,
             "joints": joints, "couplings": couplings}
 

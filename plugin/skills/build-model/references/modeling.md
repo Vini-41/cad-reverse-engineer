@@ -9,10 +9,12 @@ def build(p):
     link = ...                                   # p.link_L etc.; p is read-only
     return {
         "parts":    {"finger_link": link},       # name -> Part in its own frame
-        "datums":   {"finger_link.pin_a": (-p.pitch / 2, 0, 0)},    # named points, part frame
+        "datums":   {"finger_link.pin_a": (-p.pitch / 2, 0, 0),
+                     "finger_link.pin_b": (p.pitch / 2, 0, 0)},     # named points, part frame
         "assembly": {"finger_link_1": ("finger_link", Location((0, 0, p.z1)))},
         "sheets":   {"plates@30,41": ("finger_link", Location((p.at_x, p.at_y, 0)))},  # cut file
-        "threads":  {"finger_link.pin_a": "pin_screw"},              # datum -> thread param
+        "threads":  {"finger_link.pin_a": "pin_screw"},              # carries it: datum -> thread param
+        "clears":   {"finger_link.pin_b": "pin_screw"},              # clears its screw: the same
         # for a mechanism, see Joints and loops:
         "joints": {"input": {"type": "revolute", "parent": "palm_1", "child": "finger_link_1",
                              "axis": ["finger_link_1.pin_a", "finger_link_1.pin_a_top"],
@@ -36,7 +38,7 @@ def build(p):
 A thread is declared, never cut. Build a threaded hole or shank as a plain cylinder, and name its thread in `threads` at a datum on that cylinder: on its wall, or on its axis between its ends. The STEP files then hold plain holes a CAD program can thread in its own way, and the thread itself is in the report and on the drawing, where a reviewer reads it.
 
 - **A [thread param](project-format.md#threads) reads as its major diameter**, `p.pin_screw`, and carries the sizes its table gives it, each in the project's length unit: `p.pin_screw.tap`, the hole that carries the thread, its major diameter less its pitch, which a shop drills with the nearest drill on its chart; `p.pin_screw.clearance`, the hole its screw passes through; `p.pin_screw.pitch`. Where no source or released body gives a hole's diameter, size it from these, so no hole diameter is proposed beside a thread.
-- **Both holes of a screwed joint are declared**, each once, at one datum: the one that carries the thread and the one that clears the screw. cadrev holds each declared cylinder to its thread: from the thread's minor diameter to its major where it carries the thread, and from there to the loosest clearance hole its table gives where it clears the screw, so a released body's hole keeps the size its file gives it and is declared all the same. The drawing calls each out.
+- **Both holes of a screwed joint are declared**, each once, at one datum, and the model states each one's fit: `threads` for a hole or shank that carries the thread, `clears` for a hole its screw passes through. A hole at the major diameter may be either, so the fit is what the object does there: a Ø4 hole a nut sits behind clears an M4 screw. cadrev holds each cylinder to its table for the fit stated: from the minor diameter to the major where it carries the thread, and from the major to the loosest clearance hole the table gives where it clears, so a released body's hole keeps the size its file gives it and is declared all the same. The drawing calls each out by its fit.
 - **The model is fitted to the screw.** A [screw](project-format.md#threads)'s length is a param of its own, read like any other (`p.pin_screw_len`). Derive from it the boss, the counterbore and the blind hole that hold the screw, so the screw that is bought is the one that fits.
 - **A screw, nut or washer is a part only where the sources list it as one**, or a stated mass counts it. It is then purchased hardware like any other: a head and a plain shank, its thread declared on the shank. A stated number of screws is checked without them, by a [`count` check](project-format.md#checksyaml) of the thread, and the [plan](project-format.md#planyaml)'s steps drive them.
 

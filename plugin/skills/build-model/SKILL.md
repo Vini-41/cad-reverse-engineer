@@ -71,7 +71,7 @@ Done when every feature of every settled part has a param, and every waiting par
 
 Take one settled part all the way through before modelling any other, as a tracer bullet: a part with a stated envelope or pitch, or with a released body. Model it alone, give it its checks, and run `cadrev check <dir>` until the report shows them green. It proves the path from ledger to report while a mistake costs one part.
 
-Then build the rest of the settled parts per [`references/modeling.md`](references/modeling.md): each part the sources' parts tables list and each mechanism they state, with a datum at every checked feature and pivot, and its [thread](references/modeling.md#threads) declared on every threaded hole and shank. Weigh each part in the [mass model](references/project-format.md#paramsyaml) as you model it.
+Then build the rest of the settled parts per [`references/modeling.md`](references/modeling.md): each part the sources' parts tables list and each mechanism they state, with a datum at every checked feature and pivot, and its [thread](references/modeling.md#threads) declared on every hole and shank made for one, stated as carrying it or clearing its screw. Weigh each part in the [mass model](references/project-format.md#paramsyaml) as you model it.
 
 A settled part whose place the sources leave open is built in its own frame and placed by no instance, with a gap asking where it sits. Where no part is settled, model.py builds nothing.
 
@@ -79,7 +79,7 @@ Done when every settled part is built and `cadrev check <dir>` reports nothing a
 
 ### 3. Checks
 
-Add a check for every stated value the geometry should realise: `bbox` for an envelope, `distance` for a pitch or spacing, `angle`, `diameter` for a bore or a `Ø` callout, `count` for a stated number of instances or of threaded holes, `mass` for a stated mass, and `interference` across the assembly. Where a source states the numbers a value is worked out from (a pitch diameter from a module and a tooth count), the check compares with [`expect`](references/project-format.md#worked-values-expect). Where a source states a MIN and a MAX, or one of them, the check compares with that [stated range](references/project-format.md#stated-ranges-min-and-max) as printed.
+Add a check for every stated value the geometry should realise: `bbox` for an envelope, `distance` for a pitch or spacing, `angle`, `diameter` for a bore or a `Ø` callout, `count` for a stated number of instances or of screws, `mass` for a stated mass, and `interference` across the assembly. Where a source states the numbers a value is worked out from (a pitch diameter from a module and a tooth count), the check compares with [`expect`](references/project-format.md#worked-values-expect). Where a source states a MIN and a MAX, or one of them, the check compares with that [stated range](references/project-format.md#stated-ranges-min-and-max) as printed.
 
 View each part's drawing in `build/drawings/` as its checks turn green. It shows the part in three views with each checked value as a dimension where the check reads it, so a datum on the wrong feature, or a feature no check reads, shows there first. Hold it beside the figures that show the part: an outline or a proportion that differs shows there too.
 

@@ -344,11 +344,32 @@ LINK_FINDINGS = {
         add_line(r, "spare = p.screw.clearance"),
     ),
     "model-thread: a datum that is none": _threaded("M3", "link.nowhere"),
+    "model-thread: a clearance hole for a thread whose table gives none": lambda r, t: (
+        add(r, params=THREAD % "M2.2"),
+        remodel(r, ASSEMBLY, ASSEMBLY + '"clears": {"link.a": "screw"},'),
+    ),
+    "model-thread: a shank said to clear its screw": lambda r, t: (
+        add(r, params=THREAD % "M3"),
+        remodel(r, '{"link": link}', '{"link": link, "pin": Cylinder(p.hole_d / 2, p.link_H)}'),
+        remodel(r, '"link.top":', '"pin.axis": (0, 0, 0),\n        "link.top":'),
+        remodel(r, ASSEMBLY, ASSEMBLY + '"clears": {"pin.axis": "screw"},'),
+    ),
     "model-thread: a param that is no thread": lambda r, t: remodel(
         r, ASSEMBLY, ASSEMBLY + '"threads": {"link.a": "hole_d"},'
     ),
     "model-return: a thread that names no param": lambda r, t: remodel(
         r, ASSEMBLY, ASSEMBLY + '"threads": {"link.a": 3},'
+    ),
+    "model-return: a hole both threaded and clearing its screw": lambda r, t: (
+        add(r, params=THREAD % "M3"),
+        remodel(
+            r,
+            ASSEMBLY,
+            ASSEMBLY + '"threads": {"link.a": "screw"}, "clears": {"link.a": "screw"},',
+        ),
+    ),
+    "model-return: a clearance hole that names no param": lambda r, t: remodel(
+        r, ASSEMBLY, ASSEMBLY + '"clears": {"link.a": 3},'
     ),
     "check-config: a count of a thread that is none": _quoted_check(
         "Two screws hold it.", "{id: n, kind: count, thread: hole_d, evidence: N1, key: v}", v=2
