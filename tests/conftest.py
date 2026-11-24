@@ -321,12 +321,13 @@ TEN_LONG = "screw_len: {basis: proposed, value: 10, rationale: through the link,
 
 def threaded(root: Path, size: str = "tap", spec: str = M3) -> None:
     """The link with both holes sized by a thread param, in place of hole_d, and declared for
-    it: at its tap drill, or at its clearance hole."""
+    it: at its tap drill in threads, or at its clearance hole in clears."""
     edit(root, "params.yaml", lambda d: d["params"].pop("hole_d"))
     add(root, params=spec)
     remodel(root, "p.hole_d", f"p.screw.{size}")
+    key = "clears" if size == "clearance" else "threads"
     remodel(
-        root, ASSEMBLY, ASSEMBLY + '\n        "threads": {"link.a": "screw", "link.b": "screw"},'
+        root, ASSEMBLY, ASSEMBLY + f'\n        "{key}": {{"link.a": "screw", "link.b": "screw"}},'
     )
 
 

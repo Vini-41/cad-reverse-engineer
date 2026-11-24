@@ -118,8 +118,8 @@ def sun(p):
         "sun.axis": Vector(0, 0, p.sun_journal_len / 2),
         "sun.axis_end": mid,
     }
-    threads = {"sun.axis": "sun_bolt"}
-    return at * body, placed(datums, at), threads
+    clears = {"sun.axis": "sun_bolt"}
+    return at * body, placed(datums, at), clears
 
 
 def rod(radius, length):
@@ -161,14 +161,14 @@ def carrier(p):
         "carrier.axis_seat": Vector(0, 0, inner - p.car_seat_depth / 2),
         "carrier.mark": Vector(0, journal, p.car_journal_len / 2),
     }
-    threads = {}
+    clears = {}
     for name, where, height, thread in (("shaft_hole", posts, inner + stand / 2, "shaft_bolt"),
                                         ("ext_hole", between, inner + stand / 2, "ext_bolt"),
                                         ("out_hole", outs, p.car_out_hole_len / 2, "out_thread")):
         for i, loc in enumerate(where):
             datums[f"carrier.{name}_{i + 1}"] = loc.position + Vector(0, 0, height)
-            threads[f"carrier.{name}_{i + 1}"] = thread
-    return at * body, placed(datums, at), threads
+            clears[f"carrier.{name}_{i + 1}"] = thread
+    return at * body, placed(datums, at), clears
 
 
 def sec_boss(p, rounded):
@@ -232,12 +232,12 @@ def sec_carrier(p):
     body -= posts * (socket + rod(p.sec_shaft_hole_d / 2, height + p.sec_t)
                      + Pos(0, 0, far) * nut_pocket(p, p.sec_shaft_nut_af, p.sec_nut_depth, 180 / p.hex_sides))
     body -= between * (Pos(0, 0, height) * rod(p.sec_ext_hole_d / 2, p.sec_t) + Pos(0, 0, far) * nut_pocket(p, p.sec_ext_nut_af, p.sec_nut_depth, 0))
-    datums, threads = {}, {}
+    datums, clears = {}, {}
     for name, where, thread in (("shaft_hole", posts, "shaft_bolt"), ("ext_hole", between, "ext_bolt")):
         for i, loc in enumerate(where):
             datums[f"sec_carrier.{name}_{i + 1}"] = loc.position + Vector(0, 0, (height + far) / 2)
-            threads[f"sec_carrier.{name}_{i + 1}"] = thread
-    return at * body, placed(datums, at), threads
+            clears[f"sec_carrier.{name}_{i + 1}"] = thread
+    return at * body, placed(datums, at), clears
 
 
 def casing(p):
@@ -289,11 +289,11 @@ def casing(p):
         "gearbox_casing.axis": Vector(0, 0, p.cas_seat_depth / 2),
         "gearbox_casing.mark": Vector(seat, 0, p.cas_seat_depth / 2),
     }
-    threads = {}
+    clears = {}
     for i, loc in enumerate(rets):
         datums[f"gearbox_casing.ret_hole_{i + 1}"] = loc.position + Vector(0, 0, p.cas_slot_z / 2)
-        threads[f"gearbox_casing.ret_hole_{i + 1}"] = "ret_screw"
-    return at * body, placed(datums, at), threads
+        clears[f"gearbox_casing.ret_hole_{i + 1}"] = "ret_screw"
+    return at * body, placed(datums, at), clears
 
 
 def retainer(p):
@@ -301,11 +301,11 @@ def retainer(p):
     at = Plane.ZX * Pos(p.ret_axis_z, p.ret_axis_x)
     holes = PolarLocations(p.ret_hole_circle_r, int(p.ret_n_holes))
     ring = Circle(p.ret_od / 2) - Circle(p.ret_id / 2) - holes * Circle(p.ret_hole_d / 2)
-    datums, threads = {}, {}
+    datums, clears = {}, {}
     for i, loc in enumerate(holes):
         datums[f"bearing_retainer.hole_{i + 1}"] = loc.position + Vector(0, 0, p.ret_t / 2)
-        threads[f"bearing_retainer.hole_{i + 1}"] = "ret_screw"
-    return extrude(at * ring, p.ret_t), placed(datums, at), threads
+        clears[f"bearing_retainer.hole_{i + 1}"] = "ret_screw"
+    return extrude(at * ring, p.ret_t), placed(datums, at), clears
 
 
 def bearing(bore, outer, width):
@@ -319,13 +319,13 @@ def tooth_centre(z, pressure_angle):
 
 
 def build(p):
-    parts, datums, threads = {}, {}, {}
+    parts, datums, clears = {}, {}, {}
     makers = (("sun", sun), ("planet", planet), ("carrier", carrier), ("sec_carrier", sec_carrier),
               ("gearbox_casing", casing), ("bearing_retainer", retainer))
     for name, make in makers:
         parts[name], d, t = make(p)
         datums.update(d)
-        threads.update(t)
+        clears.update(t)
     parts["output_bearing"] = bearing(p.out_brg_bore, p.out_brg_od, p.out_brg_w)
     parts["sun_bearing"] = bearing(p.sun_brg_bore, p.sun_brg_od, p.sun_brg_w)
     parts["planet_bearing"] = bearing(p.planet_brg_bore, p.planet_brg_od, p.planet_brg_w)
@@ -379,4 +379,4 @@ def build(p):
             assembly[brg] = ("planet_bearing", Pos(p.car_post_circle_r * cos(at), p.car_post_circle_r * sin(at), z))
             joints[brg] = {"type": "fixed", "parent": name, "child": brg}
     assembly["sun_1"] = ("sun", Pos(0, 0, p.sun_z) * Rot(0, 0, degrees(sun_turn)) * Pos(-p.sun_axis_x, -p.sun_axis_y, 0))
-    return {"parts": parts, "datums": datums, "assembly": assembly, "threads": threads, "joints": joints, "couplings": couplings}
+    return {"parts": parts, "datums": datums, "assembly": assembly, "clears": clears, "joints": joints, "couplings": couplings}

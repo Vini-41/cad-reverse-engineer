@@ -286,6 +286,23 @@ def test_screw_built_as_a_part_fills_its_hole_without_a_step_driving_it(proj_dir
     assert "against 0 screws the steps drive and 1 screw built as a part" in run.out
 
 
+def test_screw_built_as_a_part_fills_every_threaded_hole_on_its_axis(proj_dir):
+    # A screw through a tapped link into a second one, as a screw into a bracket and a locknut.
+    threaded(proj_dir, spec=M3_SCREW)
+    add(proj_dir, params=TEN_LONG)
+    remodel(proj_dir, '{"link": link}', '{"link": link, "pin": Cylinder(p.screw / 2, p.link_H)}')
+    remodel(proj_dir, '"link.b": "screw"', '"pin.axis": "screw"')
+    remodel(proj_dir, '"link.top":', '"pin.axis": (0, 0, 0),\n        "link.top":')
+    stacked = (
+        '"link_1": ("link", Location()), "link_2": ("link", Location((0, 0, p.link_H))), '
+        '"pin_1": ("pin", Location((-p.pitch / 2, 0, 2 * p.link_H)))'
+    )
+    remodel(proj_dir, '"link_1": ("link", Location())', stacked)
+    add(proj_dir, make=FLAT, buy="pin: M3×10 socket head cap screw, ISO 4762")
+    add(proj_dir, steps="{place: [link_1, link_2, pin_1]}")
+    assert ("warning", "plan-screw") not in check(proj_dir).findings
+
+
 def test_report_says_what_the_object_is_made_of_and_what_it_follows(proj_dir):
     meta(proj_dir, material="PLA, FDM printed", follows="function")
     run = check(proj_dir)

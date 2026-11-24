@@ -66,6 +66,7 @@ _RETURNS = (
     "assembly",
     "sheets",
     "threads",
+    "clears",
     "loops",
     *(f"{kind}s" for kind in _MOTION),
 )
@@ -234,9 +235,12 @@ def _contract(result) -> None:
     for name, point in result.get("datums", {}).items():
         if not (_listed(point, 3) and all(isinstance(c, (int, float)) for c in point)):
             raise Fault(f"datum {name} must be an (x, y, z) tuple of numbers, not {point!r}")
-    for name, param in result.get("threads", {}).items():
-        if not isinstance(param, str):
-            raise Fault(f"thread at {name} must name a thread param, not {param!r}")
+    for key in ("threads", "clears"):
+        for name, param in result.get(key, {}).items():
+            if not isinstance(param, str):
+                raise Fault(f"{key} at {name} must name a thread param, not {param!r}")
+    for name in result.get("threads", {}).keys() & result.get("clears", {}).keys():
+        raise Fault(f"{name} is in both threads and clears; a hole carries its thread or clears")
     for key, what in (("assembly", "assembly instance"), ("sheets", "sheets region")):
         for name, entry in result.get(key, {}).items():
             placed = _listed(entry, 2) and isinstance(entry[0], str)
@@ -335,8 +339,9 @@ def build(p: Project) -> Model | None:
             for kind in ("joint", "loop", "coupling", "cable")
         },
     )
-    declared = result.get("threads", {})
-    _hold_units(p, model, set(declared.values()))
+    declared = {at: (param, "threaded") for at, param in result.get("threads", {}).items()}
+    declared |= {at: (param, "clearance") for at, param in result.get("clears", {}).items()}
+    _hold_units(p, model, {param for param, _ in declared.values()})
     for name, part in model.parts.items():
         solids = len(part.solids())
         if not part.is_valid:
@@ -356,9 +361,9 @@ def build(p: Project) -> Model | None:
             if gap is not None:
                 p.error("datum-off-solid", f"datum {name} of part {part}: {released.off(gap)}")
     faces: dict[tuple, str] = {}  # each part's cylindrical face declared for a thread: its datum
-    for at, param in declared.items():
+    for at, (param, fit) in declared.items():
         with p.filing("model-thread", f"thread at {at}: "):
-            model.threads.append(_threaded(p, model, at, param, faces))
+            model.threads.append(_threaded(p, model, at, param, fit, faces))
     for inst, (part, _) in list(model.assembly.items()):
         if part not in model.parts:
             p.error("assembly-part", f"assembly instance {inst}: unknown part {part!r}")
@@ -370,11 +375,13 @@ def build(p: Project) -> Model | None:
     return model
 
 
-def _threaded(p: Project, model: Model, at: str, param: str, faces: dict[tuple, str]) -> Threaded:
-    """The cylinder a thread is declared on, held to the thread's sizes: it carries the thread
-    from its minor diameter to its major, or clears its screw from there to the loosest
-    clearance hole its table gives, as a released body's hole may be any of them. A hole or
-    shank is declared once, at one datum, so a count of them counts each once."""
+def _threaded(
+    p: Project, model: Model, at: str, param: str, fit: str, faces: dict[tuple, str]
+) -> Threaded:
+    """The cylinder declared for a thread, held to its table for the fit model.py states: one
+    that carries the thread lies from its minor diameter to its major, and a hole that clears its
+    screw from its major to the loosest clearance hole the table gives, as a released body's hole
+    may be any of them. A hole or shank is declared once, at one datum."""
     part = prefix(at, model.parts)
     if part is None or at not in model.datums:
         raise Fault("is not a <part>.<feature> datum")
@@ -384,8 +391,20 @@ def _threaded(p: Project, model: Model, at: str, param: str, faces: dict[tuple, 
             raise Fault(f"{param} is not a thread param; give it thread: in params.yaml")
         raise Fault()  # the param's own finding says why it has no value
     tol, thread = p.length_tol, size.thread
-    loosest = None if thread.loosest is None else thread.loosest * size.per_mm
-    widest = float(size) if loosest is None else loosest
+    if fit == "threaded":
+        low, high = size.minor, float(size)
+        wanted = (
+            f"{thread.name}'s thread (Ø{low:.4g} to Ø{high:g}; its tap drill is Ø{size.tap:.4g}); "
+            "a hole that clears its screw goes in clears"
+        )
+    elif thread.loosest is None:
+        raise Fault(f"{thread.name}'s table gives it no clearance hole; leave this one undeclared")
+    else:
+        low, high = float(size), thread.loosest * size.per_mm
+        wanted = (
+            f"a clearance hole for {thread.name} (Ø{low:g} to Ø{high:.4g}); a hole that carries "
+            "the thread goes in threads"
+        )
     # A datum on the axis of a hole in a boss lies on the boss's axis too: the hole is the one
     # of them the thread fits.
     diameter, origin, direction, face = released.cylinder_at(
@@ -394,25 +413,48 @@ def _threaded(p: Project, model: Model, at: str, param: str, faces: dict[tuple, 
         tol,
         at,
         or_axis=True,
-        fits=lambda found: size.minor - tol <= found <= widest + tol,
+        fits=lambda found: low - tol <= found <= high + tol,
     )
     # By part too: two parts may be built as one shape.
     if faces.setdefault((part, id(face)), at) != at:
         raise Fault(f"lies on the hole or shank {faces[part, id(face)]} already declares")
-    if size.minor - tol <= diameter <= size + tol:
-        fit = "threaded"
-    elif loosest is not None and size < diameter <= loosest + tol:
-        fit = "clearance"
-    else:
-        hole = "" if loosest is None else f" nor a clearance hole for it (up to Ø{loosest:.4g})"
-        raise Fault(
-            f"its cylinder is Ø{diameter:.4g}, {'neither' if hole else 'not'} {thread.name}'s "
-            f"thread (Ø{size.minor:.4g} to Ø{float(size):g}; its tap drill is Ø{size.tap:.4g})"
-            f"{hole}"
-        )
-    return Threaded(
-        at, part, param, fit, released.is_hole(face), printed(diameter)[0], origin, direction
+    hole = released.is_hole(face)
+    if fit == "clearance" and not hole:
+        raise Fault("is a shank, which carries its thread; declare it in threads")
+    if not low - tol <= diameter <= high + tol:
+        raise Fault(f"its cylinder is Ø{diameter:.4g}, not {wanted}")
+    return Threaded(at, part, param, fit, hole, printed(diameter)[0], origin, direction)
+
+
+def screws(carrying: list[Threaded], assembly: dict, tol: float) -> tuple[int, int]:
+    """Of the holes and shanks carrying one thread: the screws built as parts, and the holes on
+    no built screw's axis, each a screw of its own. Each counts per instance of its part, or once
+    where none places it, which has no place to share an axis with another."""
+    from build123d import Location
+
+    def axes(hole: bool) -> list[tuple]:
+        found = []
+        for t in carrying:
+            if t.hole == hole:
+                tip = tuple(a + b for a, b in zip(t.origin, t.direction))
+                for at in [loc for part, loc in assembly.values() if part == t.part]:
+                    found.append(
+                        ((at * Location(t.origin)).position, (at * Location(tip)).position)
+                    )
+        return found
+
+    def on(point, axis: tuple) -> bool:
+        along = (axis[1] - axis[0]).normalized()
+        offset = point - axis[0]
+        return (offset - along * offset.dot(along)).length <= tol
+
+    placed = {part for part, _ in assembly.values()}
+    unplaced = [t.hole for t in carrying if t.part not in placed]
+    built = axes(False)
+    open_holes = sum(
+        not any(on(start, axis) and on(tip, axis) for axis in built) for start, tip in axes(True)
     )
+    return len(built) + unplaced.count(False), open_holes + unplaced.count(True)
 
 
 def _hold_units(p: Project, model: Model, threaded: set[str]) -> None:

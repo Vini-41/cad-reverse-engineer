@@ -426,7 +426,7 @@ def build_fit_coupon(p, datums, threads):
 def build(p):
     parts = {}
     datums = {}
-    threads = {}
+    threads, clears = {}, {}
     assembly = {}
 
     parts["body"] = build_body(p, datums, threads)
@@ -462,8 +462,8 @@ def build(p):
     for i, a in enumerate(ring(p.bp_hole_n, p.bp_hole_a), 1):
         assembly[f"plate_screw_{i}"] = ("plate_screw", Location(polar(p.bp_hole_R, a, head_y)))
 
+    # The body's post holes are left undeclared: the screw cuts its own thread there, which is neither fit.
     for i in range(1, int(p.bp_hole_n) + 1):
-        threads[f"body.post_hole_{i}"] = "plate_screw"
-        threads[f"bottom_plate.hole_{i}"] = "plate_screw"
+        clears[f"bottom_plate.hole_{i}"] = "plate_screw"
 
-    return {"parts": parts, "datums": datums, "assembly": assembly, "threads": threads}
+    return {"parts": parts, "datums": datums, "assembly": assembly, "threads": threads, "clears": clears}

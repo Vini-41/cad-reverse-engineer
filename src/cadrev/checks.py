@@ -14,7 +14,16 @@ from dataclasses import dataclass, field
 from typing import NamedTuple
 
 from . import Fault, ledger, released, units
-from .build import JOINT_TYPES, Model, unmoving, coupling_by, prefix, printed, range_ends
+from .build import (
+    JOINT_TYPES,
+    Model,
+    coupling_by,
+    prefix,
+    printed,
+    range_ends,
+    screws,
+    unmoving,
+)
 from .ledger import TOL_CAP, TOL_REL_CAP, above_cap
 from .motion import Mechanism, pose_text
 from .project import (
@@ -557,19 +566,16 @@ class Checks:
         yield self._compare(c, c["id"], compared_with(c), found, f" at {at}")
 
     def _count(self, c: dict, placed: Model) -> Iterator[Result]:
-        """How many instances of its part the assembly places; or, of its thread, how many holes
-        and shanks carry it, each once per instance of its part, or once where none places it."""
+        """How many instances of its part the assembly places; or, of its thread, how many screws
+        the holes and shanks carrying it hold, a built screw and the holes on its axis being one."""
         placed_parts = Counter(name for name, _ in placed.assembly.values())
         if "thread" in c:
             thread = str(c["thread"])
             if thread not in self.p.thread_params:
                 raise Fault(f"{thread} is not a thread param")
-            found = sum(
-                placed_parts[t.part] or 1
-                for t in self.model.threads
-                if t.param == thread and t.fit == "threaded"
-            )
-            measured = f"{found} hole{'s' * (found != 1)} or shank{'s' * (found != 1)} threaded "
+            carrying = [t for t in self.model.threads if t.param == thread and t.fit == "threaded"]
+            found = sum(screws(carrying, placed.assembly, self.p.length_tol))
+            measured = f"{found} screw{'s' * (found != 1)} threaded "
             measured += f"{self.p.thread_params[thread].thread.name} ({thread})"
         else:
             part = str(c["part"])
