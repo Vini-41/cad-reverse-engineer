@@ -106,7 +106,7 @@ evidence:
     confirmed_by: <reviewer>     # the name of the human who checked the crop
 ```
 
-- **A quote** is matched against the text `cadrev text` prints, ignoring case, whitespace, line-break hyphenation, dash variants and `×`/`x`; everything else is verbatim. Each value must appear as a number in the quote, matched whole: "37 mm" is not found in "137 mm".
+- **A quote** is matched against the text `cadrev text` prints, ignoring case, whitespace (but for a space that keeps two numbers apart), line-break hyphenation, dash variants and `×`/`x`; everything else is verbatim. Each value must appear as a number in the quote, matched whole: "37 mm" is not found in "137 mm".
 - **How numbers read.** A decimal comma is one number (`3,5 mm` is 3.5) and so is a fraction before a unit (`1 1/2 in` is 1.5); both ends of a range are values; a number labelling a figure, table, equation or section is not one. A cardinal from zero to ninety-nine in words is a number ("Eight tension springs" states 8, written `n: 8` or `n: eight`). A comma before exactly three digits (`1,250`) reads two ways, so take that value from where it is printed in another form.
 - **Image evidence** covers numbers that exist only in pixels: figure labels, drawing dimensions, video frames. The crop is hashed so the reviewed image cannot change under its reading. Until `confirmed_by` names the human who checked it, the reading holds the project at VERIFIED PENDING REVIEW. The image a `measured` param scales off is image evidence too and needs no `values`: its `reading` transcribes any label and names the reference it is scaled against.
 - **`scope`** sets a statement aside, with a `reason`:

@@ -162,8 +162,8 @@ def _offsets(text: str, needle: str) -> list[int]:
 def _quote_spans(page: str, quote: str) -> list[tuple[int, int]]:
     """Where quote occurs on a page normalized with its line-break hyphens marked by NUL, as spans
     of the page with those hyphens dropped: found with them dropped (inter-|toe), else kept
-    (dual-|axis); and, as the quote matcher does, ignoring whitespace where it is not found as
-    written."""
+    (dual-|axis); and, as the quote matcher does, ignoring whitespace but for a space that keeps
+    two numbers apart where it is not found as written."""
     dropped, kept = page.replace("\0", ""), page.replace("\0", "-")
     for squashed in (False, True):
         for reading, to_dropped in (
@@ -171,10 +171,14 @@ def _quote_spans(page: str, quote: str) -> list[tuple[int, int]]:
             (kept, lambda i: i - page.count("\0", 0, i)),
         ):
             # The offset in reading of each char searched: every char, or every non-space one.
-            at = [i for i, ch in enumerate(reading) if not (squashed and ch.isspace())]
+            at = [
+                i
+                for i in range(len(reading))
+                if not (squashed and sources.ignored_space(reading, i))
+            ]
             searched = "".join(reading[i] for i in at)
             needles = dict.fromkeys(
-                re.sub(r"\s+", "", n) if squashed else n for n in sources.needles(quote)
+                sources.unspaced(n) if squashed else n for n in sources.needles(quote)
             )
             found = [
                 (to_dropped(at[start]), to_dropped(at[start + len(needle) - 1] + 1))

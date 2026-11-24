@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import io
 import math
 import re
 import unicodedata
 import zipfile
-from functools import cache
+from collections.abc import Callable
+from functools import cache, partial
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import NamedTuple
@@ -97,8 +99,23 @@ def needles(quote: str) -> list[str]:
     return [f for i, f in enumerate(forms) if f and f not in forms[:i]]
 
 
+# Whitespace a quote may differ by: any but what stands between two digits, a decimal point among
+# them or not (1 4, 1 .4, 1. 4, 1 . 4), which keeps two numbers from reading as one.
+_IGNORED_SPACE = re.compile(r"(?<!\d)(?<!\d\.)(?<!\d\s\.)\s|\s(?!\.?\s?\d)")
+
+
+def ignored_space(text: str, i: int) -> bool:
+    """Whether normalized text[i] is whitespace a quote may differ by."""
+    return _IGNORED_SPACE.match(text, i) is not None
+
+
+def unspaced(text: str) -> str:
+    """Normalized text without the whitespace a quote may differ by."""
+    return _IGNORED_SPACE.sub("", text)
+
+
 def squash(text: str, hyphen: str = "") -> str:
-    return re.sub(r"\s+", "", normalize(text, hyphen))
+    return unspaced(normalize(text, hyphen))
 
 
 class _Number(NamedTuple):
@@ -308,11 +325,16 @@ def _pages(path: Path, digest: str) -> tuple[str, ...]:
     """pages(path), cached by its content: a source rewritten in place is read afresh."""
     suffix = path.suffix.lower()
     if suffix == ".pdf":
+        import pypdf
         import pypdfium2
 
         # PDFium ends a line with \r\n, and writes a hyphen that ends one as U+FFFE with no break.
         pdf = pypdfium2.PdfDocument(path)
-        texts = (page.get_textpage().get_text_range() for page in pdf)
+        reader = cache(lambda: pypdf.PdfReader(path))  # opened only for a symbol font's page
+        texts = (
+            _page_text(page.get_textpage(), partial(_font_codes, reader, n))
+            for n, page in enumerate(pdf)
+        )
         return tuple(t.replace("\r\n", "\n").replace("\ufffe", "-\n") for t in texts)
     if suffix == ".docx":
         return (_docx_text(path),)
@@ -323,16 +345,97 @@ def _pages(path: Path, digest: str) -> tuple[str, ...]:
     raise ValueError(f"unsupported source format: {path.name}")
 
 
+# What a typesetter's symbol font draws, by glyph name, where its text layer names another
+# character. Its control codes are assigned per file (code 3 is × in one paper, ~ in another), so
+# a glyph is known by the name the font's encoding gives its code.
+_DRAWN = {"AdvP4C4E74": {"C2": "×", "zero": "′"}, "AdvPi1": {"m": "µ"}}
+# Characters on one line further apart than this many digit widths are in separate table cells.
+_CELL_GAP = 3
+
+
+def _in_separate_cells(a: tuple[float, ...], b: tuple[float, ...]) -> bool:
+    """Whether two characters' boxes (left, right, bottom, top) sit on one line, across the page
+    or up it, too far apart to be one number."""
+    for start, end, low, high in ((0, 1, 2, 3), (2, 3, 0, 1)):
+        if min(a[high], b[high]) > max(a[low], b[low]):
+            gap = max(b[start] - a[end], a[start] - b[end])
+            return gap > _CELL_GAP * max(a[end] - a[start], b[end] - b[start])
+    return False
+
+
+def _font_codes(reader: Callable, n: int) -> dict[str, dict[int, str | None]]:
+    """The glyph name of each code the /Differences of page n's fonts name, by font family; None
+    for a code two subsets of a family name differently, since PDFium does not say which drew it."""
+    codes: dict[str, dict[int, str | None]] = {}
+    pending, seen = [reader().pages[n].get("/Resources")], set()
+    while pending:
+        resources = pending.pop()
+        resources = resources.get_object() if resources is not None else None
+        if not resources or id(resources) in seen:
+            continue
+        seen.add(id(resources))
+        pending += [
+            x.get_object().get("/Resources") for x in resources.get("/XObject", {}).values()
+        ]
+        for font in resources.get("/Font", {}).values():
+            font = font.get_object()
+            family = codes.setdefault(str(font.get("/BaseFont", "")).split("+")[-1].lstrip("/"), {})
+            encoding = font.get("/Encoding")
+            encoding = encoding.get_object() if encoding is not None else None
+            code = 0
+            for item in encoding.get("/Differences", []) if isinstance(encoding, dict) else []:
+                item = item.get_object()
+                if isinstance(item, int):
+                    code = item
+                else:
+                    family[code] = item[1:] if family.get(code, item[1:]) == item[1:] else None
+                    code += 1
+    return codes
+
+
+def _page_text(textpage, font_codes: Callable[[], dict[str, dict[int, str | None]]]) -> str:
+    """A PDF page's text as PDFium extracts it, with what the text layer misstates put right: a
+    symbol font's glyph is the character it draws, and two numbers in separate table cells are
+    kept apart."""
+    import pypdfium2.raw as pdfium
+
+    raw, chars = textpage.raw, []
+    name, flags = ctypes.create_string_buffer(256), ctypes.c_int()
+    left, right, bottom, top = (ctypes.c_double() for _ in range(4))
+    codes, before = None, None  # the page's font codes once needed; the digit just before
+    for i in range(pdfium.FPDFText_CountChars(raw)):
+        code = pdfium.FPDFText_GetUnicode(raw, i)
+        char = chr(code)
+        if (code < 32 or char in "m0") and pdfium.FPDFText_GetFontInfo(raw, i, name, 256, flags):
+            if drawn := _DRAWN.get(name.value.decode("utf8", "replace")):
+                codes = font_codes() if codes is None else codes
+                family = codes.get(name.value.decode("utf8", "replace"), {})
+                char = drawn.get(family.get(code, char) or "", char)
+        if char.isascii() and (char.isdecimal() or char == "."):
+            pdfium.FPDFText_GetCharBox(raw, i, left, right, bottom, top)
+            box = left.value, right.value, bottom.value, top.value
+            if before and _in_separate_cells(before, box):
+                chars.append(" ")
+            before = box if char != "." else None
+        else:
+            before = None
+        # As PDFium's own text range: U+0002 is a line-end hyphen, written U+FFFE, and U+0003 is
+        # left out.
+        if char != "\x03":
+            chars.append("\ufffe" if char == "\x02" else char)
+    return "".join(chars).encode("utf-16-le", "surrogatepass").decode("utf-16-le", "ignore")
+
+
 def find_quote(path: Path, quote: str, page: int | None = None) -> int | None:
     """The page a verbatim quote is on, 1-based, looking only on the cited page when one is given;
-    None where it is not found. Whitespace is matched as one space, then ignored. A line-break
-    hyphen ends a split word (inter-|toe) or belongs to a compound (dual-|axis), so both readings
-    are tried."""
+    None where it is not found. Whitespace is matched as one space, then ignored, but for a space
+    that keeps two numbers from reading as one. A line-break hyphen ends a split word (inter-|toe)
+    or belongs to a compound (dual-|axis), so both readings are tried."""
     texts = pages(path)
     candidates = [n for n in ([page] if page else range(1, len(texts) + 1)) if 1 <= n <= len(texts)]
     for squashed in (False, True):
         forms = needles(quote)
-        patterns = [_whole(re.sub(r"\s+", "", f) if squashed else f) for f in forms]
+        patterns = [_whole(unspaced(f) if squashed else f) for f in forms]
         for n in candidates:
             for hyphen in ("", "-"):
                 text = (squash if squashed else normalize)(texts[n - 1], hyphen)

@@ -98,7 +98,7 @@ evidence:
     source: paper
     page: 4
     locator: Bill of materials
-    quote: "Acrylic glass 6 mm  60 cm  30 cm 2"
+    quote: "Acrylic glass 6 mm × 60 cm × 30 cm 2"
     values: {t: 6, L: 60, W: 30}
     scope: context
     reason: "the stock sheets the 6 mm parts are cut from; restates P3-carriage"
@@ -106,13 +106,13 @@ evidence:
     source: paper
     page: 4
     locator: Bill of materials
-    quote: "Rubber feet M5  15 mm Set (10"
+    quote: "Rubber feet M5 × 15 mm Set (10"
     values: {size: 15}
   - id: P4-tnuts
     source: paper
     page: 4
     locator: Bill of materials
-    quote: "Slim T-slot nuts M5 10 mm  6 mm"
+    quote: "Slim T-slot nuts M5 10 mm × 6 mm"
     values: {a: 10, b: 6}
     scope: not-modeled
     reason: "nuts inside the profiles' slots, fasteners the model does not build"
@@ -120,7 +120,7 @@ evidence:
     source: paper
     page: 5
     locator: Bill of materials
-    quote: "Screw M2.5  16 mm 4"
+    quote: "Screw M2.5 × 16 mm 4"
     values: {L: 16, n: 4}
     scope: context
     reason: "a total over the stretcher and the controller units, which the target splits; which holes it drives is gap G-screws"
@@ -128,7 +128,7 @@ evidence:
     source: paper
     page: 5
     locator: Bill of materials
-    quote: "Screw M2.5  10 mm 2"
+    quote: "Screw M2.5 × 10 mm 2"
     values: {L: 10, n: 2}
     scope: context
     reason: "a total over the stretcher and the controller units, which the target splits; which holes it drives is gap G-screws"
@@ -136,7 +136,7 @@ evidence:
     source: paper
     page: 5
     locator: Bill of materials
-    quote: "Screw M3  8 mm 16"
+    quote: "Screw M3 × 8 mm 16"
     values: {L: 8, n: 16}
     scope: context
     reason: "a total over the stretcher and the controller units, which the target splits; which holes it drives is gap G-screws"
@@ -144,7 +144,7 @@ evidence:
     source: paper
     page: 5
     locator: Bill of materials
-    quote: "Screw M3  10 mm 4"
+    quote: "Screw M3 × 10 mm 4"
     values: {L: 10, n: 4}
     scope: context
     reason: "a total over the stretcher and the controller units, which the target splits; which holes it drives is gap G-screws"
@@ -152,7 +152,7 @@ evidence:
     source: paper
     page: 5
     locator: Bill of materials
-    quote: "Screw M3  12 mm 40"
+    quote: "Screw M3 × 12 mm 40"
     values: {L: 12, n: 40}
     scope: context
     reason: "a total over the stretcher and the controller units, which the target splits; which holes it drives is gap G-screws"
@@ -160,13 +160,13 @@ evidence:
     source: paper
     page: 5
     locator: Bill of materials
-    quote: "Screw M4  12 mm 24"
+    quote: "Screw M4 × 12 mm 24"
     values: {L: 12, n: 24}
   - id: P5-m5x12
     source: paper
     page: 5
     locator: Bill of materials
-    quote: "Screw M5  12 mm 50"
+    quote: "Screw M5 × 12 mm 50"
     values: {L: 12, n: 50}
     scope: context
     reason: "a total over the stretcher and the controller units, which the target splits; which holes it drives is gap G-screws"
@@ -174,7 +174,7 @@ evidence:
     source: paper
     page: 5
     locator: Bill of materials
-    quote: "Screw M5  20 mm 8"
+    quote: "Screw M5 × 20 mm 8"
     values: {L: 20, n: 8}
     scope: context
     reason: "a total over the stretcher and the controller units, which the target splits; which holes it drives is gap G-screws"
@@ -182,7 +182,7 @@ evidence:
     source: paper
     page: 5
     locator: Bill of materials
-    quote: "Screw M6  20 mm 4"
+    quote: "Screw M6 × 20 mm 4"
     values: {L: 20, n: 4}
     scope: context
     reason: "a total over the stretcher and the controller units, which the target splits; which holes it drives is gap G-screws"
@@ -190,7 +190,7 @@ evidence:
     source: paper
     page: 6
     locator: Section 5.1
-    quote: "two sheets with a size of 6 mm  30 cm  60 cm"
+    quote: "two sheets with a size of 6 mm × 30 cm × 60 cm"
     values: {t: 6, W: 30, L: 60}
     scope: context
     reason: "the stock sheets the 6 mm parts are cut from; restates P3-carriage"
@@ -312,7 +312,7 @@ evidence:
     source: paper
     page: 5
     locator: Bill of materials
-    quote: "Acrylic glass 3 mm  60 cm  30 cm 2"
+    quote: "Acrylic glass 3 mm × 60 cm × 30 cm 2"
     values: {t: 3, L: 60, W: 30}
     scope: context
     reason: "the stock sheets the 3 mm parts are cut from; restates P3-mould-base"
@@ -320,7 +320,7 @@ evidence:
     source: paper
     page: 7
     locator: Section 5.2
-    quote: "two sheets with a size of 3 mm  30 cm  60 cm"
+    quote: "two sheets with a size of 3 mm × 30 cm × 60 cm"
     values: {t: 3, W: 30, L: 60}
     scope: not-modeled
     reason: "the sheets of the electronics and controller unit's housing, which the target leaves out"
