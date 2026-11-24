@@ -5,7 +5,7 @@
 A six-well stretching stage of laser-cut acrylic, rebuilt from [its paper](https://doi.org/10.1016/j.ohx.2020.e00162) and [the authors' cut sheets and meshes](https://doi.org/10.17632/mgkbmytx63.1). With [uv](https://docs.astral.sh/uv/) installed, run this from the root of a clone:
 
 ```bash
-uvx --python '>=3.12,<3.15' cadrev==0.3.1 check examples/cell-stretcher
+uvx --python '>=3.12,<3.15' cadrev==0.4.0 check examples/cell-stretcher
 ```
 
 Expected status: `VERIFIED: 0 errors, 4 warnings, 106/106 checks pass`

@@ -2,6 +2,15 @@
 
 The highlights of each version. Its release has the full notes.
 
+## [v0.4.0](https://github.com/Vini-41/cad-reverse-engineer/releases/tag/v0.4.0)
+
+- **The model states each hole's fit.** `threads` holds a hole or shank that carries the thread, and the new `clears` holds a hole its screw passes through. cadrev no longer guesses the fit from the diameter. The drawing, the plan's screw warning and a `count` check read the fit stated, and a count counts each screw once.
+- **A ledger number is the number the page prints.** `cadrev text` reads a symbol font's µ and ×, prints an inch mark as ″, and keeps two table cells apart. A quote that copied one of these misreadings is refused.
+- **A check that raises is a finding.** It files `[check-unevaluated]` with the check's name, and the report says NOT VERIFIED. A full run that dies leaves no earlier report behind.
+- **`--no-build` no longer warns `[unchecked-source]`** about params a shape check covers. The full run still names a param no check compares.
+
+**Upgrading:** move each clearance hole from `threads` to `clears`. One wider than the thread's major diameter fails with `[model-thread]` until it is moved. One at the major diameter still passes as tapped, so find those by hand. A hole the screw cuts its own thread in is neither, so leave it undeclared. A `[quote-not-found]` on a quote that passed before means it copied a misreading: quote the page as `cadrev text` now prints it.
+
 ## [v0.3.1](https://github.com/Vini-41/cad-reverse-engineer/releases/tag/v0.3.1)
 
 - **Figures reach every model.** `cadrev figures` writes a grayscale or CMYK JPEG as PNG, because some models refuse those JPEGs.

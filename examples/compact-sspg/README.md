@@ -5,7 +5,7 @@
 The gearbox of a robot actuator, rebuilt from [its paper](https://arxiv.org/abs/2510.07197) and [the authors' STL meshes](https://github.com/singhaman1750/COMPAct). The secondary carrier is hidden in the image to show the gears. With [uv](https://docs.astral.sh/uv/) installed, run this from the root of a clone:
 
 ```bash
-uvx --python '>=3.12,<3.15' cadrev==0.3.1 check examples/compact-sspg
+uvx --python '>=3.12,<3.15' cadrev==0.4.0 check examples/compact-sspg
 ```
 
 Expected status: `VERIFIED: 0 errors, 1 warning, 17/17 checks pass`
