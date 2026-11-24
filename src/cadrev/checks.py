@@ -316,6 +316,11 @@ class Checks:
                         p.error(fault.rule or "check-config", f"check {cid}: {fault.message}")
                 except (KeyError, TypeError, ValueError) as exc:
                     p.error("check-config", f"check {cid}: missing or unknown {exc}")
+                except Exception as exc:  # noqa: BLE001 - OCC raises many types on a valid part
+                    p.error(
+                        "check-unevaluated",
+                        f"check {cid}: could not be evaluated: {type(exc).__name__}: {exc}",
+                    )
             seconds = time.perf_counter() - start
             if found and (slowest is None or seconds > slowest[1]):
                 slowest = (str(cid), seconds)

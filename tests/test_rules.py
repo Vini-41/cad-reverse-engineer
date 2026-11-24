@@ -134,6 +134,36 @@ def _sheet(*then, **kwargs):
     return lambda r, t: (sheet(r, t, **kwargs), [step(r, t) for step in then])
 
 
+# A plate whose flank is a spline with a zero start derivative, so the normal of the face it sweeps
+# is undefined at the midpoint of that end's edge, where a shape check against an STL reads it.
+ZERO_NORMAL = """\
+from math import cos, sin
+
+from build123d import *
+
+
+def build(p):
+    ts = [p.roll * i / p.spans for i in range(int(p.spans) + 1)]
+    points = [(p.rb * (cos(t) + t * sin(t)), p.rb * (sin(t) - t * cos(t)), 0) for t in ts]
+    ends = [(p.rb * t * cos(t), p.rb * t * sin(t), 0) for t in (ts[0], ts[-1])]
+    curve = Edge.make_spline(points, tangents=ends, parameters=ts, scale=False, tol=0)
+    start, end = curve @ 0, curve @ 1
+    low_end, low_start = Vector(end.X, -p.drop, 0), Vector(start.X, -p.drop, 0)
+    sides = [(end, low_end), (low_end, low_start), (low_start, start)]
+    wire = Wire([curve, *(Edge.make_line(*side) for side in sides)])
+    link = extrude(Face(wire), p.thick)
+    return {"parts": {"link": link}, "datums": {}, "assembly": {"link_1": ("link", Location())}}
+"""
+
+
+def _zero_normal(r, t):
+    """A shape check against an STL of a part whose face has no normal where the check reads it."""
+    released(r, t, name="link.stl")
+    for name, value in {"rb": 5, "roll": 0.6, "spans": 13, "drop": 2.5, "thick": 2}.items():
+        add(r, params=f"{name}: {{basis: proposed, value: {value}, rationale: r, gap: G1}}")
+    write(r, "model.py", ZERO_NORMAL)
+
+
 def _quoted_check(text: str, check: str, **values):
     """A notes source stating values, and a check that compares with them."""
     return lambda r, t: (add_quote(r, t, text, values=values), add(r, checks=check))
@@ -531,6 +561,7 @@ LINK_FINDINGS = {
     # Checks.
     "check-id": _check("{id: env, kind: interference}"),
     "check-kind": _checks("clear", kind="overlap"),
+    "check-unevaluated": _zero_normal,
     "check-failed": _model("Box(p.link_L,", "Box(p.link_L + 1,"),
     "check-failed: a count one short": lambda r, t: (
         add_quote(r, t, "Two links make a finger.", values={"n": 2}),
@@ -847,6 +878,13 @@ def test_every_rule_the_source_can_file_is_tripped():
     rules = source_rules()
     assert len(rules) > 70 and rules - tripped == set()
     assert tripped - rules == set(), "a case names a rule the source does not file"
+
+
+def test_a_check_whose_evaluation_raises_is_named_and_the_run_reports(proj_dir, tmp_path):
+    _zero_normal(proj_dir, tmp_path)
+    run = check(proj_dir)
+    assert run.status == "NOT VERIFIED" and run.report
+    assert any(m.startswith("check shape:") for m in run.messages("check-unevaluated"))
 
 
 def _sourced(**entry):

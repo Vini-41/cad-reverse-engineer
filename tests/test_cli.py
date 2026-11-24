@@ -263,6 +263,23 @@ def test_only_a_build_says_a_source_param_is_unchecked(proj_dir):
     assert "unchecked-source" in check(proj_dir).rules
 
 
+@pytest.mark.parametrize(
+    ("dies", "raised"),
+    [
+        (lambda r: add_line(r, "raise KeyboardInterrupt"), KeyboardInterrupt),
+        # YAML reads this as a date, and Python's date refuses it, as the project is being read.
+        (lambda r: write(r, "params.yaml", "params: 2026-02-30\n"), ValueError),
+    ],
+    ids=["building", "reading"],
+)
+def test_a_run_that_dies_leaves_no_earlier_report(proj_dir, dies, raised):
+    assert check(proj_dir).status == "VERIFIED"
+    dies(proj_dir)
+    with pytest.raises(raised):
+        cadrev("check", proj_dir)
+    assert not {"report.md", "report.json"} & {f.name for f in (proj_dir / "build").iterdir()}
+
+
 @pytest.mark.parametrize("command", ["check", "text", "figures", "source"])
 @pytest.mark.parametrize("refusal", ["project-missing", "format-missing", "format-unknown"])
 def test_every_command_refuses_a_project_it_cannot_read_and_writes_nothing(

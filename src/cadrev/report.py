@@ -343,6 +343,12 @@ def _anchor(e: dict) -> str:
     return f"figure {e.get('image')}: “{e.get('reading')}”{confirmed}"
 
 
+def withdraw(root: Path) -> None:
+    """Remove the last run's report, so a run that dies before writing its own leaves none."""
+    for name in ("report.md", "report.json"):
+        (root / "build" / name).unlink(missing_ok=True)
+
+
 def write(
     p: Project,
     status: str,
