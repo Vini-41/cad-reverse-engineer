@@ -14,6 +14,7 @@ from conftest import (
     add_source,
     cadrev,
     change,
+    docx,
     check,
     edit,
     ledgered,
@@ -41,6 +42,12 @@ MATCHING = [
     ("The pin is 16 mm long", "The pin is 16 mm long.", False),
     ("a shaft of 17 mm", "a shaft of 17 cm", False),
     ("two cells 1 4 € apart", "two cells 14 € apart", False),
+    # A raised run belongs to what it is raised over where it changes a reading: an exponent
+    # or a unit's power, not a footnote marker.
+    ("a factor of 10⁵ here", "a factor of 10", False),
+    ("an area of 4 cm² here", "an area of 4 cm", False),
+    ("bought from eBay¹ for 5 €", "bought from eBay", True),
+    ("the 12.5¹ pin", "the 12.5", True),
     ("one cell 25 € wide", "one cell 2 5 € wide", False),
 ]
 
@@ -54,7 +61,7 @@ def test_quote_matches_across_line_breaks_spacing_case_and_dashes_but_never_insi
     assert missed == {f"N{i}" for i, row in enumerate(MATCHING) if not row[2]}
     # A quote that matches covers the quantities inside it.
     uncovered = [m.split("quantity ")[1].split("  …")[0] for m in run.messages("coverage")]
-    assert uncovered == ["137 mm", "3.7 mm", "16 mm", "17 mm"]
+    assert uncovered == ["137 mm", "3.7 mm", "16 mm", "17 mm", "4 cm²"]
 
 
 def test_pdf_quote_matches_a_word_hyphenated_across_lines_either_way(proj_dir, tmp_path):
@@ -86,7 +93,7 @@ TEXT_LAYER = [
     (CENTRIFUGE, 1, "© 2022", "\x01 2022"),
     (STRETCHER, 14, "LEGO®", "LEGO\x04"),
     # and AdvP4C4E74's C0, C15, and C24, drawn as code 3 here and C2 (×) in the stretcher.
-    (CENTRIFUGE, 9, "1.118 × 10−5", "1.118 × 10\x055"),
+    (CENTRIFUGE, 9, "1.118 × 10⁻⁵", "1.118 × 10\x055"),
     (CENTRIFUGE, 2, "• Simple design", "\x01 Simple design"),
     (CENTRIFUGE, 4, "~ 100 g", "printing\n 100 g"),
 ]
@@ -153,6 +160,55 @@ def test_the_sweep_lists_a_product_and_a_unit_a_symbol_font_prints(proj_dir, tmp
     assert "250 mm" not in listed and "20 μm" not in listed  # 20 µM, micromolar
 
 
+DATASHEET = REPO / "examples/rp2040-qfn56/sources/rp2040-datasheet.pdf"
+# What a page prints raised, written raised, and how its text layer flattens it:
+# (paper, page, printed, flattened).
+RAISED = [
+    (CENTRIFUGE, 9, "RCF = RPM² × 1.118 × 10⁻⁵ × r", "RPM2"),
+    (DATASHEET, 213, "(12 × 10⁶ ⋅ 1 × 10⁻³) ÷ 256", "10\n6"),
+    (STRETCHER, 1, "of 4 cm² per", "4 cm2"),
+    (STRETCHER, 12, "cells/cm²", "cells/cm2"),
+    (STRETCHER, 2, "Sylgard™184", "SylgardTM"),
+    (STRETCHER, 4, "eBay¹ Other", "eBay1"),
+    (STRETCHER, 4, "Plattenzuschnitt24³ Polymer", "Plattenzuschnitt243"),
+    (STRETCHER, 1, "Delf Kah^(a,⇑), Alexander Winterlᵃ, ", "Kah a"),
+    # A mark that prints high is written as printed; so are a product and a thread size.
+    (STRETCHER, 14, "LEGO®", "^(®)"),
+    (CENTRIFUGE, 3, "(0.75′′*0.5′′)", "^(′"),
+    (CENTRIFUGE, 4, "rotor, † part", "rotor, y"),
+    (STRETCHER, 4, "glass 6 mm × 60 cm × 30 cm", "^("),
+    (STRETCHER, 5, "Screw M3 × 10 mm 4", "^("),
+    # A fraction's numerator stands over its denominator, and is not raised.
+    (DATASHEET, 328, "increments of 1\n256", "increments of ¹"),
+    (DATASHEET, 504, "255\n15\n16", "255¹⁵"),
+]
+
+
+@pytest.mark.parametrize("paper, page, printed, flattened", RAISED)
+def test_pdf_text_writes_what_a_page_prints_raised_as_raised(
+    proj_dir, tmp_path, paper, page, printed, flattened
+):
+    add_source(proj_dir, tmp_path, "source.pdf", paper.read_bytes())
+    text = cadrev("text", proj_dir, "doc", "--page", page)[1]
+    assert printed in text and flattened not in text
+
+
+def test_a_quote_types_a_raised_run_raised_or_with_a_caret_and_never_flat(proj_dir, tmp_path):
+    add_source(proj_dir, tmp_path, "source.pdf", CENTRIFUGE.read_bytes())
+    quotes = {
+        "raised": "RPM² × 1.118 × 10⁻⁵ × r",
+        "caret": "RPM^2 × 1.118 × 10^-5 × r",
+        "bracketed": "RPM^(2) × 1.118 × 10^(−5) × r",
+        "flat": "RPM2 × 1.118 × 105 × r",
+        "cut": "1.118 × 10",  # a number cut from its exponent
+    }
+    for eid, quote in quotes.items():
+        entry = {"id": eid, "source": "doc", "page": 9, "locator": "p", "quote": quote}
+        add(proj_dir, evidence=entry | {"scope": "context", "reason": "test"})
+    refused = check(proj_dir, "--no-build").messages("quote-not-found")
+    assert [message.split(":")[0] for message in refused] == ["flat", "cut"]
+
+
 def test_a_concentration_is_no_stated_length(proj_dir, tmp_path):
     # Lower case would read 20 µM, micromolar, as 20 µm.
     add_source(proj_dir, tmp_path, "notes.pdf", pdf(["blebbistatin (5 or 20 µM) and 2 mM ATP"]))
@@ -185,6 +241,13 @@ READING = {
     "the first of a pair of pins": ([], [1, 2]),
     "the twenty-first of one hundred links": ([], [20, 21, 1, 100]),
     "two-thirds of the plate": ([], [2]),
+    # A raised run after 10 is its exponent; after another number or a word, a footnote marker.
+    "E = 2.1 × 10⁵ MPa": ([2.1e5], [2.1, 10, 5, 105]),
+    "E = 2.1 x 10^5 MPa": ([2.1e5], [2.1, 105]),
+    "E = 2.1 · 10⁵ MPa, or 2.1⋅10⁵ MPa": ([2.1e5], [2.1, 10]),
+    "a factor of 10⁻⁵, or 1.118×10^(-5)": ([1e-5, 1.118e-5], [10, 5, -5, 1.118, 105]),
+    "the 12.5¹ pin, 30 mm¹ long, from eBay¹": ([12.5, 30], [1, 12.51, 301]),
+    "Plattenzuschnitt24³": ([24], [243, 3]),
 }
 
 
@@ -243,6 +306,14 @@ MM = {
     "a spring of 0.25 N·m/rad": (0.25, 250),
     "a damper of 0.002 N·m·s/rad": (0.002, 2),
     "a cord of 300 N/m": (300, 0.3),
+    "a modulus of 2.1 × 10⁵ MPa": (2.1e5, 2.1e5),
+    "a resin of 1.24 × 10³ kg/m³": (1240, 0.00124),
+    "a resin of 1.2 g·cm⁻³": (1.2, 0.0012),
+    "a resin of 1.2 g·cm^-3": (1.2, 0.0012),
+    "a 4 cm² pad": (4, 400),
+    "a 4 cm^2 pad": (4, 400),
+    "a 30 mm¹ rod": (30, 30),
+    "a 2 mN·m² plate": (2, 2),  # in a unit cadrev does not know, so the project's
     "a sun of 25 teeth": (25, 25),
     # A drawing's count of threaded holes is a count, whatever its thread size spells.
     "tapped 6-M2.0 through": (6, 6),
@@ -291,7 +362,7 @@ SWEPT = {
     'A 0.5 in shaft, a 2" bore and a 1/4 inch key.': ["0.5 in", '2"', "1/4 inch"],
     "It is 5 millimeters, 5 um or 3 ft.": ["5 millimeters", "5 um", "3 ft"],
     "An M3 screw, an M10x1.5 bolt and 4 × M2.5 nuts.": ["m3", "m10x1.5", "m2.5"],
-    "Of 10 cm3, 2.5 mm² and 30◦.": ["10 cm3", "2.5 mm2", "30◦"],
+    "Of 10 cm3, 2.5 mm² and 30◦.": ["10 cm3", "2.5 mm²", "30◦"],
     "At 5 MPa and 1.2 kg·cm.": ["5 mpa", "1.2 kg·cm"],
     "It runs at 300 rpm for 9 s at 40%.": ["300 rpm", "9 s", "40%"],
     "Walls 3,5 mm, 3–5 mm or 10,20,30 mm.": ["3,5 mm", "3-5 mm", "10,20,30 mm"],
@@ -324,11 +395,20 @@ SWEPT = {
     # A subscript on a line of its own, as PDFium extracts one, and a modulo between symbols.
     "WPG: N\nr\n1 = N\ns\n1 + 2N\np\n1, SSPG: 2(R\ns\ni + R\np\ni) sin π\n2N\np\ni": [],
     "CPG: N\ns\n1 % n\np\n1 = 0, Nr\n2 % n\np\n1 = 0, (N\ns\ni + N\nr\ni\n) % n\np\ni = 0": [],
+    "CPG: N\ns\n1 % nᵖ\n1 = 0, 2Nᵖ\ni + Nʳ1": [],  # and with its superscript raised
     "Ratios from 4:1 to 60:1 in unit increments, 4:1 in total.": [],
     # Numbers that state no quantity: no unit, a count noun, a table cell.
     "The part is 32.5 here, built at Ørsted 3.": [],
     "Eight springs hold its 3 planets; SSPG [25, 65, 155, 0.5, 3] lists each.": [],
     "Price 3500* 500 g here.": ["500 g"],
+    # A raised run: an exponent, a unit's power, or a footnote marker.
+    "E = 2.1 × 10⁵ MPa over 4 cm², 4 cm^2 or 30 mm¹, at RPM² × 10⁻⁵ (eBay¹, 12.5¹).": [
+        "2.1x10⁵ mpa",
+        "4 cm²",
+        "4 cm²",
+        "30 mm",
+    ],
+    "A rate of 10 s⁻¹ in Nᵖ.": [],
 }
 
 
@@ -338,6 +418,22 @@ def test_coverage_lists_each_stated_quantity_whole_and_no_look_alike(proj_dir, t
     said = "notes p1: unledgered stated quantity "
     listed = [message.removeprefix(said).split("  …")[0] for message in found]
     assert listed == [candidate for candidates in SWEPT.values() for candidate in candidates]
+
+
+def test_html_and_docx_write_a_superscript_raised(proj_dir, tmp_path):
+    sup = '</w:t></w:r><w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:t>'
+    plain = "</w:t></w:r><w:r><w:t>"
+    pages = {
+        "ds.html": "<p>E = 2.1 × 10<sup>5</sup> MPa over 4 cm<sup>2</sup></p>",
+        "ds.docx": docx(f"E = 2.1 × 10{sup}5{plain} MPa over 4 cm{sup}2{plain}"),
+    }
+    for sid, page in pages.items():
+        add_source(proj_dir, tmp_path, sid, page, sid)
+        assert "E = 2.1 × 10⁵ MPa over 4 cm²" in cadrev("text", proj_dir, sid)[1]
+        entry = {"id": sid, "source": sid, "locator": "p", "quote": "E = 2.1 × 10^5 MPa"}
+        add(proj_dir, evidence=entry | {"values": {"E": 2.1e5}, "scope": "context", "reason": "r"})
+    run = check(proj_dir, "--no-build")
+    assert run.messages("quote-not-found") == run.messages("value-not-in-quote") == []
 
 
 def test_html_source_is_quoted_and_swept_as_its_rendered_text(proj_dir, tmp_path):

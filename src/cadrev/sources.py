@@ -76,11 +76,42 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+# Each character's superscript form, by the characters it raises: the later of two (ᵃ over ª),
+# a whole run where one stands for it (™ for TM), and a dash as the minus.
+_SUPERSCRIPT_OF = {unicodedata.normalize("NFKC", c): c for c in units.SUPERSCRIPTS} | dict.fromkeys(
+    "-‐‑‒–—", "⁻"
+)
+# Marks a font sets high whether or not they are raised: primes, degrees, footnote and
+# trademark signs.
+_HIGH = frozenset("′″‴°◦*∗†‡®©" + units.SUPERSCRIPTS)
+
+
+def superscript(run: str) -> str:
+    """A raised run as source text writes it: in superscripts (10⁻⁵, cm², ™), as printed where
+    each mark is one a font sets high anyway (″, ®, †), else as ^(run)."""
+    if all(c in _HIGH for c in run):
+        return run
+    if run in _SUPERSCRIPT_OF:
+        return _SUPERSCRIPT_OF[run]
+    if all(c in _SUPERSCRIPT_OF for c in run):
+        return "".join(_SUPERSCRIPT_OF[c] for c in run)
+    return f"^({run})"
+
+
+# A raised run typed with a caret: 10^5, 10^-5, cm^2, ^(a,b).
+_CARET = re.compile(r"\^\(([^()]*)\)|\^([-+−]?\d+)")
+_SUPERSCRIPT_RUN = re.compile(f"([{units.SUPERSCRIPTS}]+)")
+
+
 def normalize(text: str, hyphen: str = "", cased: bool = False) -> str:
-    """Canonical form for matching: NFKC, unified dashes and multiplication signs (an asterisk
-    between digits among them), hyphenated line breaks re-joined with hyphen between the halves,
-    single spaces, lower case unless cased."""
-    text = unicodedata.normalize("NFKC", text).translate(_DASHES).translate(_TIMES)
+    """Canonical form for matching: NFKC but for superscripts, which stay apart from the line
+    (a caret's run written as one), unified dashes and multiplication signs (an asterisk
+    between digits among them), hyphenated line breaks re-joined with hyphen between the
+    halves, single spaces, lower case unless cased."""
+    text = _CARET.sub(lambda m: superscript(m[2] if m[1] is None else m[1]), text)
+    parts = _SUPERSCRIPT_RUN.split(text)
+    text = "".join(p if i % 2 else unicodedata.normalize("NFKC", p) for i, p in enumerate(parts))
+    text = text.translate(_DASHES).translate(_TIMES)
     text = text.replace("­", "")
     text = re.sub(r"(\d)-\s*\n\s*(?=\d)", r"\1-", text)  # a range broken over a line: 60-80%
     text = re.sub(r"(\w)-\s*\n\s*(\w)", rf"\1{hyphen}\2", text)
@@ -161,6 +192,31 @@ def _value(printed: str) -> float:
 _NO_UNIT_NEXT = re.compile(r"\s?M\d|\s?[-xX]\s?M\s?\d|\s?[μmn]M(?![A-Za-z])")
 
 
+# A raised run that reads as a power of ten after a printed 10, and the product sign before
+# that 10 in scientific notation, as normalized: 2.1x10⁵, 2.1 x 10⁵, 2.1 · 10⁵.
+_EXPONENT = re.compile(r"[⁻⁺]?[⁰¹²³⁴⁵⁶⁷⁸⁹]+")
+_PRODUCT_SIGN = re.compile(r"\s?[x·⋅]\s?")
+
+
+def _exponents(text: str, numbers: list[_Number]) -> list[_Number]:
+    """numbers in normalized text, each 10 with an exponent raised over it read as that power
+    of ten, and as one number with the mantissa it multiplies: 10⁻⁵ is 1e-5, 2.1 × 10⁵ is
+    210000. Any other raised run is no number: a unit's power, or a footnote marker."""
+    read: list[_Number] = []
+    for n in numbers:
+        power = _EXPONENT.match(text, n.stop)
+        if power is None or text[n.start : n.stop] != "10":
+            read.append(n)
+            continue
+        ten = 10.0 ** int(unicodedata.normalize("NFKC", power.group()).translate(_DASHES))
+        if read and _PRODUCT_SIGN.fullmatch(text, read[-1].stop, n.start):
+            mantissa = read.pop()
+            read.append(_Number(mantissa.value * ten, mantissa.start, power.end()))
+        else:
+            read.append(_Number(ten, n.start, power.end()))
+    return read
+
+
 def _tokens(text: str, as_printed: str | None = None) -> list[_Token]:
     """Every number in normalized text, in digits or as a word from zero to ninety-nine, with the
     unit printed after it. The numbers of a range, product or list share its last unit. Where
@@ -173,10 +229,13 @@ def _tokens(text: str, as_printed: str | None = None) -> list[_Token]:
         r"\1.\2", _RANGE_DASH.sub(r"\1 ", text.replace("x", " "))
     )  # same length
     # Words are read in text, since scanned blanks the x of six.
-    numbers = sorted(
-        [_Number(_value(m.group()), *m.span()) for m in _NUMBER.finditer(scanned)]
-        + [_Number(_word_value(m), *m.span()) for m in _WORD_NUMBER.finditer(text)],
-        key=lambda n: n.start,
+    numbers = _exponents(
+        text,
+        sorted(
+            [_Number(_value(m.group()), *m.span()) for m in _NUMBER.finditer(scanned)]
+            + [_Number(_word_value(m), *m.span()) for m in _WORD_NUMBER.finditer(text)],
+            key=lambda n: n.start,
+        ),
     )
     found: list[tuple[_Number, str | None, int]] = []  # each number, its unit, and where both end
     for n in numbers:
@@ -255,10 +314,17 @@ def ambiguous_numbers(text: str) -> list[Ambiguous]:
     ]
 
 
+# What a raised run after it is the exponent or the power of: a 10, or a unit's spelling.
+_CUT_FROM_POWER = re.compile(rf"(?<![\d.,])10$|(?<![a-z]){units.spelling()}$")
+
+
 def _whole(needle: str) -> re.Pattern[str]:
-    """needle, refusing to start or end inside a larger number (37 within 137 or 3.7)."""
+    """needle, refusing to start or end inside a larger number (37 within 137 or 3.7), or to
+    end on a 10 or a unit cut from the run raised over it (10 of 10⁵, cm of cm²)."""
     head = r"(?<!\d)(?<!\d[.,])" if needle[:1].isdigit() else ""
     tail = r"(?![.,]?\d)" if needle[-1:].isdigit() else ""
+    if _CUT_FROM_POWER.search(needle):
+        tail += f"(?![{units.SUPERSCRIPTS}])"
     return re.compile(head + re.escape(needle) + tail)
 
 
@@ -266,17 +332,28 @@ _WORD = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
 def _docx_text(path: Path) -> str:
-    """A DOCX's text runs, a line per paragraph, entities decoded."""
+    """A DOCX's text runs, a line per paragraph, entities decoded, superscript runs raised."""
     import xml.etree.ElementTree as ET
 
     body = ET.fromstring(zipfile.ZipFile(path).read("word/document.xml"))
-    lines = ("".join(t.text or "" for t in p.iter(f"{_WORD}t")) for p in body.iter(f"{_WORD}p"))
+    lines = []
+    for p in body.iter(f"{_WORD}p"):
+        runs = []  # (text, whether superscript), consecutive runs alike joined
+        for r in p.iter(f"{_WORD}r"):
+            align = r.find(f"{_WORD}rPr/{_WORD}vertAlign")
+            up = align is not None and align.get(f"{_WORD}val") == "superscript"
+            text = "".join(t.text or "" for t in r.iter(f"{_WORD}t"))
+            if runs and runs[-1][1] == up:
+                runs[-1] = (runs[-1][0] + text, up)
+            elif text:
+                runs.append((text, up))
+        lines.append("".join(superscript(text) if up else text for text, up in runs))
     return "\n".join(line for line in lines if line.strip())
 
 
 class _HtmlText(HTMLParser):
     """An HTML page's rendered text: script, style and title dropped, tags removed, entities
-    decoded, each block element or table cell its own line."""
+    decoded, each block element or table cell its own line, and a <sup> raised."""
 
     BLOCKS = frozenset(
         "address article aside blockquote br caption dd div dl dt figcaption figure footer form"
@@ -288,22 +365,28 @@ class _HtmlText(HTMLParser):
         super().__init__()  # convert_charrefs: entities arrive decoded
         self.parts: list[str] = []
         self.hidden_depth = 0  # how many hidden elements the parser is inside
+        self.sup: list[str] | None = None  # the text of the <sup> the parser is inside
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag in self.HIDDEN:
             self.hidden_depth += 1
         if tag in self.BLOCKS:
             self.parts.append("\n")
+        if tag == "sup" and self.sup is None:
+            self.sup = []
 
     def handle_endtag(self, tag: str) -> None:
         if tag in self.HIDDEN:
             self.hidden_depth = max(self.hidden_depth - 1, 0)
         if tag in self.BLOCKS:
             self.parts.append("\n")
+        if tag == "sup" and self.sup is not None:
+            run, self.sup = " ".join("".join(self.sup).split()), None
+            self.parts.append(superscript(run) if run else "")
 
     def handle_data(self, data: str) -> None:
         if not self.hidden_depth:
-            self.parts.append(data.replace("\n", " "))
+            (self.parts if self.sup is None else self.sup).append(data.replace("\n", " "))
 
     def text(self) -> str:
         lines = (" ".join(line.split()) for line in "".join(self.parts).split("\n"))
@@ -353,7 +436,7 @@ def _pages(path: Path, digest: str) -> tuple[str, ...]:
 # its standard encoding's, which for a letter is the letter. A glyph at a printable code that is no
 # letter needs its character in _LOOKED_UP.
 _DRAWN = {
-    "AdvP4C4E74": {"C0": "−", "C2": "×", "C15": "•", "C24": "~", "zero": "′"},
+    "AdvP4C4E74": {"C0": "−", "C2": "×", "C15": "•", "C24": "~", "y": "†", "zero": "′"},
     "AdvPSMP13": {"b": "β", "l": "µ"},
     "AdvPSSym": {"C176": "°", "C210": "®", "C211": "©"},
     "AdvPi1": {"m": "µ"},
@@ -409,15 +492,111 @@ def _font_codes(reader: Callable, n: int) -> dict[str, dict[int, str | None]]:
     return codes
 
 
+class _Glyph(NamedTuple):
+    """Where a character is drawn: its baseline's start, its size, the direction its line runs
+    (a unit vector), and where it is on the page, by which its box is found."""
+
+    x: float
+    y: float
+    size: float
+    dx: float
+    dy: float
+    at: int  # its index on the page
+
+    def offset(self, other: _Glyph) -> tuple[float, float]:
+        """How far along this glyph's line other starts, and how far above its baseline, in
+        this glyph's size."""
+        vx, vy = other.x - self.x, other.y - self.y
+        return (vx * self.dx + vy * self.dy) / self.size, (self.dx * vy - self.dy * vx) / self.size
+
+
+Box = Callable[[int], tuple[float, float, float, float]]  # a character's (left, right, bottom, top)
+
+
+def _spaced(a: _Glyph, b: _Glyph, box: Box, size: float) -> bool:
+    """Whether b's box starts further along a's line after a's ends than a space would, in a
+    line of size."""
+    (l1, r1, b1, t1), (l2, r2, b2, t2) = box(a.at), box(b.at)
+    end = max(l1 * a.dx, r1 * a.dx) + max(b1 * a.dy, t1 * a.dy)
+    return min(l2 * a.dx, r2 * a.dx) + min(b2 * a.dy, t2 * a.dy) - end > _SPACE * size
+
+
+# A raised character is drawn smaller than the last character on its line, its baseline above
+# that one's by more than this share of its size and less than a line. A capital or a bracket
+# stands taller on the same baseline, at the same size.
+_SMALLER, _RISE = 0.9, 0.15
+# A wider gap than this share of the line's size beside a raised run is a space.
+_SPACE = 0.25
+
+
+def _is_raised(base: _Glyph, glyph: _Glyph, last: _Glyph) -> bool:
+    """Whether glyph is raised over base, the last character on its line, starting just after
+    last: base itself or the raised character before it."""
+    if glyph.size >= _SMALLER * base.size:
+        return False
+    along, rise = base.offset(glyph)
+    return _RISE < rise < 1 and -0.5 < along - base.offset(last)[0] < 2
+
+
+def _written(chars: list[tuple[str, _Glyph | None]], box: Box) -> str:
+    """A page's characters, each with where it is drawn (None for one PDFium adds), with each
+    raised run written raised and kept on its line: what PDFium adds around it is a space where
+    the page leaves one, else nothing. A fraction's numerator stands over its denominator,
+    which steps back under it below the line, and is not raised."""
+    out: list[str] = []
+    base, added = None, 0  # the last character on the line; spaces and breaks added since it
+    i = 0
+    while i < len(chars):
+        char, glyph = chars[i]
+        if glyph is None or base is None or not _is_raised(base, glyph, base):
+            out.append(char)
+            base, added = (glyph, 0) if glyph else (base, added + 1 if char.isspace() else 0)
+            i += 1
+            continue
+        run, last, j = [char], glyph, i + 1  # j: just after the run's last character
+        while True:
+            k = next((n for n in range(j, len(chars)) if chars[n][1]), len(chars))
+            after = chars[k][1] if k < len(chars) else None  # the next character drawn
+            if after is None or not _is_raised(base, after, last):
+                break
+            run.append(chars[k][0])
+            last, j = after, k + 1
+        along, rise = base.offset(after) if after else (0.0, 0.0)
+        if after and -1 < rise < -_RISE and along < base.offset(last)[0]:  # a numerator
+            out.append(char)
+            base, added, i = glyph, 0, i + 1
+            continue
+        if added:
+            out[len(out) - added :] = [" " if _spaced(base, glyph, box, base.size) else ""]
+        out.append(superscript(_utf16("".join(run))))
+        if after and abs(rise) < _RISE and along > base.offset(last)[0]:  # back on the line
+            out.append(" " if _spaced(last, after, box, base.size) else "")
+        else:
+            out += [c for c, _ in chars[j:k]]
+        added, i = 0, k
+    return "".join(out)
+
+
+def _utf16(text: str) -> str:
+    """text as PDFium gives it, a surrogate pair for a character beyond the BMP, decoded."""
+    return text.encode("utf-16-le", "surrogatepass").decode("utf-16-le", "ignore")
+
+
 def _page_text(textpage, font_codes: Callable[[], dict[str, dict[int, str | None]]]) -> str:
     """A PDF page's text as PDFium extracts it, with what the text layer misstates put right: a
-    symbol font's glyph is the character it draws, and two numbers in separate table cells are
-    kept apart."""
+    symbol font's glyph is the character it draws, two numbers in separate table cells are
+    kept apart, and a raised run is written raised."""
     import pypdfium2.raw as pdfium
 
     raw, chars = textpage.raw, []
     name, flags = ctypes.create_string_buffer(256), ctypes.c_int()
     left, right, bottom, top = (ctypes.c_double() for _ in range(4))
+    x, y, matrix = ctypes.c_double(), ctypes.c_double(), pdfium.FS_MATRIX()
+
+    def box(i: int) -> tuple[float, float, float, float]:
+        pdfium.FPDFText_GetCharBox(raw, i, left, right, bottom, top)
+        return left.value, right.value, bottom.value, top.value
+
     codes, before = None, None  # the page's font codes once needed; the digit just before
     for i in range(pdfium.FPDFText_CountChars(raw)):
         code = pdfium.FPDFText_GetUnicode(raw, i)
@@ -427,19 +606,26 @@ def _page_text(textpage, font_codes: Callable[[], dict[str, dict[int, str | None
                 codes = font_codes() if codes is None else codes
                 family = codes.get(name.value.decode("utf8", "replace"), {})
                 char = drawn.get(family.get(code, char) or "", char)
+        glyph = None
+        if not pdfium.FPDFText_IsGenerated(raw, i):
+            pdfium.FPDFText_GetMatrix(raw, i, matrix)
+            a, b, c, d = matrix.a, matrix.b, matrix.c, matrix.d
+            size = pdfium.FPDFText_GetFontSize(raw, i) * math.sqrt(abs(a * d - b * c))
+            if size > 0 and (scale := math.hypot(a, b)) > 0:
+                pdfium.FPDFText_GetCharOrigin(raw, i, x, y)
+                glyph = _Glyph(x.value, y.value, size, a / scale, b / scale, i)
         if char.isascii() and (char.isdecimal() or char == "."):
-            pdfium.FPDFText_GetCharBox(raw, i, left, right, bottom, top)
-            box = left.value, right.value, bottom.value, top.value
-            if before and _in_separate_cells(before, box):
-                chars.append(" ")
-            before = box if char != "." else None
+            here = box(i)
+            if before and _in_separate_cells(before, here):
+                chars.append((" ", None))
+            before = here if char != "." else None
         else:
             before = None
         # As PDFium's own text range: U+0002 is a line-end hyphen, written U+FFFE, and U+0003 is
         # left out.
         if char != "\x03":
-            chars.append("\ufffe" if char == "\x02" else char)
-    return "".join(chars).encode("utf-16-le", "surrogatepass").decode("utf-16-le", "ignore")
+            chars.append(("￾" if char == "\x02" else char, glyph))
+    return _utf16(_written(chars, box))
 
 
 def find_quote(path: Path, quote: str, page: int | None = None) -> int | None:
@@ -536,8 +722,11 @@ _DIAMETER = re.compile(r"(?<!\w)[ø⌀∅] ?$")
 # A moment, when something happens (t = 2 s, a video frame's T=0s), not how long it lasts (Δt).
 _MOMENT = re.compile(r"(?<!\w)t ?= ?$")
 # A subscripted symbol (r2, p2, s1) after a one-letter unit: 2N r2 is a product of symbols, as is
-# 2N p 1, its subscript on a line of its own as PDFium extracts it.
-_SUBSCRIPTED = re.compile(r" (?:[a-z]+\d+|[a-z] [a-z0-9])(?![a-z0-9])")
+# 2N p 1, its subscript on a line of its own as PDFium extracts it, and 1 % nᵖ 1, its superscript
+# raised.
+_SUBSCRIPTED = re.compile(
+    rf" (?:[a-z]+[{units.SUPERSCRIPTS}]*\d+|[a-z][{units.SUPERSCRIPTS}]* [a-z0-9])(?![a-z0-9])"
+)
 # The colon of a ratio (60:1), whose second number takes no unit; a time's (1:30 min) does.
 _RATIO = re.compile(r"\d:$")
 # Units whose spelling, hyphened to a number, names a thing instead: a four-bar or 4-bar linkage

@@ -106,7 +106,7 @@ checks:
   - {id: substrate-bottom, kind: distance, instances: [mould_platform_1, mould_frame_1], between: [mould_platform_1.top, mould_frame_1.top], along: z,
      evidence: P4-mould-frame, key: bottom, interpretation: "the frame stands this far above the platform: the cast substrate's bottom"}
   - {id: culture-area, kind: distance, between: [mould_platform.side_a, mould_platform.side_b], expect: "sqrt(P1-area.area)",
-     interpretation: "4 cm2 read as the platform's 20 x 20 mm square, its r5 corners not taken off"}
+     interpretation: "4 cm² read as the platform's 20 x 20 mm square, its r5 corners not taken off"}
   # ---- motion
   - {id: lead-per-turn, kind: distance, instances: [guide_rod_1, bearing_1], between: [guide_rod_1.zero, bearing_1.mid], along: y,
      evidence: P11-lead, key: lead, from: {}, pose: {screw_1: 360}, interpretation: "carriage travel over one turn of the screws"}

@@ -15,7 +15,7 @@ evidence:
     source: paper
     page: 1
     locator: Abstract
-    quote: "cell culture area of 4 cm2 per substrate"
+    quote: "cell culture area of 4 cm² per substrate"
     values: {area: 4}
   - id: P2-envelope
     source: paper
@@ -343,7 +343,7 @@ skipped:
   - {source: paper, page: 4, quote: "for 24 h, we recommend making several molds", reason: "curing time of the PDMS"}
   - {source: paper, page: 5, quote: "angled adapter DOWN (~30 cm)", reason: "a cable of the controller unit"}
   - {source: paper, page: 5, quote: "HDMI 90° angle", reason: "an adapter of the controller unit"}
-  - {source: paper, page: 5, from: "General Washer M2.5", to: "General Spring Washer M6 4 0.10 0.40 DOLD2 Metal", reason: "washers and spring washers under the screws, which the model does not build"}
+  - {source: paper, page: 5, from: "General Washer M2.5", to: "General Spring Washer M6 4 0.10 0.40 DOLD² Metal", reason: "washers and spring washers under the screws, which the model does not build"}
   - {source: paper, page: 6, quote: "While the acrylic adhesive sets under UV light for 20 min", reason: "a curing time of the adhesive"}
   - {source: paper, page: 7, from: "PDMS base component and crosslinker (Fig. 4B)", to: "using DPBS.", reason: "mixing, curing and coating the PDMS substrates: the cast product and its chemistry"}
   - {source: paper, page: 8, from: "iii) Coat the cell substrate", to: "in a cell culture incubator.", reason: "coating and seeding the substrates"}
