@@ -76,6 +76,19 @@ TEXT_LAYER = [
     (STRETCHER, 7, "with 500 µL of", "with 500 mL of"),
     (STRETCHER, 4, "glass 6 mm × 60 cm × 30 cm", "glass 6 mm 60 cm 30 cm"),
     (STRETCHER, 9, "60.8 × 11.7 mm", "60.8 11.7 mm"),
+    # Elsevier's symbol fonts, by family and glyph: AdvPSMP13's l and b,
+    (CENTRIFUGE, 1, "500 µl and 200 µl", "500 ll and 200 ll"),
+    (STRETCHER, 13, "Scale bars: 10 µm", "Scale bars: 10 lm"),
+    (STRETCHER, 15, "Yap1 and β-catenin", "Yap1 and b-catenin"),
+    # AdvPSSym's C176, drawn as code 3, and its C211 and C210,
+    (CENTRIFUGE, 5, "nozzle temperature: 200 °C", "nozzle temperature: 200 C"),
+    (STRETCHER, 5, "HDMI 90° angle", "HDMI 90 angle"),
+    (CENTRIFUGE, 1, "© 2022", "\x01 2022"),
+    (STRETCHER, 14, "LEGO®", "LEGO\x04"),
+    # and AdvP4C4E74's C0, C15, and C24, drawn as code 3 here and C2 (×) in the stretcher.
+    (CENTRIFUGE, 9, "1.118 × 10−5", "1.118 × 10\x055"),
+    (CENTRIFUGE, 2, "• Simple design", "\x01 Simple design"),
+    (CENTRIFUGE, 4, "~ 100 g", "printing\n 100 g"),
 ]
 
 
@@ -126,10 +139,24 @@ def test_a_symbol_fonts_control_code_is_read_by_its_glyph_in_that_file(proj_dir,
     assert "× 100 g" not in cadrev("text", proj_dir, "doc", "--page", 4)[1]
 
 
+@pytest.mark.parametrize("paper", [CENTRIFUGE, STRETCHER])
+def test_no_symbol_font_glyph_reads_as_a_control_code(proj_dir, tmp_path, paper):
+    add_source(proj_dir, tmp_path, "source.pdf", paper.read_bytes())
+    text = cadrev("text", proj_dir, "doc")[1]
+    assert not {"\x01", "\x04", "\x05"} & set(text)
+
+
 def test_the_sweep_lists_a_product_and_a_unit_a_symbol_font_prints(proj_dir, tmp_path):
     add_source(proj_dir, tmp_path, "source.pdf", STRETCHER.read_bytes())
     listed = [m.split("quantity ")[1].split("  …")[0] for m in check(proj_dir).messages("coverage")]
-    assert "60.8x11.7 mm" in listed and "250 μm" in listed and "250 mm" not in listed
+    assert {"60.8x11.7 mm", "250 μm", "10 μm", "90°"} <= set(listed)
+    assert "250 mm" not in listed and "20 μm" not in listed  # 20 µM, micromolar
+
+
+def test_a_concentration_is_no_stated_length(proj_dir, tmp_path):
+    # Lower case would read 20 µM, micromolar, as 20 µm.
+    add_source(proj_dir, tmp_path, "notes.pdf", pdf(["blebbistatin (5 or 20 µM) and 2 mM ATP"]))
+    assert check(proj_dir).messages("coverage") == []
 
 
 # The numbers a quote states, and near misses it does not: quote -> (values in it, values not).

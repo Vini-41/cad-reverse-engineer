@@ -153,17 +153,19 @@ def _value(printed: str) -> float:
     return float(whole[0]) + (-value if whole[0].startswith("-") else value)  # -1 1/2 is -1.5
 
 
-# A thread size after a number (4 M3 screws), or called out by it as a drawing counts its holes
-# (4-M3, 4xM3, 8-M 2.0), as printed: a capital M and its digits, which in lower case would spell
-# a length, an area or a volume.
-_THREAD_NEXT = re.compile(r"\s?M\d|\s?[-xX]\s?M\s?\d")
+# What follows a number, as printed, that is no unit of it though in lower case it would spell
+# one: a thread size after it (4 M3 screws) or called out by it as a drawing counts its holes
+# (4-M3, 4xM3, 8-M 2.0), a capital M and its digits, which would spell a length, an area or a
+# volume; and a concentration in moles per litre (20 µM, 2 mM, 5 nM), a capital M after a
+# lower-case prefix, which would spell a length or a torque.
+_NO_UNIT_NEXT = re.compile(r"\s?M\d|\s?[-xX]\s?M\s?\d|\s?[μmn]M(?![A-Za-z])")
 
 
 def _tokens(text: str, as_printed: str | None = None) -> list[_Token]:
     """Every number in normalized text, in digits or as a word from zero to ninety-nine, with the
     unit printed after it. The numbers of a range, product or list share its last unit. Where
-    as_printed gives the text normalized but for case, a thread size is no unit of the number
-    before it: four M3 screws are no four cubic metres."""
+    as_printed gives the text normalized but for case, a thread size or a concentration is no
+    unit of the number before it: four M3 screws are no four cubic metres, and 20 µM no 20 µm."""
     if as_printed is None or len(as_printed) != len(text):
         as_printed = text
     label_spans = [m.span(1) for m in _LABEL.finditer(text)]
@@ -182,7 +184,7 @@ def _tokens(text: str, as_printed: str | None = None) -> list[_Token]:
             continue  # a digit of the unit before it: the 3 of g/cm3
         unit, end = units.unit_at(text, n.stop) or (None, n.stop)
         named = unit in _HYPHENED_NAMES and text.startswith("-", n.stop)
-        if named or _THREAD_NEXT.match(as_printed, n.stop):
+        if named or _NO_UNIT_NEXT.match(as_printed, n.stop):
             unit, end = None, n.stop
         found.append((n, unit, end))
     tokens: list[_Token] = []
@@ -347,8 +349,22 @@ def _pages(path: Path, digest: str) -> tuple[str, ...]:
 
 # What a typesetter's symbol font draws, by glyph name, where its text layer names another
 # character. Its control codes are assigned per file (code 3 is × in one paper, ~ in another), so
-# a glyph is known by the name the font's encoding gives its code.
-_DRAWN = {"AdvP4C4E74": {"C2": "×", "zero": "′"}, "AdvPi1": {"m": "µ"}}
+# a glyph is known by the name the font's encoding gives its code: its /Differences name, else
+# its standard encoding's, which for a letter is the letter. A glyph at a printable code that is no
+# letter needs its character in _LOOKED_UP.
+_DRAWN = {
+    "AdvP4C4E74": {"C0": "−", "C2": "×", "C15": "•", "C24": "~", "zero": "′"},
+    "AdvPSMP13": {"b": "β", "l": "µ"},
+    "AdvPSSym": {"C176": "°", "C210": "®", "C211": "©"},
+    "AdvPi1": {"m": "µ"},
+}
+# The characters whose font is looked up, those PDFium reports for the glyphs above: a control
+# code, a letter as itself, and zero as 0.
+_LOOKED_UP = frozenset(
+    [chr(code) for code in range(32)]
+    + [name for drawn in _DRAWN.values() for name in drawn if len(name) == 1]
+    + ["0"]
+)
 # Characters on one line further apart than this many digit widths are in separate table cells.
 _CELL_GAP = 3
 
@@ -406,7 +422,7 @@ def _page_text(textpage, font_codes: Callable[[], dict[str, dict[int, str | None
     for i in range(pdfium.FPDFText_CountChars(raw)):
         code = pdfium.FPDFText_GetUnicode(raw, i)
         char = chr(code)
-        if (code < 32 or char in "m0") and pdfium.FPDFText_GetFontInfo(raw, i, name, 256, flags):
+        if char in _LOOKED_UP and pdfium.FPDFText_GetFontInfo(raw, i, name, 256, flags):
             if drawn := _DRAWN.get(name.value.decode("utf8", "replace")):
                 codes = font_codes() if codes is None else codes
                 family = codes.get(name.value.decode("utf8", "replace"), {})

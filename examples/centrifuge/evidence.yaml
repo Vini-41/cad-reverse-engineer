@@ -14,7 +14,7 @@ evidence:
     source: paper
     page: 1
     locator: Abstract
-    quote: "one can hold up to six tubes (1.5/2 ml, or 500 ll and 200 ll tubes with adapters) or two PCR strips"
+    quote: "one can hold up to six tubes (1.5/2 ml, or 500 µl and 200 µl tubes with adapters) or two PCR strips"
     values: {tubes: six}
 
   - id: P2-six
@@ -30,7 +30,7 @@ evidence:
     source: paper
     page: 2
     locator: Fig. 1 caption
-    quote: "Illustration of the assembled mini centrifuge with a six-tube rotor and lid (left), six tubes rotor (middle) and with a PCR strip rotor (right). The six tube rotor holds plastic tubes of the most common sizes: 1.5/2 ml, 500 ll and 200 ll with the appropriate adapter."
+    quote: "Illustration of the assembled mini centrifuge with a six-tube rotor and lid (left), six tubes rotor (middle) and with a PCR strip rotor (right). The six tube rotor holds plastic tubes of the most common sizes: 1.5/2 ml, 500 µl and 200 µl with the appropriate adapter."
     values: {tubes: six}
     scope: context
     reason: "restates P1-rotors"
@@ -146,7 +146,7 @@ evidence:
     source: paper
     page: 3
     locator: Design files table, descriptions
-    quote: "0.5 ml tube adapter Adapter for 0.5 ml (500 ll) tubes. 0.2 ml tube adapter Adapter for 0.2 ml (200 ll) tubes."
+    quote: "0.5 ml tube adapter Adapter for 0.5 ml (500 µl) tubes. 0.2 ml tube adapter Adapter for 0.2 ml (200 µl) tubes."
     values: {a: 0.5, b: 0.2}
     scope: not-modeled
     reason: "tube adapters go in with the tubes; the target is the unloaded centrifuge"
@@ -240,7 +240,7 @@ evidence:
     source: paper
     page: 4
     locator: Bill of materials, PLA filament row
-    quote: "100 g 2 €"
+    quote: "~ 100 g 2 €"
     values: {m: 100}
     scope: context
     reason: "the filament to buy, an approximate total for parts of which the body is printed at 10 % infill; not the mass of a modelled part"
@@ -430,7 +430,7 @@ evidence:
     source: paper
     page: 9
     locator: Section 7.1
-    quote: "When the rotor was loaded with two empty adapters (to make counting easier), the measured speed was 2160 RPM, under the load of two 1.5 ml tubes containing 1000 l liquid, the maximum decreased only to 2100 RPM."
+    quote: "When the rotor was loaded with two empty adapters (to make counting easier), the measured speed was 2160 RPM, under the load of two 1.5 ml tubes containing 1000 µ liquid, the maximum decreased only to 2100 RPM."
     values: {rpm_adapters: 2160, rpm_tubes: 2100}
     scope: not-modeled
     reason: "behaviour: the project is static, the rotor fixed on the hub"
